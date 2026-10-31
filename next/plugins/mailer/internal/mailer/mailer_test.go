@@ -22,10 +22,11 @@ type smtpServer struct {
 	addr   string
 	refuse string
 
-	mu   sync.Mutex
-	from string
-	to   []string
-	data string
+	mu        sync.Mutex
+	quitFails bool // answer QUIT with an error
+	from      string
+	to        []string
+	data      string
 }
 
 func startSMTP(t *testing.T, refuse string) *smtpServer {
@@ -98,6 +99,13 @@ func (s *smtpServer) serve(conn net.Conn) {
 			s.mu.Unlock()
 			reply("250 queued")
 		case upper == "QUIT":
+			s.mu.Lock()
+			fails := s.quitFails
+			s.mu.Unlock()
+			if fails {
+				reply("421 closing")
+				return
+			}
 			reply("221 bye")
 			return
 		default:
@@ -147,6 +155,17 @@ func TestDeliver(t *testing.T) {
 	plain, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(body, "\r\n", ""))
 	if err != nil || string(plain) != "account 7 / group 2 / claude-sonnet-5" {
 		t.Fatalf("body: %q %v", plain, err)
+	}
+}
+
+// Once the server accepted the message, a failed QUIT is not a failure: a
+// retry would send the mail twice.
+func TestDeliverQuitFails(t *testing.T) {
+	srv := startSMTP(t, "")
+	srv.quitFails = true
+	resp, err := configured(t, srv, nil).DeliverNotification(context.Background(), request())
+	if err != nil || resp.GetRejected() != "" {
+		t.Fatalf("deliver: %v %v", resp, err)
 	}
 }
 

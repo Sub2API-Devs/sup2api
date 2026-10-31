@@ -15,6 +15,7 @@ import ProxyPicker from '@/components/ProxyPicker.vue'
 import { useBulkRun, type BulkFailure } from '@/composables/useBulkRun'
 import { errorMessage } from '@/utils/errors'
 import { accountControl } from './accountTypeChoices'
+import { todayQuery } from './accountUsage'
 import { buildBulkPatch, BULK_LIMITS, type BulkFields, type GroupMode } from './bulkEdit'
 
 const props = defineProps<{ open: boolean; accounts: Account[]; typeOf: (a: Account) => AccountType | undefined }>()
@@ -69,7 +70,7 @@ async function apply() {
       unchanged++
       return
     }
-    saved.push(await api.patch<Account>(`/accounts/${a.id}`, body, { signal }))
+    saved.push(await api.patch<Account>(`/accounts/${a.id}`, body, { signal, query: todayQuery() }))
   })
   failures.value = out.failed
   if (saved.length) emit('saved', saved)

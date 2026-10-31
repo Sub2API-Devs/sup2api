@@ -182,6 +182,34 @@ func TestUnapprovedVersionsHoldNoResources(t *testing.T) {
 	}
 }
 
+// A notification channel is held like a platform: one provider per id, so
+// the channel's notifications reach the plugin the sender meant (§74.4).
+func TestChannelHeldByOneProvider(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	acme := acmePublisher(t, e, pkg.TrustVerified)
+	provider := func(key, publisher string) *manifest.Manifest {
+		m := pkgtest.Minimal(key, "1.0.0", publisher)
+		m.Capabilities = []manifest.Capability{{ID: manifest.CapNotifyChannel}}
+		m.Notifications = &manifest.Notifications{Channels: []manifest.NotificationChannel{{ID: "sms", Label: manifest.LocalizedText{"en": "SMS"}}}}
+		return m
+	}
+	a, b := provider("sms_a", "acme"), provider("sms_b", "sub2api")
+	if _, err := e.svc.Upload(ctx, pkgtest.Build(a, acme), e.admin, UploadOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Upload(ctx, pkgtest.Build(b, e.root), e.admin, UploadOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.Consent(ctx, "sms_b", "1.0.0", allGrants(b), e.admin); err != nil {
+		t.Fatal(err)
+	}
+	_, err := e.svc.Consent(ctx, "sms_a", "1.0.0", allGrants(a), e.admin)
+	if errCode(err) != "plugin_resource_conflict" || fieldCode(err, "notifications.channels[0].id") != "channel_conflict" {
+		t.Fatalf("consent of a second provider: %v", err)
+	}
+}
+
 // renamePlatform gives the platform of a pkgtest.Platform manifest the id id.
 func renamePlatform(m *manifest.Manifest, id string) *manifest.Manifest {
 	old := m.Platforms[0].ID

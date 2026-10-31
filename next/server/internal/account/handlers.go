@@ -66,6 +66,9 @@ type row struct {
 	// SubscriptionType is the plan the runtime reported (CONTRACTS §59); nil while unknown.
 	SubscriptionType *string
 	AutoModels       *bool
+	// AutoDisabledSource says who wrote an automatic disable (0070):
+	// usageLimitSource or '' (plugins and failure policies).
+	AutoDisabledSource string
 }
 
 // selectRow joins the creator's email (also for soft-deleted users); every
@@ -75,7 +78,7 @@ const selectRow = `SELECT a.id, a.name, a.plugin_key, a.type, a.credentials_enc,
 	a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.model_limits, a.environment, a.last_used_at,
 	a.created_by, u.email, a.created_at, a.updated_at,
 	a.last_test_at, a.last_test_ok, a.last_test_latency_ms::bigint, a.last_test_model, a.last_test_message, a.auto_disabled_until,
-	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.auto_models
+	a.last_test_status,a.last_test_error_code,a.last_test_error_source,a.subscription_type,a.auto_models,a.auto_disabled_source
 	FROM accounts a LEFT JOIN users u ON u.id = a.created_by`
 
 func scanRow(r pgx.Row) (*row, error) {
@@ -85,7 +88,7 @@ func scanRow(r pgx.Row) (*row, error) {
 		&a.Models, &a.ModelMapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &a.ModelLimits, &a.Environment, &a.LastUsedAt,
 		&a.CreatedBy, &a.CreatedByEmail, &a.CreatedAt, &a.UpdatedAt,
 		&a.LastTestAt, &a.LastTestOK, &a.LastTestLatencyMs, &a.LastTestModel, &a.LastTestMessage, &a.AutoDisabledUntil,
-		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.AutoModels)
+		&a.LastTestStatus, &a.LastTestErrorCode, &a.LastTestErrorSource, &a.SubscriptionType, &a.AutoModels, &a.AutoDisabledSource)
 	return &a, err
 }
 
@@ -213,6 +216,8 @@ type View struct {
 	// Refresh is the credential refresh state (CONTRACTS §48); null for
 	// account types whose credentials do not expire.
 	Refresh *RefreshView `json:"refresh"`
+	// limitDisabled: the usage limit auto-disabled the account (Usage.LimitDisabled).
+	limitDisabled bool
 	// LastTest is the last console test (CONTRACTS §50); null until tested.
 	LastTest *LastTest `json:"last_test"`
 	// SubscriptionType is the plan the account's runtime reported ("max",
@@ -265,6 +270,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 			LastUsedAt: a.LastUsedAt, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt,
 			LastTest:         a.lastTest(),
 			SubscriptionType: a.SubscriptionType,
+			limitDisabled:    limitDisabled(a.Status, a.AutoDisabledSource),
 		}
 		out[i], ids[i], byID[a.ID] = v, a.ID, v
 	}
@@ -1344,8 +1350,8 @@ func (s *Service) update(c *gin.Context) {
 			in.AutoDisable, in.AutoModels, limits, in.SPMLimit, in.Environment); err != nil {
 			return err
 		}
-		if statusChanged && *in.Status == "active" && isUsageLimitReason(locked.StatusReason) {
-			if err := waiveUsageLimit(ctx, tx, id); err != nil { // enabled by hand (§73.4)
+		if statusChanged && *in.Status == "active" && limitDisabled(locked.Status, locked.AutoDisabledSource) {
+			if err := waiveUsageLimit(ctx, tx, id, locked.AutoDisabledUntil); err != nil { // enabled by hand (§73.4)
 				return err
 			}
 		}
@@ -1446,8 +1452,8 @@ func (s *Service) resetStatus(c *gin.Context) {
 			}
 			// Brought back by hand: the usage limit leaves it running for
 			// the rest of the period (CONTRACTS §73.4).
-			if isUsageLimitReason(a.StatusReason) {
-				if err := waiveUsageLimit(ctx, tx, id); err != nil {
+			if limitDisabled(a.Status, a.AutoDisabledSource) {
+				if err := waiveUsageLimit(ctx, tx, id, a.AutoDisabledUntil); err != nil {
 					return err
 				}
 			}

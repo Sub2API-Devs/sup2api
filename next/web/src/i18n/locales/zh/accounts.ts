@@ -24,7 +24,7 @@ export default {
     per: { hour: '每小时', day: '每天', week: '每周', month: '每月', none: '总额' },
     perN: { hour: '每 {n} 小时', day: '每 {n} 天', week: '每 {n} 周', month: '每 {n} 个月' },
     limitLine: '用量限制（{period}）：{used} / {amount}', resetsAt: '{time} 重置', loadFailed: '用量明细加载失败',
-    limitReached: '用量已达上限：{used} / {amount}（{period}）',
+    limitReached: '用量已达上限：{used} / {amount}（{period}）', limitReachedPlain: '用量已达上限',
     hint: '数据来自使用记录（核心统计）。开启原始倍率计费时，累计用量和用量限制都按原始费用计算（分组倍率视为 1）。'
   },
   usageLimit: {
@@ -35,16 +35,16 @@ export default {
     period: '重置周期', periodHint: '「不重置」即总额度：用满后保持自动禁用，调高限额后自动启用。',
     periods: { hour: '每小时', day: '每天', week: '每周', month: '每月', none: '不重置' },
     periodCount: '周期长度', periodCountHint: '例如 2 + 每周 = 每两周重置一次', periodCountUnit: '个周期',
-    anchor: '周期起点', anchorHint: '从这个时间开始计算周期（按整点，2000-2099 年）；留空则从 2024-01-01 00:00 开始，日、周、月落在自然边界上。',
+    anchor: '周期起点', anchorHint: '从这个时间开始计算周期（按整点，2000-2099 年）；留空则从 2024-01-01 00:00 开始，日、周、月落在自然边界上。按小时重置时周期落在 UTC 整点，半点时区（如印度）会早半小时。',
     timezone: '周期按 {zone} 计算',
     current: '本周期已用（{start} → {end}）', currentTotal: '累计已用', summary: '用量限制 {amount} {period}', saveFailed: '账号已保存，但用量限制保存失败：{error}',
     amountInvalid: '开启用量限制需要填写 0-1000000000 之间、大于 0 的限额', periodCountInvalid: '周期长度必须为 1-{max}',
-    loadFailed: '用量限制加载失败，暂时不能修改：{error}', retry: '重试'
+    loadFailed: '用量限制加载失败，暂时不能修改：{error}', retry: '重试', waived: '本周期已人工放行'
   },
   successRate: {
     column: '成功率 · 1 分钟', title: '成功率（近 60 秒）', success: '成功请求', failed: '失败尝试',
     requests: '{success} / {total} 次', idle: '近 1 分钟无请求',
-    hint: '成功率 = 成功 ÷（成功 + 失败），按近 60 秒滚动窗口统计。每次失败的上游尝试都计一次；400（请求本身有误）、客户端主动取消和网关自身限流不算失败。'
+    hint: '成功率 = 成功 ÷（成功 + 失败），按近 60 秒滚动窗口统计。每次失败的上游尝试都计一次，按上游返回的状态码判断；上游返回 400（请求本身有误）、客户端主动取消，以及与账号无关的本地失败（网关自身限流、网关内部出错等）不算失败；连接失败、超时等没有上游响应的失败计入。'
   },
   modelLimits: {
     title: '指定模型限速',

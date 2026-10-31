@@ -8,7 +8,8 @@ describe('accountStatus', () => {
     [{ status: 'disabled', schedulable: true }, 'disabled', 'danger'],
     [{ status: 'auto_disabled', schedulable: true }, 'auto_disabled', 'warning'],
     [{ status: 'error', schedulable: true }, 'auto_disabled', 'warning'],
-    [{ status: 'active', schedulable: false }, 'auto_disabled', 'warning']
+    // Taken out of scheduling by hand: filed under auto-disabled, red like a manual disable.
+    [{ status: 'active', schedulable: false }, 'auto_disabled', 'danger']
   ])('maps %o to %s', (a, key, tone) => {
     expect(accountStatusKey(a)).toBe(key)
     expect(accountStatusTone(a)).toBe(tone)

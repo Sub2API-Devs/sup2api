@@ -41,13 +41,17 @@ func (p *Plugin) OnObservations(_ context.Context, in *pluginv1.ObservationBatch
 
 // sampleOf turns a finished attempt into a sample of its key. Attempts the
 // account is not to blame for are left out: requests outside a group or
-// without a model, client cancellations, and local failures.
+// without a model, and what observation.AttemptOutcome does not count (client
+// cancellations, local failures), the rule the core's success rate shares.
 func sampleOf(o *pluginv1.RequestObservation) (key, rules.Sample, bool) {
 	k := key{AccountID: o.GetAccountId(), GroupID: o.GetGroupId(), Model: o.GetModel()}
-	if o.GetPhase() != observation.AttemptFinished || k.GroupID <= 0 || k.Model == "" || o.GetCanceled() || o.GetLocalFailure() {
+	counted, failed, status := observation.AttemptOutcome(o)
+	if !counted || k.GroupID <= 0 || k.Model == "" {
 		return key{}, rules.Sample{}, false
 	}
-	s := rules.Sample{Stream: o.GetStream(), Fail: !o.GetSuccess(), TTFBMs: -1, LatencyMs: -1}
+	// A failure is bucketed by its upstream status; a connection failure or
+	// a timeout stays in bucket 0, which no exemption covers.
+	s := rules.Sample{Stream: o.GetStream(), Fail: failed, FailStatus: status, TTFBMs: -1, LatencyMs: -1}
 	started := o.GetAttemptStartedAtUnixMs()
 	// Timings come from successful attempts only, as in new-api: a failure
 	// counts in the error rate, not again in the latency picture.
@@ -56,11 +60,6 @@ func sampleOf(o *pluginv1.RequestObservation) (key, rules.Sample, bool) {
 	}
 	if !s.Fail && started > 0 {
 		s.LatencyMs = max(o.GetOccurredAtUnixMs()-started, 0)
-	}
-	// Only an upstream answer has a status to exempt; a connection failure
-	// or a timeout stays in bucket 0, which no exemption covers.
-	if code := int(o.GetUpstreamStatusCode()); s.Fail && code >= 100 && code <= 599 {
-		s.FailStatus = code
 	}
 	return k, s, true
 }

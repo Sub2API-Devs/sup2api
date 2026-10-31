@@ -183,6 +183,22 @@ func TestReauthorizationClearsOnlyAutomaticAccountBlocks(t *testing.T) {
 			t.Fatal("reauth retained the automatic block")
 		}
 	}
+
+	// New credentials do not lower the usage: the usage limit's disable stays.
+	id := e.mkRawAccount("ccgateway", "managed", "reauth-usage-limit", "unused", true)
+	_, err := e.db.Pool.Exec(t.Context(), `UPDATE accounts SET status='auto_disabled',status_reason='usage limit reached',auto_disabled_source='usage_limit',
+		auto_disabled_until=clock_timestamp()+interval '1 hour' WHERE id=$1`, id)
+	require.NoError(t, err)
+	require.NoError(t, e.db.Tx(t.Context(), func(tx pgx.Tx) error {
+		changed, err := e.svc.resetForReauth(t.Context(), tx, &row{ID: id, Status: "auto_disabled", AutoDisabledSource: usageLimitSource})
+		assert.False(t, changed)
+		return err
+	}))
+	var status string
+	var until *time.Time
+	require.NoError(t, e.db.Pool.QueryRow(t.Context(), `SELECT status,auto_disabled_until FROM accounts WHERE id=$1`, id).Scan(&status, &until))
+	assert.Equal(t, "auto_disabled", status)
+	assert.NotNil(t, until, "released when its period ends")
 }
 
 func TestAutomaticStateActionsAndTimeForms(t *testing.T) {

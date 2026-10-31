@@ -163,8 +163,7 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	b.settler = usage.New(b.db, bill, bill, b.events, usage.Options{CanRetry: b.canWork, Environment: b.env})
 	b.settler.Start(b.ctx)
 	b.stopper.add("settler", b.settler.Stop)
-	b.ntf = notify.New(b.db, b.reg, notify.Options{CanRun: b.canWork})
-	b.ntf.Start(b.ctx)
+	b.ntf = notify.New(b.db, b.reg, notify.Options{CanRun: b.canWork, Locker: b.cl.Locker})
 	b.stopper.add("notifications", b.ntf.Stop)
 
 	az := authz.New(authz.Deps{DB: b.db, Bus: b.cl.Bus, Plugins: b.reg})
@@ -329,6 +328,9 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 	// stack moves the re-registration to the end instead of adding a second
 	// call, so the close order is unchanged.
 	b.stopper.add("settler", b.settler.Stop)
+	// Delivery starts once the plugin runtime does, so the providers can
+	// bind their channels first.
+	b.ntf.Start(b.ctx)
 	b.stopper.add("notifications", b.ntf.Stop)
 	b.stopper.add("helper-history", stopHelperHistory)
 
@@ -435,7 +437,19 @@ func (b *boot) registerRoutes(r *httpapi.Router) {
 		Authz: b.az, Cipher: b.cipher, Bus: b.cl.Bus, Jobs: b.jobs, HookStats: b.gw, Plugins: cfg.Plugins,
 	}).RegisterRoutes(r)
 	writes := &audit.PluginWrites{DB: b.db, Locker: b.cl.Locker, CanRun: b.canWork}
-	go writes.Run(b.ctx)
+	writesCtx, stopWrites := context.WithCancel(b.ctx)
+	writesDone := make(chan struct{})
+	go func() {
+		defer close(writesDone)
+		writes.Run(writesCtx)
+	}()
+	b.stopper.add("plugin-writes", func(wait context.Context) {
+		stopWrites()
+		select {
+		case <-writesDone:
+		case <-wait.Done():
+		}
+	})
 	pr := routes.New(b.reg, b.idm, b.az, routes.WithHealth(b.cl.Registry), routes.WithVersionAssets(b.pkgs), routes.WithAudit(writes))
 	pr.RegisterRoutes(r)
 	pr.RegisterAssets(b.engine)

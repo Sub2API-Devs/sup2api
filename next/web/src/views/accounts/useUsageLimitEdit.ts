@@ -2,7 +2,8 @@
 // its own endpoint: it is loaded the first time the card is shown for a saved
 // account and saved after the account when it changed. The PUT replaces the
 // whole config, so until the GET succeeded the card is read-only and nothing
-// is saved. Periods follow the browser's time zone once the limit is edited.
+// is saved. Periods follow the browser's time zone once the period, its
+// length or its start is edited; other edits keep the saved zone.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account, AccountUsageLimit } from '@/api/types'
@@ -15,6 +16,10 @@ import { defaultUsageLimit, fetchUsageLimit, PERIOD_COUNT_MAX, saveUsageLimit, u
 export type UsageLimitStatus = 'idle' | 'loading' | 'ready' | 'failed'
 
 const MESSAGES = { amount: 'accounts.usageLimit.amountInvalid', period_count: 'accounts.usageLimit.periodCountInvalid' } as const
+/** The fields that place the periods on a wall clock: editing one takes the browser's time zone. */
+const PERIOD_FIELDS = ['period', 'period_count', 'anchor'] as const
+/** What decides whether the limit changed: the zone alone is not an edit. */
+const fingerprint = (v: AccountUsageLimit) => JSON.stringify({ ...v, timezone: undefined })
 
 export function useUsageLimitEdit(accountId: () => number | undefined, shown: () => boolean) {
   const { t } = useI18n()
@@ -26,12 +31,15 @@ export function useUsageLimitEdit(accountId: () => number | undefined, shown: ()
   let forId: number | undefined | null = null
   let seq = 0
 
-  /** The card's model: every edit takes the browser's time zone, the one saved. */
-  const limit = computed({ get: () => value.value, set: (v: AccountUsageLimit) => (value.value = { ...v, timezone: browserTZ() }) })
+  /** The card's model: an edit of the periods takes the browser's time zone, the one saved. */
+  const limit = computed({
+    get: () => value.value,
+    set: (v: AccountUsageLimit) => (value.value = PERIOD_FIELDS.some((k) => v[k] !== value.value[k]) ? { ...v, timezone: browserTZ() } : v)
+  })
 
   function reset(v: AccountUsageLimit, next: UsageLimitStatus) {
     value.value = v
-    saved.value = JSON.stringify(v)
+    saved.value = fingerprint(v)
     status.value = next
     errors.value = {}
   }
@@ -73,8 +81,8 @@ export function useUsageLimitEdit(accountId: () => number | undefined, shown: ()
 
   /** Saves the limit of the saved account when it loaded and changed. */
   async function save(a: Account) {
-    if (status.value !== 'ready' || JSON.stringify(value.value) === saved.value) return
-    const body = { ...value.value, timezone: browserTZ() }
+    if (status.value !== 'ready' || fingerprint(value.value) === saved.value) return
+    const body = value.value
     await saveUsageLimit(a.id, body)
     reset(body, 'ready')
   }

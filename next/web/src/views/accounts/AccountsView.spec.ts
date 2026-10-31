@@ -158,6 +158,8 @@ describe('account automatic disabling policy', () => {
   })
 })
 
+const today = { query: { tz: Intl.DateTimeFormat().resolvedOptions().timeZone } }
+
 describe('account status recovery', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -194,7 +196,7 @@ describe('account status recovery', () => {
     const w = render()
     await w.get('[data-testid="account-reset-status"]').trigger('click')
     await flushPromises()
-    expect(mocks.post).toHaveBeenCalledWith('/accounts/23/reset-status')
+    expect(mocks.post).toHaveBeenCalledWith('/accounts/23/reset-status', undefined, { query: { tz: Intl.DateTimeFormat().resolvedOptions().timeZone } })
     expect(list.items.value[0]).toMatchObject({ status: 'active', status_reason: '', schedulable: false })
     expect(w.find('[data-testid="account-reset-status"]').exists()).toBe(false)
     expect(mocks.reload).toHaveBeenCalledOnce()
@@ -247,12 +249,14 @@ describe('account status recovery', () => {
   })
 
   it('words the reason of the usage limit from the usage figures (CONTRACTS §73)', () => {
-    const usage = { raw_cost_accounting: false, limit_disabled: true, limit: { amount: '200', used: '200.004', period: 'week', period_count: 1, window_start: null, window_end: null } }
+    const usage = { raw_cost_accounting: false, limit_disabled: true, limit: { amount: '200', used: '200.004', period: 'week', period_count: 1, window_start: null, window_end: null, waived: false } }
     Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'usage limit reached: $200.00 / $200.00 (per week)', auto_disabled_until: null, usage })
     expect(render().get('[data-testid="account-status"]').attributes('title')).toBe('用量已达上限：$200.00 / $200.00（每周）')
     i18n.global.locale.value = 'en'
     usage.limit.period_count = 2
     expect(render().get('[data-testid="account-status"]').attributes('title')).toBe('Usage limit reached: $200.00 / $200.00 (per 2 weeks)')
+    Object.assign(list.items.value[0], { usage: { ...usage, limit: null } })
+    expect(render().get('[data-testid="account-status"]').attributes('title')).toBe('Usage limit reached')
   })
 
   it('keeps the server reason when the usage limit did not disable the account', () => {
@@ -349,13 +353,13 @@ describe('account status recovery', () => {
     expect(toggle.attributes('aria-label')).toBe('禁用')
     await flip(toggle)
     await flushPromises()
-    expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/23', { status: 'disabled', schedulable: false })
+    expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/23', { status: 'disabled', schedulable: false }, today)
     expect(list.items.value[0].status).toBe('disabled')
     expect(toggle.attributes('aria-checked')).toBe('false')
     expect(w.text()).not.toContain('自动禁用')
     await flip(toggle)
     await flushPromises()
-    expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/23', { status: 'active', schedulable: true })
+    expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/23', { status: 'active', schedulable: true }, today)
     expect(list.items.value[0]).toMatchObject({ status: 'active', schedulable: true })
     expect(toggle.attributes('aria-checked')).toBe('true')
     expect(w.text()).not.toContain('自动禁用')
@@ -371,7 +375,7 @@ describe('account status recovery', () => {
     expect(toggle.attributes('aria-label')).toBe('启用')
     await flip(toggle)
     await flushPromises()
-    expect(mocks.patch).toHaveBeenCalledWith('/accounts/23', { status: 'active', schedulable: true })
+    expect(mocks.patch).toHaveBeenCalledWith('/accounts/23', { status: 'active', schedulable: true }, today)
     expect(toggle.attributes('aria-checked')).toBe('false')
     expect(list.items.value[0].status).toBe('disabled')
     expect(mocks.notifyError).toHaveBeenCalledWith(error)

@@ -77,6 +77,7 @@ const current = computed(() => props.usage?.limit ?? null)
             : t('accounts.usageLimit.currentTotal') }}
         </span>
         <span class="font-semibold">{{ formatMoney(current.used, 2) }} / {{ formatMoney(current.amount, 2) }}</span>
+        <span v-if="current.waived" class="w-full text-fg-muted" data-testid="usage-limit-waived">{{ t('accounts.usageLimit.waived') }}</span>
       </div>
     </template>
   </SSettingsGroup>

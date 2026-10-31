@@ -583,9 +583,9 @@ func (c *call) priceInputsFrom(rule *core.PriceRule, body []byte) (params map[st
 	return params, values
 }
 
-// meta describes the request to plugins. Protocol is the endpoint protocol;
-// attempts on a converting route override it with the upstream protocol
-// (metaFor).
+// meta describes the request to plugins. Protocol is the endpoint protocol
+// and Environment has no account layer; attempts override both with the
+// upstream protocol and the attempt's environment (metaFor).
 func (c *call) meta() *pluginv1.RequestMeta {
 	if !c.metaMapsDone {
 		c.metaPathParams = boundMeta(c.params)
@@ -596,7 +596,7 @@ func (c *call) meta() *pluginv1.RequestMeta {
 		RequestId: c.rid, Protocol: c.ep.Protocol, ClientProtocol: c.ep.Protocol,
 		Model: c.model, Stream: c.stream, ClientIp: c.c.ClientIP(),
 		PathParams: c.metaPathParams, Query: c.metaQuery,
-		Endpoint: c.ep.Path, SessionFingerprint: c.sessionFP,
+		Endpoint: c.ep.Path, SessionFingerprint: c.sessionFP, Environment: c.environment(nil),
 	}
 	if p := c.principal; p != nil {
 		m.UserId, m.ApiKeyId, m.GroupId = p.UserID, p.KeyID, p.Group.ID

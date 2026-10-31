@@ -15,6 +15,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
 func (e *env) stickyStats(rule string) map[string]string {
@@ -359,4 +360,22 @@ func TestRequestMetaEndpointAndSessionFingerprint(t *testing.T) {
 	require.Equal(t, 200, r.status, string(r.body))
 	e.record()
 	assert.Empty(t, h.calls[len(h.calls)-1].GetMeta().GetSessionFingerprint())
+}
+
+// A failed rule load is held briefly instead of sending every request to a
+// database that just failed; an invalidation reloads at once.
+func TestRuleCacheHoldsLoadFailure(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	_, err := db.Pool.Exec(ctx, `INSERT INTO sticky_rules (name, source, key_sources) VALUES ('r', 'admin', '[]')`)
+	require.NoError(t, err)
+	c := newRuleCache(db)
+	_, err = db.Pool.Exec(ctx, `ALTER TABLE sticky_rules RENAME TO sticky_rules_off`)
+	require.NoError(t, err)
+	require.Empty(t, c.get(ctx))
+	_, err = db.Pool.Exec(ctx, `ALTER TABLE sticky_rules_off RENAME TO sticky_rules`)
+	require.NoError(t, err)
+	require.Empty(t, c.get(ctx), "the failure is served from the cache")
+	c.invalidate()
+	require.Len(t, c.get(ctx), 1)
 }

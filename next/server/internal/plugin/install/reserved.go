@@ -56,8 +56,8 @@ func reservedUse(m *manifest.Manifest) (field, msg string) {
 // a platform id or a notification channel id of a first-party plugin.
 var ErrReservedKey = core.NewError(http.StatusForbidden, "plugin_key_reserved", "the plugin key, platform or notification channel id is reserved")
 
-// ErrResourceConflict: a version declares a platform or gateway endpoint
-// another approved plugin holds, a built-in platform id or a path the core
+// ErrResourceConflict: a version declares a platform, gateway endpoint or
+// notification channel another approved plugin holds, a built-in platform id or a path the core
 // reserves (details.fields, codes as check.Conflicts).
 var ErrResourceConflict = core.NewError(http.StatusConflict, "plugin_resource_conflict",
 	"another plugin or the core already holds a platform or endpoint this version declares")
@@ -76,11 +76,11 @@ func (s *Service) CheckResources(ctx context.Context, key, version string) error
 }
 
 func (s *Service) checkResources(ctx context.Context, q store.Querier, m *manifest.Manifest) error {
-	others, endpoints, err := s.otherPlatforms(ctx, q, m.Key)
+	others, endpoints, channels, err := s.otherResources(ctx, q, m.Key)
 	if err != nil {
 		return err
 	}
-	if conflicts := pkg.Conflicts(m, others, endpoints); len(conflicts) > 0 {
+	if conflicts := pkg.Conflicts(m, others, endpoints, channels); len(conflicts) > 0 {
 		return ErrResourceConflict.WithDetails(map[string]any{"fields": conflicts})
 	}
 	if field, msg := reservedUse(m); field != "" {

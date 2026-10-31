@@ -198,22 +198,29 @@ func secretName(name string) bool {
 	return false
 }
 
-// nameWords splits a field name into lower-case words at non-alphanumerics
-// and camelCase boundaries (authHeader -> auth, header).
+// nameWords splits a field name into lower-case words at non-alphanumerics,
+// camelCase boundaries (authHeader -> auth, header) and the end of an
+// acronym (SMTPPass -> smtp, pass).
 func nameWords(name string) []string {
 	var words []string
 	var word []rune
-	prev := rune(0)
-	for _, r := range name {
+	rs := []rune(name)
+	for i, r := range rs {
+		var prev, next rune
+		if i > 0 {
+			prev = rs[i-1]
+		}
+		if i+1 < len(rs) {
+			next = rs[i+1]
+		}
 		switch {
 		case !unicode.IsLetter(r) && !unicode.IsDigit(r):
 			words, word = appendWord(words, word), nil
-		case unicode.IsUpper(r) && unicode.IsLower(prev):
+		case unicode.IsUpper(r) && (unicode.IsLower(prev) || unicode.IsUpper(prev) && unicode.IsLower(next)):
 			words, word = appendWord(words, word), []rune{r}
 		default:
 			word = append(word, r)
 		}
-		prev = r
 	}
 	return appendWord(words, word)
 }

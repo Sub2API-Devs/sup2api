@@ -229,8 +229,8 @@ func lockSettlement(ctx context.Context, tx pgx.Tx, usageLogID int64) (*reserved
 	p := &pending{}
 	st := &reservedRowState{p: p}
 	err := tx.QueryRow(ctx, `
-		SELECT request_id, user_id, group_id, account_id, billing_status, total_cost FROM usage_logs WHERE id = $1 FOR UPDATE`,
-		usageLogID).Scan(&p.RequestID, &p.UserID, &p.GroupID, &p.AccountID, &st.status, &st.totalCost)
+		SELECT request_id, user_id, billing_status, total_cost FROM usage_logs WHERE id = $1 FOR UPDATE`,
+		usageLogID).Scan(&p.RequestID, &p.UserID, &st.status, &st.totalCost)
 	if store.IsNoRows(err) {
 		return nil, nil, core.ErrNotFound.WithMessage("usage record not found")
 	}

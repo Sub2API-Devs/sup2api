@@ -32,6 +32,7 @@ const (
 	onFailureStick    = "stick"
 
 	rulesTTL             = 30 * time.Second
+	rulesErrorTTL        = 3 * time.Second
 	stickyRedisTimeout   = 200 * time.Millisecond
 	maxStickyValueBytes  = 4 << 10
 	stickyStatsKeyPrefix = "sticky:stats:"
@@ -180,9 +181,11 @@ func scanStickyKeys(ctx context.Context, rdb redis.UniversalClient, pattern stri
 // ---------------------------------------------------------------- rule cache
 
 type ruleCache struct {
-	db    *store.DB
-	mu    sync.Mutex
-	at    time.Time
+	db *store.DB
+	mu sync.Mutex
+	// list is served until until; a failed load is cached as no rules for
+	// rulesErrorTTL, so a database outage is not queried on every request.
+	until time.Time
 	list  []*stickyRule
 	epoch uint64
 	// override replaces the DB in tests.
@@ -194,7 +197,7 @@ func newRuleCache(db *store.DB) *ruleCache { return &ruleCache{db: db} }
 func (c *ruleCache) invalidate() {
 	c.mu.Lock()
 	c.epoch++
-	c.list, c.at = nil, time.Time{}
+	c.list, c.until = nil, time.Time{}
 	c.mu.Unlock()
 }
 
@@ -207,7 +210,7 @@ func (c *ruleCache) get(ctx context.Context) []*stickyRule {
 		c.mu.Unlock()
 		return l
 	}
-	if c.list != nil && time.Since(c.at) < rulesTTL {
+	if time.Now().Before(c.until) {
 		l := c.list
 		c.mu.Unlock()
 		return l
@@ -217,15 +220,20 @@ func (c *ruleCache) get(ctx context.Context) []*stickyRule {
 	if c.db == nil {
 		return nil
 	}
-	all, err := listRules(ctx, c.db.Pool)
-	if err != nil {
+	var list []*stickyRule
+	ttl := rulesTTL
+	if all, err := listRules(ctx, c.db.Pool); err != nil {
+		if ctx.Err() != nil {
+			return nil // this request went away; the database may be fine
+		}
 		slog.WarnContext(ctx, "gateway: load sticky rules", "err", err)
-		return nil
+		ttl = rulesErrorTTL
+	} else {
+		list = activeRules(all)
 	}
-	list := activeRules(all)
 	c.mu.Lock()
 	if c.epoch == epoch {
-		c.list, c.at = list, time.Now()
+		c.list, c.until = list, time.Now().Add(ttl)
 	}
 	c.mu.Unlock()
 	return list

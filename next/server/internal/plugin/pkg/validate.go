@@ -38,6 +38,10 @@ type EndpointOwner = check.EndpointOwner
 // PlatformOwner is a platform declared by another installed plugin.
 type PlatformOwner = check.PlatformOwner
 
+// ChannelOwner is a notification channel declared by another installed
+// plugin.
+type ChannelOwner = check.ChannelOwner
+
 // ValidateOptions carries host facts needed by Validate.
 type ValidateOptions = check.ValidateOptions
 
@@ -45,6 +49,12 @@ type ValidateOptions = check.ValidateOptions
 // given manifests of other installed plugins (for ValidateOptions).
 func OthersFromManifests(ms []*manifest.Manifest) ([]PlatformOwner, []EndpointOwner) {
 	return check.OthersFromManifests(ms)
+}
+
+// ChannelsFromManifests collects the notification channels declared by the
+// given manifests of other installed plugins (for ValidateOptions).
+func ChannelsFromManifests(ms []*manifest.Manifest) []ChannelOwner {
+	return check.ChannelsFromManifests(ms)
 }
 
 // Validate checks a manifest against the package contents and host facts.
@@ -66,10 +76,10 @@ func Validate(m *manifest.Manifest, files map[string][]byte, opt ValidateOptions
 	return core.InvalidFields(fields...).WithMessage("plugin manifest validation failed")
 }
 
-// Conflicts reports the platforms and gateway endpoints of m that other
-// plugins already hold (check.Conflicts).
-func Conflicts(m *manifest.Manifest, others []PlatformOwner, endpoints []EndpointOwner) []core.FieldError {
-	fs := check.Conflicts(m, others, endpoints)
+// Conflicts reports the platforms, gateway endpoints and notification
+// channels of m that other plugins already hold (check.Conflicts).
+func Conflicts(m *manifest.Manifest, others []PlatformOwner, endpoints []EndpointOwner, channels []ChannelOwner) []core.FieldError {
+	fs := check.Conflicts(m, others, endpoints, channels)
 	out := make([]core.FieldError, len(fs))
 	for i, f := range fs {
 		out[i] = core.FieldError{Field: f.Field, Code: f.Code, Message: f.Message}

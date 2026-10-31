@@ -496,6 +496,23 @@ describe('account usage limit', () => {
     expect(w.emitted('saved')).toHaveLength(2)
   })
 
+  it('keeps the saved time zone unless the periods are edited', async () => {
+    const chatham = { ...saved, timezone: 'Pacific/Chatham' }
+    limitGet = () => Promise.resolve(chatham)
+    const w = await open()
+    card(w).vm.$emit('update:modelValue', { ...chatham, raw_cost_accounting: true })
+    await flushPromises()
+    await submit(w)
+    expect(mocks.put).toHaveBeenCalledWith('/accounts/1/usage-limit', { ...chatham, raw_cost_accounting: true })
+
+    card(w).vm.$emit('update:modelValue', { ...chatham, raw_cost_accounting: true, period: 'month' })
+    card(w).vm.$emit('update:modelValue', { ...chatham, raw_cost_accounting: true })
+    await flushPromises()
+    expect(card(w).props('modelValue').timezone).toBe(zone)
+    await submit(w)
+    expect(mocks.put).toHaveBeenCalledOnce()
+  })
+
   it('keeps the card read-only and never saves a limit that did not load', async () => {
     limitGet = () => Promise.reject(new Error('network down'))
     const w = await open()

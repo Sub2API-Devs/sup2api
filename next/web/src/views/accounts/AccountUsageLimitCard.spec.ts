@@ -48,6 +48,13 @@ describe('AccountUsageLimitCard', () => {
     expect(render(limit({ timezone: 'UTC' })).get('[data-testid="usage-limit-timezone"]').text()).toBe('Periods follow UTC')
   })
 
+  it('says when the current period was released by hand', async () => {
+    const state = { amount: '200', used: '250', period: 'week' as const, period_count: 1, window_start: null, window_end: null, waived: true }
+    const w = render(limit())
+    await w.setProps({ usage: { raw_cost_accounting: false, total: { cost: '0', raw_cost: '0', requests: 0, tokens: 0 }, today: { cost: '0', raw_cost: '0', requests: 0, tokens: 0 }, limit: state, limit_disabled: false } })
+    expect(w.get('[data-testid="usage-limit-waived"]').text()).toBe('本周期已人工放行')
+  })
+
   it.each<UsageLimitStatus>(['idle', 'loading'])('is read-only until the limit has loaded (%s)', (status) => {
     const w = render(limit(), status)
     expect(w.find('[data-testid="usage-limit-loading"]').exists()).toBe(true)

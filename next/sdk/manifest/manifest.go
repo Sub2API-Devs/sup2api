@@ -890,7 +890,7 @@ var HostPermissionRisk = map[string]string{
 	"platform.register":    RiskHigh,
 	"scheduler.rank":       RiskHigh,
 	"sticky.clear":         RiskHigh,
-	"notify.send":          RiskMedium, // sends through another plugin's channel, rate limited by the core
+	"notify.send":          RiskHigh, // free-form mail from the deployment to any recipient (phishing), even rate limited
 	"gateway.observe":      RiskHigh,
 	"users.read":           RiskHigh,
 	"accounts.credentials": RiskCritical,

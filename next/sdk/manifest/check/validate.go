@@ -23,7 +23,10 @@ var (
 	accountTypeIDRe = regexp.MustCompile(`^[a-z][a-z0-9_]{1,49}$`)
 	subscriptionRe  = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 	protocolRe      = regexp.MustCompile(`^[a-z0-9_.-]+$`)
-	allowedMethods  = map[string]bool{"GET": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true}
+	// coreKeys name the core itself where a plugin key is recorded (the
+	// source of a notification, an audit actor): no plugin may take them.
+	coreKeys       = map[string]bool{"core": true, "system": true}
+	allowedMethods = map[string]bool{"GET": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true}
 	// errorFormats are the upstream error renderings the gateway implements
 	// (server/internal/gateway/errors.go writeError); an endpoint declaring
 	// anything else would silently get the host's own "plain" envelope.
@@ -79,6 +82,13 @@ type PlatformOwner struct {
 	Endpoints []manifest.Endpoint
 }
 
+// ChannelOwner is a notification channel declared by another installed
+// plugin.
+type ChannelOwner struct {
+	PluginKey string
+	ID        string
+}
+
 // ValidateOptions carries host facts needed by Validate.
 type ValidateOptions struct {
 	// HostVersion is the server version; a pre-release suffix is ignored
@@ -96,6 +106,9 @@ type ValidateOptions struct {
 	OtherEndpoints []EndpointOwner
 	// OtherPlatforms are the platforms declared by all other installed plugins.
 	OtherPlatforms []PlatformOwner
+	// OtherChannels are the notification channels declared by all other
+	// installed plugins.
+	OtherChannels []ChannelOwner
 	// Tooling relaxes the three checks a manifest cannot satisfy outside an
 	// installing host: hostCompat is parsed but not matched against
 	// HostVersion (which is unknown), and the two package entries produced by
@@ -122,21 +135,38 @@ func OthersFromManifests(ms []*manifest.Manifest) ([]PlatformOwner, []EndpointOw
 	return pfs, eps
 }
 
+// ChannelsFromManifests collects the notification channels declared by the
+// given manifests of other installed plugins (for ValidateOptions).
+func ChannelsFromManifests(ms []*manifest.Manifest) []ChannelOwner {
+	var out []ChannelOwner
+	for _, m := range ms {
+		if m.Notifications == nil {
+			continue
+		}
+		for _, c := range m.Notifications.Channels {
+			out = append(out, ChannelOwner{PluginKey: m.Key, ID: c.ID})
+		}
+	}
+	return out
+}
+
 // Conflicts reports only the exclusive resources of m that other plugins or
-// the core already hold: platform ids and gateway endpoints of other plugins
-// (platform_conflict, endpoint_conflict), built-in platform ids
+// the core already hold: platform ids, gateway endpoints and notification
+// channel ids of other plugins (platform_conflict, endpoint_conflict,
+// channel_conflict), built-in platform ids
 // (builtin_platform) and paths the core reserves (invalid_path). The host
 // runs it again whenever a version starts to hold or use them - approval,
 // enable, upgrade - because versions awaiting approval hold nothing and a
 // newer core may have taken a path or platform since the upload.
-func Conflicts(m *manifest.Manifest, others []PlatformOwner, endpoints []EndpointOwner) []FieldError {
-	v := &validator{m: m, opt: ValidateOptions{OtherPlatforms: others, OtherEndpoints: endpoints, Tooling: true},
+func Conflicts(m *manifest.Manifest, others []PlatformOwner, endpoints []EndpointOwner, channels []ChannelOwner) []FieldError {
+	v := &validator{m: m, opt: ValidateOptions{OtherPlatforms: others, OtherEndpoints: endpoints, OtherChannels: channels, Tooling: true},
 		perms: map[string]*manifest.HostPermission{}}
 	v.platforms()
+	v.notifications()
 	var out []FieldError
 	for _, e := range v.errs {
 		switch e.Code {
-		case "platform_conflict", "endpoint_conflict", "builtin_platform", "invalid_path":
+		case "platform_conflict", "endpoint_conflict", "channel_conflict", "builtin_platform", "invalid_path":
 			out = append(out, e)
 		}
 	}
@@ -302,6 +332,8 @@ func (v *validator) basics() {
 	}
 	if !keyRe.MatchString(m.Key) {
 		v.add("key", "invalid_format", "key must match %s", keyRe.String())
+	} else if coreKeys[m.Key] {
+		v.add("key", "reserved", "key %q is reserved for the core", m.Key)
 	}
 	if strings.TrimSpace(m.Name["en"]) == "" {
 		v.add("name", "required", "name.en is required")

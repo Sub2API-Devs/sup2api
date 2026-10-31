@@ -426,6 +426,8 @@ export interface AccountUsageLimitState {
   window_start: string | null
   /** When the period resets; null for a lifetime limit ("none"). */
   window_end: string | null
+  /** Released by hand in this period: the limit does not disable the account again until the next one. */
+  waived: boolean
 }
 
 /** Account.usage: the core's usage record of the account (CONTRACTS §73). */
@@ -464,7 +466,7 @@ export interface AccountUsageLimit {
   timezone: string
 }
 
-/** Success-rate figure of an account (CONTRACTS §73): 400s, cancellations and gateway rate limiting are not failures. */
+/** Success-rate figure of an account (CONTRACTS §73.1): the upstream's 400s, cancellations and local failures are not failures. */
 export interface AccountOutcomes {
   success: number
   failed: number

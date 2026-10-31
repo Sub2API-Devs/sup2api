@@ -23,11 +23,19 @@ import (
 // the usage limit caps the cost of a period and, once reached, auto-disables
 // the account until the next period starts.
 
-// usageLimitReason starts the status_reason the usage limit writes. Only
-// accounts auto-disabled with it are the limit's to re-enable.
+// usageLimitReason starts the status_reason the usage limit writes, for
+// people to read: the limit knows its own disable by usageLimitSource.
 const usageLimitReason = "usage limit reached"
 
-func isUsageLimitReason(reason string) bool { return strings.HasPrefix(reason, usageLimitReason) }
+// usageLimitSource is accounts.auto_disabled_source of a disable the usage
+// limit wrote. Only such accounts are the limit's to re-enable or update.
+const usageLimitSource = "usage_limit"
+
+// limitDisabled reports whether the usage limit auto-disabled an account (a
+// trigger clears the source once the account leaves auto_disabled).
+func limitDisabled(status, source string) bool {
+	return status == "auto_disabled" && source == usageLimitSource
+}
 
 const (
 	usagePeriodHour  = "hour"
@@ -69,7 +77,7 @@ type UsageLimit struct {
 	Period      string          `json:"period"`
 	PeriodCount int             `json:"period_count"`
 	// Anchor is where periods are counted from; null = 2024-01-01 00:00 in
-	// Timezone. Truncated to the hour on that wall clock.
+	// Timezone. Floored to the hour (anchorStart).
 	Anchor *time.Time `json:"anchor"`
 	// Timezone (IANA) is the wall clock the periods follow: days start at its
 	// midnight and keep it across daylight saving.
@@ -91,6 +99,23 @@ func (l UsageLimit) location() *time.Location {
 	return time.UTC
 }
 
+// anchorStart is where the periods are counted from: the anchor (default
+// 2024-01-01 00:00) floored to the hour of the limit's wall clock. Hourly
+// periods floor it to the UTC hour instead: usage is summed in UTC hours,
+// and an hour period of a half-hour zone (Asia/Kolkata) would otherwise
+// split every bucket it touches.
+func (l UsageLimit) anchorStart() time.Time {
+	loc := l.location()
+	a := time.Date(2024, 1, 1, 0, 0, 0, 0, loc)
+	if l.Anchor != nil {
+		a = l.Anchor.In(loc)
+	}
+	if l.Period == usagePeriodHour {
+		return a.Truncate(time.Hour)
+	}
+	return time.Date(a.Year(), a.Month(), a.Day(), a.Hour(), 0, 0, 0, loc)
+}
+
 // window returns the period containing now: [start, end); end is nil for a
 // lifetime limit, whose start is the Unix epoch.
 func (l UsageLimit) window(now time.Time) (time.Time, *time.Time) {
@@ -98,11 +123,7 @@ func (l UsageLimit) window(now time.Time) (time.Time, *time.Time) {
 		return time.Unix(0, 0).UTC(), nil
 	}
 	loc := l.location()
-	anchor := time.Date(2024, 1, 1, 0, 0, 0, 0, loc)
-	if l.Anchor != nil {
-		a := l.Anchor.In(loc)
-		anchor = time.Date(a.Year(), a.Month(), a.Day(), a.Hour(), 0, 0, 0, loc)
-	}
+	anchor := l.anchorStart()
 	n := max(l.PeriodCount, 1)
 	at := func(k int) time.Time { return periodStart(anchor, l.Period, k*n) }
 	// The estimate is off by at most one period (daylight saving, month
@@ -185,9 +206,16 @@ type UsageLimitState struct {
 	PeriodCount int             `json:"period_count"`
 	WindowStart *time.Time      `json:"window_start"`
 	WindowEnd   *time.Time      `json:"window_end"`
+	// Waived: an administrator brought the account back by hand in this
+	// period, so the limit does not disable it again until the next one
+	// (CONTRACTS §73.4).
+	Waived bool `json:"waived"`
 }
 
-func (st *UsageLimitState) reached() bool { return st != nil && !st.Used.LessThan(st.Amount) }
+// reached reports whether the limit disables the account now.
+func (st *UsageLimitState) reached() bool {
+	return st != nil && !st.Waived && !st.Used.LessThan(st.Amount)
+}
 
 // UsageView is View.Usage: lifetime and today's usage, which cost is the
 // main figure, and the usage limit when one is on.
@@ -305,13 +333,13 @@ func limitStates(ctx context.Context, q store.Querier, limits map[int64]UsageLim
 		if !l.active() {
 			continue
 		}
-		st := &UsageLimitState{Amount: l.Amount, Period: l.Period, PeriodCount: l.PeriodCount}
+		start, end := l.window(now)
+		st := &UsageLimitState{Amount: l.Amount, Period: l.Period, PeriodCount: l.PeriodCount, Waived: l.waived != nil && l.waived.Equal(start)}
 		out[id] = st
 		if l.Period == usagePeriodNone {
 			st.Used = basis(l.RawCost, totals[id])
 			continue
 		}
-		start, end := l.window(now)
 		st.WindowStart, st.WindowEnd = &start, end
 		windows = append(windows, usageWindow{id, start, end})
 	}
@@ -367,7 +395,7 @@ func (s *Service) fillUsage(ctx context.Context, out []*View) {
 	}
 	for i, v := range out {
 		v.Usage = &UsageView{RawCostAccounting: limits[v.ID].RawCost, Total: totals[v.ID], Today: todays[i], Limit: states[v.ID],
-			LimitDisabled: v.Status == "auto_disabled" && isUsageLimitReason(v.StatusReason)}
+			LimitDisabled: v.limitDisabled}
 	}
 }
 
@@ -493,7 +521,7 @@ func (s *Service) putUsageLimit(c *gin.Context) {
 		return
 	}
 	if in.Anchor != nil {
-		a := in.Anchor.Truncate(time.Hour)
+		a := in.anchorStart()
 		in.Anchor = &a
 	}
 	scope := core.OwnerScope(ctx, "account:update")
@@ -530,10 +558,11 @@ func (s *Service) putUsageLimit(c *gin.Context) {
 }
 
 // waiveUsageLimit lets an account an administrator brought back by hand run
-// for the rest of the current period (for a lifetime limit: until the limit
-// is saved again). Runs in the transaction that re-enables the account, so
-// the sweep never sees it active and unwaived.
-func waiveUsageLimit(ctx context.Context, q store.Querier, id int64) error {
+// for the rest of the period that disabled it, the one ending at its release
+// time until (for a lifetime limit: until the limit is saved again). Runs in
+// the transaction that re-enables the account, so the sweep never sees it
+// active and unwaived.
+func waiveUsageLimit(ctx context.Context, q store.Querier, id int64, until *time.Time) error {
 	limits, err := usageLimits(ctx, q, []int64{id})
 	if err != nil {
 		return err
@@ -542,7 +571,13 @@ func waiveUsageLimit(ctx context.Context, q store.Querier, id int64) error {
 	if !ok || !l.active() {
 		return nil
 	}
-	start, _ := l.window(time.Now())
+	var at time.Time
+	if until != nil {
+		at = until.Add(-time.Nanosecond) // periods end before their end
+	} else if err := q.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&at); err != nil {
+		return err
+	}
+	start, _ := l.window(at)
 	_, err = q.Exec(ctx, `UPDATE account_usage_limits SET waived_window = $2 WHERE account_id = $1`, id, start)
 	return err
 }
@@ -584,11 +619,11 @@ func (s *Service) runUsageLimits(ctx context.Context) error {
 
 // usageCandidate is an account EnforceUsageLimits may change.
 type usageCandidate struct {
-	id                   int64
-	name, pluginKey, typ string
-	status, reason       string
-	until                *time.Time
-	limit                UsageLimit
+	id                     int64
+	name, pluginKey, typ   string
+	status, reason, source string
+	until                  *time.Time
+	limit                  UsageLimit
 }
 
 // EnforceUsageLimits applies the usage limits of the given accounts (nil =
@@ -598,7 +633,8 @@ type usageCandidate struct {
 // release time, and one the limit disabled that is now under it (limit
 // raised, turned off, or released early) is enabled again. The release at
 // the end of a period is the automatic-state sweep's. One account's failure
-// does not hold up the others.
+// does not hold up the others. Periods follow the database clock, the one
+// the sweep releases by.
 func (s *Service) EnforceUsageLimits(ctx context.Context, ids []int64) error {
 	if s.d.DB == nil {
 		return nil
@@ -608,25 +644,28 @@ func (s *Service) EnforceUsageLimits(ctx context.Context, ids []int64) error {
 		filter = ids
 	}
 	def := defaultUsageLimit()
-	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id, a.name, a.plugin_key, a.type, a.status, a.status_reason, a.auto_disabled_until,
+	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id, a.name, a.plugin_key, a.type, a.status, a.status_reason, a.auto_disabled_source, a.auto_disabled_until,
 			coalesce(l.raw_cost, false), coalesce(l.enabled, false), coalesce(l.amount, 0), coalesce(l.period, $3), coalesce(l.period_count, 1),
 			l.anchor, coalesce(l.timezone, $4), l.waived_window
 		FROM accounts a LEFT JOIN account_usage_limits l ON l.account_id = a.id
 		WHERE a.deleted_at IS NULL AND ($1::bigint[] IS NULL OR a.id = ANY($1))
-			AND ((l.enabled AND a.status = 'active') OR (a.status = 'auto_disabled' AND starts_with(a.status_reason, $2)))`,
-		filter, usageLimitReason, def.Period, def.Timezone)
+			AND ((l.enabled AND a.status = 'active') OR (a.status = 'auto_disabled' AND a.auto_disabled_source = $2))`,
+		filter, usageLimitSource, def.Period, def.Timezone)
 	if err != nil {
 		return err
 	}
 	cands, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (usageCandidate, error) {
 		var c usageCandidate
-		err := r.Scan(append([]any{&c.id, &c.name, &c.pluginKey, &c.typ, &c.status, &c.reason, &c.until}, c.limit.scanTargets()...)...)
+		err := r.Scan(append([]any{&c.id, &c.name, &c.pluginKey, &c.typ, &c.status, &c.reason, &c.source, &c.until}, c.limit.scanTargets()...)...)
 		return c, err
 	})
 	if err != nil || len(cands) == 0 {
 		return err
 	}
-	now := time.Now()
+	var now time.Time
+	if err := s.d.DB.Pool.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
+		return err
+	}
 	limits := make(map[int64]UsageLimit, len(cands))
 	var lifetime []int64
 	for _, c := range cands {
@@ -645,7 +684,7 @@ func (s *Service) EnforceUsageLimits(ctx context.Context, ids []int64) error {
 	}
 	var failed int
 	for _, c := range cands {
-		if err := s.enforceUsageLimit(ctx, c, states[c.id], now); err != nil {
+		if err := s.enforceUsageLimit(ctx, c, states[c.id]); err != nil {
 			failed++
 			slog.WarnContext(ctx, "account: apply usage limit", "account", c.id, "err", err)
 		}
@@ -656,17 +695,13 @@ func (s *Service) EnforceUsageLimits(ctx context.Context, ids []int64) error {
 	return nil
 }
 
-func (s *Service) enforceUsageLimit(ctx context.Context, c usageCandidate, st *UsageLimitState, now time.Time) error {
+func (s *Service) enforceUsageLimit(ctx context.Context, c usageCandidate, st *UsageLimitState) error {
 	over := st.reached()
-	if over && c.limit.waived != nil {
-		start, _ := c.limit.window(now)
-		over = !c.limit.waived.Equal(start)
-	}
-	limited := c.status == "auto_disabled" && isUsageLimitReason(c.reason)
+	limited := limitDisabled(c.status, c.source)
 	ch := automaticChange{id: c.id, name: c.name, pluginKey: c.pluginKey, typ: c.typ, from: c.status, fromReason: c.reason}
 	switch {
 	case over && (c.status == "active" || limited && !sameLimitDisable(c, st)):
-		ch.to, ch.until = "auto_disabled", st.WindowEnd
+		ch.to, ch.until, ch.source = "auto_disabled", st.WindowEnd, usageLimitSource
 		ch.reason = fmt.Sprintf("%s: $%s / $%s (%s)", usageLimitReason, st.Used.StringFixed(2), st.Amount.StringFixed(2), c.limit.periodText())
 	case !over && limited:
 		ch.to, ch.eventReason = "active", "usage back under the limit"

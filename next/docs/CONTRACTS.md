@@ -1364,7 +1364,7 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 rpc RankAccounts(RankAccountsRequest) returns (RankAccountsResponse);
 
 message RankAccountsRequest {
-  RequestMeta meta = 1;                 // 同钩子：request_id、protocol、model、stream、user_id、api_key_id、group_id、client_ip
+  RequestMeta meta = 1;                 // 同钩子：request_id、protocol、model、stream、user_id、api_key_id、group_id、client_ip；environment 不含账号层（§74.3）
   repeated RankCandidate candidates = 2;
 }
 message RankCandidate {
@@ -4741,7 +4741,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 1. **取结尾的消息不改核心**：gjson 自带的多路径写法 `messages|@reverse|[0,1,…,15]` 就能取到倒数 16 条（倒序；数组不足 16 条时缺的位置自动跳过，2026-10-30 用 gjson v1.19.0 实测）。插件把结果倒回正序，再算出结尾连续的 user 消息，不必把整段历史传过去。下文用 `TAIL16` 代指 `|@reverse|[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]`。
 2. **宿主调用 `SecretSeal` / `SecretOpen`**（HostService，宿主权限 `secrets`，风险 low，即无需管理员额外同意，插件升级时自动授予）：用核心的主密钥做 AES-256-GCM（`secret.Cipher`），AAD = `plugin-secret:{插件 key}:{context}`，context 由插件指定（≤128 字节，例如 `channel:3`），明文 ≤64 KiB。插件 A 封存的数据插件 B 解不开，同一插件换了 context 也解不开；解不开时一律返回 `InvalidArgument "ciphertext does not open"`，不区分原因。SDK：`Host.SealSecret` / `Host.OpenSecret`；`pluginsdktest.FakeHost` 用公开的测试密钥实现同样的绑定。审核渠道的 API Key 和代理地址密文存在插件表里（new-api 存明文；我们的账号凭证都加密，这里不降级）。旧核心没有这两个调用，返回 Unimplemented。
-3. **钩子请求的消息大小**：插件侧 gRPC 默认只收 4 MiB，带图片的请求会超过。SDK 加选项 `pluginsdk.WithMaxRecvMsgSize(n)`（编译进插件），moderation 设 64 MiB（`main.go` 的 `maxRecvMsgSize`），覆盖正常的请求（上游自己也限制请求大小，原先固定的请求体上限是 32 MiB）。核心作为客户端的发送上限是 gRPC 默认值（不限），钩子字段只是请求体的片段。§74.3 的 `max_request_body_mb` 允许管理员把请求体调大，个别请求可能超过插件的接收上限：这样的调用以 `RESOURCE_EXHAUSTED`（"larger than max"）失败，核心按该钩子的 failure 处理这一次，**但不计入熔断**（2026-10-31，`hooks.go` `tooLarge`），插件是健康的，不能因为个别超大请求让整个集群暂停审核。
+3. **钩子请求的消息大小**：插件侧 gRPC 默认只收 4 MiB，带图片的请求会超过。SDK 加选项 `pluginsdk.WithMaxRecvMsgSize(n)`（编译进插件），moderation 设 64 MiB（`main.go` 的 `maxRecvMsgSize`），覆盖正常的请求（上游自己也限制请求大小，原先固定的请求体上限是 32 MiB）。核心作为客户端的发送上限是 gRPC 默认值（不限），钩子字段只是请求体的片段。§74.3 的 `max_request_body_mb` 允许管理员把请求体调大，个别请求可能超过插件的接收上限：这样的调用以 `RESOURCE_EXHAUSTED` 失败，核心按该钩子的 failure 处理这一次，**但熔断不理会它**（2026-10-31，`hooks.go` `requestTooLarge`）：只有 `RESOURCE_EXHAUSTED` 且请求本身（`proto.Size(request)`）超过 4 MiB（gRPC 默认接收上限）时才算超大请求，既不计为失败，也不重置连续失败计数；插件的响应超大仍计为失败。插件是健康的，不能因为个别超大请求让整个集群暂停审核。
 4. `moderation` 的 `hostCompat` 改为 `>=` 本次核心版本（因为要用 `secrets`）；**发布顺序是先核心、后插件**。
 5. 不改：钩子点（仍然只有 `gateway.request`）、`usage_logs`、权限目录。插件权限在 manifest 里声明。
 
@@ -4851,7 +4851,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 某一级出错或超时 → 该级无结论，按通过处理，并标 `errored`，记录结果为 `error`。
 - 严重度取判定那一级的最高命中分数：≥0.9 为 high，≥0.7 为 medium，其余为 low。
 
-**超时**：`total_timeout_ms` 为 0 时，发布时自动填成"每级最大渠道超时之和"，封顶 120000。
+**超时**：`total_timeout_ms` 为 0 时，发布时自动填成"每级最大渠道超时之和"，封顶 120000。草稿保留 0（自动），只有已发布的 spec 和 `flow_versions.spec` 带算出的值；`flow_versions.auto_timeout`（0.5.1，迁移 `0008`）记下该版本发布时是否为自动，回滚到它时草稿恢复为 0 并重新计算，界面"放弃修改"按流程的 `published_auto_timeout` 把草稿恢复为 0。0.5.1 之前发布的版本记为非自动。流程接口用 `dirty` 表示草稿与已发布版本不同（0.5.1 删除了同义的 `has_draft_changes`）。
 
 **发布与版本**：
 - 草稿和已发布版本分开存；发布时带 `expected_version`（乐观锁）。
@@ -4941,7 +4941,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 删除已过期的名单条目（写 `watch_events` 的 expire）和已过期的封禁。
   - 另按**当前**留存期删除：结果类别对应的留存期之前创建的记录一律删除（照 new-api `cleanup.go`），统计表按 `stats_retention_days` 删除。所以缩短留存期对已有记录同样生效。
   - 保存设置后，任一留存期（四个结果类别或 `stats_retention_days`）比原来短时，各节点在应用新设置（Configure）后马上尝试执行一次记录和统计的删除，不等每天 04:00 的任务（照 new-api `controller:250-257`）。（2026-10-31 改：此前缩短留存期只对之后写入的记录生效。）
-  - 按留存期删除（`purgeRetention`，Configure 和 `cleanup` 任务共用）只在一个节点上执行：先在插件库里取会话级 advisory lock（`pg_try_advisory_lock`，键由 `moderation.retention_purge:` 加当前 schema 算出），取不到说明别的节点正在删，直接返回 0。删除分批进行：每条 `DELETE` 最多 5000 行（按 `ctid` 选出），批间停 50 ms，每批前检查 ctx，照 new-api `cleanup.go` 的 `deleteRecordBatches`；统计表 `stats_hourly`、`user_daily` 同样分批。释放锁失败时关闭该连接，不把持锁的连接还回连接池。（2026-10-31 改：此前每个节点同时执行，且每类只用一条不分批的 `DELETE`。）
+  - 按留存期删除（`purgeRetention`，Configure 和 `cleanup` 任务共用）只在一个节点上执行：先在插件库里取会话级 advisory lock（`pg_try_advisory_lock`，键由 `moderation.retention_purge:` 加当前 schema 算出），取不到说明别的节点正在删，直接返回 0。删除分批进行：每条 `DELETE` 最多 5000 行（按 `ctid` 选出），批间停 50 ms，每批前检查 ctx，照 new-api `cleanup.go` 的 `deleteRecordBatches`；统计表 `stats_hourly`、`user_daily` 和费用表 `costs`（按 `stats_retention_days`）同样分批。释放锁失败时关闭该连接，不把持锁的连接还回连接池。（2026-10-31 改：此前每个节点同时执行，且每类只用一条不分批的 `DELETE`。）
 
 ### 72.11 接口（`/api/v1/p/moderation/*`，新增或修改的部分）
 
@@ -5020,7 +5020,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 **72.13.4 AI 分析**（照 new-api `analysis.go`、`analysis_tools.go`、`escalate.go`、`category_dict.go`）
 
 - **触发**：
-  - 自动：observe 级用户的违规计数达到 `analysis_every_violations`（>0，且设置了 `analysis_channel_id`）时，计数清零、开新的计数窗口，并把这个用户排进分析队列。
+  - 自动：observe 级用户的违规计数达到 `analysis_every_violations`（>0，且分析渠道可用：存在、启用、是 `llm` 渠道，与 `runtime.analysis.channel_configured` 同一判断）时，计数清零、开新的计数窗口，并把这个用户排进分析队列。分析渠道不可用时不排队、计数也不清零（0.5.1 起；此前只看 `analysis_channel_id` 非 0）。
   - 手动：`POST /watchlist/:user_id/analyze`（manage）。observe 级、enforce 级都可以。用户不在名单上返回 404；没设分析渠道返回 400 `no_analysis_channel`；已在排队或正在分析返回 409 `analysis_pending`。
 - **队列**：在名单行上实现，新增列：
   - `analysis_requested_at`、`analysis_source`（auto|manual）：已排队。
@@ -5079,7 +5079,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - `GET /flows/:id/versions`（read）→ `{current_version, items:[{version, published_at, published_by, current}]}`，按版本倒序。
 - `GET /flows/:id/versions/:version`（read）→ `{flow_id, name, version, current, published_at, spec, stages:[{stage, combine, n, auditors:[{auditor_id, name, type, deleted}]}]}`。审核器名称取当前的；已删除的标 `deleted`。
-- `POST /flows/:id/rollback {version, expected_version}`（manage）：把旧版本的 spec 作为新版本发布，草稿同时换成它。
+- `POST /flows/:id/rollback {version, expected_version}`（manage）：把旧版本的 spec 作为新版本发布，草稿同时换成它；该版本以自动总超时发布时，草稿的 `total_timeout_ms` 回到 0，发布值按当前渠道重新计算（72.7）。
   - 引用了已删除审核器时返回 400 `missing_auditors`，`details.auditor_ids` 列出这些 id。
   - 版本号不对时返回 409 `version_conflict`。
 - `POST /flows/:id/simulate {text?, images?, event_id?, source: draft|published|version, version?}`（manage）：用当前的审核器跑一遍，返回值同 `/test`，另加本次 `cost`。
@@ -5117,7 +5117,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - `user_daily`：每个用户每个 UTC 日的审核数、可疑数、高危数、错误数、最近命中时间。共用一次 pre 审核的多个请求各记各的用户。持有 `moderation:read` 的用户（版主）不记。
 - 每个节点在内存里累加，每 10 秒写一次。写入串行，按固定键顺序 upsert，避免多节点死锁；失败的部分留到下一轮。读接口先写本节点的待写数据，其他节点最多晚 10 秒。
 - 不计入的情况：Shutdown 打断的运行，以及客户端已离开且没有命中的 pre 请求。
-- 清理：`stats_retention_days`（默认 90 天）删除 `stats_hourly` 和 `user_daily`，`costs` 保留 400 天。
+- 清理：`stats_retention_days`（默认 90 天）删除 `stats_hourly`、`user_daily` 和 `costs`，与 72.10 的统计表一样在 `purgeRetention` 的锁内分批删除（0.5.1 起；此前 `costs` 固定保留 400 天、不分批）。
 
 **接口**（都要 `moderation:read`）：
 - `GET /status`：今日计数、AI 复核计数、观察名单计数、近 1 小时审核器和渠道健康度、漏斗、队列、今日费用。观察计数与 new-api 一致：`watching` 和 `watching_with_new` 只算 observe 级，`blocking` 算 enforce 级。
@@ -5145,7 +5145,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 插件查不了（没授予 `users.read`，或核心早于 Host API 8）时回答 503 `users_unavailable`，界面此后改为逐个调核心的 `/users/:id`（需要 `user:read`，遇到 403 就停止）；邮箱和角色只从这条路得到，没有显示名时界面才显示邮箱。其他错误（查询失败等）不切换：这批 id 暂记为未知，30 秒后再次渲染时重查。
   - 通知（AI 调整观察级别）里的用户写成"显示名 #id"，没有显示名时只写 `#id`，不用邮箱。
   - 时间线和名单历史仍走 `GET /events?user_id=` 和 `GET /watchlist/:user_id/events`。（2026-10-31 改：此前返回邮箱和角色、任意 id 都回答、任何错误都永久改走核心。）
-- 手动加入名单（`POST /watchlist`）和手动封禁（`POST /blocks`）先用 `GetUsers` 确认用户存在，不存在返回 404 `user_not_found`（照 new-api）。查不了时不校验，与以前相同；查询出错返回 503。
+- 手动加入名单（`POST /watchlist`）和手动封禁（`POST /blocks`）先用 `GetUsers` 确认用户存在，不存在返回 404 `user_not_found`（照 new-api）。查不了时不校验，与以前相同；查询出错返回 503。两者都拒绝豁免用户和版主（400，`user_id` 字段错误 `exempt` / `staff`，0.5.1 起封禁也检查）。
 - `users.read`（风险 high）是**可选**授权：不授予时上面两项退回旧行为。0.5.0 新增，升级时管理员需要确认。
 - 名单的"新命中"（`hits_since_seen`）在以下情况清零：手动标记已读、手动改级别、AI 改级别（与 new-api 的 `hits_since_mark` 一致）。
 
@@ -5177,7 +5177,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 72.15 界面（插件 `ui/native`，只用 `@sub2api/ui` 和 `@sub2api/host`）
 
-**标签页**：概览、记录、观察名单、封禁、流程、审核器、渠道、测试、设置。设置标签页对核心 `plugin:manage` 或 `moderation:manage`（§75.1）可见；没有核心 `plugin:read` 的人，"完整设置"链接打开 `/plugins/moderation/settings`；它只编辑本插件常用的几项，完整设置仍然在插件详情页的 schema 表单里。
+**标签页**：概览、记录、观察名单、封禁、流程、审核器、渠道、测试、设置。设置标签页对核心 `plugin:manage` 或 `moderation:manage`（§75.1）可见；没有核心 `plugin:read` 的人，"完整设置"链接打开 `/plugins/moderation/settings`；它只编辑本插件常用的几项，完整设置仍然在插件详情页的 schema 表单里。保存前重新读取已存的设置，只改本页的几项再写回（核心设置接口没有版本号），别处同时改的其他设置不会被覆盖。
 
 - **概览**：数据来自 `/status` 和 `/stats/*`。内容包括：状态行、KPI、需关注用户、AI 复核、今日费用、性能、分类、漏斗、趋势、健康度、队列。
 - **流程**：拖拽画布，与 new-api 一致。支持模板、发布、版本与回滚、模拟（可选用户状态），分组单元格遇到 409 时可以强制覆盖。
@@ -5219,7 +5219,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ### 73.1 成功率（1 分钟滚动窗口）
 
 - 核心观测消费者 `core.account` 同时订阅 `usage_finalized` 和 `attempt_finished`，新增指标 `failed_requests`（`sdk/observation.FailedRequests`）。
-- 失败 = 一次结束的尝试 `!success && !canceled && !local_failure && status != 400 && error_type != "rate_limited"`，`status` 取 `upstream_status_code`，没有上游响应时取 `status_code`：400（请求本身有误）、客户端取消、网关自身限流、本地失败（§74.1，不怪账号）都不算失败；其余每次失败的上游尝试计一次。成功侧仍是 `success_requests`（成功请求数）。
+- 失败与 dynweight 计数（§74.5）用同一条规则 `sdk/observation.AttemptOutcome` / `AccountFailure`：一次结束的尝试 `!success && !canceled && !local_failure`，按 `upstream_status_code` 判断，核心豁免 400（请求本身有误）。客户端取消和本地失败（§74.1，不怪账号；网关自身限流的 `error_type` 不是 `upstream_error`，所以总是本地失败）都不算。只看上游自己的状态码：没有上游响应（连接失败、超时，`upstream_status_code` 为 0）的失败总是计入，不退回客户端看到的 `status_code`（插件可能改写过，改写成 400 时会被误豁免）。其余每次失败的上游尝试计一次。成功侧仍是 `success_requests`（成功请求数）。
 - 账号列表视图新增 `outcomes: {success, failed}`（近 60 秒，与统计设置的窗口无关；Redis 不可用时为 null）。成功率 = success ÷ (success + failed)，无请求显示「—」；≥99% 绿、≥95% 黄、其余红。
 - `GET /accounts/stats` 的 `AccountStatsView` 新增 `failed_requests`；插件读核心指标的白名单同步加入 `failed_requests`。一次读取的 账号×指标 上限改为 800（200 个账号 × 4 个核心指标，核心与插件读取同一上限；核心指标列表为 `observation.CoreMetrics`）。
 
@@ -5228,7 +5228,8 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 迁移 `0064_account_usage.sql`：`account_usage_hourly(account_id, hour, cost, raw_cost, requests, tokens)` 与 `account_usage_totals(account_id, …)`；首次迁移时回填全部历史行（回填期间锁住 `usage_logs` 的写入）。
 - 迁移 `0068_account_usage_journal.sql`：`usage_logs` 上的触发器 `account_usage_track` 只往 `account_usage_deltas` 追加增量，不再在结算事务里改汇总行（结算按批写入，两批以不同顺序写同一批账号、或与同一用户的结算交错时会死锁，热门账号的写入也会排队在它的那一行上）。账号服务每 5 秒在一个节点上（advisory lock `account.usage_limits`）用 `account_usage_fold(n)` 把增量并入小时表和累计表，所以用量和限额最多滞后几秒。
 - 口径与 §61 API Key 额度一致：`billed`/`reserved` 的行计入费用，转为 `free`/`failed` 时退回；`cost` 为计费后费用，`raw_cost` 为分组倍率前的费用（取 `billing_detail.cost`，任意位小数，四舍五入到 8 位；缺失时 `total_cost / rate_multiplier`，倍率 ≤ 0 时取 `total_cost`）。注意：使用记录统计页的「原价」(`standard_cost`) 一律是 `total_cost / rate_multiplier`，两者在 `billing_detail.cost` 与之不一致或倍率为 0 时会不同；`requests` 为成功行数；`tokens` 为五类 token 之和。行换账号时从旧账号扣回。删除历史日志不回退累计值。
-- 两张表不引用 `accounts`（触发器在结算事务里执行，已清除的账号不能让写入失败）。小时桶按 UTC 整点；半小时时区的周期边界落在 UTC 半点，按所在小时桶近似。
+- 两张表不引用 `accounts`（触发器在结算事务里执行，已清除的账号不能让写入失败）。小时桶按 UTC 整点；半小时时区的日/周/月周期边界落在 UTC 半点，按所在小时桶近似（偏差半小时）；按小时的周期对齐 UTC 整点（73.3），不近似。
+- 迁移 `0070_account_usage_limit_source.sql`：`billing_detail.cost` 为负数时不再采用（会抵扣限额），与缺失时一样退回 `total_cost / rate_multiplier`。
 - 账号视图新增 `usage: {raw_cost_accounting, total, today, limit}`；`today` 从请求 `tz=<IANA 时区>` 的当日零点起（缺省 UTC；`httpapi.RequestContext` 读入 `core.TimeZone`）；`usage.limit_disabled` 表示账号正被用量限制自动禁用，控制台据此本地化原因，不解析原因字符串。`GET /accounts/:id/usage`（`account:read` / `account:own:read`）返回 `today`、`last_7_days`、`last_30_days`、`total` 和 `limit`。
 
 ### 73.3 原始倍率计费与用量限制
@@ -5236,18 +5237,19 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 配置存于 `account_usage_limits`（随账号删除级联），接口：
   - `GET /accounts/:id/usage-limit`（读权限）：未保存过时返回默认值 `{raw_cost_accounting:false, enabled:false, amount:"0", period:"month", period_count:1, anchor:null, timezone:"UTC"}`。
   - `PUT /accounts/:id/usage-limit`（`account:update` / `account:own:update`）：整体替换并写审计 `account.usage_limit`，保存后立即对该账号生效，返回 `GET /usage` 同形的明细。
-- 字段：`raw_cost_accounting`（原始倍率计费：累计用量与限额都按 `raw_cost`）、`enabled`、`amount`（USD，0–1e9，最多 8 位小数，开启时须 > 0）、`period`（`hour|day|week|month|none`）、`period_count`（单个周期最长 366 天：小时 ≤ 8784、天 ≤ 366、周 ≤ 52、月 ≤ 12）、`anchor`（周期起点，2000–2100 年，按 `timezone` 的挂钟取整点；null = 该时区 2024-01-01 00:00，即日/周一/月初的自然边界）、`timezone`（IANA 时区，控制台保存时取浏览器时区；周期按该时区挂钟计算，日/周跨夏令时仍从零点开始，月按日历，起点是 31 日时短月取月末）。`none` 为总额度，按累计值计算、不重置。
-- 执行：账号服务每 5 秒的自动状态巡检后，在一个节点上先汇总用量（73.2），再执行 `EnforceUsageLimits`（单个账号失败只记日志，不影响其它账号）：
-  - 启用中的账号本周期用量 ≥ 限额 → `status=auto_disabled`，`status_reason="usage limit reached: $<used> / $<amount> (<per month|per 2 weeks|total>)"`，`auto_disabled_until` = 本周期结束（总额度为 null）。不受账号「允许自动禁用」和全局自动禁用开关影响。
+- 字段：`raw_cost_accounting`（原始倍率计费：累计用量与限额都按 `raw_cost`）、`enabled`、`amount`（USD，0–1e9，最多 8 位小数，开启时须 > 0）、`period`（`hour|day|week|month|none`）、`period_count`（单个周期最长 366 天：小时 ≤ 8784、天 ≤ 366、周 ≤ 52、月 ≤ 12）、`anchor`（周期起点，2000–2100 年，按 `timezone` 的挂钟向下取整点后保存；null = 该时区 2024-01-01 00:00，即日/周一/月初的自然边界。`period=hour` 时起点改为向下取 UTC 整点：用量按 UTC 小时桶汇总，半小时/45 分时区的小时周期否则每个周期都会把两个桶各算一半；这类时区的小时周期因此比挂钟整点早 30/45 分钟）、`timezone`（IANA 时区，控制台保存时取浏览器时区；周期按该时区挂钟计算，日/周跨夏令时仍从零点开始，月按日历，起点是 31 日时短月取月末）。`none` 为总额度，按累计值计算、不重置。
+- 执行：账号服务每 5 秒的自动状态巡检后，在一个节点上先汇总用量（73.2），再执行 `EnforceUsageLimits`（单个账号失败只记日志，不影响其它账号）。周期按数据库时钟（`clock_timestamp()`）计算，与到期解除用的是同一个时钟，节点时钟偏差不会让刚解除的账号按上一个周期再被禁用：
+  - 启用中的账号本周期用量 ≥ 限额 → `status=auto_disabled`，`status_reason="usage limit reached: $<used> / $<amount> (<per month|per 2 weeks|total>)"`，`auto_disabled_until` = 本周期结束（总额度为 null），`auto_disabled_source='usage_limit'`。不受账号「允许自动禁用」和全局自动禁用开关影响。
   - 周期结束由现有的自动状态巡检（§42）自动启用。
   - 被用量限制禁用、且现在不再超限（调高限额、关闭限制、改了周期）→ 立即恢复 `active`；仍超限但限额或周期改了 → 更新原因和 `auto_disabled_until`。
-  - 只处理 `status_reason` 以 `usage limit reached` 开头的自动禁用，其它原因的自动禁用和人工禁用不动。状态变更与插件/失败策略的自动状态共用一套写入（`writeAutomaticStatus`），写审计 `account.usage_limit_state` 并发 `account.status_changed`。
-  - 插件或失败策略的 `ACTION_CLEAR` 不解除用量限制的禁用（§73.4）。
+  - 用量限制只认自己写的禁用：`status='auto_disabled' AND auto_disabled_source='usage_limit'`（迁移 0070 新增 `accounts.auto_disabled_source`，回填以 `usage limit reached` 开头的现有自动禁用；触发器在账号离开 `auto_disabled` 时清空它）。原因文本只给人看，插件或失败策略写了同样开头的原因也不算。其它自动禁用和人工禁用不动。状态变更与插件/失败策略的自动状态共用一套写入（`writeAutomaticStatus`，总是写 `auto_disabled_source`），写审计 `account.usage_limit_state` 并发 `account.status_changed`。
+  - 插件或失败策略的 `ACTION_CLEAR` 不解除用量限制的禁用（§73.4）。它们的 `ACTION_DISABLE` 只在更久时替换用量限制的禁用（不定期限替换定期限，或解除时间更晚；总额度的禁用不被替换），替换后来源变为插件/失败策略，那个禁用结束后用量限制照常再判断；否则不变。
 
 ### 73.4 人工恢复与豁免
 
-- 「重置状态」或把状态改回「启用」恢复一个被用量限制禁用的账号时，在同一事务里记下当前周期（`waived_window`），本周期内不再禁用；总额度模式下一直有效。保存用量限制配置会清除这一豁免。
-- 控制台：状态栏的自动禁用统一为黄色徽章（人工禁用仍为红色），原因与「何时自动启用」只在悬停时显示；用量限制的原因翻译为「用量已达上限：…」。编辑页「调度与限流」新增「用量限制」卡片，打开该分区时加载，加载成功前不可编辑、加载失败不会提交；账号保存成功后单独提交，提交失败只提示，不影响已保存的账号。
+- 「重置状态」或把状态改回「启用」恢复一个被用量限制禁用的账号时，在同一事务里记下造成这次禁用的周期（`waived_window`，即包含 `auto_disabled_until` 前一刻的周期，不是当前周期：周期已结束、巡检还没解除时放行的账号，在新周期超限照样禁用），该周期内不再禁用；总额度模式下一直有效。保存用量限制配置会清除这一豁免。`usage.limit` / 明细的 `limit` 新增 `waived`（当前周期已人工放行），控制台显示「本周期已人工放行」。
+- CCGateway 重新授权（§49.17）解除错误和其它自动禁用，但不解除用量限制的禁用：新凭据不减少用量，到周期结束由巡检解除，或人工放行。
+- 控制台：状态栏的自动禁用统一为黄色徽章（人工禁用仍为红色；启用但人工关闭调度的账号归在「自动禁用」筛选里，徽章同人工禁用为红色），原因与「何时自动启用」只在悬停时显示；用量限制的原因翻译为「用量已达上限：…」（没有限额数字时只显示「用量已达上限」）。行内操作（启用/停用、重置状态、批量编辑）的请求带浏览器 `tz`，返回的行数据里「今日」与列表一致。编辑页「调度与限流」新增「用量限制」卡片，打开该分区时加载，加载成功前不可编辑、加载失败不会提交；账号保存成功后单独提交，提交失败只提示，不影响已保存的账号。只有改了周期、周期长度或起点时才改用浏览器时区；只改其它字段时保留已保存的时区，只有时区不同不算修改。
 
 ## 74. 动态权重 dynweight 与它需要的核心能力（2026-10-31，用户要求参照 new-api codingplus 的动态权重迁移）
 
@@ -5267,7 +5269,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 ### 74.1 请求观测的新字段（`RequestObservation`）
 
 - `group_id`（26）：请求所在分组。
-- `local_failure`（27）：这次失败不怪账号。来源是平台插件的 `ClassifyError` 判为 local_failure，核心在本地转交响应时出错（例如缓冲响应的临时文件写失败），或者失败不是上游失败（错误类型不是 `upstream_error`，例如账号不可用、资源准备失败）。上游的错误响应读不完整（连接被重置、卡住）仍算上游失败。判断看的是这次尝试最终记下的错误类型：转发完成但在本地出错的尝试（例如额度写入失败）同样算本地失败。WebSocket 会话的每一轮同样按这三条判断。健康统计应把它排除。
+- `local_failure`（27）：这次失败不怪账号。来源是平台插件的 `ClassifyError` 判为 local_failure，核心在本地转交响应时出错（例如缓冲响应的临时文件写失败），或者失败不是上游失败（错误类型不是 `upstream_error`，例如账号不可用、资源准备失败）。上游的错误响应读不完整（连接被重置、卡住）仍算上游失败。判断看的是这次尝试最终记下的错误类型：转发完成但在本地出错的尝试（例如额度写入失败）同样算本地失败。WebSocket 会话的每一轮同样按这三条判断。健康统计应把它排除。只在 `attempt_finished` 阶段设置，其他阶段（`attempt_started`、`response_started`、`usage_finalized` 等）一律为 false，所以只应在 `attempt_finished` 上读它。
 - `upstream_status_code`（28）：上游对这次尝试回的状态码。上游没有响应时为 0。客户端看到的 `status_code` 可能经过映射，也可能是合成的 502，所以健康统计按这个字段算。流式响应开始时就记下，上游回 200 以外的状态也照记。
 
 ### 74.2 清理粘性会话（`HostService.ClearStickyBindings`，Host API 8，授权 `sticky.clear`）
@@ -5275,6 +5277,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **请求**：`{account_id, group_id, model, percent 1..100, salt}`。删除指向该账号、且可能服务这个（分组、客户端模型）的粘性绑定，删其中 `percent` 的比例。
   - 键里没有分组或模型维度的绑定，按两者都匹配处理。
   - 同一个 `salt` 选中的是同一批绑定，换一个 `salt` 选中另一批。
+  - 一次调用最长 10 秒（要扫描全部绑定键）；超时返回错误，已删除的绑定不恢复。
 - **回答**：`{matched, cleared}`。
 - **用途**：降权后把一部分会话放到别的账号上，避免被粘性会话绑死。
 
@@ -5286,8 +5289,11 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **已声明的变量**（定义见 `core/environment.go`）：
   - `relay_timeout_seconds`、`response_header_timeout_seconds`、`streaming_idle_timeout_seconds`
   - `max_request_body_mb`：没有账号层，因为选账号之前就要用到。端点声明了 `request.maxBodyBytes` 时，生效值取两者中较大的那个（只放宽，不收紧端点自己要的上限）；端点没有声明时直接用它，所以运营方仍可把默认的 32 MB 调小。未设置：端点声明的值，否则 32 MB。
-  - `task_timeout_minutes`、`task_poll_max_failures`：只有分组层和账号层，全局层就是对账设置（§8 的 `max_reconcile_age_sec`、`max_poll_failures`），没有进程环境变量。只作用于异步任务；普通预扣条目只按对账设置。`task_timeout_minutes` 在任务登记时折算成截止时间，之后修改不影响已登记的任务；`task_poll_max_failures` 每次查询失败时重新解析。
+  - `task_timeout_minutes`、`task_poll_max_failures`：只有分组层和账号层，全局层就是对账设置（§8 的 `max_reconcile_age_sec`、`max_poll_failures`），没有进程环境变量。只作用于异步任务；普通预扣条目只按对账设置。`task_timeout_minutes` 在任务登记时折算成截止时间，之后修改不影响已登记的任务；例外是管理员手动重新对账（`POST /usage/:id/reconcile`）：截止时间从重试时刻起、按任务所在分组和账号**当前**的变量重新计算。`task_poll_max_failures` 每次查询失败时重新解析。
   - 三个超时只作用于 HTTP 转发；WebSocket 会话是长连接，只用请求体上限（作为单条消息的上限）。
+  - 资源请求（Files API 等，`resource_http.go`）不受 `max_request_body_mb` 和三个超时约束，用自己的上限（文件 512 MB、JSON 16 KB）和期限。
+  - `relay_timeout_seconds` 从发出上游请求时起算，与 `response_header_timeout_seconds` 同时开始；之前的本地准备（资源与额度请求头、辅助历史包装、可用性检查、任务登记）不计入。`streaming_idle_timeout_seconds` 只在核心等待上游数据（读响应体）时计时，客户端读得慢不算上游空闲。
+  - 账号层取本次尝试重新加载的账号，不取挑选候选时的快照。
   - `relay_timeout_seconds` 或 `streaming_idle_timeout_seconds` 中途切断流式响应时，使用记录的错误信息写明是哪一个（`upstream stream interrupted: upstream request exceeded relay_timeout_seconds` / `… upstream stream exceeded streaming_idle_timeout_seconds`），不再只是 `context canceled`。
   - 平台插件 `Execute` 调用的总时限是 6 小时加上本次尝试的 `relay_timeout_seconds`，所以设得再长（最大 86400 秒）也不会先被这个上限截断。
   - 进程环境变量（`SUB2API_RELAY_TIMEOUT_SECONDS` 等，见声明的 `process_env`）由 `config.Load` 解析，作为全局层的回退；非法（非数字或超出范围）时启动失败。
@@ -5296,7 +5302,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - `GET|PUT /settings/environment`：全局层。
   - 分组层和账号层是 `groups.environment` 和 `accounts.environment` 两列，随分组和账号一起编辑。
 - **插件**：
-  - 网关请求的解析结果在 `RequestMeta.environment`。
+  - 网关请求的解析结果在 `RequestMeta.environment`。选定账号之前的调用（钩子、`RankAccounts`、用量估算等）拿到的是分组层和全局层（含进程层）的解析结果，没有账号层；针对某次尝试的调用（构建上游请求、`ClassifyError`、用量提取等）含该账号的账号层。
   - 后台任务调用 `HostService.GetEnvironment(group_id, account_id)`，总是授权。
   - 变量名常量在 SDK 的 `protocol` 包（`protocol.EnvVarRelayTimeoutSeconds` 等），核心复用同一组常量。
   - 目前没有插件读这两处：转发由核心完成，变量也由核心应用。它们是留给自己向上游转发的插件（自带 HTTP 客户端、后台任务直接调上游）的扩展点，这类插件应按同样的变量设超时和上限。
@@ -5305,16 +5311,20 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 ### 74.4 通知
 
 - **渠道由插件提供**：插件声明 `notify.channel.v1`，在 manifest 的 `notifications.channels` 里写 `[{id, label, description, recipient: email|text}]`，并实现 `NotificationChannel.DeliverNotification`。
-  - 渠道 id 全局唯一，冲突时先声明的插件生效。
+  - 渠道 id 全局唯一，和平台一样是独占资源：上传、批准、启用、升级时，若另一个已批准的插件已声明同一渠道 id，返回 409 `plugin_resource_conflict`（`details.fields` 里 `notifications.channels[i].id` 的 code 为 `channel_conflict`；上传时是 400 的同名字段错误）。运行时仍以先声明的插件为准。
   - 内置的 `mailer` 插件提供 `email`，经它设置里的 SMTP 服务器发送。
   - 渠道 id 和平台 id 一样保留给第一方插件（`email` 只能由 `mailer` 声明），因为渠道的提供方能读到发往该渠道的每条通知。
-  - `mailer` 一封邮件发给全部接收人：任一接收人被 SMTP 以 5xx 拒绝，整条通知按最终失败处理。超时上限 25 秒，低于核心投递调用的 30 秒期限。
+  - `mailer` 一封邮件发给全部接收人：任一接收人被 SMTP 以 5xx 拒绝，整条通知按最终失败处理。超时上限 25 秒，低于核心投递调用的 30 秒期限。邮件正文已被服务器接受（DATA 结束）后 QUIT 失败不算失败，避免重试造成重复邮件。
 - **发送方只认渠道 id**：持有 `notify.send` 授权的插件调用 `ListNotificationChannels` 和 `Notify{channel, recipients 1..20, subject, body 纯文本, severity info|warning|critical, dedupe_key, dedupe_seconds}`，核心自己发通知也走同一条路。
   - 业务插件不需要了解是哪个插件在投递。
+  - `notify.send` 风险等级为 High（2026-10-31 由 Medium 提高）：持有者能以本站的发件身份给任意地址发任意内容，限速只能限量。
+  - 插件 key 不能是 `core` 或 `system`（`manifest/check` 报 `key` `reserved`）：通知来源、限速和去重按 key 区分，这两个名字代表核心自己。
 - **核心的处理**：
-  - 校验，然后按来源去重：同一个 `dedupe_key` 在窗口内只发一次，默认窗口 600 秒，最长 86400 秒。
+  - 校验，然后按来源去重：同一个 `dedupe_key` 在窗口内只发一次，默认窗口 600 秒，最长 86400 秒。已最终失败（`failed`）的行不参与去重，下一条照常排队。
   - 限速：每个来源每 5 分钟最多 20 条。超过返回 `rate_limited`。
-  - 写入 `notifications` 表排队，worker 每次领取一条投递，避免慢的 SMTP 让同批其他行的租约过期而被别的节点重复发送。失败退避重试，从 30 秒到 1 小时，最多 8 次；节点关闭打断的投递不计次数。记录保留 30 天。
+  - 写入 `notifications` 表排队，同时记下当时提供该渠道的插件（`provider`，迁移 `0069_notification_provider`；之前的行为 NULL，由渠道当前的提供方投递）。worker 每次领取一条投递，避免慢的 SMTP 让同批其他行的租约过期而被别的节点重复发送。失败退避重试，从 30 秒到 1 小时，最多 8 次；节点关闭打断的投递不计次数。
+  - 投递时渠道没有绑定到记下的那个插件（启动时插件还没加载、插件重启或升级中、已停用或卸载、渠道 id 已归另一个插件）不算一次投递：退还次数，30 秒后再试；从排队起超过 24 小时仍未绑定才按最终失败处理。worker 在插件运行时启动之后才开始。
+  - 记录保留 30 天。每小时清理一次（过期删除、把租约耗尽的最后一次投递标为失败），只在拿到集群锁 `notify:purge` 的节点上执行（受后台准入控制）。
   - 控制台的测试通知以 `core:test` 为来源，不占核心通知的限速额度。
 - **控制台**：`GET /notifications/channels`、`GET /notifications`，以及 `POST /notifications/test`（需要 `settings:manage`）。
 
@@ -5332,7 +5342,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **窗口**：每个账号的窗口相位不同，`WindowStart` 用账号 id 乘 7919 错开。这样各账号的评估不会挤在同一时刻。
 - **什么算一个样本**：
   - 只统计 `attempt_finished`，且分组大于 0、模型非空。
-  - 客户端取消和 `local_failure` 不算。
+  - 客户端取消和 `local_failure` 不算。与核心成功率（§73.1）共用 `sdk/observation.AttemptOutcome`，差别只在豁免：核心固定豁免 400，这里按配置的 `exempt_status_codes`。
   - 失败按 `upstream_status_code` 分桶。传输失败落在 0 桶，任何豁免都不覆盖它。
   - 只有成功的尝试有耗时（与 new-api 一致，失败只计入错误率）：成功流式请求的首字耗时 = 首个流事件 − 尝试开始，成功请求的整次耗时 = 结束 − 开始。
 - **异步任务端点不计数**：task-submit / task-query 端点不发观测（`server/internal/gateway/accountstats.go`），所以只服务异步任务的账号不会被 dynweight 降权。这是与 new-api 的差别：new-api 记录任务提交的尝试。
@@ -5351,16 +5361,18 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 可以设冷却时间。
 - **配置分层**：
   - 全局层。
-  - 分组层整体替换全局层，但总开关仍以全局为准。分组层与 new-api 一样叠在出厂默认层上：没写的字段取默认值，`enabled` 不写即为开启。
+  - 分组层整体替换全局层，但总开关仍以全局为准。分组层与 new-api 一样叠在出厂默认层上：没写的字段取默认值，`enabled` 不写即为开启。分组层的字段写成 `null` 时拒绝（400），否则它会被悄悄读成默认值；控制台的数值框清空时标红，不能校验和保存。
   - 账号覆盖可以改开关、豁免状态码和权重下限。
   - 账号覆盖的豁免状态码有三种：不写（沿用所在层）、`""`（不豁免任何状态码）、具体列表。控制台按"沿用 / 单独设置"区分，单独设置时留空即为不豁免。
   - 和 new-api 的差别：豁免状态码只在层上配置，规则上不能单独配；保存时除了"有降权没有回升"，还多一条警告：没有引用权重条件的回升策略且下限为 0 时，降到 0 的权重不会自己恢复。
   - **窗口长度 10..3600 秒**（new-api 是 3..3600）：new-api 在请求到来时懒评估，随时能评估刚关闭的窗口；这里由每 10 秒一次的 `evaluate` 评估，每次只评估最新一个已关闭的窗口，短于 10 秒的窗口在两次运行之间会关闭不止一个，中间的窗口只能按"跳过的窗口"补位。所以下限取任务间隔 `rules.MinWindowSeconds`（manifest 测试校验两者一致）。新提交的配置（`PUT /config`、`POST /config/validate`）窗口小于 10 秒时拒绝；0.1.0 已保存的小于 10 秒的窗口（全局层或分组层）在加载时提升到 10 秒，照常生效，插件为每处记一条警告日志，`GET /config` 返回提升后的配置并在 `warnings` 里说明，控制台显示为警告，管理员保存一次即写回。
+  - **加载已保存的配置时逐处容错**（与 new-api §2.3 一致）：解不开或校验不过的分组层忽略（该分组跟随全局层），全局层越界的 `window_seconds`、`min_samples`、`exempt_status_codes`、最低权重各自回退到出厂默认值（60 / 10 / `400` / `base_percent` 0），校验不过的账号覆盖忽略，校验不过的通知关闭。每处记一条警告日志，`GET /config` 的 `warnings` 同样列出，管理员保存一次即写回。只有整个文档解不开或全局规则、策略校验不过时加载失败。
   - `log_events`（只在全局，默认开启，与 new-api 一致）：每条权重事件同时写一行插件日志（host 的结构化日志，`dynweight: weight event`，带账号、分组、模型、类型、原因、权重和详情）。每 60 秒最多 5000 行，超出的只丢日志行，事件表完整，下一个窗口写一行说明丢了多少。
 - **评估任务**：`evaluate` 每 10 秒跑一次。每个调度槽只有一个节点执行，但任务锁按槽加，超时（60 秒）长于间隔，相邻两次运行可能重叠。
   - 先 flush，再逐键运行 `rules.Evaluate`。
   - 状态写回时用 `gen` 做 CAS：重叠的运行或并发的重置只有一方写入，输掉的一方不记事件、不通知、不清理粘性会话，所以每个（键、窗口）恰好生效一次。正确性靠 CAS，不靠任务锁。
   - 全局关闭时照常运行：已降权的键按"不调整"钉回基准（规则历史清空，消费截止保留），重新开启后从基准开始，已评估过的窗口不再消费。
+  - 配置还没读到时（启动时加载失败）不按出厂配置运行：出厂配置是关闭的，会把所有键钉回基准，按它的保留期清理也会删掉还要用的计数。`evaluate`、`cleanup` 先重新加载，仍失败则返回 Unavailable；`/status` 和重置同样回答不可用。调度在此期间按原权重放行。
   - 记录事件，按动作清理粘性会话，所有键评估完后发一条通知摘要。某个键失败不影响其他键，已写入状态的键的事件照常记录，任务最后报告失败数。
   - 同一个键有多个策略要清理时只调用一次，取最大比例：同一个 `salt` 下，大比例选中的绑定包含小比例选中的。
   - 有效权重有变化时广播 `dynweight.weights`，各节点重新加载快照。快照里只有不在基准上的键。
@@ -5397,8 +5409,8 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 
 | 接口 | 说明 |
 | --- | --- |
-| `GET /config` | 从数据库读，返回 `{config, version, warnings?}`；`warnings` 说明加载时提升了哪些小于下限的窗口 |
-| `PUT /config` | 提交 `{config, version}`。校验失败返回 400，渠道不存在返回 400，版本冲突返回 409。成功时回 `warnings`，例如有降权却没有回升策略 |
+| `GET /config` | 从数据库读，返回 `{config, version, warnings?}`；`warnings` 说明加载时提升的窗口、回退的全局字段和忽略的分组层、账号覆盖、通知（见上文"加载已保存的配置"） |
+| `PUT /config` | 提交 `{config, version}`。校验失败返回 400，渠道不存在返回 400，版本冲突返回 409（`version` 为 0 只在还没有保存过配置时接受）。成功时回 `warnings`，例如有降权却没有回升策略 |
 | `POST /config/validate` | 0.2.0 起，需要 `dynweight:manage`。与 `PUT /config` 同一套校验但不保存：拒绝时回同样的 400，通过时回 `{config（规范化后）, version, warnings}`。控制台保存前先调它，有警告时请管理员确认 |
 | `GET /defaults` | 默认的层，包括默认规则和策略 |
 | `GET /channels` | 可选的通知渠道 |
@@ -5413,7 +5425,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **菜单**：网关分组下的"动态权重"，有三个标签页：
   - 有效权重：本节点运行指标（折叠面板）；按名称选账号和分组筛选；展开一行看该键的详情（对应 new-api 的悬浮详情：有效/基准与下限、配置来源、成功率、进行中窗口、上一窗口与阈值计数、每条规则的"N 个窗口命中 M 次"进度和位图、最近变化、最早下次评估、没有回升策略的告警）；单键重置、勾选多行后按账号批量重置（可再限定分组和模型；显示"已选 N 个账号（最多 500）"，超过 500 不能提交；筛选、翻页、刷新都会清空勾选）、按筛选结果批量重置、跳转到该键的事件。
   - 权重事件：账号和分组显示名称。
-  - 配置：全局层、分组层、账号覆盖、事件日志开关、通知。分组和账号按名称选择。规则和策略可以可视化编辑（上移、下移、复制、删除；顺序有意义），也可以切到 JSON 直接编辑两个数组（解析失败时提示，不写回，"校验"和"保存"不可用，"放弃修改"可用；恢复默认、放弃修改和保存后文本跟着配置刷新，输入中的文本不会被重排）。新建分组层复制全局层，但不复制只在全局的 `log_events`。"校验"调 `/config/validate` 只显示错误或警告，"保存"先校验，有警告时确认后再保存。
+  - 配置：全局层、分组层、账号覆盖、事件日志开关、通知。分组和账号按名称选择。规则和策略可以可视化编辑（上移、下移、复制、删除；顺序有意义），也可以切到 JSON 直接编辑两个数组（解析失败，或条目缺少可视化编辑要用的结构——`conditions`、`actions` 不是对象数组，`when` 不是规则名或 all / any 数组——时提示，不写回，"校验"和"保存"不可用，"放弃修改"可用；缺少的 `conditions`、`actions` 按空数组补上，缺少的 `when` 按未设置；恢复默认、放弃修改和保存后文本跟着配置刷新，输入中的文本不会被重排）。新建分组层复制全局层，但不复制只在全局的 `log_events`。"校验"调 `/config/validate` 只显示错误或警告，"保存"先校验，有警告时确认后再保存。
   - 分组和账号的名称经核心接口取得，用的是查看者自己的 `group:read` / `account:read`：分组一次读入（`@sub2api/host` 的 `listAll`，最多 1000 个，失败后下次再读）；账号不整表读入，选择框按输入的名称搜索 `GET /accounts?q=`（前 20 个），其他地方要显示的账号名按 id 读 `GET /accounts/:id`。选择框总能直接输入数字 id；选中的 id 不在列表里时显示为名称或 `#id`。没有这些权限时名称显示为 `#id`（状态和事件里的账号名仍来自插件自己记下的名称）。
 - **账号列表**：`account.list.weight` 插槽在权重下方显示"动态 N"。同一帧内所有行的请求合并成一次 `/weights`。
 
@@ -5450,9 +5462,9 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 
 - **记录什么**：`/api/v1/p/:key/*` 中 `scope = admin` 的路由，方法是 POST、PUT、PATCH、DELETE，并且请求已转给插件（通过登录和权限检查）时，核心在回答后写一行 `audit_logs`：
   - `action = "plugin.route.write"`，`target_type = "plugin"`，`target_id = 插件 key`，`user_id`，`ip`；
-  - `detail = {method, path（插件内路径，不含查询串）, route（manifest 里的路由模式）, status（控制台收到的 HTTP 状态码；插件调用失败时是核心回答的错误状态码）, request_id, body?}`。
+  - `detail = {method, path（插件内路径，不含查询串）, route（manifest 里的路由模式）, status（控制台收到的 HTTP 状态码；插件调用失败时是核心回答的错误状态码；处理中 panic 时记 500）, request_id, body?}`。
   - `body` 是请求体摘要：
-    - JSON 里名字像密钥的字段的值换成 `"[REDACTED]"`：名字（不分大小写）含 password、passwd、passphrase、secret、token、credential、authorization、bearer、cookie、session、signature、private；或按 `_`、`-`、`.` 和驼峰拆开后有一个词是 auth、pass、pwd、dsn、sig；或以 key、keys 结尾；或等于 code。
+    - JSON 里名字像密钥的字段的值换成 `"[REDACTED]"`：名字（不分大小写）含 password、passwd、passphrase、secret、token、credential、authorization、bearer、cookie、session、signature、private；或按 `_`、`-`、`.`、驼峰和缩写词结尾（`SMTPPass` → smtp、pass）拆开后有一个词是 auth、pass、pwd、dsn、sig；或以 key、keys 结尾；或等于 code。
     - `{name, value}`（或 `{key, value}`）形式的对象，`name`（`key`）像密钥时 `value` 也换成 `"[REDACTED]"`（请求头、环境变量列表）。
     - 绝对 URL 去掉用户信息、查询串和片段；字段名含 url、uri、webhook、endpoint、callback 时只留协议和主机（路径里也可能带密钥，例如 Slack webhook）。
     - 字符串截到 200 字节（不切断 UTF-8 字符），数组截到 20 项，嵌套截到 4 层；摘要仍超过 4 KiB 时只留 `{truncated, bytes, fields}`（顶层字段名）；不是 JSON 时只留 `{non_json, bytes}`。

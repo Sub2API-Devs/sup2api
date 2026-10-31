@@ -390,7 +390,7 @@ func metaCall(ep manifest.Endpoint, params map[string]string, rawQuery string) *
 		target += "?" + rawQuery
 	}
 	gc.Request = httptest.NewRequest(http.MethodPost, target, nil)
-	return &call{c: gc, ep: ep, params: params, rid: "rid-1", model: "gemini-2.5-pro"}
+	return &call{g: &Gateway{}, c: gc, ep: ep, params: params, rid: "rid-1", model: "gemini-2.5-pro"}
 }
 
 // RequestMeta carries the matched path parameters so plugins can read the

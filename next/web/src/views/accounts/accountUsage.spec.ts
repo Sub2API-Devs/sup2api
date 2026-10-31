@@ -3,7 +3,7 @@ import { i18n } from '@/i18n'
 import { defaultUsageLimit, limitLevel, mainCost, usageLimitError, usagePeriodLabel } from './accountUsage'
 
 const figures = { cost: '6.0', raw_cost: '5.0', requests: 1, tokens: 120 }
-const limit = (used: string, amount = '200') => ({ amount, used, period: 'week' as const, period_count: 1, window_start: null, window_end: null })
+const limit = (used: string, amount = '200') => ({ amount, used, period: 'week' as const, period_count: 1, window_start: null, window_end: null, waived: false })
 
 describe('account usage', () => {
   it('counts in raw cost when the raw ratio is on', () => {

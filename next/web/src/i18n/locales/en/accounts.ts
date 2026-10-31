@@ -24,7 +24,7 @@ export default {
     per: { hour: 'per hour', day: 'per day', week: 'per week', month: 'per month', none: 'total' },
     perN: { hour: 'per {n} hours', day: 'per {n} days', week: 'per {n} weeks', month: 'per {n} months' },
     limitLine: 'Usage limit ({period}): {used} / {amount}', resetsAt: 'resets {time}', loadFailed: 'Could not load the usage details',
-    limitReached: 'Usage limit reached: {used} / {amount} ({period})',
+    limitReached: 'Usage limit reached: {used} / {amount} ({period})', limitReachedPlain: 'Usage limit reached',
     hint: 'From the usage records (core statistics). With raw-ratio accounting, lifetime usage and the usage limit count the raw cost (group multiplier taken as 1).'
   },
   usageLimit: {
@@ -35,16 +35,16 @@ export default {
     period: 'Reset period', periodHint: '"Never" is a lifetime limit: once reached the account stays auto-disabled until the limit is raised.',
     periods: { hour: 'Hourly', day: 'Daily', week: 'Weekly', month: 'Monthly', none: 'Never' },
     periodCount: 'Period length', periodCountHint: 'For example 2 + weekly = resets every two weeks', periodCountUnit: 'periods',
-    anchor: 'Periods start at', anchorHint: 'Periods are counted from here (whole hours, years 2000-2099); empty = 2024-01-01 00:00, so days, weeks and months fall on their natural boundaries.',
+    anchor: 'Periods start at', anchorHint: 'Periods are counted from here (whole hours, years 2000-2099); empty = 2024-01-01 00:00, so days, weeks and months fall on their natural boundaries. Hourly periods start on whole UTC hours: in a half-hour zone (such as India) half an hour earlier.',
     timezone: 'Periods follow {zone}',
     current: 'Used this period ({start} → {end})', currentTotal: 'Used in total', summary: 'Usage limit {amount} {period}', saveFailed: 'The account was saved, but the usage limit was not: {error}',
     amountInvalid: 'An enabled usage limit needs an amount above 0 and up to 1000000000', periodCountInvalid: 'Period length must be 1-{max}',
-    loadFailed: 'Could not load the usage limit, so it cannot be edited: {error}', retry: 'Retry'
+    loadFailed: 'Could not load the usage limit, so it cannot be edited: {error}', retry: 'Retry', waived: 'Released by hand for this period'
   },
   successRate: {
     column: 'Success · 1 min', title: 'Success rate (last 60 seconds)', success: 'Successful requests', failed: 'Failed attempts',
     requests: '{success} / {total}', idle: 'No requests in the last minute',
-    hint: 'Success rate = successes ÷ (successes + failures) over a rolling 60-second window. Every failed upstream attempt counts once; a 400 (the request itself is wrong), a client cancellation and the gateway\'s own rate limiting are not failures.'
+    hint: 'Success rate = successes ÷ (successes + failures) over a rolling 60-second window. Every failed upstream attempt counts once, judged by the status the upstream answered: an upstream 400 (the request itself is wrong), a client cancellation and local failures the account is not to blame for (the gateway\'s own rate limiting or errors) are not failures; a failure without an upstream answer (connection failure, timeout) is.'
   },
   modelLimits: {
     title: 'Model limits',

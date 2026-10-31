@@ -44,6 +44,12 @@ type Options struct {
 	RateLimit    int           // notifications per source and RateWindow (20)
 	RateWindow   time.Duration // (5min)
 	Retention    time.Duration // sent and failed rows are kept this long (30d)
+	// UnboundFor is how long a row waits for the plugin that provided its
+	// channel to be bound again (24h from created_at); meanwhile it is
+	// retried every BackoffMin without using an attempt.
+	UnboundFor time.Duration
+	// Locker elects the node that purges; nil purges on every node.
+	Locker core.Locker
 }
 
 func (o *Options) defaults() {
@@ -58,6 +64,7 @@ func (o *Options) defaults() {
 	def(&o.BackoffMax, time.Hour)
 	def(&o.RateWindow, 5*time.Minute)
 	def(&o.Retention, 30*24*time.Hour)
+	def(&o.UnboundFor, 24*time.Hour)
 	if o.MaxAttempts <= 0 {
 		o.MaxAttempts = 8
 	}
@@ -104,7 +111,7 @@ func (s *Service) channel(id string) (core.NotificationChannelBinding, bool) {
 
 // Notify validates n and queues it for source.
 func (s *Service) Notify(ctx context.Context, source string, n core.Notification) (core.NotifyResult, error) {
-	n, err := s.validate(n)
+	n, provider, err := s.validate(n)
 	if err != nil {
 		return core.NotifyResult{}, err
 	}
@@ -116,7 +123,8 @@ func (s *Service) Notify(ctx context.Context, source string, n core.Notification
 			return err
 		}
 		if n.DedupeKey != "" {
-			err := tx.QueryRow(ctx, `SELECT id FROM notifications WHERE source = $1 AND dedupe_key = $2
+			// A failed notification does not hold its key: the next one may get through.
+			err := tx.QueryRow(ctx, `SELECT id FROM notifications WHERE source = $1 AND dedupe_key = $2 AND status <> 'failed'
 				AND created_at > now() - make_interval(secs => $3) ORDER BY id DESC LIMIT 1`, source, n.DedupeKey, n.DedupeSeconds).Scan(&out.ID)
 			if err == nil {
 				out.Deduplicated = true
@@ -134,9 +142,9 @@ func (s *Service) Notify(ctx context.Context, source string, n core.Notification
 		if recent >= s.opts.RateLimit {
 			return core.ErrRateLimited.WithMessage("notification rate limit exceeded")
 		}
-		return tx.QueryRow(ctx, `INSERT INTO notifications (source, channel, recipients, subject, body, severity, dedupe_key)
-			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-			source, n.Channel, n.Recipients, n.Subject, n.Body, n.Severity, n.DedupeKey).Scan(&out.ID)
+		return tx.QueryRow(ctx, `INSERT INTO notifications (source, channel, recipients, subject, body, severity, dedupe_key, provider)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+			source, n.Channel, n.Recipients, n.Subject, n.Body, n.Severity, n.DedupeKey, provider).Scan(&out.ID)
 	})
 	if err == nil && !out.Deduplicated {
 		s.poke()
@@ -145,8 +153,9 @@ func (s *Service) Notify(ctx context.Context, source string, n core.Notification
 }
 
 // validate checks n and returns it normalized (trimmed recipients, default
-// severity and dedupe window).
-func (s *Service) validate(n core.Notification) (core.Notification, error) {
+// severity and dedupe window) with the key of the plugin providing its
+// channel, the only one that may deliver it.
+func (s *Service) validate(n core.Notification) (core.Notification, string, error) {
 	var fe []core.FieldError
 	bad := func(field, msg string) { fe = append(fe, core.FieldError{Field: field, Code: "invalid", Message: msg}) }
 	b, ok := s.channel(n.Channel)
@@ -190,9 +199,9 @@ func (s *Service) validate(n core.Notification) (core.Notification, error) {
 		n.DedupeSeconds = DefaultDedupeSeconds
 	}
 	if len(fe) > 0 {
-		return n, core.InvalidFields(fe...)
+		return n, "", core.InvalidFields(fe...)
 	}
-	return n, nil
+	return n, b.Plugin.Key, nil
 }
 
 // poke wakes the local worker after a new row.

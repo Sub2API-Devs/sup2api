@@ -67,9 +67,10 @@ func (s *Service) applyAutomaticState(ctx context.Context, owner string, id int6
 		var allowed bool
 		var until *time.Time
 		var now time.Time
-		err := tx.QueryRow(ctx, `SELECT name,plugin_key,type,status,status_reason,auto_disable,auto_disabled_until,clock_timestamp()
+		var source string
+		err := tx.QueryRow(ctx, `SELECT name,plugin_key,type,status,status_reason,auto_disabled_source,auto_disable,auto_disabled_until,clock_timestamp()
 			FROM accounts WHERE id=$1 AND deleted_at IS NULL AND ($2='' OR plugin_key=$2) FOR UPDATE`, id, owner).
-			Scan(&name, &pluginKey, &typ, &out.Status, &out.Reason, &allowed, &until, &now)
+			Scan(&name, &pluginKey, &typ, &out.Status, &out.Reason, &source, &allowed, &until, &now)
 		if store.IsNoRows(err) {
 			return notFound(ctx)
 		}
@@ -97,12 +98,12 @@ func (s *Service) applyAutomaticState(ctx context.Context, owner string, id int6
 		if out.Status == "disabled" || (owner != "" && state.GetAction() == pluginv1.AccountAutomaticState_ACTION_DISABLE) {
 			return nil
 		}
-		previous := out.Status
+		previous, limited := out.Status, limitDisabled(out.Status, source)
 		next, reason := "auto_disabled", state.GetReason()
 		if state.GetAction() == pluginv1.AccountAutomaticState_ACTION_CLEAR {
 			// The usage limit's own disable is lifted by the limit or an
 			// administrator only (CONTRACTS §73.4).
-			if out.Status != "auto_disabled" || isUsageLimitReason(out.Reason) {
+			if out.Status != "auto_disabled" || limited {
 				return nil
 			}
 			next, reason = "active", ""
@@ -118,6 +119,11 @@ func (s *Service) applyAutomaticState(ctx context.Context, owner string, id int6
 				return nil
 			}
 			if out.Status == "auto_disabled" && until == nil && release != nil {
+				return nil
+			}
+			// Another disable only replaces the usage limit's when it lasts
+			// longer; the limit applies again once that one ends (§73.3).
+			if limited && (until == nil || release != nil && !release.After(*until)) {
 				return nil
 			}
 		}
@@ -149,6 +155,9 @@ type automaticChange struct {
 	from, fromReason string
 	to, reason       string
 	until            *time.Time
+	// source is the auto_disabled_source written with the change:
+	// usageLimitSource for the usage limit's disable, '' otherwise.
+	source string
 	// eventReason is the account.status_changed reason, reason by default.
 	eventReason string
 	// audit adds to the audit detail.
@@ -159,8 +168,8 @@ type automaticChange struct {
 // locked in tx, with its audit row and account.status_changed event; the
 // caller runs afterStatusChange once tx commits.
 func (s *Service) writeAutomaticStatus(ctx context.Context, tx pgx.Tx, action string, ch automaticChange) error {
-	if _, err := tx.Exec(ctx, `UPDATE accounts SET status=$2,status_reason=$3,auto_disabled_until=$4,updated_at=clock_timestamp() WHERE id=$1`,
-		ch.id, ch.to, ch.reason, ch.until); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE accounts SET status=$2,status_reason=$3,auto_disabled_until=$4,auto_disabled_source=$5,updated_at=clock_timestamp() WHERE id=$1`,
+		ch.id, ch.to, ch.reason, ch.until, ch.source); err != nil {
 		return err
 	}
 	detail := map[string]any{"plugin_key": ch.pluginKey, "previous_status": ch.from, "status": ch.to, "until": ch.until}

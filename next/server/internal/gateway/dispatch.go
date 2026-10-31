@@ -401,7 +401,7 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	if rt == nil || rt.binding.Client == nil {
 		return unavailable("account type not enabled", errors.New(ref.PluginKey+"/"+ref.Type))
 	}
-	c.env = c.environment(ref)
+	c.env = c.environment(&acc.AccountRef)
 	id := acc.ID
 	c.rec.AccountID = &id
 	c.rec.PluginKey, c.rec.PluginVersion = rt.binding.Plugin.Key, rt.binding.Plugin.Version
@@ -555,10 +555,6 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	// The cause names the timeout that cut the request (forward records it).
 	uctx, ucancel := context.WithCancelCause(ctx)
 	defer ucancel(nil)
-	if total := c.env.Duration(core.EnvVarRelayTimeoutSeconds); total > 0 {
-		relayTimer := time.AfterFunc(total, func() { ucancel(errRelayTimeout) })
-		defer relayTimer.Stop()
-	}
 	method := strings.ToUpper(built.GetMethod())
 	if method == "" {
 		method = http.MethodPost
@@ -629,6 +625,12 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	headerWait := c.g.headerWait(c.stream)
 	if d := c.env.Duration(core.EnvVarResponseHeaderTimeoutSeconds); d > 0 {
 		headerWait = d
+	}
+	// The relay timeout covers the upstream exchange, not the local
+	// preparation above, so it starts with the header timer.
+	if total := c.env.Duration(core.EnvVarRelayTimeoutSeconds); total > 0 {
+		relayTimer := time.AfterFunc(total, func() { ucancel(errRelayTimeout) })
+		defer relayTimer.Stop()
 	}
 	timer := time.AfterFunc(headerWait, func() { ucancel(errHeaderTimeout) })
 	if execution != nil {

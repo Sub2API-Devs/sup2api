@@ -2,12 +2,16 @@ package gateway
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -27,18 +31,52 @@ func withEnvironment(global, group core.EnvironmentValues) envOpt {
 	}
 }
 
-func TestEnvironmentReachesBuildMeta(t *testing.T) {
+// Plugins called before an account is chosen see the group and global
+// layers; an attempt adds the layer of the account as loaded for it, not as
+// it was when the candidates were listed.
+func TestEnvironmentReachesPluginMeta(t *testing.T) {
 	e := newEnv(t, withEnvironment(core.EnvironmentValues{core.EnvVarRelayTimeoutSeconds: 300},
 		core.EnvironmentValues{core.EnvVarTaskPollMaxFailures: 10, core.EnvVarRelayTimeoutSeconds: 120}))
-	e.accounts.mu.Lock()
-	e.accounts.accounts[1].Environment = core.EnvironmentValues{core.EnvVarRelayTimeoutSeconds: 90}
-	e.accounts.mu.Unlock()
+	e.accounts.set(1, func(acc *core.Account) { acc.Environment = core.EnvironmentValues{core.EnvVarRelayTimeoutSeconds: 60} })
+	hook := &fakeHook{}
+	e.addHook(guardHook(300, "open"), nil, hook)
+	ranker := e.addRanker("guard", manifest.SchedulerRank{}, &fakeRanker{fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
+		e.accounts.set(1, func(acc *core.Account) { acc.Environment = core.EnvironmentValues{core.EnvVarRelayTimeoutSeconds: 90} })
+		return nil, nil
+	}})
 	r := e.messages(body(testModel, false))
 	require.Equal(t, 200, r.status, string(r.body))
+	e.record()
+
+	base := map[string]int64{core.EnvVarTaskPollMaxFailures: 10, core.EnvVarRelayTimeoutSeconds: 120}
+	require.Equal(t, 1, hook.count())
+	assert.Equal(t, base, hook.calls[0].GetMeta().GetEnvironment())
+	assert.Equal(t, base, ranker.last().GetMeta().GetEnvironment())
 	e.plat.mu.Lock()
 	meta := e.plat.builds[0].GetMeta()
 	e.plat.mu.Unlock()
-	require.Equal(t, map[string]int64{core.EnvVarTaskPollMaxFailures: 10, core.EnvVarRelayTimeoutSeconds: 90}, meta.GetEnvironment())
+	assert.Equal(t, map[string]int64{core.EnvVarTaskPollMaxFailures: 10, core.EnvVarRelayTimeoutSeconds: 90}, meta.GetEnvironment())
+}
+
+// The idle timer runs only while a read waits on the upstream: a reader that
+// pauses longer than the timeout between reads is not cut.
+func TestIdleBodyCountsOnlyUpstreamWaits(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	pr, pw := io.Pipe()
+	b := newIdleBody(pr, 50*time.Millisecond, func(err error) { cancel(err); _ = pw.CloseWithError(err) })
+	defer func() { _ = b.Close() }()
+
+	go func() { _, _ = pw.Write([]byte("a")) }()
+	buf := make([]byte, 1)
+	n, err := b.Read(buf)
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	time.Sleep(150 * time.Millisecond) // the client is slow, the upstream is not waited on
+	require.NoError(t, context.Cause(ctx))
+
+	_, err = b.Read(buf) // the upstream sends nothing
+	require.ErrorIs(t, err, errStreamIdleTimeout)
+	require.ErrorIs(t, context.Cause(ctx), errStreamIdleTimeout)
 }
 
 // max_request_body_mb replaces the default of an endpoint that declares no

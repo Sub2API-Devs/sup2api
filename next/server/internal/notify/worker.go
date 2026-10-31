@@ -48,7 +48,14 @@ func (s *Service) loop(ctx context.Context, done chan struct{}) {
 			for s.step(ctx) {
 			}
 			if time.Now().After(nextPurge) {
-				s.purge(ctx)
+				// One node per period: the lock is left to expire.
+				held := s.opts.Locker == nil
+				if !held {
+					_, held, _ = s.opts.Locker.TryLock(ctx, "notify:purge", time.Hour-time.Hour/10)
+				}
+				if held {
+					s.purge(ctx)
+				}
 				nextPurge = time.Now().Add(time.Hour)
 			}
 		}
@@ -65,6 +72,7 @@ type queued struct {
 	id         int64
 	source     string
 	channel    string
+	provider   *string // the plugin that provided channel at queue time; nil on rows from before 0069
 	recipients []string
 	subject    string
 	body       string
@@ -82,8 +90,8 @@ func (s *Service) step(ctx context.Context) bool {
 			next_attempt_at = now() + make_interval(secs => $1)
 		WHERE id = (SELECT id FROM notifications WHERE status IN ('pending', 'sending') AND next_attempt_at <= now()
 			AND attempts < $2 ORDER BY next_attempt_at, id LIMIT 1 FOR UPDATE SKIP LOCKED)
-		RETURNING id, source, channel, recipients, subject, body, severity, attempts`, s.opts.Lease.Seconds(), s.opts.MaxAttempts).
-		Scan(&q.id, &q.source, &q.channel, &q.recipients, &q.subject, &q.body, &q.severity, &q.attempt)
+		RETURNING id, source, channel, provider, recipients, subject, body, severity, attempts`, s.opts.Lease.Seconds(), s.opts.MaxAttempts).
+		Scan(&q.id, &q.source, &q.channel, &q.provider, &q.recipients, &q.subject, &q.body, &q.severity, &q.attempt)
 	if err != nil {
 		if !store.IsNoRows(err) && ctx.Err() == nil {
 			slog.WarnContext(ctx, "notify: claim", "err", err)
@@ -99,10 +107,16 @@ type errRejected struct{ reason string }
 
 func (e errRejected) Error() string { return e.reason }
 
+// errUnbound: the plugin that provided the channel is not bound to it now
+// (not loaded yet at startup, restarting, upgrading, disabled, uninstalled,
+// or the channel went to another plugin). Not a delivery attempt: the row
+// waits for it until UnboundFor.
+var errUnbound = errors.New("the plugin providing the notification channel is not available (it is starting, restarting, disabled or uninstalled)")
+
 func (s *Service) deliver(ctx context.Context, q queued) error {
 	b, ok := s.channel(q.channel)
-	if !ok {
-		return errors.New("the notification channel is not available (its plugin is disabled or uninstalled)")
+	if !ok || q.provider != nil && *q.provider != b.Plugin.Key {
+		return errUnbound
 	}
 	resp, err := b.Client.DeliverNotification(ctx, &pluginv1.DeliverNotificationRequest{Id: q.id, Channel: q.channel, Recipients: q.recipients,
 		Subject: q.subject, Body: q.body, Severity: q.severity, Source: q.source, Attempt: q.attempt})
@@ -131,6 +145,13 @@ func (s *Service) finish(ctx context.Context, q queued, err error) {
 	case err == nil:
 		_, exec = s.db.Pool.Exec(ctx, `UPDATE notifications SET status = 'sent', sent_at = now(), last_error = ''
 			WHERE id = $1 AND status = 'sending' AND attempts = $2`, q.id, q.attempt)
+	case errors.Is(err, errUnbound):
+		// The attempt is given back; the row fails only once it waited
+		// UnboundFor since it was queued.
+		_, exec = s.db.Pool.Exec(ctx, `UPDATE notifications SET attempts = attempts - 1, last_error = $3,
+				status = CASE WHEN created_at < now() - make_interval(secs => $4) THEN 'failed' ELSE 'pending' END,
+				next_attempt_at = now() + make_interval(secs => $5)
+			WHERE id = $1 AND status = 'sending' AND attempts = $2`, q.id, q.attempt, err.Error(), s.opts.UnboundFor.Seconds(), s.opts.BackoffMin.Seconds())
 	case errors.As(err, &rejected) || int(q.attempt) >= s.opts.MaxAttempts:
 		_, exec = s.db.Pool.Exec(ctx, `UPDATE notifications SET status = 'failed', last_error = $3
 			WHERE id = $1 AND status = 'sending' AND attempts = $2`, q.id, q.attempt, truncate(err.Error()))

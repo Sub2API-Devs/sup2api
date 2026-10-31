@@ -3,7 +3,7 @@
 // in the basis the raw-ratio switch picks, then the usage limit of the current
 // period as plain figures, or today's cost and requests without a limit.
 // Hovering loads today / 7 days / 30 days / lifetime with both costs, again
-// once the row's usage changes.
+// once the row's usage changed; until then an open card keeps the figures.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SBadge, SHint, SSpinner, STooltip } from '@sub2api/ui'
@@ -19,10 +19,12 @@ const detail = ref<AccountUsageDetail | null>(null)
 const loading = ref(false)
 const failed = ref(false)
 let seq = 0
+let stale = false
 
 async function load() {
-  if (loading.value || detail.value) return
+  if (loading.value || (detail.value && !stale)) return
   const my = ++seq
+  stale = false
   loading.value = true
   failed.value = false
   try {
@@ -34,13 +36,23 @@ async function load() {
     if (my === seq) loading.value = false
   }
 }
-// A reloaded row (or another account) makes the loaded details stale.
-watch([() => props.accountId, () => props.usage], () => {
-  seq++
-  detail.value = null
-  loading.value = false
-  failed.value = false
-})
+// Another account drops the loaded details. The list reloads every row every
+// few seconds: only usage that moved makes them stale, and they stay on show
+// until the next hover has loaded them again.
+watch(
+  () => props.accountId,
+  () => {
+    seq++
+    detail.value = null
+    loading.value = false
+    failed.value = false
+    stale = false
+  }
+)
+watch(
+  () => JSON.stringify(props.usage),
+  () => (stale = true)
+)
 
 const money = (v: number | string) => formatMoney(v, 2)
 const level = computed(() => (props.usage?.limit ? limitLevel(props.usage.limit) : 'ok'))
@@ -82,9 +94,7 @@ const rows = computed<Array<{ key: string; f: AccountUsageFigures }>>(() =>
     </span>
     <template #content>
       <div class="mb-2 font-semibold">{{ t('accounts.usage.title') }}</div>
-      <SSpinner v-if="loading" />
-      <SHint v-else-if="failed" size="xs" tone="warning">{{ t('accounts.usage.loadFailed') }}</SHint>
-      <table v-else-if="detail" class="w-full text-xs tabular-nums">
+      <table v-if="detail" class="w-full text-xs tabular-nums">
         <thead>
           <tr class="text-fg-muted">
             <th class="py-1 pr-3 text-left font-medium">{{ t('accounts.usage.range') }}</th>
@@ -104,9 +114,12 @@ const rows = computed<Array<{ key: string; f: AccountUsageFigures }>>(() =>
           </tr>
         </tbody>
       </table>
+      <SSpinner v-else-if="loading" />
+      <SHint v-else-if="failed" size="xs" tone="warning">{{ t('accounts.usage.loadFailed') }}</SHint>
       <div v-if="usage.limit" class="mt-2 text-xs tabular-nums">
         {{ t('accounts.usage.limitLine', { period: periodLabel, used: money(usage.limit.used), amount: money(usage.limit.amount) }) }}
         <span v-if="usage.limit.window_end" class="text-fg-muted">· {{ t('accounts.usage.resetsAt', { time: formatDateTime(usage.limit.window_end) }) }}</span>
+        <span v-if="usage.limit.waived" class="text-fg-muted">· {{ t('accounts.usageLimit.waived') }}</span>
       </div>
       <p class="mt-2 text-xxs leading-relaxed text-fg-muted">{{ t('accounts.usage.hint') }}</p>
     </template>

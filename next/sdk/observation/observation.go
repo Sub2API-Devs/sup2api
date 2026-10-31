@@ -1,6 +1,11 @@
 package observation
 
-import "regexp"
+import (
+	"regexp"
+	"slices"
+
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+)
 
 const (
 	Capability             = "gateway.observe.v1"
@@ -39,3 +44,31 @@ func ValidPhase(phase string) bool {
 }
 
 func PluginNamespace(key string) string { return "plugin." + key }
+
+// AttemptOutcome classifies a finished attempt for an account's error rate,
+// the one rule the core's success rate (CONTRACTS §73.1) and dynweight
+// (§74.5) share. counted is false for what the account is not judged by:
+// events other than attempt_finished, client cancellations and local
+// failures (§74.1). status is the upstream's HTTP status of a failed
+// attempt, never the status the client got (a plugin may map it); 0 when the
+// upstream sent no response (connection failure, timeout).
+func AttemptOutcome(o *pluginv1.RequestObservation) (counted, failed bool, status int) {
+	if o.GetPhase() != AttemptFinished || o.GetCanceled() || o.GetLocalFailure() {
+		return false, false, 0
+	}
+	if o.GetSuccess() {
+		return true, false, 0
+	}
+	if code := int(o.GetUpstreamStatusCode()); code >= 100 && code <= 599 {
+		status = code
+	}
+	return true, true, status
+}
+
+// AccountFailure reports whether a finished attempt counts as a failure of
+// its account: counted, failed, and its upstream status not exempt. A
+// failure without an upstream response (status 0) is never exempt.
+func AccountFailure(o *pluginv1.RequestObservation, exempt ...int) bool {
+	counted, failed, status := AttemptOutcome(o)
+	return counted && failed && (status == 0 || !slices.Contains(exempt, status))
+}

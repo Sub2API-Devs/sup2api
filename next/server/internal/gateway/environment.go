@@ -34,8 +34,9 @@ var (
 )
 
 // idleBody cancels the upstream request when a streamed response delivers
-// nothing for the idle timeout (streaming_idle_timeout_seconds). Each read
-// that returns re-arms the timer.
+// nothing for the idle timeout (streaming_idle_timeout_seconds). The timer
+// only runs while a Read waits on the upstream, so a slow client is not
+// counted as an idle upstream.
 type idleBody struct {
 	io.ReadCloser
 	timer *time.Timer
@@ -43,15 +44,15 @@ type idleBody struct {
 }
 
 func newIdleBody(body io.ReadCloser, idle time.Duration, cancel context.CancelCauseFunc) *idleBody {
-	return &idleBody{ReadCloser: body, idle: idle, timer: time.AfterFunc(idle, func() { cancel(errStreamIdleTimeout) })}
+	timer := time.AfterFunc(idle, func() { cancel(errStreamIdleTimeout) })
+	timer.Stop()
+	return &idleBody{ReadCloser: body, idle: idle, timer: timer}
 }
 
 func (b *idleBody) Read(p []byte) (int, error) {
-	n, err := b.ReadCloser.Read(p)
-	if n > 0 {
-		b.timer.Reset(b.idle)
-	}
-	return n, err
+	b.timer.Reset(b.idle)
+	defer b.timer.Stop()
+	return b.ReadCloser.Read(p)
 }
 
 func (b *idleBody) Close() error {

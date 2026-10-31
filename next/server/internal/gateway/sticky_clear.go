@@ -4,11 +4,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
+
+// stickyClearTimeout bounds one ClearStickyBindings call: it walks the whole
+// binding keyspace, and a plugin must not hold Redis for longer than this.
+const stickyClearTimeout = 10 * time.Second
 
 // StickyClearer serves HostService.ClearStickyBindings (CONTRACTS §74.2). It
 // only needs Redis, so it is built before the plugin runtime and the gateway.
@@ -20,11 +25,14 @@ func NewStickyClearer(rdb redis.UniversalClient) *StickyClearer { return &Sticky
 // {hash}. A key is compatible when its group segment is the group or "_" and
 // its model segment is the model or "_" (the dimension is not part of the
 // rule's key). Of the compatible bindings that point at the account, those
-// whose hash of key and salt falls under percent are deleted.
+// whose hash of key and salt falls under percent are deleted. A call cut by
+// stickyClearTimeout fails, keeping what it already deleted.
 func (s *StickyClearer) ClearStickyBindings(ctx context.Context, req core.StickyClearRequest) (matched, cleared int64, err error) {
 	if s == nil || s.rdb == nil {
 		return 0, 0, core.ErrUnavailable.WithMessage("sticky store unavailable")
 	}
+	ctx, cancel := context.WithTimeout(ctx, stickyClearTimeout)
+	defer cancel()
 	group := itoa(req.GroupID)
 	err = scanStickyKeys(ctx, s.rdb, "sticky:*", func(keys []string) error {
 		var candidates []string

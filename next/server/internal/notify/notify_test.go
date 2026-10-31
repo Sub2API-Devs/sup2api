@@ -139,8 +139,16 @@ func TestNotifyDedupeAndRateLimit(t *testing.T) {
 		t.Fatalf("dedupe: %+v %v", again, err)
 	}
 	// Another source has its own keys and its own limit.
-	if r, err := s.Notify(ctx, "guard", n); err != nil || r.Deduplicated {
-		t.Fatalf("other source: %+v %v", r, err)
+	guard, err := s.Notify(ctx, "guard", n)
+	if err != nil || guard.Deduplicated {
+		t.Fatalf("other source: %+v %v", guard, err)
+	}
+	// A failed notification does not hold its key.
+	if _, err := db.Pool.Exec(ctx, `UPDATE notifications SET status = 'failed' WHERE id = $1`, guard.ID); err != nil {
+		t.Fatal(err)
+	}
+	if r, err := s.Notify(ctx, "guard", n); err != nil || r.Deduplicated || r.ID == guard.ID {
+		t.Fatalf("after a failure: %+v %v", r, err)
 	}
 	var recipients []string
 	if err := db.Pool.QueryRow(ctx, `SELECT recipients FROM notifications WHERE id = $1`, first.ID).Scan(&recipients); err != nil || fmt.Sprint(recipients) != "[ops@example.com]" {
@@ -219,13 +227,36 @@ func TestDeliveryLeaseAndMissingChannel(t *testing.T) {
 	if st, _, _ := status(t, db, r.ID); st != "sending" {
 		t.Fatalf("stale finish applied: %s", st)
 	}
-	// The provider plugin went away: retried, with the reason recorded.
+	// The provider plugin is not bound (starting, restarting, gone): the
+	// row waits without using an attempt, then fails after UnboundFor.
+	var provider string
+	if err := db.Pool.QueryRow(ctx, `SELECT provider FROM notifications WHERE id = $1`, r.ID).Scan(&provider); err != nil || provider != "mailer" {
+		t.Fatalf("provider: %q %v", provider, err)
+	}
+	bound := s.reg
 	s.reg = fakeRegistry{gen: fakeGen{}}
 	due(t, db)
 	s.step(ctx)
-	if st, _, e := status(t, db, r.ID); st != "failed" || !strings.Contains(e, "not available") {
-		t.Fatalf("missing channel: %s %q", st, e)
+	if st, attempts, e := status(t, db, r.ID); st != "pending" || attempts != 2 || !strings.Contains(e, "not available") {
+		t.Fatalf("missing channel: %s %d %q", st, attempts, e)
 	}
+	// Another plugin now holding the channel id does not get the row either.
+	s.reg = fakeRegistry{gen: fakeGen{channels: []core.NotificationChannelBinding{{
+		Plugin: core.PluginInfo{Key: "acme"}, Channel: manifest.NotificationChannel{ID: "email"}, Client: &fakeProvider{}}}}}
+	due(t, db)
+	s.step(ctx)
+	if st, attempts, _ := status(t, db, r.ID); st != "pending" || attempts != 2 {
+		t.Fatalf("other provider: %s %d", st, attempts)
+	}
+	if _, err := db.Pool.Exec(ctx, `UPDATE notifications SET created_at = now() - interval '25 hours' WHERE id = $1`, r.ID); err != nil {
+		t.Fatal(err)
+	}
+	due(t, db)
+	s.step(ctx)
+	if st, _, e := status(t, db, r.ID); st != "failed" || !strings.Contains(e, "not available") {
+		t.Fatalf("unbound for too long: %s %q", st, e)
+	}
+	s.reg = bound
 
 	// A last attempt whose lease ran out is not claimed again: purge fails it.
 	if _, err := db.Pool.Exec(ctx, `UPDATE notifications SET status = 'sending', attempts = 3 WHERE id = $1`, last.ID); err != nil {

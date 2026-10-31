@@ -175,7 +175,10 @@ func (p *Plugin) send(ctx context.Context, s *Settings, to []string, msg []byte)
 	if err := w.Close(); err != nil {
 		return refusal(err)
 	}
-	return c.Quit()
+	// The server accepted the message: a failed QUIT must not make the core
+	// send it again.
+	_ = c.Quit()
+	return nil
 }
 
 // messageRefused is a 5xx reply to the message itself (its recipients or

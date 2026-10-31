@@ -233,23 +233,26 @@ func (h *Handler) serveAPI(c *gin.Context) {
 		}
 		req.Headers[lk] = &pluginv1.HeaderValues{Values: v}
 	}
+	answered := false
 	if h.audit != nil && chosen.Route.Scope == "admin" && auditedMethods[c.Request.Method] {
-		// After the answer: flushed first, so the row costs the caller nothing
-		// (an unwritten answer, e.g. on a panic, is left to the middleware).
+		// After the answer: flushed first, so the row costs the caller nothing.
+		// No answer means a panic, which the recovery middleware answers 500.
 		defer func() {
-			if c.Writer.Written() {
+			status := http.StatusInternalServerError
+			if answered {
 				c.Writer.Flush()
+				status = c.Writer.Status()
 			}
 			h.audit.AuditPluginWrite(ctx, core.PluginWrite{UserID: userID, Plugin: key, Method: c.Request.Method, Path: sub,
-				Route: chosen.Route.Path, Status: c.Writer.Status(), RequestID: req.Caller.RequestId, ClientIP: req.Caller.ClientIp, Body: body})
+				Route: chosen.Route.Path, Status: status, RequestID: req.Caller.RequestId, ClientIP: req.Caller.ClientIp, Body: body})
 		}()
 	}
-	resp, err := chosen.Client.HandleHTTP(ctx, req)
-	if err != nil {
+	if resp, err := chosen.Client.HandleHTTP(ctx, req); err != nil {
 		httpapi.Fail(c, err)
-		return
+	} else {
+		writeResponse(c, resp)
 	}
-	writeResponse(c, resp)
+	answered = true
 }
 
 // auditedMethods are the writes WithAudit records.

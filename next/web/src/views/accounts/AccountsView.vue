@@ -133,10 +133,14 @@ type StatusView = { tone: ReturnType<typeof accountStatusTone>; label: string; d
 function statusOf(a: Account): StatusView {
   const key = accountStatusKey(a)
   const cooling = key === 'active' && coolingDown(a)
-  const limit = a.usage?.limit_disabled ? a.usage.limit : null
-  const statusReason = limit
-    ? t('accounts.usage.limitReached', { used: formatMoney(limit.used, 2), amount: formatMoney(limit.amount, 2), period: usagePeriodLabel(t, limit.period, limit.period_count) })
-    : a.status_reason
+  // The usage limit's own reason is localized; without the limit's figures it reads generically.
+  const limit = a.usage?.limit
+  let statusReason = a.status_reason
+  if (a.usage?.limit_disabled) {
+    statusReason = limit
+      ? t('accounts.usage.limitReached', { used: formatMoney(limit.used, 2), amount: formatMoney(limit.amount, 2), period: usagePeriodLabel(t, limit.period, limit.period_count) })
+      : t('accounts.usage.limitReachedPlain')
+  }
   const reason = a.orphaned ? t('accounts.orphanedHint', { plugin: a.plugin_key }) : (cooling && a.cooldown_reason) || statusReason
   const view: StatusView = { tone: accountStatusTone(a), label: t(`accounts.status.${key}`), detail: reason || undefined }
   // Auto-disabled reads as one yellow badge; why, and when it comes back, show on hover.
@@ -288,7 +292,7 @@ async function bulkToggle(enable: boolean) {
   const rows = picked.value.toggle.filter((a) => (a.status !== 'disabled') !== enable)
   if (!rows.length) return toast(t('accounts.bulk.nothingToChange'), 'info')
   const out = await bulk.run(rows, async (a, signal) => {
-    patchAccount(a.id, await api.patch<Account>(`/accounts/${a.id}`, { status: enable ? 'active' : 'disabled', schedulable: enable }, { signal }))
+    patchAccount(a.id, await api.patch<Account>(`/accounts/${a.id}`, { status: enable ? 'active' : 'disabled', schedulable: enable }, { signal, query: todayQuery() }))
   })
   bulkToast(out.ok.length, out.failed)
 }
@@ -450,7 +454,7 @@ async function toggleEnabled(a: Account, v: boolean) {
   if (togglingEnabled.value.has(a.id) || !canUpdate(a) || !accountControl(typeOf(a), 'schedulable').configurable) return
   togglingEnabled.value.add(a.id)
   try {
-    const updated = await api.patch<Account>(`/accounts/${a.id}`, { status: v ? 'active' : 'disabled', schedulable: v })
+    const updated = await api.patch<Account>(`/accounts/${a.id}`, { status: v ? 'active' : 'disabled', schedulable: v }, { query: todayQuery() })
     patchAccount(a.id, updated)
   } catch (e) {
     notifyError(e)

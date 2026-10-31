@@ -42,13 +42,13 @@ func TestEndpointCoreAndConsolePaths(t *testing.T) {
 func TestConflictsOnlyOtherPlugins(t *testing.T) {
 	m := pluginPlatformManifest(validPlatform().Endpoints[0])
 	m.Key = "mine"
-	if got := Conflicts(m, nil, nil); len(got) != 0 {
+	if got := Conflicts(m, nil, nil, nil); len(got) != 0 {
 		t.Fatalf("no others: %v", got)
 	}
 	other := &manifest.Manifest{Key: "other", Platforms: []manifest.Platform{validPlatform()}}
 	pfs, eps := OthersFromManifests([]*manifest.Manifest{other})
 	got := map[string]string{}
-	for _, e := range Conflicts(m, pfs, eps) {
+	for _, e := range Conflicts(m, pfs, eps, nil) {
 		got[e.Field] = e.Code
 	}
 	if got["platforms[0].id"] != "platform_conflict" || got["platforms[0].endpoints[0].path"] != "endpoint_conflict" || len(got) != 2 {
@@ -56,8 +56,21 @@ func TestConflictsOnlyOtherPlugins(t *testing.T) {
 	}
 	// Its own earlier versions are not conflicts.
 	pfs, eps = OthersFromManifests([]*manifest.Manifest{{Key: "mine", Platforms: []manifest.Platform{validPlatform()}}})
-	if got := Conflicts(m, pfs, eps); len(got) != 0 {
+	if got := Conflicts(m, pfs, eps, nil); len(got) != 0 {
 		t.Fatalf("own versions: %v", got)
+	}
+	// A notification channel another plugin provides is held like a platform.
+	ch := manifest.NotificationChannel{ID: "sms", Label: manifest.LocalizedText{"en": "SMS"}}
+	m.Capabilities = append(m.Capabilities, manifest.Capability{ID: manifest.CapNotifyChannel})
+	m.Notifications = &manifest.Notifications{Channels: []manifest.NotificationChannel{ch}}
+	provider := &manifest.Manifest{Key: "other", Notifications: &manifest.Notifications{Channels: []manifest.NotificationChannel{ch}}}
+	if got := Conflicts(m, nil, nil, ChannelsFromManifests([]*manifest.Manifest{provider})); len(got) != 1 ||
+		got[0].Field != "notifications.channels[0].id" || got[0].Code != "channel_conflict" {
+		t.Fatalf("channel: %v", got)
+	}
+	provider.Key = "mine"
+	if got := Conflicts(m, nil, nil, ChannelsFromManifests([]*manifest.Manifest{provider})); len(got) != 0 {
+		t.Fatalf("own channel: %v", got)
 	}
 }
 
@@ -67,7 +80,7 @@ func TestConflictsWithTheCore(t *testing.T) {
 	ep := validPlatform().Endpoints[0]
 	ep.Method, ep.Path = "GET", "/dashboard/x"
 	got := map[string]string{}
-	for _, e := range Conflicts(pluginPlatformManifest(ep), nil, nil) {
+	for _, e := range Conflicts(pluginPlatformManifest(ep), nil, nil, nil) {
 		got[e.Field] = e.Code
 	}
 	if got["platforms[0].endpoints[0].path"] != "invalid_path" {
@@ -76,7 +89,7 @@ func TestConflictsWithTheCore(t *testing.T) {
 	m := pluginPlatformManifest(validPlatform().Endpoints[0])
 	m.Platforms[0].ID = "anthropic"
 	got = map[string]string{}
-	for _, e := range Conflicts(m, nil, nil) {
+	for _, e := range Conflicts(m, nil, nil, nil) {
 		got[e.Field] = e.Code
 	}
 	if got["platforms[0].id"] != "builtin_platform" {

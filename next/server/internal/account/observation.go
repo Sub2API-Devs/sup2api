@@ -15,7 +15,14 @@ func (StatsConsumer) OnObservations(_ context.Context, in *pluginv1.ObservationB
 	out := &pluginv1.ObservationResult{}
 	for _, event := range in.GetObservations() {
 		if event.GetPhase() == observation.AttemptFinished {
-			if failedAttempt(event) {
+			// A failure of the success rate (CONTRACTS §73.1) is what
+			// dynweight counts too (observation.AccountFailure), with the
+			// upstream's 400 exempt: the request itself is wrong. Only the
+			// upstream's own status is judged, so a failure without an
+			// upstream response counts whatever status the client got.
+			// Cancellations and local failures (the gateway's own rate
+			// limiting among them) never count.
+			if observation.AccountFailure(event, http.StatusBadRequest) {
 				out.Contributions = append(out.Contributions, &pluginv1.ObservationContribution{ObservationId: event.Id, Metrics: map[string]int64{observation.FailedRequests: 1}})
 			}
 			continue
@@ -37,23 +44,6 @@ func (StatsConsumer) OnObservations(_ context.Context, in *pluginv1.ObservationB
 		out.Contributions = append(out.Contributions, &pluginv1.ObservationContribution{ObservationId: event.Id, Metrics: metrics})
 	}
 	return out, nil
-}
-
-// failedAttempt reports whether a finished attempt counts against the
-// account's success rate (CONTRACTS §73): every unsuccessful attempt except a
-// 400 (the request itself is wrong), a client cancellation, and the gateway's
-// own rate limiting (no upstream answer to judge the account by). A local
-// failure is never the account's fault (§74.1), and the 400 is the upstream's
-// answer when there was one: the client may see a mapped status.
-func failedAttempt(event *pluginv1.RequestObservation) bool {
-	if event.GetSuccess() || event.GetCanceled() || event.GetLocalFailure() {
-		return false
-	}
-	status := event.GetUpstreamStatusCode()
-	if status == 0 {
-		status = event.GetStatusCode()
-	}
-	return status != http.StatusBadRequest && event.GetErrorType() != core.ErrRateLimited.Code
 }
 
 // outcomesWindowSeconds is the window of the success-rate column: one minute,

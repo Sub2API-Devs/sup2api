@@ -70,9 +70,11 @@ func TestObservationAggregateOverflowCannotPoisonOtherConsumers(t *testing.T) {
 	require.EqualValues(t, 20, *coreOut.Accounts[0].SuccessTokens)
 }
 
-// The success rate's failure side (CONTRACTS §73): every finished attempt that
-// failed counts once, except 400s, client cancellations and the gateway's own
-// rate limiting; successes keep coming from usage_finalized.
+// The success rate's failure side (CONTRACTS §73.1): every finished attempt
+// that failed counts once, judged by the upstream's status like dynweight:
+// the upstream's 400, client cancellations and local failures (the gateway's
+// own rate limiting is one) are left out, a failure without an upstream
+// response counts; successes keep coming from usage_finalized.
 func TestStatsConsumerCountsFailedAttemptsForSuccessRate(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1})
@@ -83,20 +85,24 @@ func TestStatsConsumerCountsFailedAttemptsForSuccessRate(t *testing.T) {
 	s.now = func() time.Time { return now }
 	ctx := context.Background()
 
-	attempt := func(id string, success, canceled bool, status int32, errorType string) *pluginv1.RequestObservation {
-		return &pluginv1.RequestObservation{Id: id, Phase: observation.AttemptFinished, AccountId: 7, Revision: 1, Success: success, Canceled: canceled, StatusCode: status, ErrorType: errorType}
+	attempt := func(id string, status, upstream int32, errorType string) *pluginv1.RequestObservation {
+		return &pluginv1.RequestObservation{Id: id, Phase: observation.AttemptFinished, AccountId: 7, Revision: 1, Success: status == 200,
+			StatusCode: status, UpstreamStatusCode: upstream, ErrorType: errorType, LocalFailure: errorType != "" && errorType != "upstream_error"}
 	}
+	canceled := attempt("canceled", 499, 0, "upstream_error")
+	canceled.Canceled = true
 	batch := &pluginv1.ObservationBatch{Observations: []*pluginv1.RequestObservation{
-		attempt("ok", true, false, 200, ""),
-		attempt("bad-request", false, false, 400, "invalid_request"),
-		attempt("canceled", false, true, 499, "client_canceled"),
-		attempt("gateway-limited", false, false, 429, "rate_limited"),
-		attempt("upstream-429", false, false, 429, "upstream_error"),
-		attempt("upstream-500", false, false, 500, "upstream_error"),
-		// A local failure is not the account's fault; a mapped client status
-		// does not hide the upstream's 400.
-		{Id: "local", Phase: observation.AttemptFinished, AccountId: 7, Revision: 1, StatusCode: 502, ErrorType: "gateway_credit_storage", LocalFailure: true},
-		{Id: "mapped-400", Phase: observation.AttemptFinished, AccountId: 7, Revision: 1, StatusCode: 502, UpstreamStatusCode: 400, ErrorType: "upstream_error"},
+		attempt("ok", 200, 200, ""),
+		attempt("bad-request", 400, 400, "upstream_error"),
+		canceled,
+		attempt("gateway-limited", 429, 0, "rate_limited"),
+		attempt("local", 502, 200, "gateway_credit_storage"),
+		attempt("upstream-429", 429, 429, "upstream_error"),
+		attempt("upstream-500", 500, 500, "upstream_error"),
+		// No upstream response: the client's status is not judged.
+		attempt("transport", 400, 0, "upstream_error"),
+		// A mapped client status does not hide the upstream's 400.
+		attempt("mapped-400", 502, 400, "upstream_error"),
 		{Id: "req:usage_finalized", Phase: observation.UsageFinalized, AccountId: 7, Revision: 1, Success: true, TotalTokens: 10},
 	}}
 	out, err := StatsConsumer{}.OnObservations(ctx, batch)
@@ -110,5 +116,5 @@ func TestStatsConsumerCountsFailedAttemptsForSuccessRate(t *testing.T) {
 	stats, err := s.AccountStats(ctx, []int64{7}, 60)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, *stats.Accounts[0].SuccessRequests)
-	require.EqualValues(t, 2, *stats.Accounts[0].FailedRequests)
+	require.EqualValues(t, 3, *stats.Accounts[0].FailedRequests)
 }

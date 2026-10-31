@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -316,23 +318,32 @@ func TestHookBreaker(t *testing.T) {
 	}
 }
 
-func TestHookTooLargeKeepsBreakerClosed(t *testing.T) {
+// A request above the plugin's receive limit leaves the breaker's failure
+// streak as it was; an oversize answer (small request) is the plugin's fault.
+func TestHookTooLargeRequestLeavesBreakerAlone(t *testing.T) {
 	e := newEnv(t)
 	h := &fakeHook{fn: func(context.Context, *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error) {
-		return nil, status.Error(codes.ResourceExhausted, "grpc: received message larger than max (70000000 vs. 67108864)")
+		return nil, status.Error(codes.ResourceExhausted, "grpc: received message larger than max")
 	}}
-	e.addHook(guardHook(300, "open"), []string{"prompt_text"}, h)
-	for i := 0; i <= breakerThreshold; i++ {
-		if r := e.messages(body(testModel, false)); r.status != 200 {
-			t.Fatalf("fail open %d: %d", i, r.status)
-		}
-		if d := e.record().HookDecisions; d[0].Decision != decisionErrorOpen {
-			t.Fatalf("decision %+v", d)
-		}
+	e.addHook(guardHook(300, "open"), []string{"messages"}, h)
+	send := func(text string) {
+		b := body(testModel, false)
+		b["messages"] = []any{map[string]any{"role": "user", "content": text}}
+		r := e.messages(b)
+		require.Equal(t, 200, r.status, "fail open")
+		assert.Equal(t, decisionErrorOpen, e.record().HookDecisions[0].Decision)
 	}
-	if h.count() != breakerThreshold+1 || e.mr.Exists("hook:breaker:guard:prompt-rules") {
-		t.Fatalf("oversize requests opened the breaker (calls %d)", h.count())
+	for i := 0; i < breakerThreshold-1; i++ {
+		send("small")
 	}
+	big := strings.Repeat("x", grpcDefaultMaxRecv)
+	for i := 0; i < 3; i++ {
+		send(big)
+	}
+	require.False(t, e.mr.Exists("hook:breaker:guard:prompt-rules"), "oversize requests counted as failures")
+	send("small")
+	require.True(t, e.mr.Exists("hook:breaker:guard:prompt-rules"), "oversize requests reset the failure streak")
+	assert.Equal(t, breakerThreshold+3, h.count())
 }
 
 func TestHookStatsCountsDeniesAndTimeouts(t *testing.T) {

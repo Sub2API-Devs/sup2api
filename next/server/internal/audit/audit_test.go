@@ -93,6 +93,9 @@ func TestBodySummary(t *testing.T) {
 		// Secret-looking names: plurals, whole words, camelCase.
 		{`{"api_keys":["k"],"authHeader":"a","author":"Ann","db_dsn":"d","smtp-pass":"p","pwd":"p","bypass":true,"sessionId":"s","request_signature":"s","Bearer":"b"}`,
 			`{"Bearer":"[REDACTED]","api_keys":"[REDACTED]","authHeader":"[REDACTED]","author":"Ann","bypass":true,"db_dsn":"[REDACTED]","pwd":"[REDACTED]","request_signature":"[REDACTED]","sessionId":"[REDACTED]","smtp-pass":"[REDACTED]"}`},
+		// Acronyms end before the next word.
+		{`{"SMTPPass":"p","DBPwd":"p","APIAuth":"a","HTTPServer":"h"}`,
+			`{"APIAuth":"[REDACTED]","DBPwd":"[REDACTED]","HTTPServer":"h","SMTPPass":"[REDACTED]"}`},
 		// {name, value} pairs naming a secret.
 		{`{"headers":[{"name":"Authorization","value":"Bearer x"},{"name":"Accept","value":"*/*"},{"key":"X-Api-Key","value":"k"}]}`,
 			`{"headers":[{"name":"Authorization","value":"[REDACTED]"},{"name":"Accept","value":"*/*"},{"key":"[REDACTED]","value":"[REDACTED]"}]}`},

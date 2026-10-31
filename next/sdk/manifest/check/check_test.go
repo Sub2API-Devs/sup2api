@@ -128,4 +128,11 @@ func TestToolingMode(t *testing.T) {
 	if !strings.Contains(err.Error(), "key: ") {
 		t.Fatalf("error text = %q", err.Error())
 	}
+	// The core's own names are not plugin keys.
+	for _, key := range []string{"core", "system"} {
+		m.Key = key
+		if c := codes(Validate(m, nil, ValidateOptions{Tooling: true})); c["key"] != "reserved" {
+			t.Fatalf("key %q: %v", key, c)
+		}
+	}
 }

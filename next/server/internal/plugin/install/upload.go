@@ -96,7 +96,7 @@ func (s *Service) openAndValidate(ctx context.Context, data []byte, opt UploadOp
 // plugins' exclusive resources.
 func (s *Service) validatePackage(ctx context.Context, p *pkg.Package, opt UploadOptions) error {
 	m := p.Manifest
-	otherPlatforms, otherEndpoints, err := s.otherPlatforms(ctx, s.d.DB.Pool, m.Key)
+	otherPlatforms, otherEndpoints, otherChannels, err := s.otherResources(ctx, s.d.DB.Pool, m.Key)
 	if err != nil {
 		return err
 	}
@@ -108,6 +108,7 @@ func (s *Service) validatePackage(ctx context.Context, p *pkg.Package, opt Uploa
 		MaxMemoryMB:    s.opt.Plugins.MaxMemoryMB,
 		OtherEndpoints: otherEndpoints,
 		OtherPlatforms: otherPlatforms,
+		OtherChannels:  otherChannels,
 	})
 }
 
@@ -236,38 +237,40 @@ func (s *Service) carryOverConsent(ctx context.Context, r *Review, key, version 
 	return nil
 }
 
-// otherPlatforms lists the platforms and gateway endpoints declared by every
-// approved version of other plugins. A version awaiting approval holds no
+// otherResources lists the platforms, gateway endpoints and notification
+// channels declared by every approved version of other plugins. A version awaiting approval holds no
 // exclusive resource (audit 2026-10-09 P1-5): it cannot block a later upload,
 // a built-in plugin's above all, and Consent checks it again before it is
 // approved.
-func (s *Service) otherPlatforms(ctx context.Context, q store.Querier, key string) ([]pkg.PlatformOwner, []pkg.EndpointOwner, error) {
+func (s *Service) otherResources(ctx context.Context, q store.Querier, key string) ([]pkg.PlatformOwner, []pkg.EndpointOwner, []pkg.ChannelOwner, error) {
 	rows, err := q.Query(ctx, `
-		SELECT plugin_key, manifest->'platforms'
+		SELECT plugin_key, manifest->'platforms', manifest->'notifications'
 		FROM plugin_versions
-		WHERE plugin_key <> $1 AND consent_status = 'approved' AND jsonb_typeof(manifest->'platforms') = 'array'
+		WHERE plugin_key <> $1 AND consent_status = 'approved'
+			AND (jsonb_typeof(manifest->'platforms') = 'array' OR jsonb_typeof(manifest->'notifications') = 'object')
 		ORDER BY plugin_key, version`, key)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	defer rows.Close()
 	var ms []*manifest.Manifest
 	for rows.Next() {
 		m := &manifest.Manifest{}
-		var raw []byte
-		if err := rows.Scan(&m.Key, &raw); err != nil {
-			return nil, nil, err
+		var platforms, notifications []byte
+		if err := rows.Scan(&m.Key, &platforms, &notifications); err != nil {
+			return nil, nil, nil, err
 		}
-		if json.Unmarshal(raw, &m.Platforms) != nil {
+		if platforms != nil && json.Unmarshal(platforms, &m.Platforms) != nil ||
+			notifications != nil && json.Unmarshal(notifications, &m.Notifications) != nil {
 			continue
 		}
 		ms = append(ms, m)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	pfs, eps := pkg.OthersFromManifests(ms)
-	return pfs, eps, nil
+	return pfs, eps, pkg.ChannelsFromManifests(ms), nil
 }
 
 func sameID(a, b *int64) bool {

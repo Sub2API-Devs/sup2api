@@ -28,7 +28,7 @@ describe('AccountUsageCell', () => {
     const w = render({ accountId: 7, usage: usage() })
     expect(w.text()).toContain('$12.50')
     expect(w.text()).toContain('今日 $1.25 · 3 次')
-    const limited = render({ accountId: 7, usage: usage({ limit: { amount: '200', used: '190', period: 'week', period_count: 2, window_start: null, window_end: null } }) })
+    const limited = render({ accountId: 7, usage: usage({ limit: { amount: '200', used: '190', period: 'week', period_count: 2, window_start: null, window_end: null, waived: false } }) })
     const figure = limited.get('[data-testid="account-usage-limit"]')
     expect(figure.findAll('span').map((s) => s.text())).toEqual(['每 2 周', '$190.00 / $200.00'])
     expect(figure.findAll('span')[1].classes()).toContain('text-warning-700')
@@ -55,6 +55,16 @@ describe('AccountUsageCell', () => {
     await w.setProps({ accountId: 8 })
     await hover(w)
     expect(mocks.get).toHaveBeenLastCalledWith('/accounts/8/usage', expect.anything())
+  })
+
+  it('keeps the open card through a reload that changed nothing', async () => {
+    const w = render({ accountId: 7, usage: usage() })
+    await hover(w)
+    await w.setProps({ usage: usage() })
+    await flushPromises()
+    expect(document.body.querySelector('table')).not.toBeNull()
+    await hover(w)
+    expect(mocks.get).toHaveBeenCalledOnce()
   })
 
   it('drops details that arrive after the row changed', async () => {

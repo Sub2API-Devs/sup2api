@@ -301,18 +301,20 @@ func (s *Service) commitCCGatewayReauth(c *gin.Context) {
 // resetForReauth clears the core's state of a re-authorized account in tx:
 // error/auto_disabled -> active, its reason, last test and quota snapshot,
 // balance snapshot and credential refresh state. A manually disabled account stays
-// disabled (the operator enables it, 2026-10-05). It reports whether the
-// status changed. The quota and balance caches are evicted outside this
-// transaction.
+// disabled (the operator enables it, 2026-10-05), and so does one its usage
+// limit disabled: new credentials do not lower its usage (CONTRACTS §73.4). It
+// reports whether the status changed. The quota and balance caches are
+// evicted outside this transaction.
 func (s *Service) resetForReauth(ctx context.Context, tx pgx.Tx, a *row) (bool, error) {
+	release := a.Status == "error" || a.Status == "auto_disabled" && !limitDisabled(a.Status, a.AutoDisabledSource)
 	if _, err := tx.Exec(ctx, `UPDATE accounts SET
-		status = CASE WHEN status IN ('error','auto_disabled') THEN 'active' ELSE status END,
-		status_reason = CASE WHEN status IN ('error','auto_disabled') THEN '' ELSE status_reason END,
-		auto_disabled_until = NULL,
+		status = CASE WHEN $2 THEN 'active' ELSE status END,
+		status_reason = CASE WHEN $2 THEN '' ELSE status_reason END,
+		auto_disabled_until = CASE WHEN NOT $2 AND status = 'auto_disabled' THEN auto_disabled_until END,
 		last_test_at = NULL, last_test_ok = NULL, last_test_latency_ms = NULL, last_test_model = NULL, last_test_message = NULL,
 		last_test_status = NULL, last_test_error_code = NULL, last_test_error_source = NULL,
 		updated_at = clock_timestamp()
-		WHERE id = $1`, a.ID); err != nil {
+		WHERE id = $1`, a.ID, release); err != nil {
 		return false, err
 	}
 	if err := store.ResetAccountQuota(ctx, tx, a.ID); err != nil {
@@ -329,5 +331,5 @@ func (s *Service) resetForReauth(ctx context.Context, tx pgx.Tx, a *row) (bool, 
 	if _, err := tx.Exec(ctx, `DELETE FROM account_credential_refresh WHERE account_id = $1`, a.ID); err != nil {
 		return false, err
 	}
-	return a.Status == "error" || a.Status == "auto_disabled", nil
+	return release, nil
 }

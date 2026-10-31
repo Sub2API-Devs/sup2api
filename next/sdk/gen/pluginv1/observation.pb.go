@@ -55,7 +55,8 @@ type RequestObservation struct {
 	// The attempt failed for a local reason the account is not to blame for:
 	// the platform plugin's ClassifyError said local_failure, the core failed
 	// locally while relaying the response, or the error type is not
-	// upstream_error (CONTRACTS §74.1).
+	// upstream_error (CONTRACTS §74.1). Only set on attempt_finished; every
+	// other phase carries false, so read it there and nowhere else.
 	LocalFailure bool `protobuf:"varint,27,opt,name=local_failure,json=localFailure,proto3" json:"local_failure,omitempty"`
 	// HTTP status the upstream answered this attempt with; 0 when it sent no
 	// response (connection failure, timeout before the headers). status_code

@@ -23,7 +23,7 @@ func TestUsageLimitWindow(t *testing.T) {
 		return func(y int, m time.Month, d, h, min int) time.Time { return time.Date(y, m, d, h, min, 0, 0, loc) }
 	}
 	sh, ny, in := zone("Asia/Shanghai"), zone("America/New_York"), zone("Asia/Kolkata")
-	anchor := sh(2026, 1, 31, 8, 0)
+	anchor, inAnchor := sh(2026, 1, 31, 8, 0), in(2026, 10, 1, 8, 0)
 	limit := func(tz, period string, count int, anchor *time.Time) UsageLimit {
 		return UsageLimit{Timezone: tz, Period: period, PeriodCount: count, Anchor: anchor}
 	}
@@ -42,6 +42,9 @@ func TestUsageLimitWindow(t *testing.T) {
 		{"day across daylight saving", limit("America/New_York", usagePeriodDay, 1, nil), ny(2026, 7, 1, 0, 30), ny(2026, 7, 1, 0, 0), ny(2026, 7, 2, 0, 0)},
 		{"week across daylight saving", limit("America/New_York", usagePeriodWeek, 1, nil), ny(2026, 11, 3, 12, 0), ny(2026, 11, 2, 0, 0), ny(2026, 11, 9, 0, 0)},
 		{"half-hour zone", limit("Asia/Kolkata", usagePeriodDay, 1, nil), in(2026, 10, 31, 0, 10), in(2026, 10, 31, 0, 0), in(2026, 11, 1, 0, 0)},
+		{"half-hour zone, day from an anchor", limit("Asia/Kolkata", usagePeriodDay, 1, &inAnchor), in(2026, 10, 31, 8, 10), in(2026, 10, 31, 8, 0), in(2026, 11, 1, 8, 0)},
+		// Usage is summed in UTC hours: hourly periods start on one.
+		{"hours of a half-hour zone follow UTC hours", limit("Asia/Kolkata", usagePeriodHour, 6, &inAnchor), in(2026, 10, 1, 13, 40), in(2026, 10, 1, 13, 30), in(2026, 10, 1, 19, 30)},
 		{"unknown zone reads as UTC", limit("", usagePeriodDay, 1, nil), time.Date(2026, 10, 31, 15, 0, 0, 0, time.UTC),
 			time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC), time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)},
 	} {
@@ -160,4 +163,99 @@ func TestUsageLimitDisablesAndRecovers(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, e.svc.EnforceUsageLimits(ctx, nil))
 	assert.Equal(t, "upstream says no", account()["status_reason"], "never touches another auto-disable")
+}
+
+// The limit knows its own disable by auto_disabled_source, not by the reason
+// text: a plugin's look-alike reason stays the plugin's, another disable only
+// replaces the limit's when it lasts longer, a manual release waives the
+// period that caused the disable, and anchors keep their wall-clock hour.
+func TestUsageLimitOwnsItsDisable(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	id := e.mkRawAccount("anthropic", "apikey", "usage-source", "sk-good-key-123", true)
+	_, err := e.db.Pool.Exec(ctx, `INSERT INTO usage_logs (request_id, user_id, api_key_id, group_id, account_id, protocol, endpoint, status_code, success,
+		total_cost, billing_status, billing_detail, rate_multiplier, input_tokens, output_tokens)
+		VALUES ('s1', 1, 1, 1, $1, 'anthropic.messages', '/v1/messages', 200, true, 6, 'billed', '{"cost":"-3"}', 1.2, 100, 20)`, id)
+	require.NoError(t, err)
+	require.NoError(t, foldUsage(ctx, e.db.Pool))
+	account := func() map[string]any {
+		t.Helper()
+		code, body := e.do("GET", "/accounts/"+itoa(id), nil)
+		require.Equal(t, 200, code, body)
+		return data(body)
+	}
+	putLimit := func(body map[string]any) map[string]any {
+		t.Helper()
+		code, out := e.do("PUT", "/accounts/"+itoa(id)+"/usage-limit", body)
+		require.Equal(t, 200, code, out)
+		return data(out)
+	}
+	apply := func(state *pluginv1.AccountAutomaticState) {
+		t.Helper()
+		_, err := e.svc.ApplyAccountAutomaticState(ctx, id, state)
+		require.NoError(t, err)
+	}
+	disable := func(reason string, seconds int64) *pluginv1.AccountAutomaticState {
+		st := &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_DISABLE, Reason: reason}
+		if seconds > 0 {
+			st.Release = &pluginv1.AccountAutomaticState_DurationSeconds{DurationSeconds: seconds}
+		}
+		return st
+	}
+	clear := &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_CLEAR}
+
+	total := account()["usage"].(map[string]any)["total"].(map[string]any)
+	assert.Equal(t, "5", strings.TrimRight(strings.TrimRight(total["raw_cost"].(string), "0"), "."), "a negative billing_detail.cost falls back to cost / multiplier")
+
+	apply(disable(usageLimitReason+": a plugin's words", 0))
+	require.NoError(t, e.svc.EnforceUsageLimits(ctx, nil))
+	a := account()
+	assert.Equal(t, "auto_disabled", a["status"])
+	assert.Equal(t, false, a["usage"].(map[string]any)["limit_disabled"], "the reason text does not make it the limit's")
+	apply(clear)
+	assert.Equal(t, "active", account()["status"], "and the plugin can clear it")
+
+	putLimit(map[string]any{"enabled": true, "amount": "5.5", "period": "day", "period_count": 1})
+	a = account()
+	require.Equal(t, "auto_disabled", a["status"])
+	assert.Equal(t, true, a["usage"].(map[string]any)["limit_disabled"])
+	limitReason := a["status_reason"]
+	apply(disable("quota exhausted", 60))
+	assert.Equal(t, limitReason, account()["status_reason"], "a shorter disable does not replace the limit's")
+	apply(disable("banned", 0))
+	a = account()
+	assert.Equal(t, "banned", a["status_reason"], "a longer one does")
+	assert.Equal(t, false, a["usage"].(map[string]any)["limit_disabled"])
+	apply(clear)
+	require.NoError(t, e.svc.EnforceUsageLimits(ctx, nil))
+	assert.Equal(t, limitReason, account()["status_reason"], "and once it ends the limit applies again")
+
+	// Released after its period ended (the sweep had not run yet): the
+	// waiver covers the period that disabled it, not the current one.
+	_, err = e.db.Pool.Exec(ctx, `UPDATE accounts SET auto_disabled_until = auto_disabled_until - interval '1 day' WHERE id = $1`, id)
+	require.NoError(t, err)
+	code, out := e.do("POST", "/accounts/"+itoa(id)+"/reset-status", nil)
+	require.Equal(t, 200, code, out)
+	require.NoError(t, e.svc.EnforceUsageLimits(ctx, nil))
+	assert.Equal(t, "auto_disabled", account()["status"], "this period is still over the limit")
+	code, out = e.do("POST", "/accounts/"+itoa(id)+"/reset-status", nil)
+	require.Equal(t, 200, code, out)
+	require.NoError(t, e.svc.EnforceUsageLimits(ctx, nil))
+	a = account()
+	assert.Equal(t, "active", a["status"], "released for the rest of this period")
+	assert.Equal(t, true, a["usage"].(map[string]any)["limit"].(map[string]any)["waived"])
+
+	anchor := func(body map[string]any) string {
+		t.Helper()
+		putLimit(body)
+		code, out := e.do("GET", "/accounts/"+itoa(id)+"/usage-limit", nil)
+		require.Equal(t, 200, code, out)
+		at, err := time.Parse(time.RFC3339, data(out)["anchor"].(string))
+		require.NoError(t, err)
+		return at.UTC().Format(time.RFC3339)
+	}
+	assert.Equal(t, "2026-09-30T18:30:00Z", anchor(map[string]any{"enabled": false, "amount": "0", "period": "day", "period_count": 1,
+		"anchor": "2026-10-01T00:20:00+05:30", "timezone": "Asia/Kolkata"}), "floored to the wall-clock hour, not the UTC one")
+	assert.Equal(t, "2026-10-01T02:00:00Z", anchor(map[string]any{"enabled": false, "amount": "0", "period": "hour", "period_count": 1,
+		"anchor": "2026-10-01T08:00:00+05:30", "timezone": "Asia/Kolkata"}), "hourly periods start on a UTC hour")
 }

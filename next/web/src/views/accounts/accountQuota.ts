@@ -5,6 +5,7 @@
 import { onBeforeUnmount, reactive, ref, type Ref } from 'vue'
 import { api } from '@sub2api/host'
 import type { Account, AccountBalance, CredentialRefreshOutcome, QuotaSnapshot, QuotaWindow } from '@/api/types'
+import { todayQuery } from './accountUsage'
 import { usageLevel, type UsageLevel } from './usageLevel'
 
 /** GET /accounts/:id/quota — `force` makes the server query the upstream now. */
@@ -12,9 +13,9 @@ export function fetchAccountQuota(id: number, force = true): Promise<QuotaSnapsh
   return api.get<QuotaSnapshot>(`/accounts/${id}/quota`, force ? { force: true } : undefined)
 }
 
-/** POST /accounts/:id/reset-status — restores active status and clears the reason and cooldown. */
+/** POST /accounts/:id/reset-status — restores active status and clears the reason and cooldown; usage "today" is the browser's. */
 export function resetAccountStatus(id: number): Promise<Account> {
-  return api.post<Account>(`/accounts/${id}/reset-status`)
+  return api.post<Account>(`/accounts/${id}/reset-status`, undefined, { query: todayQuery() })
 }
 
 /** Whether a snapshot is worth a cell: null (API keys) and unsupported types show nothing. */

@@ -17,6 +17,7 @@ import (
 	"github.com/tidwall/sjson"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -167,10 +168,18 @@ func (h *hookRuntime) recordResult(ctx context.Context, k hookKey, failed bool) 
 	}
 }
 
-// tooLarge tells whether a hook call failed because the request exceeded the
-// plugin's gRPC receive limit.
-func tooLarge(err error) bool {
-	return status.Code(err) == codes.ResourceExhausted && strings.Contains(err.Error(), "larger than max")
+// grpcDefaultMaxRecv is the gRPC receive limit a plugin serves with unless it
+// raised it (pluginsdk.WithMaxRecvMsgSize). The host's own send and receive
+// limits are MaxInt32 (go-plugin), so a RESOURCE_EXHAUSTED on a request above
+// this size is the plugin refusing our request.
+const grpcDefaultMaxRecv = 4 << 20
+
+// requestTooLarge tells whether a hook call failed because the request was
+// above the plugin's receive limit. That says nothing about the plugin's
+// health, so it is neither a failure nor a success for the breaker. An
+// oversize response is the plugin's fault and does not qualify.
+func requestTooLarge(req proto.Message, err error) bool {
+	return status.Code(err) == codes.ResourceExhausted && proto.Size(req) > grpcDefaultMaxRecv
 }
 
 type hookOutcome int
@@ -471,9 +480,9 @@ func (c *call) runHook(ctx context.Context, hb core.HookBinding) (core.HookDecis
 			o, note = outcomeTimeout, fmt.Sprintf("timeout after %s", timeout)
 		}
 		g.hooks.observe(k, hb.Hook.Point, o, latency)
-		// A request too large for the plugin's receive limit says nothing
-		// about the plugin's health: it must not open the breaker for all.
-		g.hooks.recordResult(ctx, k, !tooLarge(err))
+		if !requestTooLarge(req, err) {
+			g.hooks.recordResult(ctx, k, true)
+		}
 		return failed(note)
 	}
 
