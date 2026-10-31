@@ -221,12 +221,12 @@ message GetUsersResponse {
   repeated UserInfo users = 1; // in user_ids order, without the missing ones
 }
 
+// UserInfo carries no email or roles: a plugin must not pass user data on to
+// callers with weaker permissions than users.read (CONTRACTS §74.3).
 message UserInfo {
   int64 id = 1;
-  string email = 2;
-  string display_name = 3;
-  string status = 4;         // active | disabled
-  repeated string roles = 5; // role keys, e.g. "admin", "user"
+  string display_name = 2;
+  string status = 3; // active | disabled
 }
 
 message CountTokensRequest {

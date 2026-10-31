@@ -434,8 +434,9 @@ func (b *boot) registerRoutes(r *httpapi.Router) {
 		DB: b.db, Install: b.inst, Market: b.mkt, Rollout: b.ctl, Nodes: b.cl.Registry, Registry: b.reg,
 		Authz: b.az, Cipher: b.cipher, Bus: b.cl.Bus, Jobs: b.jobs, HookStats: b.gw, Plugins: cfg.Plugins,
 	}).RegisterRoutes(r)
-	pr := routes.New(b.reg, b.idm, b.az, routes.WithHealth(b.cl.Registry), routes.WithVersionAssets(b.pkgs),
-		routes.WithAudit(&audit.PluginWrites{DB: b.db}))
+	writes := &audit.PluginWrites{DB: b.db, Locker: b.cl.Locker, CanRun: b.canWork}
+	go writes.Run(b.ctx)
+	pr := routes.New(b.reg, b.idm, b.az, routes.WithHealth(b.cl.Registry), routes.WithVersionAssets(b.pkgs), routes.WithAudit(writes))
 	pr.RegisterRoutes(r)
 	pr.RegisterAssets(b.engine)
 	b.gw.RegisterRoutes(r)

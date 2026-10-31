@@ -24,6 +24,9 @@ const NotificationHostAPIVersion = 8
 const EnvironmentHostAPIVersion = 8
 const UsersHostAPIVersion = 8
 
+// GetUsersMaxIDs caps the user ids of one HostService.GetUsers call.
+const GetUsersMaxIDs = 500
+
 const ModelAvailabilityHostAPIVersion = 7
 const AccountAutomaticStateHostAPIVersion = 6
 const ObservationHostAPIVersion = 5

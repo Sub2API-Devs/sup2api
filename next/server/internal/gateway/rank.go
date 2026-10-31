@@ -34,7 +34,7 @@ const (
 
 // rankValues is the priority/weight one candidate account has for this
 // request after the scheduler.rank plugins ran. Weight 0 means the account is
-// not used for this request (a priority left all at 0 is already split evenly).
+// not used for this request.
 type rankValues struct{ priority, weight int }
 
 // normWeight is the weight the plugins see and the gateway schedules with:
@@ -164,17 +164,15 @@ func (c *call) rankOverrides(ctx context.Context, cands []core.AccountRef) map[i
 		return nil
 	}
 
-	// Weight 0 drops an account only beside a non-zero peer of its priority:
-	// a priority the plugins zeroed entirely shares the traffic evenly
-	// instead of handing it to the next priority.
-	live := map[int32]bool{}
+	// A plugin must never leave the gateway without an account.
+	used := false
 	for _, rc := range list {
 		if rc.Weight > 0 {
-			live[rc.Priority] = true
+			used = true
+			break
 		}
 	}
-	// A plugin must never leave the gateway without an account.
-	if len(live) == 0 {
+	if !used {
 		slog.WarnContext(ctx, "gateway: scheduler.rank excluded every candidate, using the accounts' own priority and weight",
 			"candidates", len(list))
 		c.rec.SchedDecisions = nil
@@ -183,11 +181,7 @@ func (c *call) rankOverrides(ctx context.Context, cands []core.AccountRef) map[i
 
 	out := make(map[int64]rankValues, len(list))
 	for _, rc := range list {
-		w := int(rc.Weight)
-		if !live[rc.Priority] {
-			w = 1
-		}
-		out[rc.AccountId] = rankValues{priority: int(rc.Priority), weight: w}
+		out[rc.AccountId] = rankValues{priority: int(rc.Priority), weight: int(rc.Weight)}
 	}
 	c.ranked = out
 	return out

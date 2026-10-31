@@ -41,13 +41,13 @@ func TestEnvironmentReachesBuildMeta(t *testing.T) {
 	require.Equal(t, map[string]int64{core.EnvVarTaskPollMaxFailures: 10, core.EnvVarRelayTimeoutSeconds: 90}, meta.GetEnvironment())
 }
 
-// max_request_body_mb only raises the endpoint's own limit, never lowers it.
-func TestEnvironmentRequestBodyLimitOnlyRaises(t *testing.T) {
+// max_request_body_mb replaces the default of an endpoint that declares no
+// limit, and only raises one the endpoint declares.
+func TestEnvironmentRequestBodyLimit(t *testing.T) {
 	e := newEnv(t, withEnvironment(nil, core.EnvironmentValues{core.EnvVarMaxRequestBodyMB: 1}))
 	big := body(testModel, false, "pad", strings.Repeat("x", 1<<20))
 	r := e.messages(big)
-	require.Equal(t, 200, r.status, "1 MB must not lower the 32 MB default: %s", r.body)
-	e.record()
+	require.Equal(t, 413, r.status, "1 MB replaces the 32 MB default: %s", r.body)
 
 	e.gen.endpoints[0].Endpoint.Request.MaxBodyBytes = 64
 	e.gw.table.Store(buildRouteTable(e.gen))
@@ -56,6 +56,12 @@ func TestEnvironmentRequestBodyLimitOnlyRaises(t *testing.T) {
 	e.record()
 	r = e.messages(big)
 	require.Equal(t, 413, r.status)
+
+	e.gen.endpoints[0].Endpoint.Request.MaxBodyBytes = 4 << 20
+	e.gw.table.Store(buildRouteTable(e.gen))
+	r = e.messages(big)
+	require.Equal(t, 200, r.status, "1 MB does not lower the endpoint's 4 MB: %s", r.body)
+	e.record()
 }
 
 // A timeout that cuts a stream mid-way is named in the usage record.

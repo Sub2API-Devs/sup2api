@@ -107,27 +107,40 @@ func (r *Router) require(permission string) gin.HandlerFunc {
 
 func (r *Router) requireAny(keys []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx := c.Request.Context()
-		uid, _ := core.UserID(ctx)
-		granted := make([]string, 0, len(keys))
-		for _, k := range keys {
-			ok, err := r.authz.Can(ctx, uid, k)
-			if err != nil {
-				Fail(c, err)
-				return
-			}
-			if !ok {
-				continue
-			}
+		if CanAny(c, r.authz, keys...) {
+			c.Next()
+		}
+	}
+}
+
+// CanAny reports whether the caller holds one of keys (empty keys are
+// skipped) and records every key it holds in the request context (Granted).
+// Without a match it renders permission_denied with details.permission =
+// keys[0]; handlers whose permission depends on the resource use it in place
+// of a route permission.
+func CanAny(c *gin.Context, authz core.Authorizer, keys ...string) bool {
+	ctx := c.Request.Context()
+	uid, _ := core.UserID(ctx)
+	granted := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if k == "" {
+			continue
+		}
+		ok, err := authz.Can(ctx, uid, k)
+		if err != nil {
+			Fail(c, err)
+			return false
+		}
+		if ok {
 			granted = append(granted, k)
 		}
-		if len(granted) == 0 {
-			Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": keys[0]}))
-			return
-		}
-		c.Request = c.Request.WithContext(core.WithGranted(ctx, granted))
-		c.Next()
 	}
+	if len(granted) == 0 {
+		Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": keys[0]}))
+		return false
+	}
+	c.Request = c.Request.WithContext(core.WithGranted(ctx, granted))
+	return true
 }
 
 // RequestContext assigns X-Request-Id and locale (Accept-Language zh*/en).

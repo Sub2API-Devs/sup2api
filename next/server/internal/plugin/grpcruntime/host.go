@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -35,7 +36,7 @@ const (
 	ClearStickyBindingsMaxModel = 256
 	ClearStickyBindingsMaxSalt  = 128
 	// GetUsersMaxIDs caps the ids of one GetUsers call.
-	GetUsersMaxIDs = 500
+	GetUsersMaxIDs = protocol.GetUsersMaxIDs
 )
 
 // hostServer serves HostService to exactly one plugin instance, so the
@@ -510,7 +511,11 @@ func (h *hostServer) GetUsers(ctx context.Context, in *pluginv1.GetUsersRequest)
 	if err != nil {
 		return nil, toStatus(err)
 	}
-	return &pluginv1.GetUsersResponse{Users: users}, nil
+	out := make([]*pluginv1.UserInfo, len(users))
+	for i, u := range users {
+		out[i] = &pluginv1.UserInfo{Id: u.ID, DisplayName: u.DisplayName, Status: u.Status}
+	}
+	return &pluginv1.GetUsersResponse{Users: out}, nil
 }
 
 func accountSummary(a core.PluginAccountSummary) *pluginv1.AccountSummary {

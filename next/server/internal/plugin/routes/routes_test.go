@@ -16,7 +16,6 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
@@ -194,9 +193,9 @@ func TestPluginAPIRoutes(t *testing.T) {
 	}
 }
 
-type auditor struct{ writes []audit.PluginWrite }
+type auditor struct{ writes []core.PluginWrite }
 
-func (a *auditor) AuditPluginWrite(_ context.Context, w audit.PluginWrite) {
+func (a *auditor) AuditPluginWrite(_ context.Context, w core.PluginWrite) {
 	a.writes = append(a.writes, w)
 }
 
@@ -213,7 +212,8 @@ func TestPluginAPIWritesAudited(t *testing.T) {
 	if w := do(e, "PUT", "/api/v1/p/demo/rules/7?x=1", "admin", `{"name":"r"}`); w.Code != 201 {
 		t.Fatalf("put: %d %s", w.Code, w.Body)
 	}
-	want := audit.PluginWrite{UserID: 1, Plugin: "demo", Method: "PUT", Path: "/rules/7", Route: "/rules/:id", Status: 201, Body: []byte(`{"name":"r"}`)}
+	want := core.PluginWrite{UserID: 1, Plugin: "demo", Method: "PUT", Path: "/rules/7", Route: "/rules/:id", Status: 201,
+		ClientIP: "192.0.2.1", Body: []byte(`{"name":"r"}`)}
 	if len(a.writes) != 1 || a.writes[0].RequestID == "" {
 		t.Fatalf("writes %+v", a.writes)
 	}

@@ -21,7 +21,7 @@ function search() {
   <div>
     <SPageHeader :title="t('observe.audit')" :description="t('observe.auditHint')">
       <template #actions>
-        <SButton icon="refresh" @click="table?.load()">{{ t('common.refresh') }}</SButton>
+        <SButton icon="refresh" :loading="table?.loading" @click="table?.load()">{{ t('common.refresh') }}</SButton>
       </template>
       <template #filters>
         <form class="flex items-center gap-2" data-testid="audit-filter" @submit.prevent="search">

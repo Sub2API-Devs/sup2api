@@ -2,6 +2,7 @@ package pluginsdk
 
 import (
 	"context"
+	"slices"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -57,17 +58,29 @@ func Notify(ctx context.Context, h Host, in *pluginv1.NotifyRequest) (*pluginv1.
 }
 
 // GetUsers returns the users among ids that exist, once each, in the order
-// of ids: at most 500 ids per call. It needs the "users.read" grant
-// (CONTRACTS §74.3).
+// of ids, asking the host protocol.GetUsersMaxIDs ids at a time. It needs
+// the "users.read" grant (CONTRACTS §74.3).
 func GetUsers(ctx context.Context, h Host, ids []int64) ([]*pluginv1.UserInfo, error) {
 	if err := requireHostAPI(h, protocol.UsersHostAPIVersion, "user lookup"); err != nil {
 		return nil, err
 	}
-	resp, err := h.Client().GetUsers(ctx, &pluginv1.GetUsersRequest{UserIds: ids})
-	if err != nil {
-		return nil, err
+	seen := make(map[int64]bool, len(ids))
+	unique := make([]int64, 0, len(ids))
+	for _, id := range ids {
+		if !seen[id] {
+			seen[id] = true
+			unique = append(unique, id)
+		}
 	}
-	return resp.GetUsers(), nil
+	out := make([]*pluginv1.UserInfo, 0, len(unique))
+	for batch := range slices.Chunk(unique, protocol.GetUsersMaxIDs) {
+		resp, err := h.Client().GetUsers(ctx, &pluginv1.GetUsersRequest{UserIds: batch})
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, resp.GetUsers()...)
+	}
+	return out, nil
 }
 
 // requireHostAPI fails a host call the host cannot serve yet: no host, or

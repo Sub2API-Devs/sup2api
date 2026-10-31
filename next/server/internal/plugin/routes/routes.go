@@ -15,7 +15,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
-	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
@@ -30,7 +29,7 @@ type Handler struct {
 	authz  core.Authorizer
 	health HealthChecker
 	assets VersionAssets
-	audit  WriteAuditor
+	audit  core.PluginWriteAuditor
 }
 
 // VersionAssets reads an approved immutable package independently of whichever
@@ -41,14 +40,9 @@ type VersionAssets interface {
 
 func WithVersionAssets(assets VersionAssets) Option { return func(h *Handler) { h.assets = assets } }
 
-// WriteAuditor records the writes served by admin routes (audit.PluginWrites).
-type WriteAuditor interface {
-	AuditPluginWrite(context.Context, audit.PluginWrite)
-}
-
 // WithAudit records every POST/PUT/PATCH/DELETE an admin route served
 // (CONTRACTS §74.2).
-func WithAudit(a WriteAuditor) Option { return func(h *Handler) { h.audit = a } }
+func WithAudit(a core.PluginWriteAuditor) Option { return func(h *Handler) { h.audit = a } }
 
 // HealthChecker reports whether this node may serve traffic
 // (core.NodeRegistry satisfies it).
@@ -239,16 +233,23 @@ func (h *Handler) serveAPI(c *gin.Context) {
 		}
 		req.Headers[lk] = &pluginv1.HeaderValues{Values: v}
 	}
+	if h.audit != nil && chosen.Route.Scope == "admin" && auditedMethods[c.Request.Method] {
+		// After the answer: flushed first, so the row costs the caller nothing
+		// (an unwritten answer, e.g. on a panic, is left to the middleware).
+		defer func() {
+			if c.Writer.Written() {
+				c.Writer.Flush()
+			}
+			h.audit.AuditPluginWrite(ctx, core.PluginWrite{UserID: userID, Plugin: key, Method: c.Request.Method, Path: sub,
+				Route: chosen.Route.Path, Status: c.Writer.Status(), RequestID: req.Caller.RequestId, ClientIP: req.Caller.ClientIp, Body: body})
+		}()
+	}
 	resp, err := chosen.Client.HandleHTTP(ctx, req)
 	if err != nil {
 		httpapi.Fail(c, err)
-	} else {
-		writeResponse(c, resp)
+		return
 	}
-	if h.audit != nil && chosen.Route.Scope == "admin" && auditedMethods[c.Request.Method] {
-		h.audit.AuditPluginWrite(audit.WithClientIP(ctx, c.ClientIP()), audit.PluginWrite{UserID: userID, Plugin: key,
-			Method: c.Request.Method, Path: sub, Route: chosen.Route.Path, Status: c.Writer.Status(), RequestID: req.Caller.RequestId, Body: body})
-	}
+	writeResponse(c, resp)
 }
 
 // auditedMethods are the writes WithAudit records.

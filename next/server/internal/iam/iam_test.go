@@ -309,8 +309,7 @@ func TestUserLifecycle(t *testing.T) {
 	// HostService.GetUsers: deleted and unknown ids are left out, the rest
 	// come once each in the order asked.
 	if found, err := s.LookupUsers(ctx, []int64{admin.ID, u.ID, 999999, root, admin.ID}); err != nil || len(found) != 2 ||
-		found[0].GetId() != admin.ID || found[0].GetEmail() != "admin@example.com" || found[0].GetStatus() != StatusActive ||
-		len(found[0].GetRoles()) != 1 || found[0].GetRoles()[0] != authz.RoleAdmin || found[1].GetId() != root {
+		found[0] != (core.UserSummary{ID: admin.ID, DisplayName: admin.DisplayName, Status: StatusActive}) || found[1].ID != root {
 		t.Fatalf("lookup: %v %v", found, err)
 	}
 	if _, err := s.CreateUser(ctx, root, CreateUserInput{Email: "alice@example.com", Password: "password-1"}); err != nil {

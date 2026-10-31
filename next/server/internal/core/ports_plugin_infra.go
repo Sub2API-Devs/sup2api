@@ -208,9 +208,36 @@ type StickyBindingClearer interface {
 	ClearStickyBindings(ctx context.Context, req StickyClearRequest) (matched, cleared int64, err error)
 }
 
+// UserSummary is what HostService.GetUsers tells a plugin about a user: no
+// email, no roles (CONTRACTS §74.3).
+type UserSummary struct {
+	ID          int64
+	DisplayName string
+	Status      string // active | disabled
+}
+
 // UserDirectory (owner: iam) serves HostService.GetUsers (CONTRACTS §74.3).
 type UserDirectory interface {
 	// LookupUsers returns the users among ids that exist and are not
 	// deleted, once each, in the order of ids.
-	LookupUsers(ctx context.Context, ids []int64) ([]*pluginv1.UserInfo, error)
+	LookupUsers(ctx context.Context, ids []int64) ([]UserSummary, error)
+}
+
+// PluginWrite is one write a plugin admin route served (CONTRACTS §74.2).
+type PluginWrite struct {
+	UserID    int64
+	Plugin    string
+	Method    string
+	Path      string // the request path under /api/v1/p/<plugin>
+	Route     string // the manifest route pattern it matched
+	Status    int    // the status the console answered
+	RequestID string
+	ClientIP  string
+	Body      []byte
+}
+
+// PluginWriteAuditor (owner: audit) records PluginWrite rows. Failures are
+// logged, never returned: the plugin's answer has already been sent.
+type PluginWriteAuditor interface {
+	AuditPluginWrite(ctx context.Context, w PluginWrite)
 }

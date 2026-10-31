@@ -380,6 +380,14 @@ export interface PluginDetail {
   versions?: PluginVersion[]
 }
 
+/**
+ * Whether the plugin's settings page is a core view: ccgateway keeps its
+ * settings in the core (settings:read), not in the plugin settings form.
+ */
+export function hasCoreSettings(key: string, has: (perm: string) => boolean): boolean {
+  return key === 'ccgateway' && has('settings:read')
+}
+
 export interface PluginSettings {
   schema: Record<string, any> | null
   ui_schema?: Record<string, any> | null

@@ -179,25 +179,29 @@ func (a *API) jobInfos(ctx context.Context, key string, m *manifest.Manifest) ([
 }
 
 func (a *API) currentManifest(c *gin.Context, key string) (*manifest.Manifest, string, bool) {
-	rc := c.Request.Context()
-	if _, ok := a.pluginStatus(c, key); !ok {
-		return nil, "", false
-	}
-	v, err := install.CurrentVersion(rc, a.d.DB.Pool, key)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return nil, "", false
-	}
-	if v == "" {
-		httpapi.Fail(c, core.ErrNotFound.WithMessage("plugin has no version"))
-		return nil, "", false
-	}
-	m, err := install.LoadManifest(rc, a.d.DB.Pool, key, v)
+	m, v, err := a.loadCurrentManifest(c.Request.Context(), key)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return nil, "", false
 	}
 	return m, v, true
+}
+
+// loadCurrentManifest returns the manifest of the plugin's current version
+// and that version; not_found when the plugin or its version is missing.
+func (a *API) loadCurrentManifest(ctx context.Context, key string) (*manifest.Manifest, string, error) {
+	v, err := install.CurrentVersion(ctx, a.d.DB.Pool, key)
+	if err != nil {
+		return nil, "", err
+	}
+	if v == "" {
+		return nil, "", core.ErrNotFound.WithMessage("plugin has no version")
+	}
+	m, err := install.LoadManifest(ctx, a.d.DB.Pool, key, v)
+	if err != nil {
+		return nil, "", err
+	}
+	return m, v, nil
 }
 
 func (a *API) jobs(c *gin.Context) {

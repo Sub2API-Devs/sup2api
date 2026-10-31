@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/gin-gonic/gin"
@@ -44,20 +45,23 @@ type SettingsView struct {
 
 // settingsForm loads the settings form of the plugin after checking that the
 // caller holds corePerm or the permission the plugin names for its settings.
+// The permission check comes first: a caller holding neither gets 403 whether
+// or not the plugin exists.
 func (a *API) settingsForm(c *gin.Context, key, corePerm string) (*SettingsView, bool) {
-	m, version, ok := a.currentManifest(c, key)
-	if !ok {
-		return nil, false
-	}
+	m, version, err := a.loadCurrentManifest(c.Request.Context(), key)
 	v := &SettingsView{Mode: "none", Schema: json.RawMessage("null"), UISchema: json.RawMessage("null"), Values: map[string]any{}, Secrets: []string{}}
 	var f *manifest.Form
-	if m.UI != nil {
+	if m != nil && m.UI != nil {
 		f = m.UI.Settings
 	}
 	if f != nil && f.Permission != "" {
 		v.Permission = install.PermissionKey(key, f.Permission)
 	}
-	if !a.canAny(c, corePerm, v.Permission) {
+	if !httpapi.CanAny(c, a.d.Authz, corePerm, v.Permission) {
+		return nil, false
+	}
+	if err != nil {
+		httpapi.Fail(c, err)
 		return nil, false
 	}
 	if f == nil {
@@ -161,6 +165,10 @@ func (a *API) renderSettings(c *gin.Context, key string, v *SettingsView) {
 
 func (a *API) putSettings(c *gin.Context) {
 	key := c.Param("key")
+	form, ok := a.settingsForm(c, key, PermManage)
+	if !ok {
+		return
+	}
 	var in struct {
 		Values map[string]any `json:"values"`
 	}
@@ -175,20 +183,19 @@ func (a *API) putSettings(c *gin.Context) {
 		httpapi.Fail(c, core.ErrUnavailable.WithMessage("settings encryption unavailable"))
 		return
 	}
-	form, ok := a.settingsForm(c, key, PermManage)
-	if !ok {
-		return
-	}
+	manager := slices.Contains(httpapi.Granted(c), PermManage)
 	var changed []string
 	err := a.d.DB.Tx(c.Request.Context(), func(tx pgx.Tx) error {
 		old, err := a.loadValues(c, tx, key, true)
 		if err != nil {
 			return err
 		}
+		var kept []string
 		for _, s := range form.Secrets {
 			if in.Values[s] == Mask {
 				if ov, ok := old[s]; ok {
 					in.Values[s] = ov
+					kept = append(kept, s)
 				} else {
 					delete(in.Values, s)
 				}
@@ -212,6 +219,17 @@ func (a *API) putSettings(c *gin.Context) {
 			}
 		}
 		sort.Strings(changed)
+		// A caller authorized only by the plugin's own permission keeps a
+		// stored secret only while nothing else changes: otherwise it could
+		// point a URL setting elsewhere and have the secret sent there.
+		if !manager && len(kept) > 0 && slices.ContainsFunc(changed, func(k string) bool { return !slices.Contains(form.Secrets, k) }) {
+			errs := make([]core.FieldError, 0, len(kept))
+			for _, s := range kept {
+				errs = append(errs, core.FieldError{Field: "values/" + s, Code: "reenter",
+					Message: "re-enter this secret to change other settings"})
+			}
+			return core.InvalidFields(errs...)
+		}
 		plain, err := json.Marshal(in.Values)
 		if err != nil {
 			return err

@@ -260,9 +260,9 @@ func TestHostAccountsUnavailable(t *testing.T) {
 
 type fakeUsers struct{ calls int }
 
-func (f *fakeUsers) LookupUsers(_ context.Context, ids []int64) ([]*pluginv1.UserInfo, error) {
+func (f *fakeUsers) LookupUsers(_ context.Context, ids []int64) ([]core.UserSummary, error) {
 	f.calls++
-	return []*pluginv1.UserInfo{{Id: ids[0], Email: "a@x"}}, nil
+	return []core.UserSummary{{ID: ids[0], DisplayName: "Ann", Status: "active"}}, nil
 }
 
 // GetUsers needs users.read and at most GetUsersMaxIDs ids (CONTRACTS §74.3).
@@ -279,7 +279,8 @@ func TestHostGetUsers(t *testing.T) {
 	if _, err := h.GetUsers(ctx, &pluginv1.GetUsersRequest{UserIds: make([]int64, GetUsersMaxIDs+1)}); status.Code(err) != codes.InvalidArgument || users.calls != 0 {
 		t.Fatalf("too many ids: %v", err)
 	}
-	if out, err := h.GetUsers(ctx, &pluginv1.GetUsersRequest{UserIds: []int64{7}}); err != nil || len(out.GetUsers()) != 1 || out.GetUsers()[0].GetId() != 7 {
+	if out, err := h.GetUsers(ctx, &pluginv1.GetUsersRequest{UserIds: []int64{7}}); err != nil || len(out.GetUsers()) != 1 ||
+		out.GetUsers()[0].GetId() != 7 || out.GetUsers()[0].GetDisplayName() != "Ann" || out.GetUsers()[0].GetStatus() != "active" {
 		t.Fatalf("lookup: %v %v", out, err)
 	}
 }

@@ -119,7 +119,7 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 	default:
 		// The client is still here: a timeout that canceled the upstream
 		// request names itself (dispatch.go cancels it with a cause).
-		if cause := context.Cause(resp.Request.Context()); cause != nil {
+		if cause := context.Cause(resp.Request.Context()); errors.Is(cause, errRelayTimeout) || errors.Is(cause, errStreamIdleTimeout) {
 			err = cause
 		}
 		c.rec.Success = false

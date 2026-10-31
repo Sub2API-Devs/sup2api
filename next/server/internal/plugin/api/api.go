@@ -110,26 +110,6 @@ func actor(c *gin.Context) int64 {
 	return id
 }
 
-// canAny renders permission_denied (details.permission = the first key)
-// unless the caller holds one of keys; empty keys are skipped.
-func (a *API) canAny(c *gin.Context, keys ...string) bool {
-	for _, k := range keys {
-		if k == "" {
-			continue
-		}
-		ok, err := a.d.Authz.Can(c.Request.Context(), actor(c), k)
-		if err != nil {
-			httpapi.Fail(c, err)
-			return false
-		}
-		if ok {
-			return true
-		}
-	}
-	httpapi.Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": keys[0]}))
-	return false
-}
-
 // audit writes an audit row outside a transaction (after controller calls).
 func (a *API) audit(c *gin.Context, action, key string, detail any) {
 	_ = audit.Audit(ctx(c), a.d.DB.Pool, actor(c), action, "plugin", key, detail)

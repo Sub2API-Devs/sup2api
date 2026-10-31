@@ -7,6 +7,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
 func (f *FakeHost) ClearStickyBindings(ctx context.Context, in *pluginv1.ClearStickyBindingsRequest) (*pluginv1.ClearStickyBindingsResponse, error) {
@@ -31,7 +32,7 @@ func (f *FakeHost) Notify(ctx context.Context, in *pluginv1.NotifyRequest) (*plu
 }
 
 func (f *FakeHost) GetUsers(_ context.Context, in *pluginv1.GetUsersRequest) (*pluginv1.GetUsersResponse, error) {
-	if len(in.GetUserIds()) > 500 {
+	if len(in.GetUserIds()) > protocol.GetUsersMaxIDs {
 		return nil, status.Error(codes.InvalidArgument, "at most 500 user_ids")
 	}
 	out := &pluginv1.GetUsersResponse{}

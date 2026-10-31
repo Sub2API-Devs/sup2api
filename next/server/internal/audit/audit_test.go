@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -89,12 +90,21 @@ func TestBodySummary(t *testing.T) {
 		{`[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]`, `[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,"…"]`},
 		{`{"a":{"b":{"c":{"d":{"e":1}}}}}`, `{"a":{"b":{"c":{"d":"{…}"}}}}`},
 		{`not json`, `{"bytes":8,"non_json":true}`},
+		// Secret-looking names: plurals, whole words, camelCase.
+		{`{"api_keys":["k"],"authHeader":"a","author":"Ann","db_dsn":"d","smtp-pass":"p","pwd":"p","bypass":true,"sessionId":"s","request_signature":"s","Bearer":"b"}`,
+			`{"Bearer":"[REDACTED]","api_keys":"[REDACTED]","authHeader":"[REDACTED]","author":"Ann","bypass":true,"db_dsn":"[REDACTED]","pwd":"[REDACTED]","request_signature":"[REDACTED]","sessionId":"[REDACTED]","smtp-pass":"[REDACTED]"}`},
+		// {name, value} pairs naming a secret.
+		{`{"headers":[{"name":"Authorization","value":"Bearer x"},{"name":"Accept","value":"*/*"},{"key":"X-Api-Key","value":"k"}]}`,
+			`{"headers":[{"name":"Authorization","value":"[REDACTED]"},{"name":"Accept","value":"*/*"},{"key":"[REDACTED]","value":"[REDACTED]"}]}`},
+		// URLs: no userinfo or query; URL fields keep scheme and host only.
+		{`{"note":"https://u:p@example.com/a?sig=1#f","base_url":"https://api.example.com/v1?key=k","hooks":{"webhook":"https://hooks.example.com/T0/B1/xyz"},"callback_uris":["http://cb.example.com:8080/x/y"]}`,
+			`{"base_url":"https://api.example.com","callback_uris":["http://cb.example.com:8080"],"hooks":{"webhook":"https://hooks.example.com"},"note":"https://example.com/a"}`},
+		// Cut at a rune boundary.
+		{`{"note":"` + strings.Repeat("é", 101) + `"}`, `{"note":"` + strings.Repeat("é", 100) + `…"}`},
 	}
 	for _, c := range cases {
 		got, _ := json.Marshal(bodySummary([]byte(c.body)))
-		if string(got) != c.want {
-			t.Errorf("bodySummary(%s) = %s, want %s", c.body, got, c.want)
-		}
+		assert.Equal(t, c.want, string(got), c.body)
 	}
 	// Too large even after the cuts: only the field names are kept.
 	big := map[string]string{}
@@ -108,8 +118,8 @@ func TestBodySummary(t *testing.T) {
 	}
 }
 
-// AuditPluginWrite keeps the row with a redacted body and purges only its
-// own rows past the retention; GET /audit-logs filters by target, actor and
+// AuditPluginWrite keeps the row with a redacted body and Purge deletes only
+// its own rows past the retention; GET /audit-logs filters by target, actor and
 // time and names the actor.
 func TestPluginWritesAndList(t *testing.T) {
 	db := testutil.DB(t)
@@ -124,8 +134,11 @@ func TestPluginWritesAndList(t *testing.T) {
 		}
 	}
 	w := &PluginWrites{DB: db, Retention: 24 * time.Hour}
-	w.AuditPluginWrite(WithClientIP(ctx, "203.0.113.9"), PluginWrite{UserID: uid, Plugin: "demo", Method: "PUT", Path: "/rules/7",
-		Route: "/rules/:id", Status: 200, RequestID: "req-1", Body: []byte(`{"name":"r","token":"t"}`)})
+	w.AuditPluginWrite(ctx, core.PluginWrite{UserID: uid, Plugin: "demo", Method: "PUT", Path: "/rules/7",
+		Route: "/rules/:id", Status: 200, RequestID: "req-1", ClientIP: "203.0.113.9", Body: []byte(`{"name":"r","token":"t"}`)})
+	if err := w.Purge(ctx); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO audit_logs (action, target_type, target_id) VALUES ('plugin.enable', 'plugin', 'other')`); err != nil {
 		t.Fatal(err)
 	}

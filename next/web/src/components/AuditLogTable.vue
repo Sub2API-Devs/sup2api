@@ -61,7 +61,7 @@ watch(page, load)
 watch(pageSize, reload)
 watch(() => JSON.stringify(props.query || {}), reload)
 onMounted(load)
-defineExpose({ load })
+defineExpose({ load, loading })
 </script>
 
 <template>

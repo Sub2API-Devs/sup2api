@@ -6,6 +6,8 @@ package gateway
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/json"
 	"log/slog"
 	"math/rand/v2"
@@ -102,6 +104,10 @@ type Gateway struct {
 
 	allowPrivate bool
 	health       func() bool
+	// fingerprintKey keys RequestMeta.session_fingerprint: derived from the
+	// master key, so fingerprints differ between installations and cannot be
+	// recomputed from a guessed session value.
+	fingerprintKey []byte
 
 	// Overridable in tests.
 	now               func() time.Time
@@ -155,6 +161,9 @@ func New(d Deps) *Gateway {
 	}
 	if d.Config != nil {
 		g.allowPrivate = d.Config.AllowPrivateUpstream
+		mac := hmac.New(sha256.New, d.Config.MasterKey)
+		mac.Write([]byte("session-fingerprint"))
+		g.fingerprintKey = mac.Sum(nil)
 	}
 	g.health = d.Health
 	if g.health == nil {

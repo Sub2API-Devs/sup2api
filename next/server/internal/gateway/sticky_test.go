@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"strconv"
@@ -327,15 +328,18 @@ func TestStickyRuleProtocolValidation(t *testing.T) {
 
 // RequestMeta names the endpoint and the sticky session: hooks (which run
 // before the binding is read) and the upstream build see the same opaque
-// fingerprint, the hash of the sticky key, never the client's session value.
+// fingerprint, the HMAC of the sticky key under the installation's key,
+// never the client's session value.
 func TestRequestMetaEndpointAndSessionFingerprint(t *testing.T) {
 	e := newEnv(t)
 	e.enableSticky(onFailureFailover)
 	h := &fakeHook{}
 	e.addHook(guardHook(300, "open"), []string{"model", "prompt_text"}, h)
+	e.gw.fingerprintKey = []byte("installation key")
 	fingerprint := func(session string) string {
-		sum := sha256.Sum256([]byte(stickyKey(e.gw.rules.override[0], testGroup, testModel, session)))
-		return hex.EncodeToString(sum[:])
+		mac := hmac.New(sha256.New, []byte("installation key"))
+		mac.Write([]byte(stickyKey(e.gw.rules.override[0], testGroup, testModel, session)))
+		return hex.EncodeToString(mac.Sum(nil))
 	}
 	for _, session := range []string{"session-a", "session-a", "session-b"} {
 		r := e.messages(withSession(body(testModel, false), session))

@@ -14,6 +14,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -299,9 +301,26 @@ func TestAPIFlow(t *testing.T) {
 	if code, out = h.do("GET", "/plugins/guard/settings", "viewer", nil); code != 200 || data(out)["permission"] != "plugin.guard:stats:read" {
 		t.Fatalf("settings through the plugin permission = %d %v", code, out)
 	}
-	if code, _ = h.do("PUT", "/plugins/guard/settings", "viewer", map[string]any{"values": map[string]any{"threshold": 4, "webhook_secret": Mask}}); code != 200 {
-		t.Fatalf("put masked = %d", code)
+	// Unknown plugin: 403 without permission (no existence leak), 404 with it.
+	if code, out = h.do("PUT", "/plugins/ghost/settings", "nobody", map[string]any{"values": map[string]any{}}); code != http.StatusForbidden {
+		t.Fatalf("unknown plugin without permission = %d %v", code, out)
 	}
+	if code, out = h.do("GET", "/plugins/ghost/settings", "admin", nil); code != http.StatusNotFound {
+		t.Fatalf("unknown plugin = %d %v", code, out)
+	}
+	// Only through the plugin permission, a masked secret is kept only while
+	// nothing else changes; changing another field needs the secret again.
+	code, out = h.do("PUT", "/plugins/guard/settings", "viewer", map[string]any{"values": map[string]any{"threshold": 4, "webhook_secret": Mask}})
+	require.Equal(t, http.StatusBadRequest, code, out)
+	fields, _ := out["error"].(map[string]any)["details"].(map[string]any)["fields"].([]any)
+	require.Len(t, fields, 1, out)
+	assert.Equal(t, "values/webhook_secret", fields[0].(map[string]any)["field"])
+	code, out = h.do("PUT", "/plugins/guard/settings", "viewer", map[string]any{"values": map[string]any{"threshold": 3, "webhook_secret": Mask}})
+	require.Equal(t, http.StatusOK, code, out)
+	code, out = h.do("PUT", "/plugins/guard/settings", "admin", map[string]any{"values": map[string]any{"threshold": 5, "webhook_secret": Mask}})
+	require.Equal(t, http.StatusOK, code, out)
+	code, out = h.do("PUT", "/plugins/guard/settings", "viewer", map[string]any{"values": map[string]any{"threshold": 4, "webhook_secret": "s3cret"}})
+	require.Equal(t, http.StatusOK, code, out)
 	var who int64
 	if err := h.db.Pool.QueryRow(ctx, `SELECT user_id FROM audit_logs WHERE action = 'plugin.settings.update' ORDER BY id DESC LIMIT 1`).Scan(&who); err != nil || who != 2 {
 		t.Fatalf("settings audit by %d: %v", who, err)

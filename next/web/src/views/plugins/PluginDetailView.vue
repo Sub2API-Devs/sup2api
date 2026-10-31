@@ -11,7 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { usePluginStore } from '@/stores/plugins'
 import { consentPath } from './reviewCache'
-import { compareVersions, conflictLines, isPendingConsent, shownStatus, type PluginDetail, type PluginSettings } from './pluginUtil'
+import { compareVersions, conflictLines, hasCoreSettings, isPendingConsent, shownStatus, type PluginDetail, type PluginSettings } from './pluginUtil'
 import PluginAvatar from './parts/PluginAvatar.vue'
 import StatusBadge from './parts/StatusBadge.vue'
 import TrustBadge from './parts/TrustBadge.vue'
@@ -32,7 +32,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const CCGatewaySettings = defineAsyncComponent(() => import('@/views/ccgateway/CCGatewayView.vue'))
-const isCCGatewaySettings = computed(() => key.value === 'ccgateway' && auth.has('settings:read') && status.value !== 'awaiting_consent')
+const isCCGatewaySettings = computed(() => hasCoreSettings(key.value, (p) => auth.has(p)) && status.value !== 'awaiting_consent')
 
 const key = computed(() => String(route.params.key))
 const detail = ref<PluginDetail | null>(null)

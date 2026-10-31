@@ -25,11 +25,12 @@ func (c *call) environment(ref *core.AccountRef) core.Environment {
 	return core.ResolveEnvironment(global, group, account)
 }
 
-// The causes an upstream request is canceled with when an environment
-// timeout fires, so the usage record names the setting.
+// The causes an upstream request is canceled with when a timeout fires, so
+// the usage record names it.
 var (
 	errRelayTimeout      = errors.New("upstream request exceeded relay_timeout_seconds")
 	errStreamIdleTimeout = errors.New("upstream stream exceeded streaming_idle_timeout_seconds")
+	errHeaderTimeout     = errors.New("timeout waiting for upstream response headers")
 )
 
 // idleBody cancels the upstream request when a streamed response delivers

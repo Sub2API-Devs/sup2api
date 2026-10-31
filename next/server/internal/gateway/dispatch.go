@@ -630,7 +630,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if d := c.env.Duration(core.EnvVarResponseHeaderTimeoutSeconds); d > 0 {
 		headerWait = d
 	}
-	timer := time.AfterFunc(headerWait, func() { ucancel(nil) })
+	timer := time.AfterFunc(headerWait, func() { ucancel(errHeaderTimeout) })
 	if execution != nil {
 		execution.sent = true
 	}
@@ -642,7 +642,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{WroteRequest: func(httptrace.WroteRequestInfo) { requestWritten.Store(true) }}))
 	}
 	resp, err := hc.Do(req)
-	headerTimedOut := !timer.Stop()
+	timer.Stop()
 	if err != nil {
 		if c.failurePolicy != nil {
 			c.failureState.unsafeTransport = requestWritten.Load()
@@ -654,11 +654,8 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			return attemptResult{kind: attemptCanceled, err: canceledErr()}
 		}
 		msg := err.Error()
-		switch {
-		case context.Cause(uctx) == errRelayTimeout:
-			msg = errRelayTimeout.Error()
-		case headerTimedOut:
-			msg = "timeout waiting for upstream response headers"
+		if cause := context.Cause(uctx); errors.Is(cause, errRelayTimeout) || errors.Is(cause, errHeaderTimeout) {
+			msg = cause.Error()
 		}
 		if execution != nil {
 			return execution.classify(ctx, 0, nil, nil, msg)

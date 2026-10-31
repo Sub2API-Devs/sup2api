@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -348,31 +349,50 @@ func (c *call) resolveSticky(ctx context.Context) *stickySession {
 	return s
 }
 
+// stickyMatched is a stickyMatch answer and the model and body it was
+// derived from.
+type stickyMatched struct {
+	rule        *stickyRule
+	key         string
+	model       string
+	bodyVersion uint64
+}
+
 // stickyMatch returns the first rule that matches the request and yields a
-// session value, with the binding key it derives; nil when none does.
+// session value, with the binding key it derives; nil when none does. The
+// answer is kept while the model and body stay the same, so the fingerprint
+// (before the hooks) and resolveSticky (after them) usually derive it once.
 func (c *call) stickyMatch(ctx context.Context) (*stickyRule, string) {
+	if m := c.matched; m != nil && m.model == c.model && m.bodyVersion == c.bodyVersion {
+		return m.rule, m.key
+	}
+	c.matched = &stickyMatched{model: c.model, bodyVersion: c.bodyVersion}
 	ua := c.c.Request.UserAgent()
 	for _, r := range c.g.rules.get(ctx) {
 		if !r.matches(c.ep.Protocol, c.model, ua) {
 			continue
 		}
 		if v := c.stickyValue(ctx, r); v != "" {
-			return r, stickyKey(r, c.principal.Group.ID, c.model, v)
+			c.matched.rule, c.matched.key = r, stickyKey(r, c.principal.Group.ID, c.model, v)
+			break
 		}
 	}
-	return nil, ""
+	return c.matched.rule, c.matched.key
 }
 
-// sessionFingerprint is RequestMeta.session_fingerprint: the SHA-256 of the
-// request's sticky key, so plugins can tell sessions apart without seeing the
-// client's session value. Empty when no rule yields a session value.
+// sessionFingerprint is RequestMeta.session_fingerprint: the HMAC-SHA-256 of
+// the request's sticky key under the installation's fingerprintKey, so
+// plugins can tell sessions apart without seeing, or being able to confirm a
+// guess of, the client's session value. Empty when no rule yields a session
+// value.
 func (c *call) sessionFingerprint(ctx context.Context) string {
 	_, key := c.stickyMatch(ctx)
 	if key == "" {
 		return ""
 	}
-	sum := sha256.Sum256([]byte(key))
-	return hex.EncodeToString(sum[:])
+	mac := hmac.New(sha256.New, c.g.fingerprintKey)
+	mac.Write([]byte(key))
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 func (c *call) stickyValue(ctx context.Context, r *stickyRule) string {

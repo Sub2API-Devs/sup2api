@@ -114,8 +114,9 @@ type call struct {
 	metaQuery      map[string]string
 	metaMapsDone   bool
 	// sessionFP is RequestMeta.session_fingerprint, derived before the hooks
-	// run (sessionFingerprint).
+	// run (sessionFingerprint); matched is the stickyMatch answer it used.
 	sessionFP string
+	matched   *stickyMatched
 
 	// modelResolved marks that ResolveModel already answered for the current
 	// body (endpoints with request.modelSource "plugin" only). setBody clears
@@ -328,14 +329,18 @@ func (c *call) newRecord() *core.UsageRecord {
 	}
 }
 
-// bodyLimit is the largest client request body (or WebSocket message): what
-// the endpoint declares, else the default; max_request_body_mb only raises it.
+// bodyLimit is the largest client request body (or WebSocket message).
+// max_request_body_mb may raise what the endpoint declares but not lower it;
+// for an endpoint that declares nothing it replaces the default.
 func (c *call) bodyLimit() int64 {
-	limit := int64(defaultMaxBodyBytes)
+	env := c.environment(nil).Bytes(core.EnvVarMaxRequestBodyMB)
 	if c.ep.Request.MaxBodyBytes > 0 {
-		limit = c.ep.Request.MaxBodyBytes
+		return max(c.ep.Request.MaxBodyBytes, env)
 	}
-	return max(limit, c.environment(nil).Bytes(core.EnvVarMaxRequestBodyMB))
+	if env > 0 {
+		return env
+	}
+	return defaultMaxBodyBytes
 }
 
 func (c *call) readBody() *gwError {
