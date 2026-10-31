@@ -455,6 +455,28 @@ func (h *hostServer) SetAccountAutomaticState(ctx context.Context, in *pluginv1.
 	return out, nil
 }
 
+// ClearStickyBindingsMaxModel bounds the model of a ClearStickyBindings call.
+const ClearStickyBindingsMaxModel = 256
+
+func (h *hostServer) ClearStickyBindings(ctx context.Context, in *pluginv1.ClearStickyBindingsRequest) (*pluginv1.ClearStickyBindingsResponse, error) {
+	if err := h.require(ctx, "sticky.clear"); err != nil {
+		return nil, err
+	}
+	if in.GetAccountId() <= 0 || in.GetGroupId() <= 0 || in.GetModel() == "" || len(in.GetModel()) > ClearStickyBindingsMaxModel ||
+		in.GetPercent() < 1 || in.GetPercent() > 100 || len(in.GetSalt()) > 128 {
+		return nil, status.Error(codes.InvalidArgument, "account_id, group_id, model (1..256 bytes) and percent (1..100) are required; salt is at most 128 bytes")
+	}
+	if h.i.rt.o.Sticky == nil {
+		return nil, status.Error(codes.Unavailable, "sticky bindings unavailable")
+	}
+	matched, cleared, err := h.i.rt.o.Sticky.ClearStickyBindings(ctx, core.StickyClearRequest{
+		AccountID: in.GetAccountId(), GroupID: in.GetGroupId(), Model: in.GetModel(), Percent: int(in.GetPercent()), Salt: in.GetSalt()})
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &pluginv1.ClearStickyBindingsResponse{Matched: matched, Cleared: cleared}, nil
+}
+
 func accountSummary(a core.PluginAccountSummary) *pluginv1.AccountSummary {
 	settings := string(a.Settings)
 	if settings == "" {

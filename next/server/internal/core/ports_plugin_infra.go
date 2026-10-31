@@ -191,3 +191,19 @@ type PluginAccountReader interface {
 	// handed out.
 	ReadPluginAccountCredentials(ctx context.Context, pluginKey string, id int64) (*PluginAccountCredentials, error)
 }
+
+// StickyClearRequest selects the sticky session bindings HostService.
+// ClearStickyBindings deletes (CONTRACTS §73.2).
+type StickyClearRequest struct {
+	AccountID int64
+	GroupID   int64
+	Model     string // client model, before account mapping
+	Percent   int    // 1..100
+	Salt      string
+}
+
+// StickyBindingClearer (owner: gateway) deletes a share of the sticky session
+// bindings that point at an account and could serve a (group, model).
+type StickyBindingClearer interface {
+	ClearStickyBindings(ctx context.Context, req StickyClearRequest) (matched, cleared int64, err error)
+}

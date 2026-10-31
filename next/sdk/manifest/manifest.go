@@ -836,6 +836,7 @@ var HostPermissionRisk = map[string]string{
 	"gateway.endpoint":     RiskHigh,
 	"platform.register":    RiskHigh,
 	"scheduler.rank":       RiskHigh,
+	"sticky.clear":         RiskHigh,
 	"gateway.observe":      RiskHigh,
 	"users.read":           RiskHigh,
 	"accounts.credentials": RiskCritical,

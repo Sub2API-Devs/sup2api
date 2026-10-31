@@ -15,6 +15,11 @@ import "sub2api/plugin/v1/observation.proto";
 service HostService {
   rpc SetAccountAutomaticState(SetAccountAutomaticStateRequest) returns (SetAccountAutomaticStateResponse);
   rpc ReadObservationMetrics(ReadObservationMetricsRequest) returns (ReadObservationMetricsResponse);
+  // sticky.clear (grant "sticky.clear"): delete a share of the sticky session
+  // bindings that point at an account and could serve (group_id, model), so
+  // those sessions pick an account again on their next request (CONTRACTS
+  // §73.2).
+  rpc ClearStickyBindings(ClearStickyBindingsRequest) returns (ClearStickyBindingsResponse);
   // Pure local tokenization. No upstream traffic and no billing side effects.
   rpc CountTokens(CountTokensRequest) returns (CountTokensResponse);
   // These callbacks are authorized only by an active Execute/Monitor scope,
@@ -166,6 +171,24 @@ message SetAccountAutomaticStateResponse {
   string status = 2;
   string reason = 3;
   int64 until_unix = 4;
+}
+
+message ClearStickyBindingsRequest {
+  int64 account_id = 1;
+  // Bindings whose key does not include the group dimension match any group.
+  int64 group_id = 2;
+  // Client model (before account mapping); bindings whose key does not
+  // include the model dimension match any model.
+  string model = 3;
+  // 1..100: share of the matching bindings to delete.
+  int32 percent = 4;
+  // Picks which bindings fall into the share; a different salt picks others.
+  string salt = 5;
+}
+
+message ClearStickyBindingsResponse {
+  int64 matched = 1;
+  int64 cleared = 2;
 }
 
 message CountTokensRequest {

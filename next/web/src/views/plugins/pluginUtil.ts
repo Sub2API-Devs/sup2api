@@ -28,6 +28,7 @@ export const HOST_PERMISSION_RISK: Record<string, Risk> = {
   'gateway.endpoint': 'high',
   'platform.register': 'high',
   'scheduler.rank': 'high',
+  'sticky.clear': 'high',
   'users.read': 'high',
   'accounts.credentials': 'critical',
   'ledger.credit': 'critical',
