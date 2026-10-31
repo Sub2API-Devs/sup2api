@@ -14,6 +14,13 @@
 - **核心 0.1.224**（`6771d384d`，manifest `fe12b580…c530`，无 schema / Host API 变化，内置插件与 0.1.223 相同）：Worker 在身份校验中转出的 401/403（`AccountRefusalError`）按上游错误响应处理：切换账号、套用自动禁用规则，响应体原样返回给客户端。以前报 503 “account does not provide a verified resource issuer”，只切换账号，账号一直可调度。计划 51 秒完成，没有暂停。
 - 脚本 `stage/ccgateway-0.1.116`、`stage/ccgateway-0.1.117`、`stage/0.1.224`；备份在 `backups/ccgateway-0.1.116`、`ccgateway-0.1.117`、`core-0.1.224`。#23 的 paired 更新仍是 `not_found`（0.1.115 时就有）。
 
+2026-11-01 核心 **0.1.225**（`671d1267d`，manifest `9b3cee95…a12d`，迁移 0071、0072，内置插件与 0.1.224 相同，北京时间 04:11）：
+- 失败策略 Schema 3/4 的规则同时填了状态码和关键词时，两者都命中才算匹配（原为任一）；自动禁用原因带命中的关键词，如 `failure policy login-invalid: upstream HTTP 401, keyword "oauth refresh token is no longer valid"`。
+- 迁移 0072 把线上唯一的账号规则 `migrated-disable`（401 + 7 个 new-api 关键词）拆成 `login-invalid`（401 + 登录失效关键词，取自近 30 天真实 401：`OAuth access token has been revoked.`、`OAuth refresh token is no longer valid…`，以及 CLI/Worker 的 `oauth_refresh_dead`、`not_logged_in` 等）、`account-on-hold`（403 + `oauth_account_on_hold` 等）、`migrated-disable`（原 7 个关键词，不限状态码）。revision 1→2，旧策略在 `failure_policy_history`。
+- 内置粘性规则除名称外可修改（迁移 0071 `sticky_rules.customized`，升级不覆盖，`POST /sticky-rules/:id/reset` 恢复默认）；控制台 UA 条件字段名修正为 `user_agent_contains`。
+- 重试换号并清除粘性绑定时，把会话从原账号的每分钟会话数里移除（`ReleaseSession`）。
+- 计划 49 秒完成，没有暂停，两节点 `sub2api version` = 0.1.225。脚本 `stage/0.1.225`，备份 `backups/core-0.1.225`。
+
 **2026-10-31 事故（14:22–14:32 UTC，两节点 503 约 10 分钟）**：第一次用 0.1.128 外壳签发 `v0.1.222`，manifest 的 Host API 写成 7，候选核心报 8，`start-primary` 在 Prepare 前失败、计划暂停，两节点都已停服。迁移未执行。schema 变化的计划不允许回滚、破坏性步骤后也不允许取消，最后在 `updater.upgrades` 手工把计划标为 cancelled，重启两节点外壳回到 0.1.221 基线。**教训**：核心的 `HostAPIVersion`（或集群/任务协议）变了，先升外壳，再用新外壳镜像签核心包。
 
 2026-10-31 最新发布（北京时间 03:10–03:20）：Core 两节点 **0.1.221** + moderation **0.3.1**（CONTRACTS §72.13 P2），并把 new-api 的内容审核配置迁了过来、给审核渠道补了模型价格。
