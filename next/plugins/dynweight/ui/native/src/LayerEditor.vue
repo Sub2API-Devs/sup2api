@@ -10,6 +10,8 @@ import { clone, enumOptions, useDwHost, type Layer, type When } from './host'
 // floor, exempt status codes, weight floor, rules and strategies.
 const props = defineProps<{ defaults: Layer | null; master?: boolean }>()
 const layer = defineModel<Layer>({ required: true })
+// Set while the JSON panel holds text that does not parse.
+const invalid = defineModel<boolean>('invalid', { default: false })
 const t = useDwHost().t
 
 const floorOptions = computed(() => enumOptions('floor', ['base_percent', 'fixed']))
@@ -39,12 +41,10 @@ const staleStrategies = computed(() => {
   return layer.value.strategies.filter((s) => s.enabled !== false && refsOf(s.when).some((r) => !live.has(r))).map((s) => s.name)
 })
 
-const restored = ref(0)
 function restoreRules() {
   if (!props.defaults) return
   layer.value.rules = clone(props.defaults.rules)
   layer.value.strategies = clone(props.defaults.strategies)
-  restored.value++
 }
 </script>
 
@@ -81,8 +81,7 @@ function restoreRules() {
     </SSectionTitle>
     <SHint class="dw-hint">{{ t('layer.rulesHint') }}</SHint>
     <SAlert v-if="staleStrategies.length" tone="warning" class="dw-block">{{ t('layer.staleRefs', { names: staleStrategies.join(', ') }) }}</SAlert>
-    <!-- Restoring the defaults remounts the JSON panel with the new text. -->
-    <ItemsJsonPanel v-if="mode === 'json'" :key="restored" v-model="layer" />
+    <ItemsJsonPanel v-if="mode === 'json'" v-model="layer" v-model:invalid="invalid" />
     <template v-else>
       <RulesEditor v-model="layer.rules" @rename="renameRule" />
       <SSectionTitle :title="t('layer.strategies')" />

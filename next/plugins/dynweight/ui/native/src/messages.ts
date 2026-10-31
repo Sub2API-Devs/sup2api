@@ -11,7 +11,6 @@ const zh = {
   cancel: '取消',
   tabs: { status: '有效权重', events: '权重事件', config: '配置' },
   filter: { account: '账号', group: '分组', model: '模型', all: '全部', search: '查询', clear: '清空' },
-  picker: { groupId: '分组 ID', accountId: '账号 ID' },
   status: {
     hint: '每个（账号、分组、客户端模型）独立计数和调整；调度时用有效权重替换账号在该分组的权重。',
     loadFailed: '加载有效权重失败',
@@ -31,6 +30,7 @@ const zh = {
     resetKeyConfirm: '把账号 {account} 在分组 #{group}、模型 {model} 下的有效权重重置为基准？历史窗口会被清空。',
     resetFilterConfirm: '把筛选条件覆盖的全部（账号、分组、模型）重置为基准？历史窗口会被清空。',
     resetSelected: '重置选中的 {n} 个账号',
+    selectedAccounts: '已选 {n} 个账号（最多 {max}）',
     resetSelectedHint: '分组和模型留空表示该账号的全部分组、全部模型。',
     resetSelectedConfirm: '把选中的 {n} 个账号在所选分组和模型下的有效权重重置为基准？历史窗口会被清空。',
     modelHint: '客户端请求的模型名，留空为全部',
@@ -64,6 +64,8 @@ const zh = {
     title: '运行指标（本节点）',
     hint: '处理本次请求的节点自启动以来的计数；评估任务每次只在一个节点上运行。',
     loadFailed: '加载运行指标失败',
+    node_id: '节点',
+    started_at: '启动于',
     enabled: '总开关',
     on: '开启',
     off: '关闭',
@@ -102,6 +104,7 @@ const zh = {
     clearFailed: '{strategy}：清理粘性会话失败：{error}',
     window: '窗口 {total} 次，失败 {fail}',
     nothingReset: '没有需要重置的记录',
+    keysAtBase: '{n} 个在基准上的键',
     allModels: '全部模型'
   },
   kind: {
@@ -142,6 +145,7 @@ const zh = {
     strategies: '策略 JSON',
     strategiesHint: '数组，每条：name、when（规则名，或 all / any 数组）、actions（type、mode、value、percent）、cooldown_seconds、enabled',
     notArray: '必须是一个数组',
+    invalid: 'JSON 有错误，修正后才能校验或保存',
     unnamed: '第 {i} 项必须是带 name 的对象'
   },
   when: { rule: '单条规则', all: '全部满足', any: '任一满足', addRule: '添加规则', addGroup: '添加子组' },
@@ -226,7 +230,6 @@ const en: typeof zh = {
   cancel: 'Cancel',
   tabs: { status: 'Effective weights', events: 'Weight events', config: 'Configuration' },
   filter: { account: 'Account', group: 'Group', model: 'Model', all: 'All', search: 'Search', clear: 'Clear' },
-  picker: { groupId: 'Group ID', accountId: 'Account ID' },
   status: {
     hint: 'Each (account, group, client model) is counted and adjusted on its own; scheduling replaces the account weight in the group with the effective weight.',
     loadFailed: 'Failed to load the effective weights',
@@ -246,6 +249,7 @@ const en: typeof zh = {
     resetKeyConfirm: 'Reset the effective weight of account {account} in group #{group}, model {model} to its base? Its window history is dropped.',
     resetFilterConfirm: 'Reset every (account, group, model) the filter covers to its base? Their window history is dropped.',
     resetSelected: 'Reset the {n} selected accounts',
+    selectedAccounts: '{n} accounts selected (max {max})',
     resetSelectedHint: 'Leave the group and the model empty for every group and model of the accounts.',
     resetSelectedConfirm: 'Reset the effective weights of the {n} selected accounts in the chosen group and model to their base? Their window history is dropped.',
     modelHint: 'the model the client asked for; empty for every model',
@@ -279,6 +283,8 @@ const en: typeof zh = {
     title: 'Runtime (this node)',
     hint: 'Counted since the start of the node that answered; each evaluate run happens on one node only.',
     loadFailed: 'Failed to load the runtime counters',
+    node_id: 'Node',
+    started_at: 'Started',
     enabled: 'Master switch',
     on: 'On',
     off: 'Off',
@@ -317,6 +323,7 @@ const en: typeof zh = {
     clearFailed: '{strategy}: clearing sticky sessions failed: {error}',
     window: 'window: {total} attempts, {fail} failed',
     nothingReset: 'nothing to reset',
+    keysAtBase: '{n} keys at their base',
     allModels: 'every model'
   },
   kind: {
@@ -357,6 +364,7 @@ const en: typeof zh = {
     strategies: 'Strategies JSON',
     strategiesHint: 'An array; each strategy: name, when (a rule name, or an all / any array), actions (type, mode, value, percent), cooldown_seconds, enabled',
     notArray: 'must be an array',
+    invalid: 'Fix the JSON errors to validate or save',
     unnamed: 'item {i} must be an object with a name'
   },
   when: { rule: 'One rule', all: 'All of', any: 'Any of', addRule: 'Add rule', addGroup: 'Add group' },

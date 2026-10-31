@@ -42,6 +42,11 @@ function setDraft(body: ConfigBody) {
 
 const dirty = computed(() => !!draft.value && JSON.stringify(draft.value) !== pristine.value)
 
+// Layers whose JSON panel holds text that does not parse ('' = the global
+// one, else a group id): nothing is validated or saved meanwhile.
+const badJson = ref<Record<string, boolean>>({})
+const invalid = computed(() => Object.values(badJson.value).some(Boolean))
+
 async function reload() {
   loading.value = true
   error.value = ''
@@ -60,7 +65,7 @@ async function reload() {
 
 /** Reloads, once the user agrees to drop unsaved edits. */
 async function discard() {
-  if (dirty.value && !(await host.confirm({ message: t('config.discardConfirm'), confirmText: t('config.discard'), danger: true }))) return
+  if ((dirty.value || invalid.value) && !(await host.confirm({ message: t('config.discardConfirm'), confirmText: t('config.discard'), danger: true }))) return
   await reload()
 }
 
@@ -82,10 +87,15 @@ function addGroup() {
   const id = newGroup.value.trim()
   if (!c || !validId(id) || c.groups[id]) return
   // A new group starts as a copy of the global layer that adjusts: the
-  // master switch stays the global one's.
-  const { groups: _g, accounts: _a, notify: _n, ...global } = c
+  // master switch and the event log stay the global one's.
+  const { groups: _g, accounts: _a, notify: _n, log_events: _l, ...global } = c
   c.groups[id] = { ...clone(global), enabled: true }
   newGroup.value = ''
+}
+
+function removeGroup(id: string) {
+  delete draft.value?.groups[id]
+  delete badJson.value[id]
 }
 
 function addAccount() {
@@ -127,7 +137,7 @@ async function validate(c: Draft): Promise<string[] | null> {
 }
 
 async function check() {
-  if (!draft.value) return
+  if (!draft.value || invalid.value) return
   saving.value = true
   try {
     if ((await validate(draft.value))?.length === 0) host.toast(t('config.valid'), 'success')
@@ -140,7 +150,7 @@ async function check() {
 // confirmed.
 async function save() {
   const c = draft.value
-  if (!c) return
+  if (!c || invalid.value) return
   saving.value = true
   try {
     const found = await validate(c)
@@ -169,7 +179,7 @@ async function save() {
     <template v-if="draft">
       <SCard :title="t('config.global')" :subtitle="t('config.globalHint')" class="dw-block">
         <fieldset class="dw-fieldset" :disabled="!manage">
-          <LayerEditor :model-value="draft" :defaults="defaults" master />
+          <LayerEditor v-model:invalid="badJson['']" :model-value="draft" :defaults="defaults" master />
         </fieldset>
       </SCard>
 
@@ -177,10 +187,10 @@ async function save() {
         <div class="dw-list">
           <SDisclosure v-for="id in groupIds" :key="id" variant="section" :label="catalog.groupName(Number(id))">
             <template v-if="manage" #actions>
-              <SButton size="sm" variant="ghost" icon="trash" @click="delete draft.groups[id]">{{ t('remove') }}</SButton>
+              <SButton size="sm" variant="ghost" icon="trash" @click="removeGroup(id)">{{ t('remove') }}</SButton>
             </template>
             <fieldset class="dw-fieldset" :disabled="!manage">
-              <LayerEditor v-model="draft.groups[id]" :defaults="defaults" />
+              <LayerEditor v-model="draft.groups[id]" v-model:invalid="badJson[id]" :defaults="defaults" />
             </fieldset>
           </SDisclosure>
           <form v-if="manage" class="dw-row" @submit.prevent="addGroup">
@@ -233,9 +243,10 @@ async function save() {
       </fieldset>
 
       <div v-if="manage" class="dw-toolbar">
-        <SButton :disabled="!dirty" @click="discard">{{ t('config.discard') }}</SButton>
-        <SButton :loading="saving" @click="check">{{ t('config.validate') }}</SButton>
-        <SButton variant="primary" icon="check" :loading="saving" @click="save">{{ t('config.save') }}</SButton>
+        <SButton :disabled="!dirty && !invalid" @click="discard">{{ t('config.discard') }}</SButton>
+        <SHint v-if="invalid" inline>{{ t('json.invalid') }}</SHint>
+        <SButton :loading="saving" :disabled="invalid" @click="check">{{ t('config.validate') }}</SButton>
+        <SButton variant="primary" icon="check" :loading="saving" :disabled="invalid" @click="save">{{ t('config.save') }}</SButton>
       </div>
     </template>
     <SHint v-else-if="loading">{{ t('loading') }}</SHint>

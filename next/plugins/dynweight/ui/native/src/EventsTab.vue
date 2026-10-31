@@ -52,12 +52,16 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'detail', label: t('events.col.detail'), ellipsis: '18rem' }
 ])
 
-const isWeightKind = (k: string) => k.startsWith('weight_')
+/** Weight changes, and resets of a key that was off its base. */
+const showsWeight = (e: WeightEvent) => e.kind.startsWith('weight_') || (e.kind === 'reset' && e.from !== e.to)
 
 /** One-line detail: the window counts, the reason, or the strategy's clearing. */
 function detailText(e: WeightEvent): string {
   const d = e.detail ?? {}
-  if (e.reason) return d.matched === 0 ? `${t(`reason.${e.reason}`)} · ${t('events.nothingReset')}` : t(`reason.${e.reason}`)
+  if (e.reason) {
+    const extra = d.matched === 0 ? t('events.nothingReset') : d.keys ? t('events.keysAtBase', { n: Number(d.keys) }) : ''
+    return [t(`reason.${e.reason}`), extra].filter(Boolean).join(' · ')
+  }
   if (e.kind === 'affinity_cleared') {
     const strategy = String(d.strategy ?? '')
     return d.error ? t('events.clearFailed', { strategy, error: String(d.error) }) : t('events.cleared', { strategy, n: Number(d.cleared ?? 0) })
@@ -88,7 +92,7 @@ function detailText(e: WeightEvent): string {
           <div class="dw-sub">{{ row.model || t('events.allModels') }}</div>
         </template>
         <template #cell-weight="{ row }">
-          <span v-if="isWeightKind(row.kind)" class="dw-num">{{ weightOf(row.from) }} → {{ weightOf(row.to) }}</span>
+          <span v-if="showsWeight(row)" class="dw-num">{{ weightOf(row.from) }} → {{ weightOf(row.to) }}</span>
           <SHint v-else inline>—</SHint>
         </template>
         <template #cell-rules="{ row }">

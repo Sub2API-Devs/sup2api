@@ -177,17 +177,25 @@ func (s store) writeState(ctx context.Context, k key, st rules.State, gen int64)
 	return tag.RowsAffected() == 1, nil
 }
 
-// tombstone resets a key whatever its generation.
-func (s store) tombstone(ctx context.Context, k key, window int64) error {
-	raw, err := json.Marshal(rules.Tombstone(window))
-	if err != nil {
-		return err
+// tombstone resets keys whatever their generation, in one statement: all of
+// them or none. window gives a key's reset window.
+func (s store) tombstone(ctx context.Context, keys []key, window func(key) int64) error {
+	n := len(keys)
+	accounts, groups, models, docs, windows := make([]int64, n), make([]int64, n), make([]string, n), make([]string, n), make([]int64, n)
+	// In key order, like the counters, so concurrent resets do not deadlock.
+	for i, k := range slices.SortedFunc(slices.Values(keys), compareKeys) {
+		w := window(k)
+		raw, err := json.Marshal(rules.Tombstone(w))
+		if err != nil {
+			return err
+		}
+		accounts[i], groups[i], models[i], docs[i], windows[i] = k.AccountID, k.GroupID, k.Model, string(raw), w
 	}
-	_, err = s.db.Exec(ctx, `INSERT INTO state (account_id, group_id, model, data, base, eff, tombstone, eval_window)
-		VALUES ($1, $2, $3, $4, 0, 0, true, $5)
+	_, err := s.db.Exec(ctx, `INSERT INTO state (account_id, group_id, model, data, base, eff, tombstone, eval_window)
+		SELECT a, g, m, d::jsonb, 0, 0, true, w FROM unnest($1::bigint[], $2::bigint[], $3::text[], $4::text[], $5::bigint[]) AS t(a, g, m, d, w)
 		ON CONFLICT (account_id, group_id, model) DO UPDATE SET data = EXCLUDED.data, base = 0, eff = 0, tombstone = true,
 			eval_window = EXCLUDED.eval_window, gen = state.gen + 1, updated_at = now()`,
-		k.AccountID, k.GroupID, k.Model, raw, window)
+		accounts, groups, models, docs, windows)
 	return err
 }
 

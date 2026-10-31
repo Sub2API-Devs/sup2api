@@ -4,6 +4,8 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -280,10 +282,10 @@ func (e *evaluation) clearAffinity(ctx context.Context, k key, window int64, wei
 	return ev
 }
 
-// resetKeys puts the keys matching f back to their base: their history is
-// dropped and the samples so far are never evaluated again. reason is the
-// events' (manual, status_change), userID the administrator's (0 = none).
-// It reports how many keys were reset.
+// resetKeys puts the keys matching f back to their base, all of them or
+// none: their history is dropped and the samples so far are never evaluated
+// again. reason is the events' (manual, status_change), userID the
+// administrator's (0 = none). It reports how many keys were reset.
 func (p *Plugin) resetKeys(ctx context.Context, f filter, reason string, userID int64) (int, error) {
 	s, err := p.store(ctx)
 	if err != nil {
@@ -294,23 +296,48 @@ func (p *Plugin) resetKeys(ctx context.Context, f filter, reason string, userID 
 	if err != nil {
 		return 0, err
 	}
-	// A key that fails does not stop the others, whose resets must be
-	// recorded and broadcast.
-	var errs keyErrors
-	events := make([]eventRow, 0, len(keys))
+	// The weights scheduling used until now, for the events.
+	weights := *p.weights.Load()
+	if len(keys) > 0 {
+		window := func(k key) int64 {
+			return rules.LatestClosedWindow(k.AccountID, now, cfg.GroupLayer(k.GroupID).WindowSeconds)
+		}
+		if err := s.tombstone(ctx, keys, window); err != nil {
+			return 0, err
+		}
+	}
+	p.stats.add(cResets, int64(len(keys)))
+	p.record(ctx, s, resetEvents(f, keys, weights, reason, userID), len(keys) > 0)
+	return len(keys), nil
+}
+
+// resetEvents records a reset as new-api does: an event for each key off
+// its base, from its effective weight to the base; one for each (account,
+// group) whose other keys were at their base, with the model asked for and
+// detail.keys their number; and, for an account asked for with nothing to
+// reset, one with the group and model asked for and detail.matched 0.
+func resetEvents(f filter, keys []key, weights map[key]weight, reason string, userID int64) []eventRow {
+	var events []eventRow
+	atBase := map[pair]int{}
+	for _, k := range slices.SortedFunc(slices.Values(keys), compareKeys) {
+		w, off := weights[k]
+		if !off {
+			atBase[pair{k.AccountID, k.GroupID}]++
+			continue
+		}
+		ev := resetEvent(k, reason, userID)
+		ev.From, ev.To = w.eff, float64(w.base)
+		events = append(events, ev)
+	}
+	for _, pr := range slices.SortedFunc(maps.Keys(atBase), comparePairs) {
+		ev := resetEvent(key{AccountID: pr.AccountID, GroupID: pr.GroupID, Model: f.Model}, reason, userID)
+		ev.Detail["keys"] = atBase[pr]
+		events = append(events, ev)
+	}
 	matched := map[int64]bool{}
 	for _, k := range keys {
 		matched[k.AccountID] = true
-		window := rules.LatestClosedWindow(k.AccountID, now, cfg.GroupLayer(k.GroupID).WindowSeconds)
-		if err := s.tombstone(ctx, k, window); err != nil {
-			errs.add(k, err)
-			continue
-		}
-		events = append(events, resetEvent(k, reason, userID))
 	}
-	reset := len(events)
-	// An account with nothing to reset still has the reset on record, as in
-	// new-api, with the group and model it was asked for.
 	for _, id := range f.accounts() {
 		if !matched[id] {
 			ev := resetEvent(key{AccountID: id, GroupID: f.GroupID, Model: f.Model}, reason, userID)
@@ -318,12 +345,7 @@ func (p *Plugin) resetKeys(ctx context.Context, f filter, reason string, userID 
 			events = append(events, ev)
 		}
 	}
-	p.stats.add(cResets, int64(reset))
-	p.record(ctx, s, events, reset > 0)
-	if errs.n > 0 {
-		return reset, errs
-	}
-	return reset, nil
+	return events
 }
 
 func resetEvent(k key, reason string, userID int64) eventRow {

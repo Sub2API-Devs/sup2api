@@ -330,9 +330,12 @@ func statusOf(k key, st *rules.State, res *rules.Resolved, b base, obs map[int64
 		Thresholds: thresholdCounts(res.Thresholds, cur.Thresholds), LatencyThresholds: thresholdCounts(res.LatencyThresholds, cur.Latency)}
 	out.Current.Total, out.Current.Fail = cur.Judged(res.ExemptCodes)
 	out.Current.StreamTotal, out.Current.StreamFail = cur.Stream.Judged(res.ExemptCodes)
-	// A tombstone reads as no state; it only keeps its cuts.
+	// A tombstone reads as no state; it only keeps its cuts. So does a state
+	// computed from another base than scheduling's (new-api's base check):
+	// scheduling ignores it and the next evaluation resets it.
 	out.Reset = st != nil && st.Tombstone
-	evaluated, last := st != nil && !st.Tombstone, &rules.State{}
+	stale := st != nil && !b.SeenAt.IsZero() && st.WeightBase != b.Weight
+	evaluated, last := st != nil && !st.Tombstone && !stale, &rules.State{}
 	if evaluated {
 		last = st
 		out.Base, out.Effective = st.WeightBase, st.WeightEff

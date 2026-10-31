@@ -15,24 +15,42 @@ const maxWeight = 1000
 
 // RankAccounts implements pluginsdk.AccountRanker: a candidate with an
 // effective weight for this (group, client model) gets it in place of its
-// own; an effective weight of 0 takes it out (the host keeps every candidate
-// when that would leave none). The candidates' own weights are what the
-// evaluation degrades from, so they are recorded as the bases.
+// own; an effective weight of 0 takes it out. A priority tier whose every
+// candidate is at 0 is split evenly instead (weight 1 each), as new-api's
+// weighted pick splits a tier whose weights sum to 0: scheduling never skips
+// to a lower tier for the effective weights alone. The candidates' own
+// weights are what the evaluation degrades from, so they are recorded as
+// the bases.
 func (p *Plugin) RankAccounts(_ context.Context, in *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error) {
 	resp := &pluginv1.RankAccountsResponse{}
 	meta := in.GetMeta()
 	if !p.cfg.Load().Enabled || meta.GetGroupId() <= 0 || meta.GetModel() == "" {
 		return resp, nil
 	}
-	p.bases.see(meta.GetGroupId(), in.GetCandidates(), p.now())
+	cands := in.GetCandidates()
+	p.bases.see(meta.GetGroupId(), cands, p.now())
 	weights := *p.weights.Load()
-	for _, c := range in.GetCandidates() {
+	effective := make([]int32, len(cands)) // -1: the candidate's own
+	live := map[int32]bool{}               // tiers with a candidate above 0
+	for i, c := range cands {
 		w, ok := weights[key{AccountID: c.GetAccountId(), GroupID: meta.GetGroupId(), Model: meta.GetModel()}]
 		// A state computed from another base is stale: the evaluation resets it.
-		if !ok || w.base != int(c.GetWeight()) {
-			continue
+		effective[i] = -1
+		if ok && w.base == int(c.GetWeight()) {
+			effective[i] = effectiveWeight(w.eff)
 		}
-		resp.Accounts = append(resp.Accounts, &pluginv1.RankedAccount{AccountId: c.GetAccountId(), Priority: c.GetPriority(), Weight: effectiveWeight(w.eff)})
+		if effective[i] != 0 {
+			live[c.GetPriority()] = true
+		}
+	}
+	for i, c := range cands {
+		w := effective[i]
+		if !live[c.GetPriority()] {
+			w = 1
+		}
+		if w >= 0 {
+			resp.Accounts = append(resp.Accounts, &pluginv1.RankedAccount{AccountId: c.GetAccountId(), Priority: c.GetPriority(), Weight: w})
+		}
 	}
 	return resp, nil
 }

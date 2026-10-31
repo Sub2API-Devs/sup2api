@@ -29,29 +29,37 @@ const (
 // the way back does not; and status_changed also reports every cooldown,
 // which must not wipe what the failures behind it degraded.
 //
-// A reset is idempotent but for its event: a redelivered batch records it
-// again. An event that fails stops the batch at the one before it.
+// The accounts a batch activates are reset together, in one write and one
+// broadcast. A reset is idempotent but for its events: a redelivered batch
+// records them again. When the reset fails nothing is acked and the core
+// redelivers the batch.
 func (p *Plugin) OnEvents(ctx context.Context, in *pluginv1.OnEventsRequest) (*pluginv1.OnEventsResponse, error) {
-	var acked int64
-	for _, ev := range in.GetEvents() {
+	events := in.GetEvents()
+	if len(events) == 0 {
+		return &pluginv1.OnEventsResponse{}, nil
+	}
+	last := events[len(events)-1].GetId()
+	if ids := activated(events); len(ids) > 0 {
+		if _, err := p.resetKeys(ctx, filter{AccountIDs: ids}, rules.ReasonStatusChange, 0); err != nil {
+			p.log.Warn("dynweight: reset on status change failed", "accounts", len(ids), "through_event_id", last, "error", err.Error())
+			return nil, status.Errorf(codes.Unavailable, "events through %d: %v", last, err)
+		}
+	}
+	return &pluginv1.OnEventsResponse{AckedThroughId: last}, nil
+}
+
+// activated lists the accounts the events report entering active.
+func activated(events []*pluginv1.Event) []int64 {
+	var ids []int64
+	for _, ev := range events {
 		var payload struct {
 			AccountID int64  `json:"account_id"`
 			Status    string `json:"status"`
 		}
-		active := ev.GetType() == EventAccountStatusChanged && json.Unmarshal([]byte(ev.GetPayloadJson()), &payload) == nil &&
-			payload.Status == accountActive && payload.AccountID > 0
-		if !active {
-			acked = ev.GetId()
-			continue
+		if ev.GetType() == EventAccountStatusChanged && json.Unmarshal([]byte(ev.GetPayloadJson()), &payload) == nil &&
+			payload.Status == accountActive && payload.AccountID > 0 {
+			ids = append(ids, payload.AccountID)
 		}
-		if _, err := p.resetKeys(ctx, filter{AccountID: payload.AccountID}, rules.ReasonStatusChange, 0); err != nil {
-			p.log.Warn("dynweight: reset on status change failed", "account_id", payload.AccountID, "event_id", ev.GetId(), "error", err.Error())
-			if acked > 0 {
-				return &pluginv1.OnEventsResponse{AckedThroughId: acked}, nil
-			}
-			return nil, status.Errorf(codes.Unavailable, "event %d: %v", ev.GetId(), err)
-		}
-		acked = ev.GetId()
 	}
-	return &pluginv1.OnEventsResponse{AckedThroughId: acked}, nil
+	return ids
 }

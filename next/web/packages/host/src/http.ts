@@ -468,6 +468,23 @@ export async function requestList<T = any>(path: string, query?: Query, opts: Re
   return { items, page, paged }
 }
 
+/**
+ * Every item of a paginated list, fetched page by page at the core's largest
+ * page size, up to `max` items (unbounded by default). A failed page rejects:
+ * a partial list is never returned.
+ */
+export async function listAll<T = any>(client: ApiClient, path: string, opts: { query?: Query; max?: number } = {}): Promise<T[]> {
+  const PAGE = 200
+  const max = opts.max ?? Infinity
+  const out: T[] = []
+  for (let page = 1; out.length < max; page++) {
+    const r = await client.list<T>(path, { ...opts.query, page, page_size: PAGE })
+    out.push(...r.items)
+    if (!r.paged || r.items.length < PAGE || out.length >= r.page.total) break
+  }
+  return out.slice(0, max)
+}
+
 export interface ApiClient {
   get<T = any>(path: string, query?: Query, opts?: RequestOptions): Promise<T>
   list<T = any>(path: string, query?: Query, opts?: RequestOptions): Promise<ListResult<T>>

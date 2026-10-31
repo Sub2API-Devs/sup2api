@@ -227,8 +227,11 @@ export interface WeightEvent {
 /** Puts the keys of accounts and/or a group (and model) back to their base. */
 export const resetWeights = (k: Key & { account_ids?: number[] }) => api().post<{ reset: number }>('/reset', k)
 
-/** This node's runtime counters (GET /stats); see CONTRACTS §73.5. */
-export type RuntimeStats = Record<string, number | boolean>
+/** The most accounts one reset takes (POST /reset). */
+export const MAX_RESET_ACCOUNTS = 500
+
+/** This node's runtime counters (GET /stats), with node_id and started_at; see CONTRACTS §73.5. */
+export type RuntimeStats = Record<string, number | boolean | string>
 export const fetchStats = () => api().get<RuntimeStats>('/stats')
 
 // ------------------------------------------------------------------ core catalog
@@ -236,23 +239,6 @@ export const fetchStats = () => api().get<RuntimeStats>('/stats')
 export interface Named {
   id: number
   name: string
-}
-
-/** Every item of a core list (host.api, the caller's own permissions), at most
- * `maxPages` pages; [] when it is not readable. */
-export async function fetchAll(path: string, maxPages = 25): Promise<Named[]> {
-  const PAGE = 200
-  const out: Named[] = []
-  try {
-    for (let page = 1; page <= maxPages; page++) {
-      const r = await useDwHost().api.list<Named>(path, { page, page_size: PAGE })
-      out.push(...r.items.map(({ id, name }) => ({ id, name })))
-      if (r.items.length < PAGE || out.length >= (r.page.total ?? 0)) break
-    }
-    return out
-  } catch {
-    return []
-  }
 }
 
 // ------------------------------------------------------------------ account list slot

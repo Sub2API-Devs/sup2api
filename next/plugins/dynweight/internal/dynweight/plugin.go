@@ -40,9 +40,10 @@ type Plugin struct {
 	*pluginsdk.Router
 	*pluginsdk.BroadcastMux
 
-	host pluginsdk.Host
-	log  *slog.Logger
-	now  func() time.Time
+	host    pluginsdk.Host
+	log     *slog.Logger
+	now     func() time.Time
+	started time.Time // GET /stats: what this node's counters count from
 
 	cfg     atomic.Pointer[compiledConfig]
 	weights atomic.Pointer[map[key]weight]
@@ -73,6 +74,7 @@ func New() *Plugin {
 		BroadcastMux: pluginsdk.NewBroadcastMux(),
 		log:          slog.Default(),
 		now:          time.Now,
+		started:      time.Now(),
 		obs:          newAggregator(),
 		bases:        newBaseTracker(),
 	}

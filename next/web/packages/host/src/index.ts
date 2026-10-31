@@ -12,7 +12,7 @@ export * from './bridge-protocol'
 export { useList, type UseListOptions, type UseListResult } from './useList'
 
 /** Version of the host UI contract; plugins declare hostUICompat against it. */
-export const HOST_UI_VERSION = '3.2.0'
+export const HOST_UI_VERSION = '3.3.0'
 
 /** {"en": "...", "zh": "..."} or a bare string. */
 export type LocalizedText = string | Record<string, string> | null | undefined

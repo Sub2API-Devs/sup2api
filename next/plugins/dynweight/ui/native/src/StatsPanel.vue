@@ -3,8 +3,9 @@ import { computed, ref } from 'vue'
 import { SButton, SDescriptions, SDisclosure } from '@sub2api/ui'
 import { errorMessage, fetchStats, useDwHost, type RuntimeStats } from './host'
 
-// This node's runtime counters (GET /stats), loaded when opened: evaluate
-// runs and their outcomes, flushes, dropped samples and the event log.
+// This node's runtime counters (GET /stats), loaded when opened: the node
+// and its start, evaluate runs and their outcomes, flushes, dropped samples
+// and the event log.
 const host = useDwHost()
 const t = host.t
 const stats = ref<RuntimeStats | null>(null)
@@ -37,9 +38,12 @@ const SHOWN = [
 const items = computed(() => {
   const s = stats.value
   if (!s) return []
-  const value = (k: string) => (k === 'last_run_at' ? (s[k] ? host.i18n.formatDateTime(Number(s[k]) * 1000) : '—') : host.i18n.formatNumber(Number(s[k] ?? 0)))
+  const time = (k: string) => (s[k] ? host.i18n.formatDateTime(Number(s[k]) * 1000) : '—')
+  const value = (k: string) => (k === 'last_run_at' ? time(k) : host.i18n.formatNumber(Number(s[k] ?? 0)))
   const runs = Number(s.runs_total ?? 0)
   return [
+    { key: 'node_id', label: t('stats.node_id'), value: String(s.node_id ?? '—') },
+    { key: 'started_at', label: t('stats.started_at'), value: time('started_at') },
     { key: 'enabled', label: t('stats.enabled'), value: t(s.enabled ? 'stats.on' : 'stats.off') },
     ...SHOWN.map((k) => ({ key: k, label: t(`stats.${k}`), value: value(k) })),
     { key: 'avg', label: t('stats.avg_run_ms'), value: runs ? host.i18n.formatNumber(Number(s.run_busy_us_total) / runs / 1000, 1) : '—' }

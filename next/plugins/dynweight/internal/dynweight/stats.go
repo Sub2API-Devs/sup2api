@@ -2,6 +2,8 @@ package dynweight
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 
@@ -50,10 +52,13 @@ type counters [nCounters]atomic.Int64
 func (c *counters) add(k counter, n int64) { c[k].Add(n) }
 
 // getStats is GET /stats: this node's counters, the samples dropped over
-// the pending cap, and the keys pending and degraded.
+// the pending cap, and the keys pending and degraded, with the node they
+// are from and since when.
 func (p *Plugin) getStats(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	cfg := p.cfg.Load()
 	out := map[string]any{
+		"node_id":               p.nodeID(),
+		"started_at":            p.started.Unix(),
 		"enabled":               cfg.Enabled,
 		"config_version":        cfg.version,
 		"degraded_keys":         len(*p.weights.Load()),
@@ -64,6 +69,15 @@ func (p *Plugin) getStats(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTT
 		out[name] = p.stats[i].Load()
 	}
 	return pluginsdk.DataResponse(out), nil
+}
+
+// nodeID names this node: the host's node id, else hostname:pid.
+func (p *Plugin) nodeID() string {
+	if p.host != nil && p.host.Info().NodeID != "" {
+		return p.host.Info().NodeID
+	}
+	name, _ := os.Hostname()
+	return fmt.Sprintf("%s:%d", name, os.Getpid())
 }
 
 const (

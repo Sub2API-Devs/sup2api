@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useList } from '@sub2api/host'
 import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SHint, SInput, SModal, SPagination, SSwitch, STable, type TableColumn } from '@sub2api/ui'
 import IdPicker from './IdPicker.vue'
@@ -7,7 +7,10 @@ import KeyDetail from './KeyDetail.vue'
 import KeyFilters from './KeyFilters.vue'
 import StatsPanel from './StatsPanel.vue'
 import { useCatalog } from './catalog'
-import { applyQuery, canManage, emptyFilter, errorMessage, filterQuery, resetWeights, successRate, useDwHost, weightOf, weightTone, type Filter, type Key, type KeyStatus } from './host'
+import {
+  applyQuery, canManage, emptyFilter, errorMessage, filterQuery, MAX_RESET_ACCOUNTS, resetWeights, successRate, useDwHost, weightOf, weightTone,
+  type Filter, type Key, type KeyStatus
+} from './host'
 
 // Effective weights per (account, group, model), degraded first, each with
 // its evaluation detail. A key, the selected accounts (optionally in one
@@ -83,15 +86,19 @@ const filtered = computed(() => {
 })
 const resetFiltered = () => filtered.value && reset(filtered.value, t('status.resetFilterConfirm'), 'filter')
 
-// Batch reset: the accounts of the selected rows, in every group and model
-// or in the ones given.
+// Batch reset: the accounts of the selected rows (at most
+// MAX_RESET_ACCOUNTS), in every group and model or in the ones given. The
+// selection is of the rows shown: any load (filter, page, reload) clears it.
 const selected = ref<string[]>([])
+watch(list.items, () => (selected.value = []))
 const selectedAccounts = computed(() => [...new Set(selected.value.map((k) => Number(k.split('|')[0])))])
+const tooMany = computed(() => selectedAccounts.value.length > MAX_RESET_ACCOUNTS)
 const batch = reactive({ open: false, group_id: '', model: '' })
 function openBatch() {
   Object.assign(batch, { open: true, group_id: '', model: '' })
 }
 async function resetSelected() {
+  if (tooMany.value) return
   const k = { account_id: 0, account_ids: selectedAccounts.value, group_id: Number(batch.group_id) || 0, model: batch.model.trim() }
   if (!(await reset(k, t('status.resetSelectedConfirm', { n: k.account_ids.length }), 'batch'))) return
   batch.open = false
@@ -123,7 +130,8 @@ const showEvents = (r: KeyStatus) => emit('show-events', { account_id: String(r.
     <SAlert v-if="error" tone="danger" class="dw-section">{{ error }}</SAlert>
 
     <SBulkBar v-if="manage" class="dw-section" :count="selected.length" :page-selected="rows.length > 0 && rows.every((r) => selected.includes(r.key))" @select-page="selected = rows.map((r) => r.key)" @clear="selected = []">
-      <SButton size="sm" variant="danger" icon="refresh" @click="openBatch">{{ t('status.resetSelected', { n: selectedAccounts.length }) }}</SButton>
+      <SBadge :tone="tooMany ? 'danger' : 'gray'" size="xs">{{ t('status.selectedAccounts', { n: selectedAccounts.length, max: MAX_RESET_ACCOUNTS }) }}</SBadge>
+      <SButton size="sm" variant="danger" icon="refresh" :disabled="tooMany" @click="openBatch">{{ t('status.resetSelected', { n: selectedAccounts.length }) }}</SButton>
     </SBulkBar>
 
     <SCard :padded="false" class="dw-section">
@@ -197,7 +205,7 @@ const showEvents = (r: KeyStatus) => emit('show-events', { account_id: String(r.
       </div>
       <template #footer>
         <SButton @click="batch.open = false">{{ t('cancel') }}</SButton>
-        <SButton variant="danger" :loading="busy === 'batch'" @click="resetSelected">{{ t('status.reset') }}</SButton>
+        <SButton variant="danger" :loading="busy === 'batch'" :disabled="tooMany" @click="resetSelected">{{ t('status.reset') }}</SButton>
       </template>
     </SModal>
   </div>

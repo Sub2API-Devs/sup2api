@@ -12,7 +12,7 @@
   "runtime": "grpc",
   "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
   "hostCompat": ">=0.1.0 <0.2.0",
-  "hostUICompat": "^3.0",
+  "hostUICompat": "^3.3",
 
   "capabilities": [
     { "id": "gateway.observe.v1" },

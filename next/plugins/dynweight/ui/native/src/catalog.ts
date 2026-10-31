@@ -1,27 +1,65 @@
 import { reactive } from 'vue'
-import { fetchAll, type Named } from './host'
+import { listAll } from '@sub2api/host'
+import { useDwHost, type Named } from './host'
 
-// Names of the core groups and accounts, loaded once through the core API
-// with the viewer's own permissions (group:read, account:read). Without them
-// a list stays empty: its picker falls back to typing an id, its names to
-// "#id".
-const state = reactive({ groups: [] as Named[], accounts: [] as Named[] })
+// Names of the core groups and accounts, read through the core API with the
+// viewer's own permissions (group:read, account:read). The groups are few:
+// loaded once, again after a failure. The accounts are searched by name as
+// typed (q=) and looked up by id as they are shown. Without the permissions
+// the pickers still take a typed id and the names read "#id".
+const MAX_GROUPS = 1000
+const SEARCH_SIZE = 20
+
+const state = reactive({ groups: [] as Named[], accounts: {} as Record<number, string> })
 let loading: Promise<void> | null = null
+const looked = new Set<number>()
 
-const label = (list: Named[], id: number) => {
-  const name = list.find((x) => x.id === id)?.name
-  return name ? `${name} #${id}` : `#${id}`
+const named = ({ id, name }: Named): Named => ({ id, name })
+const label = (name: string | undefined, id: number) => (name ? `${name} #${id}` : `#${id}`)
+
+function loadGroups() {
+  loading ??= listAll<Named>(useDwHost().api, '/groups', { max: MAX_GROUPS }).then(
+    (groups) => {
+      state.groups = groups.map(named)
+    },
+    () => {
+      loading = null
+    }
+  )
+}
+
+/** Fetches the name of an account not seen yet, once. */
+function lookUp(id: number) {
+  if (id <= 0 || looked.has(id)) return
+  looked.add(id)
+  useDwHost()
+    .api.get<Named>(`/accounts/${id}`)
+    .then((a) => (state.accounts[id] = a.name))
+    .catch(() => {})
+}
+
+/** The first accounts whose name contains q; [] when not readable. */
+export async function searchAccounts(q: string): Promise<Named[]> {
+  try {
+    const r = await useDwHost().api.list<Named>('/accounts', { q: q.trim(), page_size: SEARCH_SIZE })
+    const found = r.items.map(named)
+    for (const a of found) state.accounts[a.id] = a.name
+    return found
+  } catch {
+    return []
+  }
 }
 
 export function useCatalog() {
-  loading ??= Promise.all([fetchAll('/groups'), fetchAll('/accounts')]).then(([groups, accounts]) => {
-    state.groups = groups
-    state.accounts = accounts
-  })
+  loadGroups()
   return {
     state,
-    groupName: (id: number) => label(state.groups, id),
-    /** The name the plugin saw scheduling offer, else the catalog's. */
-    accountName: (id: number, seen?: string) => (seen ? `${seen} #${id}` : label(state.accounts, id))
+    groupName: (id: number) => label(state.groups.find((g) => g.id === id)?.name, id),
+    /** The name the plugin saw scheduling offer, else the core's. */
+    accountName: (id: number, seen?: string) => {
+      if (seen) return label(seen, id)
+      if (!(id in state.accounts)) lookUp(id)
+      return label(state.accounts[id], id)
+    }
   }
 }

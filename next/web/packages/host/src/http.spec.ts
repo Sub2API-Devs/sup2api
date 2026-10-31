@@ -40,6 +40,19 @@ describe('envelope', () => {
     expect(bare).toMatchObject({ items: [1, 2, 3], paged: false, page: { page: 1, page_size: 3, total: 3 } })
   })
 
+  it('listAll walks the pages up to max, keeping the query', async () => {
+    const f = stubFetch((url) => {
+      const page = Number(new URL(url, 'http://x').searchParams.get('page'))
+      const items = Array.from({ length: page < 3 ? 200 : 5 }, (_, i) => (page - 1) * 200 + i)
+      return new Response(JSON.stringify({ data: items, page: { page, page_size: 200, total: 405 } }))
+    })
+    expect(await http.listAll<number>(http.api, '/all', { query: { q: 'a' } })).toHaveLength(405)
+    expect(f).toHaveBeenCalledTimes(3)
+    expect(f.mock.calls[0][0]).toBe('/api/v1/all?q=a&page=1&page_size=200')
+    expect(await http.listAll<number>(http.api, '/all', { max: 250 })).toHaveLength(250)
+    expect(f).toHaveBeenCalledTimes(5)
+  })
+
   it('builds query strings: drops empty values, repeats arrays', async () => {
     const f = stubFetch(() => json(null))
     await http.api.get('/q', { a: 1, b: '', c: null, d: undefined, e: ['x', 'y'], f: false })

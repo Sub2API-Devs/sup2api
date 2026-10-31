@@ -227,33 +227,36 @@ func TestDegradeNotifyAndReset(t *testing.T) {
 	}
 	e.decode(e.h.Do("GET", "/events", map[string]string{"kind": rules.EventReset}, nil), http.StatusOK, &events)
 	if len(events.Data) != 2 || events.Data[0].AccountID != 99 || events.Data[0].Detail["matched"] != float64(0) ||
-		events.Data[1].Reason != rules.ReasonManual || events.Data[1].AccountName != "main" {
+		events.Data[1].Reason != rules.ReasonManual || events.Data[1].AccountName != "main" || events.Data[1].From != 70 || events.Data[1].To != 100 {
 		t.Fatalf("reset events %+v", events.Data)
 	}
 }
 
 // An account that becomes active again starts over from its base; one going
-// into a cooldown keeps its degraded weight.
+// into a cooldown keeps its degraded weight. The activations of a batch are
+// reset together.
 func TestStatusChangeResets(t *testing.T) {
 	e := newEnv(t)
 	e.configure(nil)
 	e.rank(100)
 	e.window(5, 5)
 	e.window(5, 5)
-	statusEvent := func(id int64, status string) *pluginv1.Event {
+	statusEvent := func(id, account int64, status string) *pluginv1.Event {
 		return &pluginv1.Event{Id: id, Type: EventAccountStatusChanged,
-			PayloadJson: fmt.Sprintf(`{"account_id":%d,"status":%q,"reason":"x"}`, testAccount, status)}
+			PayloadJson: fmt.Sprintf(`{"account_id":%d,"status":%q,"reason":"x"}`, account, status)}
 	}
 	resp, err := e.p.OnEvents(context.Background(), &pluginv1.OnEventsRequest{Events: []*pluginv1.Event{
-		statusEvent(1, "cooldown"), {Id: 2, Type: "account.updated", PayloadJson: `{"account_id":7}`}}})
+		statusEvent(1, testAccount, "cooldown"), {Id: 2, Type: "account.updated", PayloadJson: `{"account_id":7}`}}})
 	if err != nil || resp.GetAckedThroughId() != 2 {
 		t.Fatalf("ack %v, %v", resp, err)
 	}
 	if w := e.rank(100); w != 70 {
 		t.Fatalf("weight after a cooldown %d", w)
 	}
-	if _, err := e.p.OnEvents(context.Background(), &pluginv1.OnEventsRequest{Events: []*pluginv1.Event{statusEvent(3, "active")}}); err != nil {
-		t.Fatal(err)
+	resp, err = e.p.OnEvents(context.Background(), &pluginv1.OnEventsRequest{Events: []*pluginv1.Event{
+		statusEvent(3, testAccount, "active"), statusEvent(4, 99, "active"), statusEvent(5, testAccount, "active")}})
+	if err != nil || resp.GetAckedThroughId() != 5 {
+		t.Fatalf("ack %v, %v", resp, err)
 	}
 	if w := e.rank(100); w != 0 {
 		t.Fatalf("weight after re-activation %d", w)
@@ -262,8 +265,41 @@ func TestStatusChangeResets(t *testing.T) {
 		Data []eventItem `json:"data"`
 	}
 	e.decode(e.h.Do("GET", "/events", map[string]string{"kind": rules.EventReset}, nil), http.StatusOK, &events)
-	if len(events.Data) != 1 || events.Data[0].Reason != rules.ReasonStatusChange || events.Data[0].Model != testModel {
+	if len(events.Data) != 2 || events.Data[1].Reason != rules.ReasonStatusChange || events.Data[1].Model != testModel ||
+		events.Data[1].From != 70 || events.Data[1].To != 100 || events.Data[0].AccountID != 99 || events.Data[0].Detail["matched"] != float64(0) {
 		t.Fatalf("events %+v", events.Data)
+	}
+}
+
+// A priority tier whose every candidate the effective weights take to 0 is
+// split evenly, as new-api does; a tier with one left keeps the zeros out.
+func TestRankSplitsZeroTier(t *testing.T) {
+	e := newEnv(t)
+	e.configure(nil)
+	at := func(eff float64) weight { return weight{base: 100, eff: eff} }
+	k := func(account int64) key { return key{AccountID: account, GroupID: testGroup, Model: testModel} }
+	rank := func(weights map[key]weight) map[int64]int32 {
+		t.Helper()
+		e.p.weights.Store(&weights)
+		resp, err := e.p.RankAccounts(context.Background(), &pluginv1.RankAccountsRequest{
+			Meta: &pluginv1.RequestMeta{GroupId: testGroup, Model: testModel},
+			Candidates: []*pluginv1.RankCandidate{{AccountId: 1, Priority: 1, Weight: 100}, {AccountId: 2, Priority: 1, Weight: 100},
+				{AccountId: 3, Priority: 2, Weight: 100}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[int64]int32{}
+		for _, a := range resp.GetAccounts() {
+			out[a.GetAccountId()] = a.GetWeight()
+		}
+		return out
+	}
+	if got := rank(map[key]weight{k(1): at(0), k(2): at(0.4)}); len(got) != 2 || got[1] != 1 || got[2] != 1 {
+		t.Fatalf("zero tier %v", got)
+	}
+	if got := rank(map[key]weight{k(1): at(0), k(2): at(50)}); len(got) != 2 || got[1] != 0 || got[2] != 50 {
+		t.Fatalf("live tier %v", got)
 	}
 }
 
@@ -296,7 +332,8 @@ func TestStatusBeforeFirstEvaluation(t *testing.T) {
 		Data map[string]any `json:"data"`
 	}
 	e.decode(e.h.Do("GET", "/stats", nil, nil), http.StatusOK, &stats)
-	if stats.Data["observed_total"] != float64(2) || stats.Data["flushed_samples_total"] != float64(2) || stats.Data["enabled"] != true {
+	if stats.Data["observed_total"] != float64(2) || stats.Data["flushed_samples_total"] != float64(2) || stats.Data["enabled"] != true ||
+		stats.Data["node_id"] != "test-node" || stats.Data["started_at"] == float64(0) {
 		t.Fatalf("stats %v", stats.Data)
 	}
 }
@@ -312,6 +349,14 @@ func TestBaseChangeResets(t *testing.T) {
 		t.Fatalf("stale state applied: %d", w)
 	}
 	e.p.flush(context.Background())
+	// Until then the status reads as no state, at the new base.
+	var status struct {
+		Data []keyStatus `json:"data"`
+	}
+	e.decode(e.h.Do("GET", "/status", nil, nil), http.StatusOK, &status)
+	if st := status.Data[0]; len(status.Data) != 1 || st.Base != 50 || st.Effective != 50 || st.State != "normal" || st.EvalWindow != 0 || st.Rules[0].Fired {
+		t.Fatalf("status %+v", status.Data)
+	}
 	if msg := e.window(20, 0); msg != "evaluated 1 keys, 1 changed" {
 		t.Fatalf("reset: %s", msg)
 	}
@@ -446,10 +491,12 @@ func TestGlobalDisablePinsToBase(t *testing.T) {
 	}
 }
 
-// A key whose reset fails does not stop the others, which are recorded.
-func TestResetContinuesPastFailures(t *testing.T) {
+// A reset writes every key or none; keys at their base are recorded as one
+// event per (account, group).
+func TestResetIsAtomic(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
+	e.configure(nil)
 	s, err := e.p.store(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -464,15 +511,30 @@ func TestResetContinuesPastFailures(t *testing.T) {
 			rules.Sample{TTFBMs: -1, LatencyMs: -1}, e.p.cfg.Load().GroupLayer(testGroup))
 	}
 	e.p.flush(ctx)
-	n, err := e.p.resetKeys(ctx, filter{AccountID: testAccount}, rules.ReasonManual, 1)
-	if n != 1 || err == nil {
+	if n, err := e.p.resetKeys(ctx, filter{AccountID: testAccount}, rules.ReasonManual, 1); n != 0 || err == nil {
 		t.Fatalf("reset %d, error %v", n, err)
+	}
+	// A status change that cannot reset is not acked.
+	_, err = e.p.OnEvents(ctx, &pluginv1.OnEventsRequest{Events: []*pluginv1.Event{{Id: 1, Type: EventAccountStatusChanged,
+		PayloadJson: fmt.Sprintf(`{"account_id":%d,"status":"active"}`, testAccount)}}})
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("status change: %v", err)
 	}
 	var events struct {
 		Data []eventItem `json:"data"`
 	}
 	e.decode(e.h.Do("GET", "/events", nil, nil), http.StatusOK, &events)
-	if len(events.Data) != 1 || events.Data[0].Model != "good" || events.Data[0].Kind != rules.EventReset {
+	if len(events.Data) != 0 {
+		t.Fatalf("events %+v", events.Data)
+	}
+	if _, err := s.db.Exec(ctx, `DROP TRIGGER refuse_bad ON state`); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := e.p.resetKeys(ctx, filter{AccountID: testAccount}, rules.ReasonManual, 1); n != 2 || err != nil {
+		t.Fatalf("reset %d, error %v", n, err)
+	}
+	e.decode(e.h.Do("GET", "/events", nil, nil), http.StatusOK, &events)
+	if len(events.Data) != 1 || events.Data[0].Model != "" || events.Data[0].GroupID != testGroup || events.Data[0].Detail["keys"] != float64(2) {
 		t.Fatalf("events %+v", events.Data)
 	}
 }
