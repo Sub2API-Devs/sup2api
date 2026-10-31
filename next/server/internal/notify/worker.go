@@ -9,8 +9,10 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
 
-// claimBatch bounds the rows one step delivers.
-const claimBatch = 10
+// claimBatch bounds the rows one step delivers. One row at a time: a row is
+// delivered well within its lease, so a slow provider never lets the lease
+// of a waiting row run out and another node send it again.
+const claimBatch = 1
 
 // Start runs the delivery loop until Stop. Every node may run it: rows are
 // claimed with SKIP LOCKED and held for the lease.
@@ -128,10 +130,16 @@ func (s *Service) deliver(ctx context.Context, q queued) error {
 // finish records the outcome unless the lease ran out and another worker
 // claimed the row again (attempts moved on).
 func (s *Service) finish(ctx context.Context, q queued, err error) {
+	stopping := ctx.Err() != nil
 	ctx = context.WithoutCancel(ctx)
 	var rejected errRejected
 	var exec error
 	switch {
+	case err != nil && stopping:
+		// Cut off by shutdown: not the provider's failure, so the attempt
+		// is given back.
+		_, exec = s.db.Pool.Exec(ctx, `UPDATE notifications SET status = 'pending', attempts = attempts - 1, next_attempt_at = now()
+			WHERE id = $1 AND status = 'sending' AND attempts = $2`, q.id, q.attempt)
 	case err == nil:
 		_, exec = s.db.Pool.Exec(ctx, `UPDATE notifications SET status = 'sent', sent_at = now(), last_error = ''
 			WHERE id = $1 AND status = 'sending' AND attempts = $2`, q.id, q.attempt)

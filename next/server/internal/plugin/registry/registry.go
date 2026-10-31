@@ -321,19 +321,16 @@ func (g *generation) registerPlugin(ext Extension, pkg *Package) {
 	g.packages[pkg.Key] = pkg
 
 	pf := ext.Platform()
-	if conflicts := g.addPluginPlatforms(info, pkg, pf); len(conflicts) > 0 {
-		info.Conflicts = conflicts
-		g.plugins[len(g.plugins)-1] = info
-		g.byKey[pkg.Key] = info
-	}
+	conflicts := g.addPluginPlatforms(info, pkg, pf)
 	g.addAccountTypes(info, pkg, pf, grants)
 	g.addHooks(ext, info, m, grants)
 	g.addRanker(ext, info, pkg, m)
 	g.addRoutes(ext, info, pkg, grants)
 	g.addObserver(ext, info, m, grants)
 	g.addJobsAndEvents(ext, info, m, grants)
-	if conflicts := g.addNotificationChannels(ext, info, m); len(conflicts) > 0 {
-		info.Conflicts = append(info.Conflicts, conflicts...)
+	conflicts = append(conflicts, g.addNotificationChannels(ext, info, m)...)
+	if len(conflicts) > 0 {
+		info.Conflicts = conflicts
 		g.plugins[len(g.plugins)-1] = info
 		g.byKey[pkg.Key] = info
 	}

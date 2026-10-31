@@ -51,7 +51,7 @@ func (h *hostServer) ListNotificationChannels(ctx context.Context, _ *pluginv1.L
 	out := &pluginv1.ListNotificationChannelsResponse{}
 	for _, b := range n.NotificationChannels() {
 		out.Channels = append(out.Channels, &pluginv1.NotificationChannel{Id: b.Channel.ID, PluginKey: b.Plugin.Key,
-			Label: b.Channel.Label, Description: b.Channel.Description, Recipient: recipientFormat(b.Channel)})
+			Label: b.Channel.Label, Description: b.Channel.Description, Recipient: b.Channel.RecipientFormat()})
 	}
 	return out, nil
 }
@@ -69,11 +69,4 @@ func (h *hostServer) Notify(ctx context.Context, in *pluginv1.NotifyRequest) (*p
 		return nil, toStatus(err)
 	}
 	return &pluginv1.NotifyResponse{Id: r.ID, Deduplicated: r.Deduplicated}, nil
-}
-
-func recipientFormat(c manifest.NotificationChannel) string {
-	if c.Recipient == "" {
-		return manifest.RecipientText
-	}
-	return c.Recipient
 }

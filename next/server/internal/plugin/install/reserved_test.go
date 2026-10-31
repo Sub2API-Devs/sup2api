@@ -201,7 +201,7 @@ func renamePlatform(m *manifest.Manifest, id string) *manifest.Manifest {
 }
 
 // The reservations cover every first-party plugin in next/plugins: its key
-// and the platform ids it declares.
+// and the platform and notification channel ids it declares.
 func TestReservedCoverRepo(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join("..", "..", "..", "..", "plugins", "*", "manifest.json"))
 	if err != nil || len(paths) < 5 {
@@ -224,5 +224,23 @@ func TestReservedCoverRepo(t *testing.T) {
 				t.Errorf("platform %q of %q is not reserved for it", p.ID, m.Key)
 			}
 		}
+		if m.Notifications != nil {
+			for _, c := range m.Notifications.Channels {
+				if reservedChannels[c.ID] != m.Key {
+					t.Errorf("notification channel %q of %q is not reserved for it", c.ID, m.Key)
+				}
+			}
+		}
+	}
+}
+
+func TestReservedChannel(t *testing.T) {
+	m := &manifest.Manifest{Key: "acme", Notifications: &manifest.Notifications{Channels: []manifest.NotificationChannel{{ID: "email"}}}}
+	if err := checkReserved(m, "upload", pkg.TrustOfficial, true); err == nil {
+		t.Fatal("a third-party plugin declared the reserved email channel")
+	}
+	m.Key = "mailer"
+	if err := checkReserved(m, "builtin", "", true); err != nil {
+		t.Fatalf("mailer: %v", err)
 	}
 }

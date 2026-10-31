@@ -29,12 +29,8 @@ type ChannelView struct {
 func (s *Service) listChannels(c *gin.Context) {
 	out := []ChannelView{}
 	for _, b := range s.NotificationChannels() {
-		recipient := b.Channel.Recipient
-		if recipient == "" {
-			recipient = manifest.RecipientText
-		}
 		out = append(out, ChannelView{ID: b.Channel.ID, PluginKey: b.Plugin.Key, PluginName: pluginName(b.Plugin),
-			Label: b.Channel.Label, Description: b.Channel.Description, Recipient: recipient})
+			Label: b.Channel.Label, Description: b.Channel.Description, Recipient: b.Channel.RecipientFormat()})
 	}
 	httpapi.OK(c, out)
 }
@@ -91,6 +87,10 @@ func (s *Service) list(c *gin.Context) {
 	httpapi.List(c, items, httpapi.Page{Page: page, PageSize: size, Total: total})
 }
 
+// sourceTest is the source of console tests, so they do not count toward
+// the rate limit of the core's own notifications.
+const sourceTest = core.NotificationSourceCore + ":test"
+
 // test is POST /notifications/test {channel, recipients}: a test message
 // from the core, to check a channel's configuration.
 func (s *Service) test(c *gin.Context) {
@@ -106,7 +106,7 @@ func (s *Service) test(c *gin.Context) {
 	if zh {
 		subject, body = "Sub2API 测试通知", "这是一条测试通知，说明该渠道可以正常发送。"
 	}
-	r, err := s.Notify(c.Request.Context(), core.NotificationSourceCore, core.Notification{Channel: in.Channel, Recipients: in.Recipients,
+	r, err := s.Notify(c.Request.Context(), sourceTest, core.Notification{Channel: in.Channel, Recipients: in.Recipients,
 		Subject: subject, Body: body})
 	if err != nil {
 		httpapi.Fail(c, err)

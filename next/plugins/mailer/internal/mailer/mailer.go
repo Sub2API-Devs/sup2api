@@ -17,12 +17,16 @@ import (
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/egress"
 )
 
 // Channel is the notification channel the plugin declares.
 const Channel = "email"
+
+// maxTimeoutSeconds stays under the host's 30 s deadline of a delivery.
+const maxTimeoutSeconds = 25
 
 // Security modes of the SMTP connection.
 const (
@@ -83,7 +87,7 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 	if len(fe) > 0 {
 		return fe.Err()
 	}
-	s.TimeoutSeconds = min(max(s.TimeoutSeconds, 5), 120)
+	s.TimeoutSeconds = min(max(s.TimeoutSeconds, 5), maxTimeoutSeconds)
 	p.cfg.Store(&s)
 	return nil
 }
@@ -97,6 +101,13 @@ func (p *Plugin) DeliverNotification(ctx context.Context, in *pluginv1.DeliverNo
 	}
 	if in.GetChannel() != Channel {
 		return &pluginv1.DeliverNotificationResponse{Rejected: "unknown channel " + in.GetChannel()}, nil
+	}
+	// One bad recipient refuses the whole message: the core validates them,
+	// this is the plugin's own boundary.
+	for _, r := range in.GetRecipients() {
+		if !manifest.ValidRecipient(manifest.RecipientEmail, r) {
+			return &pluginv1.DeliverNotificationResponse{Rejected: "invalid recipient " + r}, nil
+		}
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(s.TimeoutSeconds)*time.Second)
 	defer cancel()

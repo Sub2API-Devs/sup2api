@@ -8,7 +8,6 @@ package notify
 
 import (
 	"context"
-	"net/mail"
 	"strings"
 	"sync"
 	"time"
@@ -164,17 +163,17 @@ func (s *Service) validate(n core.Notification) (core.Notification, error) {
 		bad("recipients", "between 1 and 20 recipients")
 	}
 	for _, r := range recipients {
-		if len(r) > MaxRecipientLen || (ok && b.Channel.Recipient == manifest.RecipientEmail && !isEmail(r)) {
+		if len(r) > MaxRecipientLen || (ok && !manifest.ValidRecipient(b.Channel.RecipientFormat(), r)) {
 			bad("recipients", "invalid recipient "+r)
 			break
 		}
 	}
 	n.Subject = strings.TrimSpace(n.Subject)
-	if n.Subject == "" || utf8.RuneCountInString(n.Subject) > MaxSubjectRunes || strings.ContainsAny(n.Subject, "\r\n") {
+	if n.Subject == "" || utf8.RuneCountInString(n.Subject) > MaxSubjectRunes || strings.ContainsAny(n.Subject, "\r\n\x00") {
 		bad("subject", "1 to 200 characters on one line")
 	}
-	if len(n.Body) > MaxBodyBytes {
-		bad("body", "at most 64 KiB")
+	if len(n.Body) > MaxBodyBytes || strings.ContainsRune(n.Body, 0) {
+		bad("body", "at most 64 KiB, without NUL")
 	}
 	switch n.Severity {
 	case "":
@@ -193,11 +192,6 @@ func (s *Service) validate(n core.Notification) (core.Notification, error) {
 		return n, core.InvalidFields(fe...)
 	}
 	return n, nil
-}
-
-func isEmail(s string) bool {
-	a, err := mail.ParseAddress(s)
-	return err == nil && a.Address == s
 }
 
 // poke wakes the local worker after a new row.

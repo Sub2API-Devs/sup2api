@@ -22,7 +22,7 @@ func compose(s *Settings, in *pluginv1.DeliverNotificationRequest, now time.Time
 	from := mail.Address{Name: s.FromName, Address: s.FromAddress}
 	header("From", from.String())
 	header("To", strings.Join(in.GetRecipients(), ", "))
-	header("Subject", mime.QEncoding.Encode("utf-8", severityPrefix[in.GetSeverity()]+in.GetSubject()))
+	header("Subject", encodeSubject(severityPrefix[in.GetSeverity()]+in.GetSubject()))
 	header("Date", now.Format(time.RFC1123Z))
 	header("Message-ID", fmt.Sprintf("<sub2api-notification-%d@%s>", in.GetId(), domainOf(s.FromAddress)))
 	header("MIME-Version", "1.0")
@@ -37,6 +37,26 @@ func compose(s *Settings, in *pluginv1.DeliverNotificationRequest, now time.Time
 	}
 	b.WriteString(enc + "\r\n")
 	return b.Bytes()
+}
+
+// subjectChunkRunes keeps an encoded word of CJK text under 76 characters.
+const subjectChunkRunes = 15
+
+// encodeSubject B-encodes a subject that needs it, one encoded word per
+// subjectChunkRunes runes on folded lines, so a long non-ASCII subject stays
+// within the line limit of RFC 5322.
+func encodeSubject(subject string) string {
+	if mime.BEncoding.Encode("utf-8", subject) == subject {
+		return subject
+	}
+	runes := []rune(subject)
+	words := make([]string, 0, len(runes)/subjectChunkRunes+1)
+	for len(runes) > 0 {
+		n := min(len(runes), subjectChunkRunes)
+		words = append(words, mime.BEncoding.Encode("utf-8", string(runes[:n])))
+		runes = runes[n:]
+	}
+	return strings.Join(words, "\r\n ")
 }
 
 func domainOf(address string) string {

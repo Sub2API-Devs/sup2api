@@ -11,6 +11,6 @@
     "password": { "type": "string", "title": "Password", "default": "", "maxLength": 1000, "writeOnly": true },
     "from_address": { "type": "string", "title": "From address", "default": "", "maxLength": 320 },
     "from_name": { "type": "string", "title": "From name", "default": "Sub2API", "maxLength": 100 },
-    "timeout_seconds": { "type": "integer", "title": "Timeout (seconds)", "minimum": 5, "maximum": 120, "default": 20 }
+    "timeout_seconds": { "type": "integer", "title": "Timeout (seconds)", "minimum": 5, "maximum": 25, "default": 20 }
   }
 }

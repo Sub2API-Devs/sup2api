@@ -3,7 +3,10 @@
 // registry, consent screen) and plugin tooling (pack, lint).
 package manifest
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"net/mail"
+)
 
 // APIVersion is the only manifest apiVersion this SDK understands.
 const APIVersion = 1
@@ -115,6 +118,25 @@ type NotificationChannel struct {
 	// Recipient is the format of a recipient: RecipientEmail, or
 	// RecipientText (the default).
 	Recipient string `json:"recipient,omitempty"`
+}
+
+// RecipientFormat is the channel's recipient format, RecipientText when
+// unset.
+func (c NotificationChannel) RecipientFormat() string {
+	if c.Recipient == "" {
+		return RecipientText
+	}
+	return c.Recipient
+}
+
+// ValidRecipient reports whether r is a bare address when format is
+// RecipientEmail; any other format accepts every recipient.
+func ValidRecipient(format, r string) bool {
+	if format != RecipientEmail {
+		return true
+	}
+	a, err := mail.ParseAddress(r)
+	return err == nil && a.Address == r
 }
 
 // ---------------------------------------------------------------- platforms and endpoints

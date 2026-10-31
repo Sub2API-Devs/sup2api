@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"mime"
 	"net"
 	"strings"
 	"sync"
@@ -133,7 +134,7 @@ func TestDeliver(t *testing.T) {
 	}
 	head, body, _ := strings.Cut(srv.data, "\r\n\r\n")
 	for _, want := range []string{`From: "Ops" <noreply@example.com>`, "To: ops@example.com, dev@example.com",
-		"Message-ID: <sub2api-notification-42@example.com>", "X-Sub2API-Source: dynweight", "Subject: =?utf-8?q?"} {
+		"Message-ID: <sub2api-notification-42@example.com>", "X-Sub2API-Source: dynweight", "Subject: =?utf-8?b?"} {
 		if !strings.Contains(head, want) {
 			t.Errorf("header %q missing in\n%s", want, head)
 		}
@@ -183,7 +184,7 @@ func TestConfigure(t *testing.T) {
 	if err := p.Configure(context.Background(), pluginsdk.Config{JSON: json.RawMessage(`{"timeout_seconds":1000}`)}); err != nil {
 		t.Fatal(err)
 	}
-	if s := p.cfg.Load(); s.TimeoutSeconds != 120 || s.Port != 587 || s.Security != SecuritySTARTTLS || s.Host != "" {
+	if s := p.cfg.Load(); s.TimeoutSeconds != maxTimeoutSeconds || s.Port != 587 || s.Security != SecuritySTARTTLS || s.Host != "" {
 		t.Fatalf("defaults: %+v", s)
 	}
 }
@@ -198,5 +199,24 @@ func TestCompose(t *testing.T) {
 		if len(line) > 76 {
 			t.Fatalf("line of %d", len(line))
 		}
+	}
+}
+
+// A long non-ASCII subject is folded into encoded words on short lines and
+// decodes back; an ASCII subject is left alone.
+func TestEncodeSubject(t *testing.T) {
+	subject := strings.Repeat("动态权重通知", 34)
+	enc := encodeSubject(subject)
+	for _, line := range strings.Split(enc, "\r\n") {
+		if len(line) > 76 {
+			t.Fatalf("line of %d characters: %s", len(line), line)
+		}
+	}
+	var dec mime.WordDecoder
+	if got, err := dec.DecodeHeader(enc); err != nil || got != subject {
+		t.Fatalf("decode: %q %v", got, err)
+	}
+	if got := encodeSubject("Weight degraded"); got != "Weight degraded" {
+		t.Fatalf("ascii: %q", got)
 	}
 }

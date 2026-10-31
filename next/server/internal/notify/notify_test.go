@@ -163,8 +163,11 @@ func TestDeliveryOutcomes(t *testing.T) {
 	retried, _ := s.Notify(ctx, "dynweight", email("retried"))
 	rejected, _ := s.Notify(ctx, "dynweight", email("rejected"))
 	p.outcomes = []error{nil, errors.New("smtp: connection refused"), errRejected{"mailbox unavailable"}}
-	if n := s.step(ctx); n != 3 {
-		t.Fatalf("claimed %d", n)
+	// One row per step, in order.
+	for i := 0; i < 3; i++ {
+		if n := s.step(ctx); n != 1 {
+			t.Fatalf("step %d claimed %d", i, n)
+		}
 	}
 	if st, _, _ := status(t, db, sent.ID); st != "sent" {
 		t.Fatalf("sent: %s", st)
@@ -178,6 +181,17 @@ func TestDeliveryOutcomes(t *testing.T) {
 	got := p.got[0]
 	if got.Channel != "email" || got.Source != "dynweight" || got.Severity != "info" || got.Attempt != 1 || got.Id != sent.ID {
 		t.Fatalf("request: %+v", got)
+	}
+
+	// Cut off by shutdown, a delivery gives its attempt back.
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := db.Pool.Exec(ctx, `UPDATE notifications SET status = 'sending', attempts = 2 WHERE id = $1`, retried.ID); err != nil {
+		t.Fatal(err)
+	}
+	s.finish(canceled, queued{id: retried.ID, attempt: 2}, context.Canceled)
+	if st, attempts, _ := status(t, db, retried.ID); st != "pending" || attempts != 1 {
+		t.Fatalf("shutdown: %s %d", st, attempts)
 	}
 
 	// The retried row fails for good after MaxAttempts (3).
@@ -248,7 +262,7 @@ func TestRoutes(t *testing.T) {
 	}
 	_, out = do(1, "GET", "/notifications?status=pending", nil)
 	items := out["data"].([]any)
-	if len(items) != 1 || items[0].(map[string]any)["source"] != "core" {
+	if len(items) != 1 || items[0].(map[string]any)["source"] != sourceTest {
 		t.Fatalf("list: %v", out)
 	}
 	if _, out = do(1, "GET", "/notifications?status=sent", nil); len(out["data"].([]any)) != 0 {
