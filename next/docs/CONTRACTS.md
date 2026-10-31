@@ -5117,8 +5117,11 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 管理员指有 `moderation:read` 权限的用户（含超级用户），用宿主调用 `AuthzCheck` 判断，结果缓存 5 分钟。
   - 与 new-api 一样，管理员照常审核和记录，但不进观察名单、不会被封禁。
 - **`watchlist.hits_since_seen`**：每条新的可疑记录加 1；手动或 AI 改级别时清零。对应 new-api 的 hits_since_mark。
-- **写入方式**：每个节点先在内存累加，每 10 秒 upsert 一次；写失败的计数留到下一次。计价在后台排队完成。
-- **清理**：`cleanup` 任务按 `stats_retention_days`（默认 90）删除这三张表里的旧行。
+- **写入方式**：
+  - 每个节点先在内存累加，每 10 秒 upsert 一次，按主键顺序写，避免两个节点同时刷写时死锁；写失败的计数留到下一次。计价在后台排队完成。
+  - 统计接口读之前先刷写本节点的计数，最多每秒一次；`/costs` 每次读都刷写，保证测试后能马上看到。
+  - 多个请求共享同一次审核运行时，上游调用、token、计价只记一次；流程、级、审核器的命中和用户的日计数则每个请求各记一次，按请求实际结果记（例如前置命中但超时放行，记为 hit，不记 block）。
+- **清理**：`cleanup` 任务按 `stats_retention_days`（默认 90）删除 `stats_hourly` 和 `user_daily` 的旧行；`costs` 仍固定保留 400 天，因为它也是费用账。
 - **AI 分析**：`get_user_summary` 改读 `user_daily`，关掉 `record_pass` 后审核数依然准确。
 
 #### 72.14.2 统计接口（`moderation:read`）
@@ -5137,7 +5140,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | `status_line` | `enabled_flows`、`bound_groups[]`、`stale_groups[]`、`disabled_channels`、`analysis_channel` |
 | `today` | `audited`、`suspicious`、`blocked`、`overturned`、`errors`、`cache_skipped`、`auditor_calls`、`tokens_in`、`tokens_out`、`analyses`、`analyses_failed`、`analysis_tokens_in`、`analysis_tokens_out` |
 | `ai_review` | 今天成功的分析里各类结论的条数：`reviewed`、`violation`、`false_positive`、`unsure` |
-| `watch` | `watching`、`watching_with_new`、`blocking`、`analysis_every_violations` |
+| `watch` | `watching`、`watching_with_new`（与 new-api 相同，只算观察级）、`blocking`（拦截级）、`analysis_every_violations` |
 | `attention[]` | 最需关注的用户，按 hits_since_seen、最后命中时间排序，最多 6 人；每项为 `user_id`、`level`、`hits_since_seen`、`hit_count`、`last_hit_at`、`latest_trend` |
 | `auditors[]`、`channels[]` | 近 1 小时的健康度 HealthRow，见下 |
 | `funnels[]` | 今天的漏斗：`flow_id`、`name`、`stages[{stage, received, hit, passed}]`、`suspicious`、`blocked` |
@@ -5226,7 +5229,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 1. **流程异常率**：新任务 `alerts`，`@every 1m`，全集群只在一个节点执行。
    - 判断条件：近 1 小时样本 ≥20，且 errors×100 > 阈值×样本数。
-   - 只在流程从未超过变为超过的那一刻发一次；上次的状态存在 KV 的 `alert:flow:<id>`。
+   - 只在流程从未超过变为超过的那一刻发一次；上次的状态存在 KV 命名空间 `alerts` 的 `flow:<id>` 键，不设过期，回落到阈值以下时删除。
    - 内容：`{event:"moderation.flow_error_rate", flow_id, flow_name, errors, audited, error_rate, threshold_percent, note}`。
 2. **AI 自动调整名单**（auto_upgrade、auto_downgrade、auto_remove）：
    - 内容：`{event:"moderation.watch_auto_change", user_id, action, from_level, to_level, trend, suggestion, analysis_id}`。

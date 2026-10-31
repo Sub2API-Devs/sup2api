@@ -40,6 +40,7 @@ type liveChannel struct {
 	BillingModel string
 	Timeout      time.Duration
 	markerKey    []byte // llm only: self-request marker key
+	proxy        string // "" = direct
 	client       *http.Client
 }
 

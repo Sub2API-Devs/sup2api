@@ -60,6 +60,20 @@ func (p *Plugin) clientFor(proxy string) *http.Client {
 	return c
 }
 
+// pruneProxies drops the clients of proxies no live channel uses any more
+// (a console read may add one back for the call it makes).
+func (p *Plugin) pruneProxies(inUse map[string]bool) {
+	pc := &p.proxies
+	pc.mu.Lock()
+	defer pc.mu.Unlock()
+	for proxy, c := range pc.m {
+		if !inUse[proxy] {
+			c.CloseIdleConnections()
+			delete(pc.m, proxy)
+		}
+	}
+}
+
 // openProxy opens a sealed proxy URL ("" when none is stored).
 func (p *Plugin) openProxy(ctx context.Context, id int64, enc []byte) (string, error) {
 	if len(enc) == 0 {

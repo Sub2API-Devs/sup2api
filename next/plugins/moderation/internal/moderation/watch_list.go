@@ -37,11 +37,18 @@ type WatchItem struct {
 	AICounts        *VerdictCounts  `json:"ai_counts"` // latest successful analysis
 }
 
-var watchSorts = map[string]string{
-	"new":      `w.hits_since_seen DESC, w.last_hit_at DESC NULLS LAST, w.user_id`,
-	"last_hit": `w.last_hit_at DESC NULLS LAST, w.user_id`,
-	"severity": `coalesce(r.high, 0) DESC, coalesce(r.medium, 0) DESC, w.user_id`,
-	"total":    `coalesce(r.total, 0) DESC, w.user_id`,
+// watchSort is an ORDER BY of the watch list; byRecords ones need the
+// 30-day record totals joined as r.
+type watchSort struct {
+	order     string
+	byRecords bool
+}
+
+var watchSorts = map[string]watchSort{
+	"new":      {order: `w.hits_since_seen DESC, w.last_hit_at DESC NULLS LAST, w.user_id`},
+	"last_hit": {order: `w.last_hit_at DESC NULLS LAST, w.user_id`},
+	"severity": {order: `coalesce(r.high, 0) DESC, coalesce(r.medium, 0) DESC, w.user_id`, byRecords: true},
+	"total":    {order: `coalesce(r.total, 0) DESC, w.user_id`, byRecords: true},
 }
 
 func (p *Plugin) listWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -83,7 +90,7 @@ func (p *Plugin) listWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 			errs = errs.Add("category", "invalid", "category is invalid / 分类格式无效")
 		} else {
 			f.conds = append(f.conds, `EXISTS (SELECT 1 FROM events e WHERE e.user_id = w.user_id AND e.created_at >= `+f.arg(since)+`
-				AND e.result IN ('hit', 'block') AND `+f.arg(v)+` = ANY(e.hit_categories))`)
+				AND e.`+suspiciousSQL+` AND `+f.arg(v)+` = ANY(e.hit_categories))`)
 		}
 	}
 	sort := pluginsdk.Query(req, "sort")
@@ -108,11 +115,16 @@ func (p *Plugin) listWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 		return nil, err
 	}
 	n := len(f.args)
-	args := append(f.args, size, (page-1)*size, since)
-	rows, err := db.Query(ctx, `SELECT `+prefixed("w.", watchColumns)+` FROM watchlist w
-		LEFT JOIN LATERAL (SELECT count(*) AS total, count(*) FILTER (WHERE severity = 'high') AS high, count(*) FILTER (WHERE severity = 'medium') AS medium
-			FROM events e WHERE e.user_id = w.user_id AND e.created_at >= $`+strconv.Itoa(n+3)+` AND e.result IN ('hit', 'block')) r ON true
-		WHERE `+where+` ORDER BY `+order+` LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2), args...)
+	args := append(f.args, size, (page-1)*size)
+	join := ""
+	if order.byRecords {
+		args = append(args, since)
+		join = `LEFT JOIN LATERAL (SELECT count(*) AS total, count(*) FILTER (WHERE severity = 'high') AS high,
+			count(*) FILTER (WHERE severity = 'medium') AS medium
+			FROM events e WHERE e.user_id = w.user_id AND e.created_at >= $` + strconv.Itoa(n+3) + ` AND e.` + suspiciousSQL + `) r ON true`
+	}
+	rows, err := db.Query(ctx, `SELECT `+prefixed("w.", watchColumns)+` FROM watchlist w `+join+`
+		WHERE `+where+` ORDER BY `+order.order+` LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -159,7 +171,7 @@ func fillWatchAggregates(ctx context.Context, db *pgxpool.Pool, list []WatchItem
 	}
 	rows, err := db.Query(ctx, `SELECT user_id, count(*), count(*) FILTER (WHERE severity = 'high'), count(*) FILTER (WHERE severity = 'medium'),
 			count(*) FILTER (WHERE severity = 'low'), array_agg(DISTINCT group_id ORDER BY group_id)
-		FROM events WHERE user_id = ANY($1) AND created_at >= $2 AND result IN ('hit', 'block') GROUP BY user_id`, ids, since)
+		FROM events WHERE user_id = ANY($1) AND created_at >= $2 AND `+suspiciousSQL+` GROUP BY user_id`, ids, since)
 	if err != nil {
 		return err
 	}
@@ -174,7 +186,7 @@ func fillWatchAggregates(ctx context.Context, db *pgxpool.Pool, list []WatchItem
 		return err
 	}
 	rows, err = db.Query(ctx, `SELECT user_id, c, count(*) FROM events, unnest(hit_categories) AS c
-		WHERE user_id = ANY($1) AND created_at >= $2 AND result IN ('hit', 'block') GROUP BY 1, 2 ORDER BY 1, 3 DESC, 2`, ids, since)
+		WHERE user_id = ANY($1) AND created_at >= $2 AND `+suspiciousSQL+` GROUP BY 1, 2 ORDER BY 1, 3 DESC, 2`, ids, since)
 	if err != nil {
 		return err
 	}

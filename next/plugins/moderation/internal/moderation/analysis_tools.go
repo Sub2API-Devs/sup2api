@@ -510,7 +510,7 @@ func toolUserSummary(ctx context.Context, tc *toolCtx, _ json.RawMessage) (any, 
 	}
 	// Counts come from user_daily: records are not kept for every pass
 	// (record_pass), the daily counts are.
-	tc.p.flushStats(ctx)
+	tc.p.freshStats(ctx)
 	var d, m counts
 	if err := db.QueryRow(ctx, `SELECT
 			coalesce(sum(audited) FILTER (WHERE day >= $3::date), 0), coalesce(sum(suspicious) FILTER (WHERE day >= $3::date), 0),

@@ -481,37 +481,15 @@ func (p *Plugin) loadChannel(ctx context.Context, id int64) (*liveChannel, error
 	if err != nil {
 		return nil, err
 	}
-	ch := &liveChannel{ID: id}
-	var keyEnc, proxyEnc []byte
-	var timeout int
-	err = db.QueryRow(ctx, `SELECT type, protocol, base_url, api_key_enc, proxy_enc, model, billing_model, timeout_ms FROM channels WHERE id = $1 AND deleted_at IS NULL`, id).
-		Scan(&ch.Type, &ch.Protocol, &ch.BaseURL, &keyEnc, &proxyEnc, &ch.Model, &ch.BillingModel, &timeout)
+	var r channelRecord
+	err = db.QueryRow(ctx, `SELECT `+channelRecordColumns+` FROM channels WHERE id = $1 AND deleted_at IS NULL`, id).Scan(r.targets()...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	if len(keyEnc) > 0 {
-		k, err := p.host.OpenSecret(ctx, secretContext(id, "key"), keyEnc)
-		if err != nil {
-			return nil, fmt.Errorf("open channel key: %w", err)
-		}
-		ch.Key = string(k)
-	}
-	proxy, err := p.openProxy(ctx, id, proxyEnc)
-	if err != nil {
-		return nil, err
-	}
-	ch.client = p.clientFor(proxy)
-	ch.Timeout = time.Duration(timeout) * time.Millisecond
-	if ch.Timeout <= 0 {
-		ch.Timeout = time.Duration(defaultChannelTimeoutMs[ch.Type]) * time.Millisecond
-	}
-	if ch.Type == ChannelLLM && ch.Key != "" {
-		ch.markerKey = markerKey(ch.Key)
-	}
-	return ch, nil
+	return p.openChannel(ctx, r)
 }
 
 // errRollback aborts a configTx whose response is already decided.
@@ -633,6 +611,21 @@ func (p *Plugin) getAuditor(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	return pluginsdk.DataResponse(list[0]), nil
 }
 
+// auditorBindingErrors checks an auditor type and the type of its channel
+// ("" = the channel does not exist).
+func auditorBindingErrors(typ, chType string) pluginsdk.FieldErrors {
+	want, ok := channelTypeOf[typ]
+	switch {
+	case !ok:
+		return pluginsdk.FieldErrors{}.Add("type", "enum", "type must be openai_moderation, typesafe or llm_verdict / type 取值为 openai_moderation、typesafe、llm_verdict")
+	case chType == "":
+		return pluginsdk.FieldErrors{}.Add("channel_id", "not_found", "channel does not exist / 渠道不存在")
+	case chType != want:
+		return pluginsdk.FieldErrors{}.Add("channel_id", "type_mismatch", fmt.Sprintf("the auditor needs a %s channel / 该审核器需要 %s 类型的渠道", want, want))
+	}
+	return nil
+}
+
 // validateAuditor checks the type against the bound channel and compiles the
 // config.
 func (p *Plugin) validateAuditor(ctx context.Context, tx pgx.Tx, in *auditorInput) pluginsdk.FieldErrors {
@@ -641,19 +634,14 @@ func (p *Plugin) validateAuditor(ctx context.Context, tx pgx.Tx, in *auditorInpu
 	if in.Name == "" || utf8.RuneCountInString(in.Name) > 64 {
 		errs = errs.Add("name", "invalid", "name is required, at most 64 characters / 名称必填，最多 64 字")
 	}
-	want, ok := channelTypeOf[in.Type]
-	if !ok {
-		return errs.Add("type", "enum", "type must be openai_moderation, typesafe or llm_verdict / type 取值为 openai_moderation、typesafe、llm_verdict")
-	}
 	var chType string
 	err := tx.QueryRow(ctx, `SELECT type FROM channels WHERE id = $1 AND deleted_at IS NULL`, in.ChannelID).Scan(&chType)
-	switch {
-	case errors.Is(err, pgx.ErrNoRows):
-		errs = errs.Add("channel_id", "not_found", "channel does not exist / 渠道不存在")
-	case err != nil:
-		errs = errs.Add("channel_id", "unavailable", err.Error())
-	case chType != want:
-		errs = errs.Add("channel_id", "type_mismatch", fmt.Sprintf("the auditor needs a %s channel / 该审核器需要 %s 类型的渠道", want, want))
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return errs.Add("channel_id", "unavailable", err.Error())
+	}
+	errs = append(errs, auditorBindingErrors(in.Type, chType)...)
+	if _, ok := channelTypeOf[in.Type]; !ok {
+		return errs
 	}
 	def := p.cfg.Load().jevDefault
 	if _, err := compileAuditor(0, in.Name, in.Type, in.ChannelID, in.Config, nil, &def); err != nil {
@@ -849,20 +837,15 @@ func (p *Plugin) loadAuditor(ctx context.Context, id int64, d auditorDraft) (*li
 	if d.Config != nil {
 		cfg = *d.Config
 	}
-	var errs pluginsdk.FieldErrors
-	if _, ok := channelTypeOf[typ]; !ok {
-		errs = errs.Add("type", "enum", "type must be openai_moderation, typesafe or llm_verdict / type 取值为 openai_moderation、typesafe、llm_verdict")
-	}
 	ch, err := p.loadChannel(ctx, chID)
+	chType := ""
 	switch {
-	case errors.Is(err, errNotFound):
-		errs = errs.Add("channel_id", "not_found", "channel does not exist / 渠道不存在")
-	case err != nil:
+	case err == nil:
+		chType = ch.Type
+	case !errors.Is(err, errNotFound):
 		return nil, nil, err
-	case len(errs) == 0 && ch.Type != channelTypeOf[typ]:
-		errs = errs.Add("channel_id", "type_mismatch", "the channel type does not fit the auditor type / 渠道类型与审核器类型不匹配")
 	}
-	if len(errs) > 0 {
+	if errs := auditorBindingErrors(typ, chType); len(errs) > 0 {
 		return nil, pluginsdk.FieldErrorResponse("invalid auditor / 审核器参数无效", errs), nil
 	}
 	def := p.cfg.Load().jevDefault

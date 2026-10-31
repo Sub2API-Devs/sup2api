@@ -21,6 +21,9 @@ import (
 // flow, auditor and channel lists. They read stats_hourly, costs and
 // user_daily (stats.go writes them); field names follow new-api.
 
+// suspiciousSQL selects the suspicious records (hits, refused or not).
+const suspiciousSQL = `result IN ('hit', 'block')`
+
 // minAlertSamples is the sample count below which an error rate is not
 // flagged (new-api stats.go).
 const minAlertSamples = 20
@@ -183,17 +186,6 @@ func (s *CostSummary) add(o CostSummary) {
 }
 
 func zeroCost() CostSummary { return CostSummary{Cost: formatCost(0)} }
-
-// addCostTo adds c to m[k], starting from zero.
-func addCostTo[K comparable](m map[K]*CostSummary, k K, c CostSummary) {
-	s := m[k]
-	if s == nil {
-		z := zeroCost()
-		s = &z
-		m[k] = s
-	}
-	s.add(c)
-}
 
 func mergeInto[K comparable](m map[K]*counters, k K, c *counters) {
 	if m[k] == nil {
@@ -361,7 +353,7 @@ func (p *Plugin) getStatus(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	p.flushStats(ctx) // this node's latest counts are included at once
+	p.freshStats(ctx) // this node's latest counts are included at once
 	c := p.cfg.Load()
 	now := p.now().UTC()
 	today, hour := startOfDay(now, loc), lastHour(now)
@@ -382,7 +374,6 @@ func (p *Plugin) getStatus(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	}
 	auditors, flows := map[int64]*counters{}, map[int64]*counters{}
 	funnels := map[int64]map[int]*counters{}
-	auditorCost := map[int64]*CostSummary{}
 	for i := range rows {
 		r := &rows[i]
 		kind := r.kind()
@@ -412,7 +403,6 @@ func (p *Plugin) getStatus(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 			t.AuditorCalls += r.c.calls
 			t.TokensIn += r.c.tokensIn
 			t.TokensOut += r.c.tokensOut
-			addCostTo(auditorCost, r.auditor, CostSummary{Cost: formatCost(r.c.units), Calls: r.c.calls, TokensIn: r.c.tokensIn, TokensOut: r.c.tokensOut})
 		}
 	}
 	for _, id := range slices.Sorted(maps.Keys(auditors)) {
@@ -429,9 +419,13 @@ func (p *Plugin) getStatus(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 		}
 		out.Funnels = append(out.Funnels, f)
 	}
-	out.Channels, out.Costs = channelHealth(costs, hour, today, c.ErrorRateAlertPercent)
-	for _, id := range slices.Sorted(maps.Keys(auditorCost)) {
-		out.Costs.Auditors = append(out.Costs.Auditors, CostRef{ID: id, Cost: *auditorCost[id]})
+	out.Channels, out.Costs = statusChannels(aggregateChannels(costs, hour, today), c.ErrorRateAlertPercent)
+	byAuditor, err := auditorsToday(ctx, db, today, now)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range slices.Sorted(maps.Keys(byAuditor)) {
+		out.Costs.Auditors = append(out.Costs.Auditors, CostRef{ID: id, Cost: byAuditor[id].Cost})
 	}
 	if err := p.statusDB(ctx, db, out, today); err != nil {
 		return nil, err
@@ -439,47 +433,34 @@ func (p *Plugin) getStatus(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	return pluginsdk.DataResponse(out), nil
 }
 
-// channelHealth sums the cost rows: last-hour health per channel (audit and
-// analysis calls only; manual calls do not change a channel's health) and
-// today's cost.
-func channelHealth(rows []costRow, hour, today time.Time, alertPercent int) ([]HealthRow, OverviewCosts) {
+// statusChannels turns the channel sums into the health rows and today's
+// cost of /status.
+func statusChannels(agg map[int64]*ChannelHealth, alertPercent int) ([]HealthRow, OverviewCosts) {
 	costs := OverviewCosts{Total: zeroCost(), Audit: zeroCost(), Analysis: zeroCost(), Manual: zeroCost(), Channels: []CostRef{}, Auditors: []CostRef{}}
-	health := map[int64]*HealthRow{}
-	byChannel := map[int64]*CostSummary{}
-	for _, r := range rows {
-		if !r.hour.Before(hour) && (r.source == SourceAudit || r.source == SourceAnalysis) {
-			h := health[r.channel]
-			if h == nil {
-				h = &HealthRow{ID: r.channel}
-				health[r.channel] = h
-			}
-			h.Calls += r.sum.Calls
-			h.Errors += r.errors
+	health := []HealthRow{}
+	for _, id := range slices.Sorted(maps.Keys(agg)) {
+		h := agg[id]
+		if h.Calls1h > 0 || h.errors1h > 0 {
+			health = append(health, HealthRow{ID: id, Calls: h.Calls1h, Errors: h.errors1h, ErrorRate: h.ErrorRate1h,
+				Flagged: flagged(h.errors1h, h.Calls1h, alertPercent)})
 		}
-		if r.hour.Before(today) {
+		if len(h.CostTodaySources) == 0 {
 			continue
 		}
-		costs.Total.add(r.sum)
-		switch r.source {
-		case SourceAudit:
-			costs.Audit.add(r.sum)
-		case SourceAnalysis:
-			costs.Analysis.add(r.sum)
-		default:
-			costs.Manual.add(r.sum)
+		costs.Total.add(h.CostToday)
+		costs.Channels = append(costs.Channels, CostRef{ID: id, Cost: h.CostToday})
+		for src, c := range h.CostTodaySources {
+			switch src {
+			case SourceAudit:
+				costs.Audit.add(c)
+			case SourceAnalysis:
+				costs.Analysis.add(c)
+			default:
+				costs.Manual.add(c)
+			}
 		}
-		addCostTo(byChannel, r.channel, r.sum)
 	}
-	out := []HealthRow{}
-	for _, id := range slices.Sorted(maps.Keys(health)) {
-		h := health[id]
-		h.ErrorRate, h.Flagged = ratio(h.Errors, h.Calls), flagged(h.Errors, h.Calls, alertPercent)
-		out = append(out, *h)
-	}
-	for _, id := range slices.Sorted(maps.Keys(byChannel)) {
-		costs.Channels = append(costs.Channels, CostRef{ID: id, Cost: *byChannel[id]})
-	}
-	return out, costs
+	return health, costs
 }
 
 // statusDB fills the parts of /status read from the configuration, the
@@ -515,8 +496,8 @@ func (p *Plugin) statusDB(ctx context.Context, db *pgxpool.Pool, out *Status, to
 	now := p.now().UTC()
 	w := &out.Watch
 	w.AnalysisEveryViolations = c.AnalysisEveryViolations
-	if err := db.QueryRow(ctx, `SELECT count(*), count(*) FILTER (WHERE hits_since_seen > 0), count(*) FILTER (WHERE level = $2)
-		FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, now, LevelEnforce).Scan(&w.Watching, &w.WatchingWithNew, &w.Blocking); err != nil {
+	if err := db.QueryRow(ctx, `SELECT count(*) FILTER (WHERE level = $3), count(*) FILTER (WHERE level = $3 AND hits_since_seen > 0), count(*) FILTER (WHERE level = $2)
+		FROM watchlist WHERE expires_at IS NULL OR expires_at > $1`, now, LevelEnforce, LevelObserve).Scan(&w.Watching, &w.WatchingWithNew, &w.Blocking); err != nil {
 		return err
 	}
 	rows, err := db.Query(ctx, `SELECT user_id, level, hits_since_seen, hit_count, last_hit_at, latest_trend FROM watchlist
@@ -634,7 +615,7 @@ func (w statsWindow) bucket(h time.Time) time.Time {
 // buckets lists every point of the window, oldest first.
 func (w statsWindow) buckets() []time.Time {
 	var out []time.Time
-	for b := w.bucket(w.from.Truncate(time.Hour)); !b.After(w.to); {
+	for b := w.bucket(w.from); !b.After(w.to); {
 		out = append(out, b)
 		if w.granularity == "day" {
 			b = startOfDay(b.In(w.loc).AddDate(0, 0, 1), w.loc)
@@ -656,7 +637,7 @@ func (p *Plugin) windowRows(ctx context.Context, req *pluginv1.HTTPRequest, defa
 	if err != nil {
 		return w, nil, nil, pluginsdk.Unavailable(err.Error()), nil
 	}
-	p.flushStats(ctx)
+	p.freshStats(ctx)
 	rows, err := queryStatRows(ctx, db, w.filter)
 	if err != nil {
 		return w, nil, nil, nil, err
@@ -881,6 +862,29 @@ type categoryEntry struct {
 	data *CategoryStats
 }
 
+func (c *categoryCache) get(today, now time.Time) *CategoryStats {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if e, ok := c.m[today]; ok && now.Sub(e.at) < time.Minute {
+		return e.data
+	}
+	return nil
+}
+
+func (c *categoryCache) put(today, now time.Time, data *CategoryStats) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.m == nil {
+		c.m = map[time.Time]categoryEntry{}
+	}
+	for k, e := range c.m {
+		if now.Sub(e.at) >= time.Minute {
+			delete(c.m, k)
+		}
+	}
+	c.m[today] = categoryEntry{at: now, data: data}
+}
+
 // getCategories counts today's suspicious requests by category: a request
 // counts once per category, at most maxCategoryScan records are read.
 func (p *Plugin) getCategories(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -891,46 +895,36 @@ func (p *Plugin) getCategories(ctx context.Context, req *pluginv1.HTTPRequest) (
 	now := p.now().UTC()
 	today := startOfDay(now, loc)
 	cc := &p.categories
-	cc.mu.Lock()
-	defer cc.mu.Unlock()
-	if e, ok := cc.m[today]; ok && now.Sub(e.at) < time.Minute {
-		return pluginsdk.DataResponse(e.data), nil
+	if data := cc.get(today, now); data != nil {
+		return pluginsdk.DataResponse(data), nil
 	}
 	db, err := p.db(ctx)
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	const scan = `WITH e AS (SELECT id, coalesce(nullif(request_id, ''), '#' || id) AS rq, hit_categories FROM events
-			WHERE created_at >= $1 AND result IN ('hit', 'block') ORDER BY id DESC LIMIT $2),
-		r AS (SELECT DISTINCT rq, c FROM e, unnest(hit_categories) AS c)`
-	out := &CategoryStats{}
-	var scanned int64
-	if err := db.QueryRow(ctx, scan+` SELECT (SELECT count(*) FROM e), (SELECT count(DISTINCT rq) FROM e), (SELECT count(*) FROM r)`,
-		today, maxCategoryScan).Scan(&scanned, &out.SuspiciousRequests, &out.CategoryHits); err != nil {
-		return nil, err
-	}
-	out.Truncated = scanned >= maxCategoryScan
-	rows, err := db.Query(ctx, scan+` SELECT c, count(*) FROM r GROUP BY c ORDER BY count(*) DESC, c`, today, maxCategoryScan)
+	rows, err := db.Query(ctx, `WITH e AS (SELECT id, coalesce(nullif(request_id, ''), '#' || id) AS rq, hit_categories FROM events
+			WHERE created_at >= $1 AND `+suspiciousSQL+` ORDER BY id DESC LIMIT $2),
+		r AS (SELECT DISTINCT rq, c FROM e, unnest(hit_categories) AS c)
+		SELECT t.scanned, t.requests, g.c, coalesce(g.n, 0)
+		FROM (SELECT (SELECT count(*) FROM e) AS scanned, (SELECT count(DISTINCT rq) FROM e) AS requests) t
+		LEFT JOIN (SELECT c, count(*) AS n FROM r GROUP BY c) g ON true ORDER BY g.n DESC NULLS LAST, g.c`, today, maxCategoryScan)
 	if err != nil {
 		return nil, err
 	}
-	if out.Items, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (CategoryCount, error) {
-		var c CategoryCount
-		return c, r.Scan(&c.Category, &c.Count)
+	out := &CategoryStats{Items: []CategoryCount{}}
+	var scanned int64
+	var cat *string
+	var n int64
+	if _, err := pgx.ForEachRow(rows, []any{&scanned, &out.SuspiciousRequests, &cat, &n}, func() error {
+		if cat != nil {
+			out.Items = append(out.Items, CategoryCount{Category: *cat, Count: n})
+			out.CategoryHits += n
+		}
+		return nil
 	}); err != nil {
 		return nil, err
 	}
-	if out.Items == nil {
-		out.Items = []CategoryCount{}
-	}
-	if cc.m == nil {
-		cc.m = map[time.Time]categoryEntry{}
-	}
-	for k, e := range cc.m {
-		if now.Sub(e.at) >= time.Minute {
-			delete(cc.m, k)
-		}
-	}
-	cc.m[today] = categoryEntry{at: now, data: out}
+	out.Truncated = scanned >= maxCategoryScan
+	cc.put(today, now, out)
 	return pluginsdk.DataResponse(out), nil
 }

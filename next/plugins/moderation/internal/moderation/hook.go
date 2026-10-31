@@ -187,13 +187,16 @@ func (p *Plugin) moderatePre(ctx context.Context, m *moderation) *pluginv1.Gatew
 		// shared run hits (written by finish below once it returns).
 		go func() {
 			r := <-ch
-			if t := *r.Val.(*Trace); t.Final == Hit {
+			t := *r.Val.(*Trace)
+			p.countRun(m, t, false)
+			if t.Final == Hit {
 				p.finish(m, t, false)
 			}
 		}()
 		return allow(notePrefix + "error canceled")
 	}
 	refused := tr.Final == Hit
+	p.countRun(m, tr, refused)
 	if ctx.Err() != nil && !refused {
 		return allow(traceNote(m, tr))
 	}
@@ -218,6 +221,7 @@ func (p *Plugin) runPost(m *moderation) {
 	if p.bg.Err() != nil {
 		return
 	}
+	p.countRun(m, tr, false)
 	p.finish(m, tr, false)
 }
 
@@ -236,7 +240,7 @@ func (p *Plugin) run(ctx context.Context, m *moderation) Trace {
 	})
 	tr.TruncatedRun = m.in.TruncatedRun
 	if m.source == "" {
-		p.countRun(m, tr)
+		p.countCalls(m, tr)
 	}
 	return tr
 }

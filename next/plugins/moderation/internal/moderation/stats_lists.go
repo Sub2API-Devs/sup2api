@@ -79,20 +79,17 @@ type ChannelHealth struct {
 	Cost1h           CostSummary            `json:"cost_1h"`
 	CostToday        CostSummary            `json:"cost_today"`
 	CostTodaySources map[string]CostSummary `json:"cost_today_sources"`
+	errors1h         int64
 }
 
 func newChannelHealth() *ChannelHealth {
 	return &ChannelHealth{Cost1h: zeroCost(), CostToday: zeroCost(), CostTodaySources: map[string]CostSummary{}}
 }
 
-func channelsHealth(ctx context.Context, db *pgxpool.Pool, today, now time.Time) (map[int64]*ChannelHealth, error) {
-	hour := lastHour(now)
-	rows, err := queryCostHours(ctx, db, earliest(today, hour))
-	if err != nil {
-		return nil, err
-	}
+// aggregateChannels sums cost rows per channel: last-hour health and cost,
+// today's tokens and cost by source.
+func aggregateChannels(rows []costRow, hour, today time.Time) map[int64]*ChannelHealth {
 	out := map[int64]*ChannelHealth{}
-	errs := map[int64]int64{}
 	for _, r := range rows {
 		h := out[r.channel]
 		if h == nil {
@@ -101,9 +98,9 @@ func channelsHealth(ctx context.Context, db *pgxpool.Pool, today, now time.Time)
 		}
 		if !r.hour.Before(hour) {
 			h.Cost1h.add(r.sum)
-			if r.source == SourceAudit || r.source == SourceAnalysis {
+			if healthSource(r.source) {
 				h.Calls1h += r.sum.Calls
-				errs[r.channel] += r.errors
+				h.errors1h += r.errors
 			}
 		}
 		if !r.hour.Before(today) {
@@ -117,8 +114,17 @@ func channelsHealth(ctx context.Context, db *pgxpool.Pool, today, now time.Time)
 			h.CostTodaySources[r.source] = s
 		}
 	}
-	for id, h := range out {
-		h.ErrorRate1h = ratio(errs[id], h.Calls1h)
+	for _, h := range out {
+		h.ErrorRate1h = ratio(h.errors1h, h.Calls1h)
 	}
-	return out, nil
+	return out
+}
+
+func channelsHealth(ctx context.Context, db *pgxpool.Pool, today, now time.Time) (map[int64]*ChannelHealth, error) {
+	hour := lastHour(now)
+	rows, err := queryCostHours(ctx, db, earliest(today, hour))
+	if err != nil {
+		return nil, err
+	}
+	return aggregateChannels(rows, hour, today), nil
 }

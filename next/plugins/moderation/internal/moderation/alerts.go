@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -69,6 +70,30 @@ func (p *Plugin) notifyAutoChange(uid int64, action, from, to string, a *Analysi
 		"trend": a.Trend, "suggestion": a.Suggestion, "analysis_id": analysisID})
 }
 
+func alertFlowKey(id int64) string { return "flow:" + strconv.FormatInt(id, 10) }
+
+// alertedFlows lists the flows that were above the threshold at the last
+// check (one KV key each, removed when the flow drops below).
+func (p *Plugin) alertedFlows(ctx context.Context) (map[int64]bool, error) {
+	out := map[int64]bool{}
+	cursor := ""
+	for {
+		keys, next, err := p.host.KV().List(ctx, alertKVNamespace, "flow:", cursor, 500)
+		if err != nil {
+			return nil, err
+		}
+		for _, k := range keys {
+			if id, err := strconv.ParseInt(strings.TrimPrefix(k, "flow:"), 10, 64); err == nil {
+				out[id] = true
+			}
+		}
+		if next == "" {
+			return out, nil
+		}
+		cursor = next
+	}
+}
+
 // runAlertsJob checks every flow's last-hour error rate and alerts once when
 // one crosses error_rate_alert_percent.
 func (p *Plugin) runAlertsJob(ctx context.Context) (*pluginv1.RunJobResponse, error) {
@@ -77,7 +102,7 @@ func (p *Plugin) runAlertsJob(ctx context.Context) (*pluginv1.RunJobResponse, er
 	if err != nil {
 		return nil, err
 	}
-	p.flushStats(ctx)
+	p.freshStats(ctx)
 	now := p.now().UTC()
 	rows, err := queryStatRows(ctx, db, statsFilter{from: lastHour(now), to: now, group: -1})
 	if err != nil {
@@ -93,18 +118,19 @@ func (p *Plugin) runAlertsJob(ctx context.Context) (*pluginv1.RunJobResponse, er
 	if err != nil {
 		return nil, err
 	}
+	marked, err := p.alertedFlows(ctx)
+	if err != nil {
+		return nil, err
+	}
 	sent := 0
 	for id := range names {
-		key := "flow:" + strconv.FormatInt(id, 10)
 		f := flows[id]
 		over := f != nil && flagged(f.errors, f.audited, c.ErrorRateAlertPercent)
-		_, was, err := p.host.KV().Get(ctx, alertKVNamespace, key)
-		if err != nil {
-			return nil, err
-		}
+		was := marked[id]
+		key := alertFlowKey(id)
 		switch {
 		case over && !was:
-			if err := p.host.KV().Set(ctx, alertKVNamespace, key, []byte{1}, 7*24*time.Hour); err != nil {
+			if err := p.host.KV().Set(ctx, alertKVNamespace, key, []byte{1}, 0); err != nil {
 				return nil, err
 			}
 			p.notify(EventFlowErrorRate, map[string]any{"flow_id": id, "flow_name": names[id], "errors": f.errors, "audited": f.audited,

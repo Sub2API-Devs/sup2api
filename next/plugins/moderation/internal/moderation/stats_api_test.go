@@ -124,6 +124,12 @@ func TestListFigures(t *testing.T) {
 	if test.URL != mod.srv.URL+"/v1/moderations" {
 		t.Fatalf("tested url = %q", test.URL)
 	}
+	costs := decodeData[CostReport](t, h.Do("GET", "/costs", nil, nil))
+	for _, src := range costs.BySource {
+		if src.Source == SourceTest && src.Summary.Calls != 1 {
+			t.Fatalf("test calls = %+v", src.Summary)
+		}
+	}
 
 	// An unsaved auditor: type and channel from the body, no stored row.
 	try := decodeData[TryResult](t, h.Do("POST", "/auditors/0/try", nil, map[string]any{
@@ -148,6 +154,8 @@ func TestRecordAndWatchContext(t *testing.T) {
 	if ev[0].Trace == nil {
 		t.Fatal("list item without trace")
 	}
+	// The watch entry is written after the record (afterWrite).
+	waitFor(t, "watch entries", func() bool { return h.Do("GET", "/watchlist/4", nil, nil).GetStatus() == 200 && h.Do("GET", "/watchlist/3", nil, nil).GetStatus() == 200 })
 	d := decodeData[EventDetail](t, h.Do("GET", fmt.Sprintf("/events/%d", ev[0].ID), nil, nil))
 	if d.FlowSnapshot == nil || d.FlowSnapshot.FlowID != flow || d.FlowSnapshot.Version != 1 || len(d.FlowSnapshot.Auditors) != 1 {
 		t.Fatalf("flow snapshot = %+v", d.FlowSnapshot)

@@ -30,13 +30,13 @@ const (
 	AuditorLLMVerdict = "llm_verdict"
 )
 
-// channelTypeOf is the channel type an auditor type binds to.
 // Upstream paths of the scored engines.
 const (
 	pathModerations = "/v1/moderations"
 	pathSystemOne   = "/v1/systemone"
 )
 
+// channelTypeOf is the channel type an auditor type binds to.
 var channelTypeOf = map[string]string{AuditorOpenAI: ChannelOpenAI, AuditorTypeSafe: ChannelTypeSafe, AuditorLLMVerdict: ChannelLLM}
 
 // OpenAICategories are the 13 omni-moderation categories.
@@ -247,7 +247,7 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool,
 	}
 	out.LatencyMs = p.now().Sub(start).Milliseconds()
 	if source == SourceAudit {
-		// Priced from the trace once the run is counted (countRun).
+		// Priced from the trace once the run is counted (countCalls).
 		p.countCall(source, ch, out.Calls, out.Err, out.LatencyMs)
 	} else {
 		out.Cost = p.priceNow(ctx, source, ch, out.EngineResult, out.Err)
