@@ -355,3 +355,70 @@ func TestAccountSPMLimitMigration(t *testing.T) {
 	require.Equal(t, 3, spm(), "a rerun cleared a cap set after the migration")
 	require.Error(t, exec(`UPDATE accounts SET spm_limit = 10000001 WHERE name='spm'`))
 }
+
+// 0064 sums an account's usage (CONTRACTS §73): existing rows are backfilled
+// once, then the trigger follows settlement, reconcile, refunds and a moved
+// account; deleting history takes nothing back and a re-run counts nothing twice.
+func TestAccountUsageMigrationAndTrigger(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	exec := func(sql string, args ...any) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, sql, args...)
+		require.NoError(t, err)
+	}
+	totals := func(name string) string {
+		t.Helper()
+		var v string
+		err := db.Pool.QueryRow(ctx, `SELECT coalesce((SELECT cost::text||' '||raw_cost::text||' '||requests||' '||tokens
+			FROM account_usage_totals WHERE account_id=(SELECT id FROM accounts WHERE name=$1)),'none')`, name).Scan(&v)
+		require.NoError(t, err)
+		return v
+	}
+	hourly := func(name string) string {
+		t.Helper()
+		var v string
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT coalesce(sum(cost),0)::text||' '||count(*) FROM account_usage_hourly
+			WHERE account_id=(SELECT id FROM accounts WHERE name=$1)`, name).Scan(&v))
+		return v
+	}
+	migrate := func() {
+		t.Helper()
+		_, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+		require.NoError(t, err)
+	}
+	usage := func(rid, account, status, cost, detail, rate string, success bool, at string) {
+		t.Helper()
+		exec(`INSERT INTO usage_logs (request_id, user_id, api_key_id, group_id, account_id, protocol, endpoint, status_code, success,
+			total_cost, billing_status, billing_detail, rate_multiplier, input_tokens, output_tokens, cache_read_tokens, created_at)
+			VALUES ($1, 1, 1, 1, (SELECT id FROM accounts WHERE name=$2), 'anthropic.messages', '/v1/messages', 200, $7,
+			$4::numeric, $3, $5::jsonb, $6::numeric, 10, 5, 100, $8::timestamptz)`, rid, account, status, cost, detail, rate, success, at)
+	}
+	exec(`DROP TRIGGER account_usage_track ON usage_logs; DROP FUNCTION account_usage_track(); DROP FUNCTION account_usage_add(bigint, timestamptz, numeric, numeric, bigint, bigint);
+		DROP TABLE account_usage_totals, account_usage_hourly, account_usage_limits;
+		DELETE FROM schema_migrations WHERE id='0064_account_usage.sql';
+		INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES ('a','fixture','apikey',''), ('b','fixture','apikey','')`)
+	usage("old-billed", "a", "billed", "1.2", `{"cost":"1.0"}`, "1.2", true, "2026-10-01T10:15:00Z")
+	usage("old-no-detail", "a", "billed", "0.6", `{}`, "1.5", true, "2026-10-01T10:45:00Z")
+	usage("old-free", "a", "free", "0", `{"cost":"9"}`, "1", true, "2026-10-01T11:00:00Z")
+	usage("old-failed", "a", "failed", "0", `{}`, "1", false, "2026-10-01T11:30:00Z")
+	migrate()
+	require.Equal(t, "1.80000000 1.40000000 3 460", totals("a"), "billed rows cost; raw from billing_detail.cost or cost / multiplier; successful rows count")
+	require.Equal(t, "1.80000000 2", hourly("a"), "two UTC hours")
+
+	usage("new", "a", "pending", "0", `{}`, "2", true, "2026-10-02T00:05:00Z")
+	require.Equal(t, "1.80000000 1.40000000 4 575", totals("a"), "pending: request and tokens, no cost yet")
+	exec(`UPDATE usage_logs SET total_cost = 0.5, billing_status = 'billed', billing_detail = '{"cost":"0.25"}' WHERE request_id = 'new'`)
+	require.Equal(t, "2.30000000 1.65000000 4 575", totals("a"), "settled")
+	exec(`UPDATE usage_logs SET total_cost = 0, billing_status = 'free', success = false WHERE request_id = 'old-billed'`)
+	require.Equal(t, "1.10000000 0.65000000 3 575", totals("a"), "refunded")
+	exec(`UPDATE usage_logs SET account_id = (SELECT id FROM accounts WHERE name='b') WHERE request_id = 'new'`)
+	require.Equal(t, "0.60000000 0.40000000 2 460", totals("a"), "moved away")
+	require.Equal(t, "0.50000000 0.25000000 1 115", totals("b"), "moved here")
+	exec(`DELETE FROM usage_logs WHERE request_id = 'old-no-detail'`)
+	require.Equal(t, "0.60000000 0.40000000 2 460", totals("a"), "deleting history takes nothing back")
+
+	exec(`DELETE FROM schema_migrations WHERE id='0064_account_usage.sql'`)
+	migrate()
+	require.Equal(t, "0.60000000 0.40000000 2 460", totals("a"), "a re-run does not backfill again")
+}

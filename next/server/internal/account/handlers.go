@@ -194,7 +194,10 @@ type View struct {
 	// Outcomes are the successful requests and failed attempts of the last 60
 	// seconds behind the success-rate column (CONTRACTS §73); null when the
 	// statistics are unavailable.
-	Outcomes       *Outcomes  `json:"outcomes"`
+	Outcomes *Outcomes `json:"outcomes"`
+	// Usage is the core's usage record of the account and its usage limit
+	// (CONTRACTS §73); null when it cannot be read.
+	Usage          *UsageView `json:"usage"`
 	InUse          int        `json:"in_use"`
 	CooldownUntil  *time.Time `json:"cooldown_until"`
 	CooldownReason string     `json:"cooldown_reason,omitempty"`
@@ -330,6 +333,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 	}
 	s.fillModelInUse(ctx, out)
 	s.fillOutcomes(ctx, out)
+	s.fillUsage(ctx, out)
 	s.fillQuota(ctx, rows, out)
 	s.fillBalance(ctx, rows, out)
 	s.fillRefresh(ctx, rows, out)
@@ -1441,6 +1445,13 @@ func (s *Service) resetStatus(c *gin.Context) {
 	}
 	s.evictQuotaCache(ctx, id)
 	s.evictBalanceCache(ctx, id)
+	if strings.HasPrefix(a.StatusReason, usageLimitReason) {
+		// Brought back by hand: the usage limit leaves it running for the
+		// rest of the period (CONTRACTS §73).
+		if err := s.waiveUsageLimit(ctx, id); err != nil {
+			slog.WarnContext(ctx, "account: waive usage limit", "account", id, "err", err)
+		}
+	}
 	s.changed(ctx, id)
 	s.kickCCGateway(id, a.PluginKey, a.Type)
 	v, err := s.fullView(ctx, id, scope)

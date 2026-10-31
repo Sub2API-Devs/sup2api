@@ -164,6 +164,9 @@ func (s *Service) runAutomaticStateSweep(ctx context.Context) {
 		if _, err := s.SweepAutomaticState(ctx); err != nil && ctx.Err() == nil {
 			slog.WarnContext(ctx, "account: automatic state recovery", "err", err)
 		}
+		if err := s.EnforceUsageLimits(ctx, nil); err != nil && ctx.Err() == nil {
+			slog.WarnContext(ctx, "account: usage limits", "err", err)
+		}
 	}
 }
 
