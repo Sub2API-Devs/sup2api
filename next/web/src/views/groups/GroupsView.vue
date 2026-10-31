@@ -208,7 +208,7 @@ function onAction(g: Group, key: string) {
       </template>
     </SPageHeader>
 
-    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value">
+    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value" :error="list.error.value" @retry="list.reload">
       <template #cell-name="{ row }">
         <SLink as="button" class="text-left font-medium" data-testid="group-name" @click="openDetail(row)">{{ row.name }}</SLink>
         <SHint v-if="row.description" size="xs" class="max-w-xs truncate">{{ row.description }}</SHint>

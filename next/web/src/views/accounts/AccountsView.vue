@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SBulkBar, SButton, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, STooltip, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SAutoRefresh, SBadge, SBulkBar, SButton, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, STooltip, confirm, toast, useAutoRefresh, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountAction, AccountLastTest, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
@@ -154,14 +154,8 @@ function statusOf(a: Account): StatusView {
 }
 
 // ---------------------------------------------------------------- auto refresh (in_use / cooldown)
-const autoRefresh = ref(true)
-let timer: ReturnType<typeof setInterval> | undefined
-onMounted(() => {
-  timer = setInterval(() => {
-    if (autoRefresh.value && !editorOpen.value && !document.hidden) list.reload()
-  }, 10000)
-})
-onBeforeUnmount(() => clearInterval(timer))
+const refreshSeconds = ref(10)
+useAutoRefresh(list.reload, () => refreshSeconds.value * 1000, { enabled: () => !editorOpen.value })
 
 // ---------------------------------------------------------------- create / edit
 const editorOpen = ref(false)
@@ -554,7 +548,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
       </template>
       <template #actions>
         <SSwitch v-model="denseRows" :label="t('accounts.listUi.compact')" />
-        <SSwitch v-model="autoRefresh" :label="t('accounts.autoRefresh')" />
+        <SAutoRefresh v-model="refreshSeconds" />
         <SButton icon="refresh" icon-only :loading="list.loading.value" :aria-label="t('accounts.listUi.refresh')" :title="t('accounts.listUi.refresh')" @click="list.reload()" />
         <SButton v-if="canCreate" variant="primary" icon="plus" data-testid="account-new" @click="openCreate">{{ t('accounts.new') }}</SButton>
       </template>

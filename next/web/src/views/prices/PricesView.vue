@@ -24,7 +24,7 @@ function queryStr(k: string): string {
 const querySource = () => (/^\d+$/.test(queryStr('sync_source_id')) ? queryStr('sync_source_id') : '')
 
 // ?source= and ?sync_source_id= come from the sync sources page ("view these prices").
-const { items, loading, page, pageSize, total, filters, reload } = useList<Price>('/prices', {
+const { items, loading, error, page, pageSize, total, filters, reload } = useList<Price>('/prices', {
   mode: '',
   source: ['manual', 'sync'].includes(queryStr('source')) ? queryStr('source') : '',
   sync_source_id: querySource(),
@@ -143,7 +143,7 @@ function remove(p: Price) {
     </SPageHeader>
 
     <SAlert tone="primary" dense class="mb-3" data-testid="price-scope-note">{{ t('prices.scopeNote') }}</SAlert>
-    <STable card :columns="columns" :rows="rows" :loading="loading">
+    <STable card :columns="columns" :rows="rows" :loading="loading" :error="error" @retry="reload">
       <template #cell-model="{ row }">
         <SLink :to="`/prices/${row.id}`" class="font-mono text-sm">{{ row.model }}</SLink>
         <SHint v-if="row.note" size="xs" class="truncate">{{ row.note }}</SHint>

@@ -3,6 +3,9 @@
 // .card, .table, .badge, ...), so plugin UIs look native without shipping CSS.
 
 export { default as SAlert } from './SAlert.vue'
+export { default as SAutoRefresh } from './SAutoRefresh.vue'
+export { useAutoRefresh } from './autoRefresh'
+export type { AutoRefresh, AutoRefreshOptions } from './autoRefresh'
 export { default as SBadge } from './SBadge.vue'
 export { default as SBulkBar } from './SBulkBar.vue'
 export { default as SButton } from './SButton.vue'

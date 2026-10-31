@@ -286,7 +286,7 @@ function remove(u: User) {
       </template>
     </SPageHeader>
 
-    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value">
+    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value" :error="list.error.value" @retry="list.reload">
       <template #cell-email="{ row }">
         <span class="font-medium text-fg">{{ row.email }}</span>
       </template>

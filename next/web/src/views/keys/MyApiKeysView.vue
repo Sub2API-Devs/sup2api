@@ -138,7 +138,7 @@ function remove(k: ApiKey) {
       </template>
     </SPageHeader>
 
-    <STable card dense :columns="columns" :rows="list.items.value" :loading="list.loading.value">
+    <STable card dense :columns="columns" :rows="list.items.value" :loading="list.loading.value" :error="list.error.value" @retry="list.reload">
       <template #cell-name="{ row }">
         <span class="inline-flex items-center gap-1.5">
           <span class="font-medium text-fg">{{ row.name }}</span>

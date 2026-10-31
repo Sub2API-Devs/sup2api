@@ -264,7 +264,7 @@ function onAction(p: Proxy, key: string) {
       </template>
     </SPageHeader>
 
-    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value">
+    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value" :error="list.error.value" @retry="list.reload">
       <template #cell-name="{ row }">
         <span class="font-medium text-fg">{{ row.name }}</span>
       </template>

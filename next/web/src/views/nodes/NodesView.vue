@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SDateTime, SBadge, SButton, SChip, SCode, SGrid, SHint, SPageHeader, SStatCard, SStatusDot, STable, type TableColumn, type Tone, type StatusTone } from '@sub2api/ui'
+import { SDateTime, useAutoRefresh, SBadge, SButton, SChip, SCode, SGrid, SHint, SPageHeader, SStatCard, SStatusDot, STable, type TableColumn, type Tone, type StatusTone } from '@sub2api/ui'
 import type { NodeInfo } from '@/api/types'
 import { statusTone, type NodePluginState } from '@/api/admin'
 import { notifyError } from '@/utils/errors'
@@ -18,7 +18,6 @@ const nodes = ref<NodeInfo[]>([])
 const loading = ref(true)
 const lastLoaded = ref<Date | null>(null)
 const tick = ref(Date.now())
-let timer: ReturnType<typeof setInterval> | undefined
 let clock: ReturnType<typeof setInterval> | undefined
 let inflight = false
 let failures = 0
@@ -41,17 +40,12 @@ async function load(manual = false) {
   }
 }
 
+useAutoRefresh(load, REFRESH_MS)
 onMounted(() => {
   load()
-  timer = setInterval(() => {
-    if (document.visibilityState !== 'hidden') load()
-  }, REFRESH_MS)
   clock = setInterval(() => (tick.value = Date.now()), 1000)
 })
-onBeforeUnmount(() => {
-  clearInterval(timer)
-  clearInterval(clock)
-})
+onBeforeUnmount(() => clearInterval(clock))
 
 // ------------------------------------------------------------------ helpers
 

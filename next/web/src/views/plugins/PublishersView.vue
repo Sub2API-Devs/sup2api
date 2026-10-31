@@ -237,7 +237,7 @@ async function revokeKey(p: Publisher, k: PublisherKey) {
       </template>
     </SPageHeader>
 
-    <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value" expandable>
+    <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value" :error="list.error.value" expandable @retry="list.reload">
       <template #cell-name="{ row }">
         <span class="font-medium text-gray-900 dark:text-white">{{ row.name }}</span>
       </template>

@@ -108,7 +108,7 @@ onMounted(loadChannels)
       </SSettingRow>
     </SSettingsGroup>
 
-    <STable card :columns="recordColumns" :rows="records.items.value" :loading="records.loading.value" data-testid="notification-records">
+    <STable card :columns="recordColumns" :rows="records.items.value" :loading="records.loading.value" :error="records.error.value" data-testid="notification-records" @retry="records.reload">
       <template #toolbar>
         <div class="flex w-full flex-wrap items-center justify-between gap-2">
           <div>

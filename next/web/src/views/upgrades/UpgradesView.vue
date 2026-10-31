@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SDateTime, SAlert, SBadge, SButton, SCard, SCode, SEmpty, SField, SHint, SPageHeader, SSectionTitle, SSelect, STable, confirm, type TableColumn, type Tone } from '@sub2api/ui'
+import { SDateTime, useAutoRefresh, SAlert, SBadge, SButton, SCard, SCode, SEmpty, SField, SHint, SPageHeader, SSectionTitle, SSelect, STable, confirm, type TableColumn, type Tone } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import TopologyGraph from '../nodes/TopologyGraph.vue'
@@ -22,7 +22,7 @@ const releases = ref<Release[]>([]), nodes = ref<Node[]>([]), plans = ref<Plan[]
 const target = ref<string | number | boolean | null>(''), selected = ref<Plan | null>(null), preflight = ref<Preflight | null>(null)
 const loading = ref(true), busy = ref(false), available = ref(false), primary = ref(''), revision = ref(0), stale = ref(false)
 const selectedID = ref(typeof route.query.upgrade === 'string' ? route.query.upgrade : '')
-let timer: ReturnType<typeof setInterval> | undefined, inflight = false, disposed = false
+let inflight = false, disposed = false
 let requestKey = crypto.randomUUID()
 const canExecute = computed(() => auth.has('system:update:execute'))
 const canRecover = computed(() => auth.has('system:update:recover'))
@@ -86,8 +86,9 @@ async function setNodeEnabled(node: Node, enabled: boolean) {
     await load()
   } catch (e) { notifyError(e) } finally { busy.value = false }
 }
-onMounted(() => { void load(); timer = setInterval(() => { if (document.visibilityState !== 'hidden') void load() }, 5000) })
-onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
+useAutoRefresh(load, 5000)
+onMounted(() => { void load() })
+onBeforeUnmount(() => { disposed = true })
 </script>
 
 <template>
