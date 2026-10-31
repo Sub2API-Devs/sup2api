@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"net/mail"
 	"net/smtp"
 	"net/textproto"
 	"strconv"
@@ -75,7 +74,7 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 	}
 	s.Host, s.FromAddress = strings.TrimSpace(s.Host), strings.TrimSpace(s.FromAddress)
 	fe := pluginsdk.FieldErrors{}
-	if s.Host != "" && !isEmail(s.FromAddress) {
+	if s.Host != "" && !manifest.ValidRecipient(manifest.RecipientEmail, s.FromAddress) {
 		fe = fe.Add("from_address", "invalid", "a plain address such as noreply@example.com / 请填写发件地址，例如 noreply@example.com")
 	}
 	if s.Security != SecuritySTARTTLS && s.Security != SecurityTLS && s.Security != SecurityNone {
@@ -93,7 +92,9 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 }
 
 // DeliverNotification implements pluginsdk.NotificationChannel. A refusal
-// by the server (a 5xx reply) is final; anything else is retried by the core.
+// of the message by the server (a 5xx reply to RCPT or DATA) is final;
+// anything else, a refused login or sender included, is a setup problem the
+// core retries until it is fixed.
 func (p *Plugin) DeliverNotification(ctx context.Context, in *pluginv1.DeliverNotificationRequest) (*pluginv1.DeliverNotificationResponse, error) {
 	s := p.cfg.Load()
 	if s == nil || s.Host == "" {
@@ -113,9 +114,9 @@ func (p *Plugin) DeliverNotification(ctx context.Context, in *pluginv1.DeliverNo
 	defer cancel()
 	msg := compose(s, in, time.Now())
 	err := p.send(ctx, s, in.GetRecipients(), msg)
-	var reply *textproto.Error
-	if errors.As(err, &reply) && reply.Code >= 500 {
-		return &pluginv1.DeliverNotificationResponse{Rejected: fmt.Sprintf("SMTP %d %s", reply.Code, reply.Msg)}, nil
+	var refused messageRefused
+	if errors.As(err, &refused) {
+		return &pluginv1.DeliverNotificationResponse{Rejected: fmt.Sprintf("SMTP %d %s", refused.reply.Code, refused.reply.Msg)}, nil
 	}
 	if err != nil {
 		return nil, err
@@ -161,23 +162,33 @@ func (p *Plugin) send(ctx context.Context, s *Settings, to []string, msg []byte)
 	}
 	for _, r := range to {
 		if err := c.Rcpt(r); err != nil {
-			return err
+			return refusal(err)
 		}
 	}
 	w, err := c.Data()
 	if err != nil {
-		return err
+		return refusal(err)
 	}
 	if _, err := w.Write(msg); err != nil {
 		return err
 	}
 	if err := w.Close(); err != nil {
-		return err
+		return refusal(err)
 	}
 	return c.Quit()
 }
 
-func isEmail(s string) bool {
-	a, err := mail.ParseAddress(s)
-	return err == nil && a.Address == s
+// messageRefused is a 5xx reply to the message itself (its recipients or
+// content), which retrying cannot change.
+type messageRefused struct{ reply *textproto.Error }
+
+func (e messageRefused) Error() string { return e.reply.Error() }
+
+// refusal marks a 5xx reply of a message step as final.
+func refusal(err error) error {
+	var reply *textproto.Error
+	if errors.As(err, &reply) && reply.Code >= 500 {
+		return messageRefused{reply}
+	}
+	return err
 }

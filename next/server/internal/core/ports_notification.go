@@ -5,6 +5,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
 // Notifications (CONTRACTS §73.4): a provider plugin declares channels
@@ -36,9 +37,9 @@ const NotificationSourceCore = "core"
 
 // Notification severities.
 const (
-	SeverityInfo     = "info"
-	SeverityWarning  = "warning"
-	SeverityCritical = "critical"
+	SeverityInfo     = protocol.SeverityInfo
+	SeverityWarning  = protocol.SeverityWarning
+	SeverityCritical = protocol.SeverityCritical
 )
 
 // Notification is one message to send.

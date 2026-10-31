@@ -10,6 +10,7 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/dynweight/internal/rules"
 )
@@ -61,12 +62,12 @@ func (p *Plugin) notify(ctx context.Context, cfg *compiledConfig, k key, b base,
 		start := time.Unix(w.Start, 0).UTC().Format(time.RFC3339)
 		body = append(body, fmt.Sprintf(m.window, start, w.Total, w.Fail, w.LookbackWindows))
 	}
-	severity := "info"
+	severity := protocol.SeverityInfo
 	switch {
 	case ev.Kind == rules.EventWeightDown && rules.IsZero(ev.To):
-		severity = "critical"
+		severity = protocol.SeverityCritical
 	case ev.Kind == rules.EventWeightDown:
-		severity = "warning"
+		severity = protocol.SeverityWarning
 	}
 	dedupe := sha1.Sum(fmt.Appendf(nil, "%d|%d|%s|%s|%d", k.AccountID, k.GroupID, k.Model, ev.Kind, window))
 	_, err := pluginsdk.Notify(ctx, p.host, &pluginv1.NotifyRequest{Channel: n.Channel, Recipients: n.Recipients,

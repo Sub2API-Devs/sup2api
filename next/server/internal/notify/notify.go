@@ -8,6 +8,7 @@ package notify
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -160,7 +161,7 @@ func (s *Service) validate(n core.Notification) (core.Notification, error) {
 	}
 	n.Recipients = recipients
 	if len(recipients) == 0 || len(recipients) > MaxRecipients {
-		bad("recipients", "between 1 and 20 recipients")
+		bad("recipients", fmt.Sprintf("between 1 and %d recipients", MaxRecipients))
 	}
 	for _, r := range recipients {
 		if len(r) > MaxRecipientLen || (ok && !manifest.ValidRecipient(b.Channel.RecipientFormat(), r)) {
@@ -170,10 +171,10 @@ func (s *Service) validate(n core.Notification) (core.Notification, error) {
 	}
 	n.Subject = strings.TrimSpace(n.Subject)
 	if n.Subject == "" || utf8.RuneCountInString(n.Subject) > MaxSubjectRunes || strings.ContainsAny(n.Subject, "\r\n\x00") {
-		bad("subject", "1 to 200 characters on one line")
+		bad("subject", fmt.Sprintf("1 to %d characters on one line", MaxSubjectRunes))
 	}
 	if len(n.Body) > MaxBodyBytes || strings.ContainsRune(n.Body, 0) {
-		bad("body", "at most 64 KiB, without NUL")
+		bad("body", fmt.Sprintf("at most %d KiB, without NUL", MaxBodyBytes>>10))
 	}
 	switch n.Severity {
 	case "":
@@ -183,7 +184,7 @@ func (s *Service) validate(n core.Notification) (core.Notification, error) {
 		bad("severity", "info, warning or critical")
 	}
 	if len(n.DedupeKey) > MaxDedupeKey || n.DedupeSeconds < 0 || n.DedupeSeconds > MaxDedupeSeconds {
-		bad("dedupe_key", "a key of at most 200 bytes and a window of 0 to 86400 seconds")
+		bad("dedupe_key", fmt.Sprintf("a key of at most %d bytes and a window of 0 to %d seconds", MaxDedupeKey, MaxDedupeSeconds))
 	}
 	if n.DedupeSeconds == 0 {
 		n.DedupeSeconds = DefaultDedupeSeconds

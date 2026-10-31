@@ -165,8 +165,8 @@ func TestDeliveryOutcomes(t *testing.T) {
 	p.outcomes = []error{nil, errors.New("smtp: connection refused"), errRejected{"mailbox unavailable"}}
 	// One row per step, in order.
 	for i := 0; i < 3; i++ {
-		if n := s.step(ctx); n != 1 {
-			t.Fatalf("step %d claimed %d", i, n)
+		if !s.step(ctx) {
+			t.Fatalf("step %d claimed nothing", i)
 		}
 	}
 	if st, _, _ := status(t, db, sent.ID); st != "sent" {

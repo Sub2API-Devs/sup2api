@@ -52,9 +52,9 @@ func reservedUse(m *manifest.Manifest) (field, msg string) {
 	return "", ""
 }
 
-// ErrReservedKey: a hand upload without an official signature uses the key
-// or a platform id of a first-party plugin.
-var ErrReservedKey = core.NewError(http.StatusForbidden, "plugin_key_reserved", "the plugin key or platform id is reserved")
+// ErrReservedKey: a hand upload without an official signature uses the key,
+// a platform id or a notification channel id of a first-party plugin.
+var ErrReservedKey = core.NewError(http.StatusForbidden, "plugin_key_reserved", "the plugin key, platform or notification channel id is reserved")
 
 // ErrResourceConflict: a version declares a platform or gateway endpoint
 // another approved plugin holds, a built-in platform id or a path the core

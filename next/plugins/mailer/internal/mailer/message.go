@@ -8,12 +8,14 @@ import (
 	"net/mail"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
 // severityPrefix marks the subject of urgent notifications.
-var severityPrefix = map[string]string{"warning": "[Warning] ", "critical": "[Critical] "}
+var severityPrefix = map[string]string{protocol.SeverityWarning: "[Warning] ", protocol.SeverityCritical: "[Critical] "}
 
 // compose builds the RFC 5322 message: UTF-8 plain text, base64 encoded.
 func compose(s *Settings, in *pluginv1.DeliverNotificationRequest, now time.Time) []byte {
@@ -21,7 +23,7 @@ func compose(s *Settings, in *pluginv1.DeliverNotificationRequest, now time.Time
 	header := func(k, v string) { fmt.Fprintf(&b, "%s: %s\r\n", k, v) }
 	from := mail.Address{Name: s.FromName, Address: s.FromAddress}
 	header("From", from.String())
-	header("To", strings.Join(in.GetRecipients(), ", "))
+	header("To", strings.Join(in.GetRecipients(), ",\r\n "))
 	header("Subject", encodeSubject(severityPrefix[in.GetSeverity()]+in.GetSubject()))
 	header("Date", now.Format(time.RFC1123Z))
 	header("Message-ID", fmt.Sprintf("<sub2api-notification-%d@%s>", in.GetId(), domainOf(s.FromAddress)))
@@ -39,22 +41,29 @@ func compose(s *Settings, in *pluginv1.DeliverNotificationRequest, now time.Time
 	return b.Bytes()
 }
 
-// subjectChunkRunes keeps an encoded word of CJK text under 76 characters.
-const subjectChunkRunes = 15
+// subjectChunkBytes keeps an encoded word within the 75 characters of
+// RFC 2047: 45 bytes are 60 base64 characters plus 12 of "=?utf-8?b?...?=".
+const subjectChunkBytes = 45
 
 // encodeSubject B-encodes a subject that needs it, one encoded word per
-// subjectChunkRunes runes on folded lines, so a long non-ASCII subject stays
-// within the line limit of RFC 5322.
+// subjectChunkBytes bytes (cut between runes) on folded lines, so a long
+// non-ASCII subject stays within the line limit of RFC 5322.
 func encodeSubject(subject string) string {
 	if mime.BEncoding.Encode("utf-8", subject) == subject {
 		return subject
 	}
-	runes := []rune(subject)
-	words := make([]string, 0, len(runes)/subjectChunkRunes+1)
-	for len(runes) > 0 {
-		n := min(len(runes), subjectChunkRunes)
-		words = append(words, mime.BEncoding.Encode("utf-8", string(runes[:n])))
-		runes = runes[n:]
+	var words []string
+	for subject != "" {
+		n := 0
+		for n < len(subject) {
+			_, size := utf8.DecodeRuneInString(subject[n:])
+			if n+size > subjectChunkBytes {
+				break
+			}
+			n += size
+		}
+		words = append(words, mime.BEncoding.Encode("utf-8", subject[:n]))
+		subject = subject[n:]
 	}
 	return strings.Join(words, "\r\n ")
 }

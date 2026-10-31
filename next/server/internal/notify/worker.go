@@ -7,12 +7,8 @@ import (
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
-
-// claimBatch bounds the rows one step delivers. One row at a time: a row is
-// delivered well within its lease, so a slow provider never lets the lease
-// of a waiting row run out and another node send it again.
-const claimBatch = 1
 
 // Start runs the delivery loop until Stop. Every node may run it: rows are
 // claimed with SKIP LOCKED and held for the lease.
@@ -49,7 +45,7 @@ func (s *Service) loop(ctx context.Context, done chan struct{}) {
 	nextPurge := time.Now()
 	for {
 		if s.opts.CanRun == nil || s.opts.CanRun() {
-			for s.step(ctx) == claimBatch {
+			for s.step(ctx) {
 			}
 			if time.Now().After(nextPurge) {
 				s.purge(ctx)
@@ -76,34 +72,26 @@ type queued struct {
 	attempt    int32
 }
 
-// step claims and delivers one batch; it returns the rows claimed.
-func (s *Service) step(ctx context.Context) int {
-	rows, err := s.db.Pool.Query(ctx, `UPDATE notifications SET status = 'sending', attempts = attempts + 1,
+// step claims and delivers one row; it reports whether there was one. One
+// row at a time: a row is delivered well within its lease, so a slow
+// provider never lets the lease of a waiting row run out and another node
+// send it again.
+func (s *Service) step(ctx context.Context) bool {
+	var q queued
+	err := s.db.Pool.QueryRow(ctx, `UPDATE notifications SET status = 'sending', attempts = attempts + 1,
 			next_attempt_at = now() + make_interval(secs => $1)
-		WHERE id IN (SELECT id FROM notifications WHERE status IN ('pending', 'sending') AND next_attempt_at <= now()
-			ORDER BY next_attempt_at, id LIMIT $2 FOR UPDATE SKIP LOCKED)
-		RETURNING id, source, channel, recipients, subject, body, severity, attempts`, s.opts.Lease.Seconds(), claimBatch)
+		WHERE id = (SELECT id FROM notifications WHERE status IN ('pending', 'sending') AND next_attempt_at <= now()
+			ORDER BY next_attempt_at, id LIMIT 1 FOR UPDATE SKIP LOCKED)
+		RETURNING id, source, channel, recipients, subject, body, severity, attempts`, s.opts.Lease.Seconds()).
+		Scan(&q.id, &q.source, &q.channel, &q.recipients, &q.subject, &q.body, &q.severity, &q.attempt)
 	if err != nil {
-		if ctx.Err() == nil {
+		if !store.IsNoRows(err) && ctx.Err() == nil {
 			slog.WarnContext(ctx, "notify: claim", "err", err)
 		}
-		return 0
+		return false
 	}
-	var batch []queued
-	for rows.Next() {
-		var q queued
-		if err := rows.Scan(&q.id, &q.source, &q.channel, &q.recipients, &q.subject, &q.body, &q.severity, &q.attempt); err != nil {
-			rows.Close()
-			slog.WarnContext(ctx, "notify: claim", "err", err)
-			return 0
-		}
-		batch = append(batch, q)
-	}
-	rows.Close()
-	for _, q := range batch {
-		s.finish(ctx, q, s.deliver(ctx, q))
-	}
-	return len(batch)
+	s.finish(ctx, q, s.deliver(ctx, q))
+	return true
 }
 
 // errRejected marks a final refusal by the provider.

@@ -14,11 +14,8 @@ import (
 // point at an account and could serve (group, model). It needs the
 // "sticky.clear" grant (CONTRACTS §73.2).
 func ClearStickyBindings(ctx context.Context, h Host, in *pluginv1.ClearStickyBindingsRequest) (*pluginv1.ClearStickyBindingsResponse, error) {
-	if h == nil || h.Client() == nil {
-		return nil, ErrHostNotReady
-	}
-	if h.Info().HostAPIVersion < protocol.StickyClearHostAPIVersion {
-		return nil, status.Errorf(codes.FailedPrecondition, "sticky binding clearing requires host API %d", protocol.StickyClearHostAPIVersion)
+	if err := requireHostAPI(h, protocol.StickyClearHostAPIVersion, "sticky binding clearing"); err != nil {
+		return nil, err
 	}
 	return h.Client().ClearStickyBindings(ctx, in)
 }
@@ -27,11 +24,8 @@ func ClearStickyBindings(ctx context.Context, h Host, in *pluginv1.ClearStickyBi
 // optionally an account (CONTRACTS §73.3). Gateway requests already carry
 // theirs in RequestMeta.environment; this is for background work.
 func GetEnvironment(ctx context.Context, h Host, groupID, accountID int64) (map[string]int64, error) {
-	if h == nil || h.Client() == nil {
-		return nil, ErrHostNotReady
-	}
-	if h.Info().HostAPIVersion < protocol.EnvironmentHostAPIVersion {
-		return nil, status.Errorf(codes.FailedPrecondition, "environment variables require host API %d", protocol.EnvironmentHostAPIVersion)
+	if err := requireHostAPI(h, protocol.EnvironmentHostAPIVersion, "environment variables"); err != nil {
+		return nil, err
 	}
 	resp, err := h.Client().GetEnvironment(ctx, &pluginv1.GetEnvironmentRequest{GroupId: groupID, AccountId: accountID})
 	if err != nil {
@@ -43,7 +37,7 @@ func GetEnvironment(ctx context.Context, h Host, groupID, accountID int64) (map[
 // ListNotificationChannels lists the notification channels of the enabled
 // plugins; it needs the "notify.send" grant (CONTRACTS §73.4).
 func ListNotificationChannels(ctx context.Context, h Host) ([]*pluginv1.NotificationChannel, error) {
-	if err := notifyReady(h); err != nil {
+	if err := requireHostAPI(h, protocol.NotificationHostAPIVersion, "notifications"); err != nil {
 		return nil, err
 	}
 	resp, err := h.Client().ListNotificationChannels(ctx, &pluginv1.ListNotificationChannelsRequest{})
@@ -56,18 +50,20 @@ func ListNotificationChannels(ctx context.Context, h Host) ([]*pluginv1.Notifica
 // Notify queues a notification on a channel by its id; the core delivers it
 // through the plugin declaring the channel. It needs the "notify.send" grant.
 func Notify(ctx context.Context, h Host, in *pluginv1.NotifyRequest) (*pluginv1.NotifyResponse, error) {
-	if err := notifyReady(h); err != nil {
+	if err := requireHostAPI(h, protocol.NotificationHostAPIVersion, "notifications"); err != nil {
 		return nil, err
 	}
 	return h.Client().Notify(ctx, in)
 }
 
-func notifyReady(h Host) error {
+// requireHostAPI fails a host call the host cannot serve yet: no host, or
+// one older than the host API version that introduced `what`.
+func requireHostAPI(h Host, version int32, what string) error {
 	if h == nil || h.Client() == nil {
 		return ErrHostNotReady
 	}
-	if h.Info().HostAPIVersion < protocol.NotificationHostAPIVersion {
-		return status.Errorf(codes.FailedPrecondition, "notifications require host API %d", protocol.NotificationHostAPIVersion)
+	if h.Info().HostAPIVersion < version {
+		return status.Errorf(codes.FailedPrecondition, "%s requires host API %d", what, version)
 	}
 	return nil
 }

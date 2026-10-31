@@ -101,13 +101,10 @@ func (s *Service) test(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	zh := core.Locale(c.Request.Context()) == "zh"
-	subject, body := "Sub2API test notification", "This is a test notification. The channel works."
-	if zh {
-		subject, body = "Sub2API 测试通知", "这是一条测试通知，说明该渠道可以正常发送。"
-	}
-	r, err := s.Notify(c.Request.Context(), sourceTest, core.Notification{Channel: in.Channel, Recipients: in.Recipients,
-		Subject: subject, Body: body})
+	ctx := c.Request.Context()
+	r, err := s.Notify(ctx, sourceTest, core.Notification{Channel: in.Channel, Recipients: in.Recipients,
+		Subject: core.Text(ctx, "Sub2API test notification", "Sub2API 测试通知"),
+		Body:    core.Text(ctx, "This is a test notification. The channel works.", "这是一条测试通知，说明该渠道可以正常发送。")})
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

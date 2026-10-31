@@ -64,8 +64,13 @@ func (s *smtpServer) serve(conn net.Conn) {
 		case strings.HasPrefix(upper, "EHLO"):
 			reply("250 test")
 		case strings.HasPrefix(upper, "MAIL FROM:"):
+			from := strings.Trim(cmd[len("MAIL FROM:"):], "<> ")
+			if from == s.refuse {
+				reply("550 sender not allowed")
+				continue
+			}
 			s.mu.Lock()
-			s.from = strings.Trim(cmd[len("MAIL FROM:"):], "<> ")
+			s.from = from
 			s.mu.Unlock()
 			reply("250 ok")
 		case strings.HasPrefix(upper, "RCPT TO:"):
@@ -133,7 +138,7 @@ func TestDeliver(t *testing.T) {
 		t.Fatalf("envelope: %s %v", srv.from, srv.to)
 	}
 	head, body, _ := strings.Cut(srv.data, "\r\n\r\n")
-	for _, want := range []string{`From: "Ops" <noreply@example.com>`, "To: ops@example.com, dev@example.com",
+	for _, want := range []string{`From: "Ops" <noreply@example.com>`, "To: ops@example.com,\r\n dev@example.com",
 		"Message-ID: <sub2api-notification-42@example.com>", "X-Sub2API-Source: dynweight", "Subject: =?utf-8?b?"} {
 		if !strings.Contains(head, want) {
 			t.Errorf("header %q missing in\n%s", want, head)
@@ -155,6 +160,11 @@ func TestDeliverOutcomes(t *testing.T) {
 	resp, err := p.DeliverNotification(ctx, request())
 	if err != nil || !strings.HasPrefix(resp.GetRejected(), "SMTP 550") {
 		t.Fatalf("refused recipient: %v %v", resp, err)
+	}
+	// A refused sender is a setup problem: retried, not a final rejection.
+	p = configured(t, srv, map[string]any{"from_address": "dev@example.com"})
+	if _, err := p.DeliverNotification(ctx, request()); err == nil || !strings.Contains(err.Error(), "550") {
+		t.Fatalf("refused sender: %v", err)
 	}
 	// STARTTLS is required when chosen; the test server does not offer it.
 	p = configured(t, srv, map[string]any{"security": "starttls"})
@@ -205,16 +215,17 @@ func TestCompose(t *testing.T) {
 // A long non-ASCII subject is folded into encoded words on short lines and
 // decodes back; an ASCII subject is left alone.
 func TestEncodeSubject(t *testing.T) {
-	subject := strings.Repeat("动态权重通知", 34)
-	enc := encodeSubject(subject)
-	for _, line := range strings.Split(enc, "\r\n") {
-		if len(line) > 76 {
-			t.Fatalf("line of %d characters: %s", len(line), line)
-		}
-	}
 	var dec mime.WordDecoder
-	if got, err := dec.DecodeHeader(enc); err != nil || got != subject {
-		t.Fatalf("decode: %q %v", got, err)
+	for _, subject := range []string{strings.Repeat("动态权重通知", 34), strings.Repeat("账号🔥", 40)} {
+		enc := encodeSubject(subject)
+		for _, line := range strings.Split(enc, "\r\n") {
+			if len(line) > 76 {
+				t.Fatalf("line of %d characters: %s", len(line), line)
+			}
+		}
+		if got, err := dec.DecodeHeader(enc); err != nil || got != subject {
+			t.Fatalf("decode: %q %v", got, err)
+		}
 	}
 	if got := encodeSubject("Weight degraded"); got != "Weight degraded" {
 		t.Fatalf("ascii: %q", got)
