@@ -1,7 +1,7 @@
 import type { PluginHost } from '@sub2api/host'
+import { lazyPage } from '@sub2api/ui'
 import messages from './messages'
 import { setHost } from './host'
-import { lazyPage } from './lazy'
 import './growth.css'
 
 export function register(host: PluginHost) {

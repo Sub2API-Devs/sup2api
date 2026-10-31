@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { api } from '@sub2api/host'
 import type { MenuSection } from '@/api/types'
+import { usePluginStore } from './plugins'
 
 export type Theme = 'light' | 'dark'
 
@@ -101,4 +102,13 @@ function normalizeSection(s: MenuSection): NavSection {
       pluginKey: i.plugin_key
     }))
   }
+}
+
+/**
+ * Reloads the console shell after plugins change: the native plugin modules
+ * and the sidebar menus. The two are independent (GET /me/menus already lists
+ * plugin menus), so they load in parallel and one failing does not stop the other.
+ */
+export async function refreshShell(): Promise<void> {
+  await Promise.allSettled([usePluginStore().refresh(), useAppStore().loadMenus()])
 }

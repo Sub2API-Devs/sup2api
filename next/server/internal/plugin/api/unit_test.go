@@ -84,3 +84,24 @@ func TestVisibleMenusAndPagesCreateLink(t *testing.T) {
 		t.Fatalf("a visible menu keeps the form, not the link: %v", pages)
 	}
 }
+
+// Two tables open the same form under different permissions: the link the
+// caller may use keeps the form, whichever table is denied.
+func TestVisibleMenusAndPagesSharedCreateForm(t *testing.T) {
+	ui := &manifest.UI{
+		Pages: map[string]manifest.Page{
+			"mine":     {Type: "table", Create: &manifest.PageLink{Page: "new_item", Permission: "items:own:create"}},
+			"all":      {Type: "table", Create: &manifest.PageLink{Page: "new_item", Permission: "items:manage"}},
+			"new_item": {Type: "form"},
+		},
+	}
+	own := func(p string) bool { return p == "items:own:create" }
+	_, pages := visibleMenusAndPages(ui, own)
+	if _, ok := pages["new_item"]; !ok || pages["mine"].Create == nil || pages["all"].Create != nil {
+		t.Fatalf("own creator: pages=%v", pages)
+	}
+	_, pages = visibleMenusAndPages(ui, func(string) bool { return false })
+	if _, ok := pages["new_item"]; ok || pages["mine"].Create != nil || pages["all"].Create != nil {
+		t.Fatalf("no create permission: pages=%v", pages)
+	}
+}

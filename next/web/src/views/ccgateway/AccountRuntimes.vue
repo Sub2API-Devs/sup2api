@@ -477,7 +477,7 @@ async function refreshAuth(r: Row) {
       </STable>
       <RetainedRuntimes :revision="retainedRevision" />
     </div>
-    <SFormModal v-model:open="fullDialogOpen" :title="t('ccgateway.requestLogs.fullTitle')" width="sm" describedby="request-log-full-warning" :submit-text="t('ccgateway.requestLogs.fullAction')" :submit-attrs="{ 'data-testid': 'request-log-full-confirm' }" :cancel-attrs="{ 'data-testid': 'request-log-full-cancel' }" @submit="confirmFull">
+    <SFormModal v-model:open="fullDialogOpen" :title="t('ccgateway.requestLogs.fullTitle')" width="sm" describedby="request-log-full-warning" :submit-text="t('ccgateway.requestLogs.fullAction')" :submit-attrs="{ 'data-testid': 'request-log-full-confirm' }" :cancel-attrs="{ 'data-testid': 'request-log-full-cancel' }" :enter-submit="false" @submit="confirmFull">
       <div class="space-y-3" data-testid="request-log-full-dialog">
         <SHint id="request-log-full-warning" tone="warning">{{ t(fullDialog?.row.logsPolicy ? 'ccgateway.requestLogs.followFullWarning' : 'ccgateway.requestLogs.fullWarning') }}</SHint>
         <SSegmented v-if="fullDialog" :model-value="fullDialog.hours" :options="hourOptions" block :aria-label="t('ccgateway.requestLogs.fullDuration')" data-testid="request-log-full-hours" @update:model-value="setHours" />

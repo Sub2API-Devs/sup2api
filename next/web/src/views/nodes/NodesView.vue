@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SDateTime, useAutoRefresh, SBadge, SButton, SChip, SCode, SGrid, SHint, SPageHeader, SStatCard, SStatusDot, STable, type TableColumn, type Tone, type StatusTone } from '@sub2api/ui'
+import { SDateTime, statusTone, useAutoRefresh, SBadge, SButton, SChip, SCode, SGrid, SHint, SPageHeader, SStatCard, SStatusDot, STable, type TableColumn, type Tone, type StatusTone } from '@sub2api/ui'
 import type { NodeInfo } from '@/api/types'
-import { statusTone, type NodePluginState } from '@/api/admin'
+import type { NodePluginState } from '@/api/admin'
 import { notifyError } from '@/utils/errors'
 import { fetchFirstPage } from '@/composables/lookups'
 import TopologyGraph from './TopologyGraph.vue'

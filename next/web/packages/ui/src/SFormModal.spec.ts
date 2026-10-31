@@ -37,8 +37,13 @@ describe('SFormModal', () => {
     expect(d.emitted('submit')).toBeUndefined()
   })
 
-  it('readonly shows only a Close button', () => {
-    const w = render({ readonly: true })
-    expect(w.findAll('.modal-footer button').map((b) => b.text())).toEqual(['Close'])
+  it('enterSubmit false ignores Enter but still submits on the button', async () => {
+    const w = render({ enterSubmit: false })
+    const form = w.get('form')
+    expect(form.find('button[type="submit"]').exists()).toBe(false)
+    await form.trigger('submit')
+    expect(w.emitted('submit')).toBeUndefined()
+    await w.findAll('.modal-footer button')[1].trigger('click')
+    expect(w.emitted('submit')).toHaveLength(1)
   })
 })

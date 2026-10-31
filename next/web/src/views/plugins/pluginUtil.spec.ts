@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import en from '@/i18n/locales/en/plugins'
 import zh from '@/i18n/locales/zh/plugins'
-import { HOST_PERMISSION_RISK, accountTypesOf, consoleSettings, endpointText, hpKey, nativeSettingsPath, platformsOf, settingsFieldErrors } from './pluginUtil'
+import { statusTone } from '@sub2api/ui'
+import { HOST_PERMISSION_RISK, PLUGIN_TONES, accountTypesOf, consoleSettings, endpointText, hpKey, nativeSettingsPath, platformsOf, settingsFieldErrors } from './pluginUtil'
 
 describe('plugin endpoint declarations', () => {
   it('preserves the same subset in manifests and installation reviews', () => {
@@ -78,5 +79,19 @@ describe('settings modes (§75.5)', () => {
     expect(nativeSettingsPath('moderation', { mode: 'native', page: 'dashboard', schema, values: {} })).toBe('/p/moderation/dashboard?tab=settings')
     expect(nativeSettingsPath('moderation', { mode: 'native', schema, values: {} })).toBeNull()
     expect(nativeSettingsPath('guard', { mode: 'schema', schema, values: {} })).toBeNull()
+  })
+})
+
+describe('plugin status tones', () => {
+  it('keep the plugin pages\' colours on top of the SDK statusTone', () => {
+    const expected: Record<string, string> = {
+      enabled: 'success', active: 'success', ready: 'success', running: 'success', ok: 'success', success: 'success', succeeded: 'success', approved: 'success',
+      enabling: 'primary', upgrading: 'primary', preparing: 'primary', activating: 'primary', pending: 'primary', starting: 'primary',
+      awaiting_consent: 'warning', installed: 'warning',
+      failed: 'danger', error: 'danger', crashed: 'danger', rolled_back: 'danger', rejected: 'danger', revoked: 'danger', unavailable: 'danger', abnormal: 'danger',
+      disabled: 'gray', stopped: 'gray', removed: 'gray', healthy: 'gray', expired: 'gray', draining: 'gray', loading: 'gray', stopping: 'gray', banned: 'gray', unknown: 'gray'
+    }
+    for (const [status, tone] of Object.entries(expected)) expect([status, statusTone(status, PLUGIN_TONES)]).toEqual([status, tone])
+    expect(statusTone(null, PLUGIN_TONES)).toBe('gray')
   })
 })

@@ -164,7 +164,7 @@ async function submit() {
 </script>
 
 <template>
-  <SFormModal :open="open" :title="title" width="xl" :loading="busy" @update:open="emit('update:open', $event)" @submit="submit">
+  <SFormModal :open="open" :title="title" width="xl" :loading="busy" :enter-submit="false" @update:open="emit('update:open', $event)" @submit="submit">
     <div class="space-y-5">
       <SAlert v-if="limited" tone="accent" dense>{{ t('sticky.modal.limitedHint') }}</SAlert>
 

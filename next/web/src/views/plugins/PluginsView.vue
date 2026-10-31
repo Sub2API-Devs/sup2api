@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SEmpty, SHint, SInput, SPageHeader, SSelect, STable, toast, type TableColumn, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SEmpty, SHint, SInput, SPageHeader, SSelect, SStatusBadge, STable, toast, type TableColumn, type Tone } from '@sub2api/ui'
 import type { PluginReview, PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -12,11 +12,11 @@ import { useAuthStore } from '@/stores/auth'
 import { consentPath, putReview } from './reviewCache'
 import PluginAvatar from './parts/PluginAvatar.vue'
 import RetiredKeys from './parts/RetiredKeys.vue'
-import StatusBadge from './parts/StatusBadge.vue'
 import TrustBadge from './parts/TrustBadge.vue'
-import { conflictLines, shownStatus } from './pluginUtil'
+import { PLUGIN_TONES, conflictLines, hasConsoleSettings, shownStatus, usePluginStatusLabel } from './pluginUtil'
 
 const { t } = useI18n()
+const statusLabel = usePluginStatusLabel()
 const router = useRouter()
 const auth = useAuthStore()
 
@@ -76,10 +76,7 @@ function open(p: PluginSummary) {
 }
 
 function canOpenSettings(p: PluginSummary): boolean {
-  if (p.status === 'awaiting_consent') return false
-  // Compatibility with the existing core-hosted CCGateway management page.
-  // Other plugins advertise their schema settings through the list API.
-  return p.key === 'ccgateway' ? auth.has('settings:read') : !!p.has_settings
+  return p.status !== 'awaiting_consent' && hasConsoleSettings(p, (perm) => auth.has(perm))
 }
 
 function review(p: PluginSummary) {
@@ -154,7 +151,7 @@ onMounted(load)
       </template>
       <template #cell-status="{ row }">
         <div class="flex flex-col items-start gap-0.5">
-          <StatusBadge :status="shownStatus(row)" />
+          <SStatusBadge :status="shownStatus(row)" :tones="PLUGIN_TONES" :label="statusLabel(shownStatus(row))" />
           <SHint
             v-if="row.resource_conflicts?.length"
             inline

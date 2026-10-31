@@ -116,7 +116,7 @@ async function submit() {
 </script>
 
 <template>
-  <SFormModal :open="open" :title="t('ledger.adjust.title')" width="md" :loading="busy" :submit-text="t('common.confirm')" @update:open="emit('update:open', $event)" @submit="submit">
+  <SFormModal :open="open" :title="t('ledger.adjust.title')" width="md" :loading="busy" :submit-text="t('common.confirm')" :enter-submit="false" @update:open="emit('update:open', $event)" @submit="submit">
     <div class="space-y-4">
       <div v-if="currentBalance !== undefined && currentBalance !== null && targetUserId === userId" class="text-sm" data-testid="adjust-current-balance">
         <SHint inline>{{ t('ledger.adjust.currentBalance') }}:</SHint>

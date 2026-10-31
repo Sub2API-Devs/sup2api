@@ -50,6 +50,7 @@ async function remove() {
     submit-variant="danger"
     :submit-text="t('common.delete')"
     :submit-attrs="{ 'data-testid': 'account-delete-confirm' }"
+    :enter-submit="false"
     @update:open="v => emit('update:open', v)"
     @submit="remove"
   >

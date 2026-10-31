@@ -19,7 +19,7 @@ watch(() => props.models, () => setAll(true), { immediate: true })
 </script>
 
 <template>
-  <SFormModal v-model:open="open" :title="t('accounts.fetchModelsTitle', { n: models.length })" width="md" :submit-disabled="!pickedModels.length" :submit-text="t('accounts.fetchApply')" @submit="emit('apply', pickedModels)">
+  <SFormModal v-model:open="open" :title="t('accounts.fetchModelsTitle', { n: models.length })" width="md" :submit-disabled="!pickedModels.length" :submit-text="t('accounts.fetchApply')" :enter-submit="false" @submit="emit('apply', pickedModels)">
     <div class="mb-2 flex items-center justify-between text-xs">
       <SHint inline size="xs">
         {{ t('accounts.fetchPicked', { n: pickedModels.length, total: models.length }) }}

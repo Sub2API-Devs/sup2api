@@ -7,6 +7,7 @@ import { SPageHeader, SSelect, STitleScope } from '@sub2api/ui'
 import type { PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
+import { hasConsoleSettings } from '@/views/plugins/pluginUtil'
 import StickyView from '@/views/sticky/StickyView.vue'
 import BillingSettingsCard from './BillingSettingsCard.vue'
 import EnvironmentSettingsCard from './EnvironmentSettingsCard.vue'
@@ -64,9 +65,7 @@ onMounted(async () => {
   if (!auth.has('plugin:read')) return
   try {
     const list = await api.get<PluginSummary[]>('/plugins')
-    pluginList.value = (list || []).filter(
-      (p) => p.status === 'enabled' && (p.key === 'ccgateway' ? auth.has('settings:read') : !!p.has_settings)
-    )
+    pluginList.value = (list || []).filter((p) => p.status === 'enabled' && hasConsoleSettings(p, (perm) => auth.has(perm)))
   } catch {
     // The plugin group is an index; the plugin list page still reaches them.
     pluginList.value = []

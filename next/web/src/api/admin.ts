@@ -9,9 +9,6 @@ export function roleMemberCount(r: RoleRow): number | undefined {
   return r.user_count ?? r.member_count
 }
 
-/** Badge tone for a generic resource status string (the SDK's statusTone). */
-export { statusTone } from '@sub2api/ui'
-
 /** Converts an RFC 3339 string to the value of an <input type="datetime-local">. */
 export function toLocalInput(v: string | null | undefined): string {
   if (!v) return ''

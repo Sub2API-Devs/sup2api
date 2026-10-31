@@ -353,7 +353,7 @@ function remove(u: User) {
     </SFormModal>
 
     <!-- roles -->
-    <SFormModal v-model:open="rolesOpen" :title="t('users.assignRolesTitle', { name: rolesUser?.email || '' })" :loading="saving" @submit="submitRoles">
+    <SFormModal v-model:open="rolesOpen" :title="t('users.assignRolesTitle', { name: rolesUser?.email || '' })" :loading="saving" :enter-submit="false" @submit="submitRoles">
       <SChoiceCards v-if="roles.length" v-model="rolesSel" multiple :cols="1" :options="roleChoices" :aria-label="t('users.roles')">
         <template v-for="r in roles" :key="r.key" #[`option-${r.key}`]>
           <span class="mt-1 flex items-center gap-2">
@@ -366,7 +366,7 @@ function remove(u: User) {
     </SFormModal>
 
     <!-- groups -->
-    <SFormModal v-model:open="groupsOpen" :title="t('users.assignGroupsTitle', { name: groupsUser?.email || '' })" :loading="saving" @submit="submitGroups">
+    <SFormModal v-model:open="groupsOpen" :title="t('users.assignGroupsTitle', { name: groupsUser?.email || '' })" :loading="saving" :enter-submit="false" @submit="submitGroups">
       <SField :hint="t('users.groupsHint')">
         <GroupPicker :model-value="groupsSel" multiple @update:model-value="onGroupsPicked" />
       </SField>

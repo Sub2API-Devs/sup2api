@@ -17,6 +17,7 @@ import {
   SPageHeader,
   SPagination,
   SSelect,
+  SStatusBadge,
   STable,
   STextarea,
   toast,
@@ -25,7 +26,7 @@ import {
   type Tone
 } from '@sub2api/ui'
 import type { Publisher } from '@/api/types'
-import { fromLocalInput, statusTone } from '@/api/admin'
+import { fromLocalInput } from '@/api/admin'
 import { confirmAction } from '@/composables/crud'
 import { applyFormError } from '@/utils/formErrors'
 import { useList } from '@/composables/useList'
@@ -51,12 +52,6 @@ function trustLabel(level: string) {
   return v === k ? level : v
 }
 
-function statusLabel(s: string) {
-  const k = `common.status_.${s}`
-  const v = t(k)
-  return v === k ? s : v
-}
-
 function keyState(k: PublisherKey): string {
   if (k.status && k.status !== 'active') return k.status
   const now = Date.now()
@@ -77,12 +72,6 @@ const keyColumns = computed<TableColumn[]>(() => {
   if (canManage.value) cols.push({ key: 'actions', label: t('common.actions'), align: 'right' })
   return cols
 })
-
-function keyStateLabel(s: string) {
-  if (s === 'expired') return t('publishers.expired')
-  if (s === 'pending') return t('publishers.notYetValid')
-  return statusLabel(s)
-}
 
 const columns = computed<TableColumn[]>(() => {
   const cols: TableColumn[] = [
@@ -245,7 +234,7 @@ async function revokeKey(p: Publisher, k: PublisherKey) {
         <SBadge :tone="trustTone(row.trust_level)">{{ trustLabel(row.trust_level) }}</SBadge>
       </template>
       <template #cell-status="{ row }">
-        <SBadge :tone="statusTone(row.status)" dot>{{ statusLabel(row.status) }}</SBadge>
+        <SStatusBadge :status="row.status" />
         <SHint v-if="row.revoked_at" size="xs" class="mt-0.5">{{ formatDateTime(row.revoked_at) }}</SHint>
       </template>
       <template #cell-keys="{ row }">
@@ -278,9 +267,7 @@ async function revokeKey(p: Publisher, k: PublisherKey) {
               </span>
             </template>
             <template #cell-status="{ row: k }">
-              <SBadge :tone="keyState(k) === 'expired' || keyState(k) === 'pending' ? 'warning' : statusTone(keyState(k))" dot>
-                {{ keyStateLabel(keyState(k)) }}
-              </SBadge>
+              <SStatusBadge :status="keyState(k)" :labels="{ pending: t('publishers.notYetValid') }" />
             </template>
             <template #cell-not_before="{ row: k }"><SHint inline>{{ k.not_before ? formatDateTime(k.not_before) : '—' }}</SHint></template>
             <template #cell-not_after="{ row: k }"><SHint inline>{{ k.not_after ? formatDateTime(k.not_after) : '—' }}</SHint></template>

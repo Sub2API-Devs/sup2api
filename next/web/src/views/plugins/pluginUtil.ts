@@ -1,8 +1,9 @@
 // Shared helpers and DTOs of the plugin pages (list, consent, detail,
 // rollout, market). Shapes not frozen by CONTRACTS.md are typed loosely and
 // read tolerantly (camelCase or snake_case).
-import type { LText, Trust, ResourceConflict } from '@/api/types'
+import type { LText, PluginSummary, Trust, ResourceConflict } from '@/api/types'
 import type { Tone } from '@sub2api/ui'
+import { useOptionalT } from '@/composables/optionalText'
 
 export type Risk = 'low' | 'medium' | 'high' | 'critical'
 
@@ -73,38 +74,41 @@ export function conflictLines(p: { resource_conflicts?: ResourceConflict[] | nul
   return (p.resource_conflicts || []).map((c) => `${c.resource} ${c.id}: ${c.reason}`)
 }
 
-export function statusTone(s: string | undefined | null): Tone {
-  switch (s) {
-    case 'enabled':
-    case 'active':
-    case 'ready':
-    case 'running':
-    case 'ok':
-    case 'success':
-    case 'succeeded':
-    case 'approved':
-      return 'success'
-    case 'enabling':
-    case 'upgrading':
-    case 'preparing':
-    case 'activating':
-    case 'pending':
-    case 'starting':
-      return 'primary'
-    case 'awaiting_consent':
-    case 'installed':
-      return 'warning'
-    case 'failed':
-    case 'error':
-    case 'crashed':
-    case 'rolled_back':
-    case 'rejected':
-    case 'revoked':
-    case 'unavailable':
-    case 'abnormal':
-      return 'danger'
-    default:
-      return 'gray'
+/**
+ * Plugin lifecycle / rollout / node state tones that differ from the SDK's
+ * statusTone (pass as SStatusBadge `tones`). In-flight states are primary
+ * rather than warning, and a few generic ones stay gray here.
+ */
+export const PLUGIN_TONES: Record<string, Tone> = {
+  success: 'success',
+  succeeded: 'success',
+  approved: 'success',
+  enabling: 'primary',
+  upgrading: 'primary',
+  preparing: 'primary',
+  activating: 'primary',
+  pending: 'primary',
+  starting: 'primary',
+  awaiting_consent: 'warning',
+  installed: 'warning',
+  rolled_back: 'danger',
+  rejected: 'danger',
+  unavailable: 'danger',
+  abnormal: 'danger',
+  healthy: 'gray',
+  expired: 'gray',
+  draining: 'gray',
+  loading: 'gray',
+  stopping: 'gray',
+  banned: 'gray'
+}
+
+/** Localized plugin state label (`plugins.status.*`); unknown values are shown raw. */
+export function usePluginStatusLabel(): (status: string | null | undefined) => string {
+  const tr = useOptionalT()
+  return (status) => {
+    const v = status || 'unknown'
+    return tr(`plugins.status.${v}`, undefined, v)
   }
 }
 
@@ -386,6 +390,11 @@ export interface PluginDetail {
  */
 export function hasCoreSettings(key: string, has: (perm: string) => boolean): boolean {
   return key === 'ccgateway' && has('settings:read')
+}
+
+/** Whether the plugin has console settings: the core view of ccgateway, else a schema form (has_settings). */
+export function hasConsoleSettings(p: Pick<PluginSummary, 'key' | 'has_settings'>, has: (perm: string) => boolean): boolean {
+  return p.key === 'ccgateway' ? hasCoreSettings(p.key, has) : !!p.has_settings
 }
 
 export interface PluginSettings {

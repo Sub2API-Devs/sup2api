@@ -75,8 +75,8 @@ func (a *API) uiPlugins(c *gin.Context) {
 // visibleMenusAndPages filters a plugin's menus and pages for one caller.
 // A page reached only through menus the caller may not see is dropped; so is
 // a table's "New" link the caller may not use, and the form page it opens
-// unless a visible menu reaches it. Pages no menu or link names stay (their
-// routes check permissions themselves).
+// unless a visible menu or another table's usable link reaches it. Pages no
+// menu or link names stay (their routes check permissions themselves).
 func visibleMenusAndPages(ui *manifest.UI, allowed func(perm string) bool) ([]manifest.Menu, map[string]manifest.Page) {
 	menus := []manifest.Menu{}
 	pages := map[string]manifest.Page{}
@@ -91,7 +91,12 @@ func visibleMenusAndPages(ui *manifest.UI, allowed func(perm string) bool) ([]ma
 		}
 	}
 	for _, pg := range ui.Pages {
-		if pg.Create != nil && !allowed(pg.Create.Permission) {
+		if pg.Create == nil {
+			continue
+		}
+		if allowed(pg.Create.Permission) {
+			visible[pg.Create.Page] = true
+		} else {
 			hidden[pg.Create.Page] = true
 		}
 	}

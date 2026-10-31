@@ -6,10 +6,11 @@
 // - auto (default): relative within 7 days, absolute before.
 // The absolute time is the hover title of the other modes. Renders <time
 // datetime>. `empty` replaces an empty / invalid value ('—'). Relative texts
-// refresh every minute, every second with `live`. `muted` uses the secondary
-// text colour.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+// refresh every minute, every second with `live` (one shared timer per
+// interval; none for absolute texts). `muted` uses the secondary text colour.
+import { computed } from 'vue'
 import { useUiLocale } from './i18n'
+import { useNow } from './now'
 
 const props = withDefaults(
   defineProps<{
@@ -24,20 +25,18 @@ const props = withDefaults(
   { mode: 'auto', empty: '—' }
 )
 const locale = useUiLocale()
-const now = ref(Date.now())
-let timer: ReturnType<typeof setInterval> | null = null
-onMounted(() => {
-  if (props.mode === 'absolute' || props.mode === 'time') return
-  timer = setInterval(() => (now.value = Date.now()), props.live ? 1000 : 60_000)
-})
-onBeforeUnmount(() => {
-  if (timer) clearInterval(timer)
-})
+const WEEK = 7 * 86400_000
 
 const date = computed(() => {
   if (props.value === null || props.value === undefined || props.value === '') return null
   const d = props.value instanceof Date ? props.value : new Date(props.value)
   return Number.isNaN(d.getTime()) ? null : d
+})
+// Only relative texts tick; an auto text a week in the past stays absolute.
+const now = useNow(() => {
+  if (!date.value || props.mode === 'absolute' || props.mode === 'time') return 0
+  if (props.mode === 'auto' && Date.now() - date.value.getTime() >= WEEK) return 0
+  return props.live ? 1000 : 60_000
 })
 const lang = computed(() => (locale() === 'zh' ? 'zh-CN' : locale()))
 const p2 = (x: number) => String(x).padStart(2, '0')
@@ -78,7 +77,7 @@ const text = computed(() => {
   if (props.mode === 'absolute') return absolute.value
   if (props.mode === 'time') return time.value
   if (props.mode === 'relative') return relative.value
-  return Math.abs(date.value.getTime() - now.value) < 7 * 86400_000 ? relative.value : absolute.value
+  return Math.abs(date.value.getTime() - now.value) < WEEK ? relative.value : absolute.value
 })
 </script>
 

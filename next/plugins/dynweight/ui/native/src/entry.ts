@@ -1,8 +1,8 @@
 import type { PluginHost } from '@sub2api/host'
+import { lazyPage } from '@sub2api/ui'
 import AccountWeight from './AccountWeight.vue'
 import messages from './messages'
 import { setHost } from './host'
-import { lazyPage } from './lazy'
 import './dynweight.css'
 
 // Native UI entry of the dynweight plugin (manifest ui.native.entry). The

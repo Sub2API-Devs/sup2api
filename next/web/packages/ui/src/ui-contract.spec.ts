@@ -22,7 +22,7 @@ describe('host UI 3 contract', () => {
     expect(satisfiesRange('3.3.0', '^3.4')).toBe(false)
   })
   it('exports the shared page building blocks (UI 3.4)', () => {
-    for (const name of ['SStatusBadge', 'statusTone', 'SFormModal', 'SFilterBar', 'SAutoRefresh', 'useAutoRefresh'] as const) {
+    for (const name of ['SStatusBadge', 'statusTone', 'SFormModal', 'SFilterBar', 'SAutoRefresh', 'useAutoRefresh', 'useNow', 'lazyPage'] as const) {
       expect(ui[name]).toBeDefined()
     }
   })

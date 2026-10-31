@@ -181,17 +181,11 @@ func (s *Service) pluginMenus(set core.PermissionSet) []pluginMenu {
 				Path:      "/p/" + p.Key + "/" + strings.TrimPrefix(m.Page, "/"),
 				PluginKey: p.Key,
 			}, order: m.Order}
-			switch {
-			case m.Section == "plugins" || m.Section == "":
-				pm.sectionKey, pm.sectionLabel, pm.sectionOrder = "plugins", lt("Plugins", "插件"), coreSectionOrder["plugins"]
-			case coreSectionOrder[m.Section] != 0:
-				pm.sectionKey, pm.sectionOrder = m.Section, coreSectionOrder[m.Section]
-				for _, cs := range coreMenus {
-					if cs.id == m.Section {
-						pm.sectionLabel = cs.label
-					}
-				}
-			default:
+			// A core section (the shared "plugins" one by default) already
+			// exists with its own label by the time plugin menus join it.
+			if section := cmp.Or(m.Section, "plugins"); coreSectionOrder[section] != 0 {
+				pm.sectionKey, pm.sectionOrder = section, coreSectionOrder[section]
+			} else {
 				pm.sectionKey = p.Key + ":" + m.Section
 				pm.sectionLabel, pm.sectionOrder = core.LocalizedText{"en": m.Section}, pluginSectionOrder
 				for _, sec := range p.Manifest.UI.Sections {

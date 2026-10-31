@@ -1,8 +1,8 @@
 import type { PluginHost } from '@sub2api/host'
+import { lazyPage } from '@sub2api/ui'
 import BlockedTodayCard from './BlockedTodayCard.vue'
 import messages from './messages'
 import { setHost } from './host'
-import { lazyPage } from './lazy'
 
 // Native UI entry of the guard plugin (manifest ui.native.entry).
 // Component names match manifest ui.pages.dashboard.component and

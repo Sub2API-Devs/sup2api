@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import SStatusBadge from './SStatusBadge.vue'
-import SBadge from './SBadge.vue'
 import { statusTone } from './status'
 
 describe('SStatusBadge', () => {
@@ -23,14 +22,11 @@ describe('SStatusBadge', () => {
   })
 })
 
-describe('statusTone / neutral tone', () => {
+describe('statusTone', () => {
   it('maps generic statuses and accepts overrides', () => {
     expect(statusTone('RUNNING')).toBe('success')
     expect(statusTone('failed')).toBe('danger')
     expect(statusTone(null)).toBe('gray')
     expect(statusTone('paused', { paused: 'warning' })).toBe('warning')
-  })
-  it('SBadge accepts the StatusTone name neutral', () => {
-    expect(mount(SBadge, { props: { tone: 'neutral' } }).classes()).toContain('badge-gray')
   })
 })

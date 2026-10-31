@@ -179,7 +179,9 @@ const columns: TableColumn[] = [
 <SDateTime :value="row.last_heartbeat" mode="relative" live /><!-- 5s ago，每秒刷新 -->
 ```
 
-默认 `auto`：7 天内显示相对时间，更早显示绝对时间。非 `absolute` 模式悬停显示完整时间；空值或无效值显示 `empty`（默认 `—`）。
+默认 `auto`：7 天内显示相对时间，更早显示绝对时间。非 `absolute` 模式悬停显示完整时间；空值或无效值显示 `empty`（默认 `—`）。相对时间按间隔共用一个定时器（`live` 每秒，否则每分钟），绝对时间不计时。
+
+自绘的相对时间可直接用 `useNow(intervalMs)`：返回当前时间（毫秒）的 ref，同一间隔的订阅者共用一个定时器，最后一个退订时清理；间隔可传 getter，变化时重新订阅，`0` 表示停表。
 
 ### 状态：`SStatusBadge` / `statusTone`
 
@@ -188,7 +190,7 @@ const columns: TableColumn[] = [
 <SStatusBadge :status="job.phase" :labels="{ paused: t('jobs.paused') }" :tones="{ paused: 'info' }" />
 ```
 
-常见状态（active、disabled、running、failed、expired …）内置中英文文案和色调；未知状态显示原值、灰色。`statusTone(status, extra?)` 单独给出色调。色调名统一用 `StatusTone`，`SBadge` 也接受 `neutral`。
+常见状态（active、disabled、running、failed、expired …）内置中英文文案和色调；未知状态显示原值、灰色。`statusTone(status, extra?)` 单独给出色调。
 
 ### 表单弹窗：`SFormModal`
 
@@ -199,7 +201,8 @@ const columns: TableColumn[] = [
 ```
 
 - 字段内回车和“保存”按钮都触发 `submit`；`loading` 时不能关闭、按钮转圈。
-- `submitText`、`submitVariant="danger"`、`submitDisabled`、`readonly`（只留“关闭”）、`submitAttrs` / `cancelAttrs`（如 `data-testid`）；其余属性落到 `<form>`。
+- `:enter-submit="false"` 时回车不提交，只能点按钮，用于调余额、删除确认、多选确认这类不应误触的弹窗。
+- `submitText`、`submitVariant="danger"`、`submitDisabled`、`submitAttrs` / `cancelAttrs`（如 `data-testid`）；其余属性落到 `<form>`。
 - `#footer-start` 在页脚左侧放提示或次要操作，`#footer` 整体替换页脚。
 - 组件只负责外壳，校验、请求和错误展示仍由页面处理。
 
@@ -232,3 +235,15 @@ useAutoRefresh(list.reload, () => seconds.value * 1000, { enabled: () => !editor
 ```
 
 绑定 `@reset` 时显示“重置”，`dirty` 为假时禁用；`:card="false"` 去掉卡片外框，用于卡片内部。
+
+### 插件页懒加载：`lazyPage`
+
+```ts
+import { lazyPage } from '@sub2api/ui'
+
+export function register(host: PluginHost) {
+  host.registerComponent('MyDashboard', lazyPage(() => import('./MyDashboard.vue')))
+}
+```
+
+控制台启动时会加载所有原生入口，页面组件用 `lazyPage` 注册后单独分包，首次打开页面时才下载；加载中显示占位，失败重试两次后显示控制台的错误状态。入口只保留 slot 组件、文案和 `register` 需要的代码。

@@ -35,36 +35,33 @@ describe('plugin store loading', () => {
     const store = usePluginStore()
     const done = store.refresh()
 
-    await store.whenListed()
+    await until(() => store.listed)
     expect(store.listed).toBe(true)
     expect(store.uiPlugins.map((p) => p.key)).toEqual([FAST, SLOW])
-    expect(store.ready).toBe(false)
 
     await until(() => store.component(FAST, 'FastPage') && release())
     expect(store.component(FAST, 'FastPage')).toBeTruthy()
     expect(store.pending[FAST]).toBeUndefined()
     expect(store.pending[SLOW]).toBe(true)
-    expect(store.ready).toBe(false)
+
+    // An overlapping refresh leaves the still-loading plugin to the first call.
+    const releaseFirst = release()
+    await store.refresh()
+    expect(release()).toBe(releaseFirst)
+    expect(store.pending[SLOW]).toBe(true)
 
     release()!()
     await done
     expect(store.component(SLOW, 'SlowPage')).toBeTruthy()
     expect(store.pending[SLOW]).toBeUndefined()
-    expect(store.ready).toBe(true)
   })
 
-  it('lists and becomes ready when GET /ui/plugins fails', async () => {
+  it('lists when GET /ui/plugins fails', async () => {
     mocks.get.mockRejectedValue(new Error('down'))
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const store = usePluginStore()
     await store.refresh()
     expect(store.listed).toBe(true)
-    expect(store.ready).toBe(true)
     expect(store.uiPlugins).toEqual([])
-  })
-
-  it('whenListed resolves at once when no refresh is running', async () => {
-    const store = usePluginStore()
-    await expect(store.whenListed()).resolves.toBeUndefined()
   })
 })

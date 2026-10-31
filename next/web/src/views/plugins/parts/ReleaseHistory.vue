@@ -2,23 +2,19 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SCode, SDisclosure, SHint, SPagination } from '@sub2api/ui'
+import { SButton, SCard, SCode, SDisclosure, SHint, SPagination, SStatusBadge, useAutoRefresh } from '@sub2api/ui'
 import type { PluginHistory, PluginRelease } from '@/api/observability'
 import { formatDateTime } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
-import { statusTone } from '@/api/admin'
-import { useOptionalT } from '@/composables/optionalText'
-import StatusBadge from './StatusBadge.vue'
+import { PLUGIN_TONES, usePluginStatusLabel } from '../pluginUtil'
 const props = defineProps<{ pluginKey?: string; since?: string }>()
 const { t } = useI18n()
-const tr = useOptionalT()
-/** Localized rollout / node state; unknown values are shown raw. */
-const stateLabel = (v: string | null | undefined) => (v ? tr(`plugins.status.${v}`, undefined, v) : '—')
+const statusLabel = usePluginStatusLabel()
 const items = ref<PluginRelease[]>([]), events = ref<PluginHistory[]>([])
 const selected = ref<PluginRelease | null>(null), page = ref(1), total = ref(0), eventPage = ref(1), eventTotal = ref(0), error = ref('')
 const allEvents = ref(false)
 const size = 10
-let timer: ReturnType<typeof setInterval> | undefined, serial = 0, disposed = false, eventSerial = 0
+let serial = 0, disposed = false, eventSerial = 0
 const groups = computed(() => [...new Set(events.value.map(e => e.node_id || ''))].map(node => ({ node, events: events.value.filter(e => e.node_id === node).slice().reverse() })))
 async function load() {
   const token = ++serial
@@ -46,8 +42,9 @@ function showAllEvents() { allEvents.value = true; selected.value = null; eventP
 watch([() => props.pluginKey, () => props.since], () => { ++eventSerial; allEvents.value = false; selected.value = null; events.value = []; page.value = 1; void load() })
 watch(page, () => { selected.value = null; events.value = []; void load() })
 watch(eventPage, () => { void loadEvents() })
-onMounted(() => { void load(); timer = setInterval(() => { if (document.visibilityState !== 'hidden') void load() }, 5000) })
-onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
+useAutoRefresh(load, 5000)
+onMounted(() => { void load() })
+onBeforeUnmount(() => { disposed = true })
 </script>
 <template>
   <SCard :title="t(pluginKey ? 'observe.history' : 'observe.related')" class="mt-5">
@@ -65,11 +62,11 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
         >
           <strong>{{ item.plugin_key }}</strong>
           <SCode inline :text="`#${item.id} · ${item.from_version || '—'} → ${item.target_version || '—'}`" />
-          <StatusBadge :status="item.phase" />
+          <SStatusBadge :status="item.phase" :tones="PLUGIN_TONES" :label="statusLabel(item.phase)" />
           <SHint inline size="xs">{{ formatDateTime(item.created_at) }}</SHint>
         </button>
         <div class="mt-2 flex flex-wrap gap-2">
-          <SBadge v-for="node in item.nodes" :key="node.boot_id" :tone="statusTone(node.state)" :title="node.error">{{ node.node_id }} · {{ stateLabel(node.state) }}</SBadge>
+          <SStatusBadge v-for="node in item.nodes" :key="node.boot_id" :status="node.state" :label="`${node.node_id} · ${statusLabel(node.state)}`" :dot="false" :title="node.error" />
         </div>
         <SHint v-if="item.error" tone="warning">{{ item.error }}</SHint>
       </div>
@@ -84,7 +81,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
           <li v-for="event in group.events" :key="event.id">
             <SHint inline size="xs">{{ formatDateTime(event.created_at) }} · {{ event.boot_id.slice(0, 8) }}</SHint>
             <div class="my-1 flex flex-wrap items-center gap-2">
-              <StatusBadge :status="event.state" />
+              <SStatusBadge :status="event.state" :tones="PLUGIN_TONES" :label="statusLabel(event.state)" />
               <SCode v-if="event.version" inline :text="event.version" />
             </div>
             <SDisclosure v-if="event.message" :label="t('observe.detail')">

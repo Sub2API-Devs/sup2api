@@ -40,12 +40,11 @@ const searchParam = computed(() => props.page.search || '')
 
 // The "New" button replaces a sidebar entry for the create form; the core
 // only sends the link (and the form) to callers who may use it.
-const createPage = computed(() => {
+const create = computed(() => {
   const id = props.page.create?.page
-  return id ? props.plugin.pages?.[id] : undefined
+  const form = id ? props.plugin.pages?.[id] : undefined
+  return form ? { path: `/p/${props.plugin.key}/${id}`, label: lt(form.title) || t('common.create') } : null
 })
-const createPath = computed(() => (createPage.value ? `/p/${props.plugin.key}/${props.page.create!.page}` : ''))
-const createLabel = computed(() => lt(createPage.value?.title) || t('common.create'))
 const q = ref('')
 
 const columns = computed<TableColumn[]>(() =>
@@ -123,8 +122,8 @@ onMounted(load)
         :aria-label="t('common.search')"
       />
       <SButton size="sm" :loading="loading" icon="refresh" @click="load">{{ t('common.refresh') }}</SButton>
-      <SButton v-if="createPath" size="sm" variant="primary" icon="plus" class="ml-auto" :to="createPath" data-testid="table-create">
-        {{ createLabel }}
+      <SButton v-if="create" size="sm" variant="primary" icon="plus" class="ml-auto" :to="create.path" data-testid="table-create">
+        {{ create.label }}
       </SButton>
     </div>
     <STable :columns="columns" :rows="visible" :loading="loading">
