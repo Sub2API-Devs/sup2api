@@ -24,10 +24,14 @@ type executeTestPlatform struct {
 	beforeRecord func()
 	afterRecord  func(context.Context, core.ExecutionCallbacks, *pluginv1.ForwardUpstreamResponse) error
 	calls        atomic.Int64
+	deadline     atomic.Value // time.Time of the Execute context
 }
 
 func (p *executeTestPlatform) Execute(ctx context.Context, in *pluginv1.ExecuteRequest, cb core.ExecutionCallbacks) (*pluginv1.ExecuteResponse, error) {
 	p.calls.Add(1)
+	if d, ok := ctx.Deadline(); ok {
+		p.deadline.Store(d)
+	}
 	built, err := p.BuildUpstreamRequest(ctx, in.Request)
 	if err != nil {
 		return nil, err
@@ -107,6 +111,17 @@ func TestFailurePolicyExecuteNeverInvokesPluginClassifier(t *testing.T) {
 	require.Equal(t, int64(2), p.calls.Load())
 	require.Equal(t, []string{"acc-1", "acc-2"}, e.up.keys())
 	require.Empty(t, e.plat.classify)
+}
+
+// The Execute RPC outlives the longest relay_timeout_seconds an attempt may use.
+func TestExecuteCapFollowsRelayTimeout(t *testing.T) {
+	db := testutil.DB(t)
+	bill := billing.New(db, nil, nil, nil, nil)
+	e, p := executeFixture(t, usage.New(db, bill, bill, nil, usage.Options{}))
+	e.gw.d.Environment = fakeEnvironment{global: core.EnvironmentValues{core.EnvVarRelayTimeoutSeconds: 86400}}
+	start := time.Now()
+	require.Equal(t, 200, e.messages(body(testModel, false)).status)
+	require.WithinDuration(t, start.Add(30*time.Hour), p.deadline.Load().(time.Time), time.Minute)
 }
 
 func TestExecuteGatewayRecordBeforePublishAndAbortUnconfirmedSSE(t *testing.T) {

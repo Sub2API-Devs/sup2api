@@ -2,10 +2,14 @@ package gateway
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -319,4 +323,36 @@ func TestStickyRuleProtocolValidation(t *testing.T) {
 		!strings.Contains(res.Raw, "anthropic.mesages") {
 		t.Fatalf("patch adding an unknown protocol: %d %s", code, res.Raw)
 	}
+}
+
+// RequestMeta names the endpoint and the sticky session: hooks (which run
+// before the binding is read) and the upstream build see the same opaque
+// fingerprint, the hash of the sticky key, never the client's session value.
+func TestRequestMetaEndpointAndSessionFingerprint(t *testing.T) {
+	e := newEnv(t)
+	e.enableSticky(onFailureFailover)
+	h := &fakeHook{}
+	e.addHook(guardHook(300, "open"), []string{"model", "prompt_text"}, h)
+	fingerprint := func(session string) string {
+		sum := sha256.Sum256([]byte(stickyKey(e.gw.rules.override[0], testGroup, testModel, session)))
+		return hex.EncodeToString(sum[:])
+	}
+	for _, session := range []string{"session-a", "session-a", "session-b"} {
+		r := e.messages(withSession(body(testModel, false), session))
+		require.Equal(t, 200, r.status, string(r.body))
+		e.record()
+		hook := h.calls[len(h.calls)-1].GetMeta()
+		e.plat.mu.Lock()
+		build := e.plat.builds[len(e.plat.builds)-1].GetMeta()
+		e.plat.mu.Unlock()
+		for _, m := range []*pluginv1.RequestMeta{hook, build} {
+			assert.Equal(t, "/v1/messages", m.GetEndpoint())
+			assert.Equal(t, fingerprint(session), m.GetSessionFingerprint())
+		}
+	}
+	// No session value, no fingerprint.
+	r := e.messages(body(testModel, false))
+	require.Equal(t, 200, r.status, string(r.body))
+	e.record()
+	assert.Empty(t, h.calls[len(h.calls)-1].GetMeta().GetSessionFingerprint())
 }

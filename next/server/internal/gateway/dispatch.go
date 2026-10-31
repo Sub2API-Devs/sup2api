@@ -552,14 +552,11 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	}
 
 	// Send. Canceling ctx (client gone) cancels the upstream request.
-	uctx, ucancel := context.WithCancel(ctx)
-	defer ucancel()
-	var relayTimedOut atomic.Bool
+	// The cause names the timeout that cut the request (forward records it).
+	uctx, ucancel := context.WithCancelCause(ctx)
+	defer ucancel(nil)
 	if total := c.env.Duration(core.EnvVarRelayTimeoutSeconds); total > 0 {
-		relayTimer := time.AfterFunc(total, func() {
-			relayTimedOut.Store(true)
-			ucancel()
-		})
+		relayTimer := time.AfterFunc(total, func() { ucancel(errRelayTimeout) })
 		defer relayTimer.Stop()
 	}
 	method := strings.ToUpper(built.GetMethod())
@@ -633,7 +630,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if d := c.env.Duration(core.EnvVarResponseHeaderTimeoutSeconds); d > 0 {
 		headerWait = d
 	}
-	timer := time.AfterFunc(headerWait, ucancel)
+	timer := time.AfterFunc(headerWait, func() { ucancel(nil) })
 	if execution != nil {
 		execution.sent = true
 	}
@@ -658,8 +655,8 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		}
 		msg := err.Error()
 		switch {
-		case relayTimedOut.Load():
-			msg = "upstream request exceeded relay_timeout_seconds"
+		case context.Cause(uctx) == errRelayTimeout:
+			msg = errRelayTimeout.Error()
 		case headerTimedOut:
 			msg = "timeout waiting for upstream response headers"
 		}

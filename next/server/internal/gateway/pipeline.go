@@ -113,6 +113,9 @@ type call struct {
 	metaPathParams map[string]string
 	metaQuery      map[string]string
 	metaMapsDone   bool
+	// sessionFP is RequestMeta.session_fingerprint, derived before the hooks
+	// run (sessionFingerprint).
+	sessionFP string
 
 	// modelResolved marks that ResolveModel already answered for the current
 	// body (endpoints with request.modelSource "plugin" only). setBody clears
@@ -234,6 +237,7 @@ func (c *call) run(ctx context.Context) {
 	}
 
 	// 4. Hooks (may deny or patch the body).
+	c.sessionFP = c.sessionFingerprint(ctx)
 	if e := c.runHooks(ctx); e != nil {
 		c.fail(e)
 		return
@@ -324,16 +328,14 @@ func (c *call) newRecord() *core.UsageRecord {
 	}
 }
 
-// bodyLimit is the largest client request body (or WebSocket message):
-// max_request_body_mb, else what the endpoint declares, else the default.
+// bodyLimit is the largest client request body (or WebSocket message): what
+// the endpoint declares, else the default; max_request_body_mb only raises it.
 func (c *call) bodyLimit() int64 {
-	if env := c.environment(nil).Bytes(core.EnvVarMaxRequestBodyMB); env > 0 {
-		return env
-	}
+	limit := int64(defaultMaxBodyBytes)
 	if c.ep.Request.MaxBodyBytes > 0 {
-		return c.ep.Request.MaxBodyBytes
+		limit = c.ep.Request.MaxBodyBytes
 	}
-	return defaultMaxBodyBytes
+	return max(limit, c.environment(nil).Bytes(core.EnvVarMaxRequestBodyMB))
 }
 
 func (c *call) readBody() *gwError {
@@ -589,6 +591,7 @@ func (c *call) meta() *pluginv1.RequestMeta {
 		RequestId: c.rid, Protocol: c.ep.Protocol, ClientProtocol: c.ep.Protocol,
 		Model: c.model, Stream: c.stream, ClientIp: c.c.ClientIP(),
 		PathParams: c.metaPathParams, Query: c.metaQuery,
+		Endpoint: c.ep.Path, SessionFingerprint: c.sessionFP,
 	}
 	if p := c.principal; p != nil {
 		m.UserId, m.ApiKeyId, m.GroupId = p.UserID, p.KeyID, p.Group.ID

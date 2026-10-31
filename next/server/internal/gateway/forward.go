@@ -117,6 +117,11 @@ func (c *call) forward(ctx context.Context, rt *typeRoute, acct *pluginv1.Accoun
 		c.rec.StatusCode = statusClientClosed
 		c.rec.ErrorMessage = "client canceled"
 	default:
+		// The client is still here: a timeout that canceled the upstream
+		// request names itself (dispatch.go cancels it with a cause).
+		if cause := context.Cause(resp.Request.Context()); cause != nil {
+			err = cause
+		}
 		c.rec.Success = false
 		c.rec.ErrorType = errTypeUpstream
 		c.rec.ErrorMessage = truncateUTF8("upstream stream interrupted: "+err.Error(), 1000)

@@ -41,11 +41,46 @@ func TestEnvironmentReachesBuildMeta(t *testing.T) {
 	require.Equal(t, map[string]int64{core.EnvVarTaskPollMaxFailures: 10, core.EnvVarRelayTimeoutSeconds: 90}, meta.GetEnvironment())
 }
 
-func TestEnvironmentRequestBodyLimitFromGroup(t *testing.T) {
+// max_request_body_mb only raises the endpoint's own limit, never lowers it.
+func TestEnvironmentRequestBodyLimitOnlyRaises(t *testing.T) {
 	e := newEnv(t, withEnvironment(nil, core.EnvironmentValues{core.EnvVarMaxRequestBodyMB: 1}))
-	big := `{"model":"` + testModel + `","max_tokens":16,"messages":[{"role":"user","content":"` + strings.Repeat("x", 1<<20) + `"}]}`
+	big := body(testModel, false, "pad", strings.Repeat("x", 1<<20))
 	r := e.messages(big)
+	require.Equal(t, 200, r.status, "1 MB must not lower the 32 MB default: %s", r.body)
+	e.record()
+
+	e.gen.endpoints[0].Endpoint.Request.MaxBodyBytes = 64
+	e.gw.table.Store(buildRouteTable(e.gen))
+	r = e.messages(body(testModel, false, "pad", strings.Repeat("x", 200)))
+	require.Equal(t, 200, r.status, "1 MB raises the endpoint's 64 bytes")
+	e.record()
+	r = e.messages(big)
 	require.Equal(t, 413, r.status)
+}
+
+// A timeout that cuts a stream mid-way is named in the usage record.
+func TestEnvironmentTimeoutCutsStreamAndNamesIt(t *testing.T) {
+	for _, tc := range []struct {
+		key   string
+		cause error
+	}{
+		{core.EnvVarRelayTimeoutSeconds, errRelayTimeout},
+		{core.EnvVarStreamingIdleTimeoutSeconds, errStreamIdleTimeout},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			e := newEnv(t, withEnvironment(core.EnvironmentValues{tc.key: 1}, nil))
+			hold := make(chan struct{})
+			defer close(hold)
+			e.up.set("acc-1", &upstreamRule{hold: hold})
+			start := time.Now()
+			e.messages(body(testModel, true))
+			rec := e.record()
+			require.Less(t, time.Since(start), 5*time.Second)
+			require.False(t, rec.Success)
+			require.Equal(t, "upstream stream interrupted: "+tc.cause.Error(), rec.ErrorMessage)
+			require.Contains(t, rec.ErrorMessage, tc.key)
+		})
+	}
 }
 
 func TestEnvironmentResponseHeaderTimeout(t *testing.T) {

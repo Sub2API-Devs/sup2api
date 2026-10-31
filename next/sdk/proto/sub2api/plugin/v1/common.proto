@@ -178,6 +178,16 @@ message RequestMeta {
   // execute, classify, usage extraction); a missing key means the plugin's
   // own default.
   map<string, int64> environment = 12;
+  // Path pattern of the matched client-facing endpoint, e.g. "/v1/messages"
+  // or "/v1beta/models/:model:generateContent" - the endpoint the usage log
+  // records. Set on every request.
+  string endpoint = 13;
+  // Opaque id of the request's sticky session (CONTRACTS §25.1): hex SHA-256
+  // of the sticky key the first matching rule derives (the raw session value
+  // never leaves the core), so requests of one session share it. Derived
+  // once, before the gateway.request hooks run. Empty when no rule yields a
+  // session value.
+  string session_fingerprint = 14;
 }
 
 // FieldError reports a validation problem on one input field.

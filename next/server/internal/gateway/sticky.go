@@ -324,36 +324,55 @@ func (c *call) resolveSticky(ctx context.Context) *stickySession {
 		}
 		return nil
 	}
+	r, key := c.stickyMatch(ctx)
+	if r == nil {
+		return nil
+	}
+	ttl := r.TTLSeconds
+	if ttl <= 0 {
+		ttl = c.stickyCfg.DefaultTTLSeconds
+	}
+	s := &stickySession{rule: r, key: key, ttl: time.Duration(ttl) * time.Second, keep: c.stickyCfg.KeepOnAccountDisabled}
+	if c.failurePolicy != nil {
+		c.failureState.stickyErr = c.readPolicyBinding(ctx, s)
+		return s
+	}
+	rctx, cancel := context.WithTimeout(ctx, stickyRedisTimeout)
+	raw, err := g.d.Redis.Get(rctx, s.key).Result()
+	cancel()
+	if err == nil {
+		s.bound, _ = strconv.ParseInt(raw, 10, 64)
+		s.policyValue = raw
+		s.initialBound = s.bound
+	}
+	return s
+}
+
+// stickyMatch returns the first rule that matches the request and yields a
+// session value, with the binding key it derives; nil when none does.
+func (c *call) stickyMatch(ctx context.Context) (*stickyRule, string) {
 	ua := c.c.Request.UserAgent()
-	for _, r := range g.rules.get(ctx) {
+	for _, r := range c.g.rules.get(ctx) {
 		if !r.matches(c.ep.Protocol, c.model, ua) {
 			continue
 		}
-		v := c.stickyValue(ctx, r)
-		if v == "" {
-			continue
+		if v := c.stickyValue(ctx, r); v != "" {
+			return r, stickyKey(r, c.principal.Group.ID, c.model, v)
 		}
-		ttl := r.TTLSeconds
-		if ttl <= 0 {
-			ttl = c.stickyCfg.DefaultTTLSeconds
-		}
-		s := &stickySession{rule: r, key: stickyKey(r, c.principal.Group.ID, c.model, v),
-			ttl: time.Duration(ttl) * time.Second, keep: c.stickyCfg.KeepOnAccountDisabled}
-		if c.failurePolicy != nil {
-			c.failureState.stickyErr = c.readPolicyBinding(ctx, s)
-			return s
-		}
-		rctx, cancel := context.WithTimeout(ctx, stickyRedisTimeout)
-		raw, err := g.d.Redis.Get(rctx, s.key).Result()
-		cancel()
-		if err == nil {
-			s.bound, _ = strconv.ParseInt(raw, 10, 64)
-			s.policyValue = raw
-			s.initialBound = s.bound
-		}
-		return s
 	}
-	return nil
+	return nil, ""
+}
+
+// sessionFingerprint is RequestMeta.session_fingerprint: the SHA-256 of the
+// request's sticky key, so plugins can tell sessions apart without seeing the
+// client's session value. Empty when no rule yields a session value.
+func (c *call) sessionFingerprint(ctx context.Context) string {
+	_, key := c.stickyMatch(ctx)
+	if key == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:])
 }
 
 func (c *call) stickyValue(ctx context.Context, r *stickyRule) string {

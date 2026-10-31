@@ -1,6 +1,8 @@
 package gateway
 
 import (
+	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -23,6 +25,13 @@ func (c *call) environment(ref *core.AccountRef) core.Environment {
 	return core.ResolveEnvironment(global, group, account)
 }
 
+// The causes an upstream request is canceled with when an environment
+// timeout fires, so the usage record names the setting.
+var (
+	errRelayTimeout      = errors.New("upstream request exceeded relay_timeout_seconds")
+	errStreamIdleTimeout = errors.New("upstream stream exceeded streaming_idle_timeout_seconds")
+)
+
 // idleBody cancels the upstream request when a streamed response delivers
 // nothing for the idle timeout (streaming_idle_timeout_seconds). Each read
 // that returns re-arms the timer.
@@ -32,8 +41,8 @@ type idleBody struct {
 	idle  time.Duration
 }
 
-func newIdleBody(body io.ReadCloser, idle time.Duration, cancel func()) *idleBody {
-	return &idleBody{ReadCloser: body, idle: idle, timer: time.AfterFunc(idle, cancel)}
+func newIdleBody(body io.ReadCloser, idle time.Duration, cancel context.CancelCauseFunc) *idleBody {
+	return &idleBody{ReadCloser: body, idle: idle, timer: time.AfterFunc(idle, func() { cancel(errStreamIdleTimeout) })}
 }
 
 func (b *idleBody) Read(p []byte) (int, error) {

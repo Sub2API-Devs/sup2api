@@ -77,7 +77,9 @@ func (c *call) executeAttempt(ctx context.Context, rt *typeRoute, acc *core.Acco
 	}()
 	// The RPC may finish accounting after client cancellation. The network
 	// capability still uses the original client + account-lease context.
-	ectx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 6*time.Hour)
+	// The cap leaves the plugin 6 h beyond any relay_timeout_seconds the
+	// upstream attempt may take.
+	ectx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 6*time.Hour+c.env.Duration(core.EnvVarRelayTimeoutSeconds))
 	defer cancel()
 	callbacks := core.ExecutionCallbacks{PrepareTimeout: c.gw.platformTimeout(), FinishTimeout: 15 * time.Second, Forward: x.forwardCallback, Record: x.record, Watch: x.watch}
 	out, err := rt.binding.Client.(core.ExecutePlugin).Execute(ectx, &pluginv1.ExecuteRequest{Request: request}, callbacks)

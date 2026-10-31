@@ -354,6 +354,7 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 			releaseKey()
 		}
 	}()
+	cl.sessionFP = cl.sessionFingerprint(ctx)
 	if e := cl.runHooks(ctx); e != nil {
 		return reject(cl, e)
 	}

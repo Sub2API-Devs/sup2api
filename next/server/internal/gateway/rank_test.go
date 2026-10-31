@@ -11,6 +11,8 @@ import (
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // fakeRanker is a plugin declaring scheduler.rank: fn decides what it
@@ -199,12 +201,13 @@ func TestRankWeightChangesTheDraw(t *testing.T) {
 	}
 }
 
-// weight 0 takes the account out of this request; the others still serve it.
+// weight 0 takes the account out of this request when its priority has a
+// non-zero peer; the others still serve it.
 func TestRankWeightZeroExcludesAccount(t *testing.T) {
 	e := newEnv(t)
 	e.addRanker("guard", manifest.SchedulerRank{}, &fakeRanker{
 		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
-			return []*pluginv1.RankedAccount{rank(1, 1, 0)}, nil
+			return []*pluginv1.RankedAccount{rank(1, 50, 0)}, nil
 		}})
 	if r := e.messages(body(testModel, false)); r.status != 200 {
 		t.Fatalf("status %d %s", r.status, r.body)
@@ -222,6 +225,27 @@ func TestRankWeightZeroExcludesAccount(t *testing.T) {
 	e.record()
 	if k := e.up.keys(); k[len(k)-1] != "acc-1" {
 		t.Fatalf("after ranking: %v, want acc-1 back", k)
+	}
+}
+
+// A priority whose accounts are all at weight 0 is split evenly among them,
+// never skipped in favour of the next priority.
+func TestRankWeightZeroPrioritySplitsEvenly(t *testing.T) {
+	e := newEnv(t)
+	e.addRanker("guard", manifest.SchedulerRank{}, &fakeRanker{
+		fn: func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
+			return []*pluginv1.RankedAccount{rank(1, 1, 0), rank(2, 1, 0)}, nil
+		}})
+	for _, tc := range []struct {
+		rnd  float64
+		want string
+	}{{0.4, "acc-1"}, {0.6, "acc-2"}} {
+		e.gw.randFloat = func() float64 { return tc.rnd }
+		r := e.messages(body(testModel, false))
+		require.Equal(t, 200, r.status, r.body)
+		e.record()
+		k := e.up.keys()
+		assert.Equal(t, tc.want, k[len(k)-1], "rnd %v", tc.rnd)
 	}
 }
 
