@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { httpErrorFrame, localErrorFrame, encodeErrorFrame, errorPrefix, maxErrorBody, policyDeniedFrame } from '../request-error.js';
+import { httpErrorFrame, localErrorFrame, encodeErrorFrame, errorPrefix, maxErrorBody, policyDeniedFrame, LoginRequiredError } from '../request-error.js';
 
 test('HTTP error frame preserves status, provider code, JSON bytes and safe headers', () => {
   const body = '{ "type":"error", "error":{"type":"rate_limit_error","code":"provider_quota","message":"line1\\nline2"},"request_id":"r" }\n';
@@ -122,4 +122,29 @@ test('interruption keeps the type consistent with its 502 status', () => {
 test('a policy refusal is a 403 input frame', () => {
   const frame = '{"protocol":"ccgateway.request.error.v1","source":"input","status":403,"error":{"type":"permission_error","code":"cli_policy_denied","message":"CC policy denied this request"}}';
   assert.equal(encodeErrorFrame(policyDeniedFrame()), `${errorPrefix}${frame}\n`);
+});
+
+// CC's own login refusals are the account's verdict: 401 (403 for an account
+// on hold) with CC's exact message, never a 502 transport failure (2026-11-01).
+test('login errors become authentication errors with the native message', () => {
+  class OAuthRefreshDead extends Error { constructor() { super('OAuth refresh token is no longer valid; run /login to re-authenticate'); this.name = 'OAuthRefreshDeadError'; } }
+  class OnHold extends Error { constructor() { super('OAuth account is on hold'); this.name = 'OAuthAccountOnHoldError'; } }
+  for (const phase of ['transport', 'build', 'input', undefined]) {
+    const frame = localErrorFrame(new OAuthRefreshDead(), { phase });
+    assert.deepEqual([frame.status, frame.error.type, frame.error.code, frame.error.message],
+      [401, 'authentication_error', 'oauth_refresh_dead', 'OAuth refresh token is no longer valid; run /login to re-authenticate']);
+    assert.equal(frame.source, phase === 'build' || phase === 'input' ? 'input' : 'transport');
+  }
+  const wrapped = localErrorFrame(Object.assign(new Error('request failed'), { cause: new OAuthRefreshDead() }), { phase: 'transport' });
+  assert.deepEqual([wrapped.status, wrapped.error.message], [401, 'OAuth refresh token is no longer valid; run /login to re-authenticate']);
+  const hold = localErrorFrame(new OnHold(), { phase: 'transport' });
+  assert.deepEqual([hold.status, hold.error.type, hold.error.code, hold.error.message], [403, 'permission_error', 'oauth_account_on_hold', 'OAuth account is on hold']);
+  const signedOut = localErrorFrame(new LoginRequiredError('CC did not provide OAuth authentication; sign in or configure ANTHROPIC_API_KEY'), { phase: 'transport' });
+  assert.deepEqual([signedOut.status, signedOut.error.type, signedOut.error.code, signedOut.error.message],
+    [401, 'authentication_error', 'not_logged_in', 'CC did not provide OAuth authentication; sign in or configure ANTHROPIC_API_KEY']);
+  // A login error wins over a timeout or interruption flag: the request never left.
+  assert.equal(localErrorFrame(new OAuthRefreshDead(), { phase: 'transport', timedOut: true }).status, 401);
+  // Lock contention is not a dead login: still a transport failure.
+  const lock = Object.assign(new Error('OAuth access token could not be refreshed: another Claude Code process is holding the refresh lock'), { name: 'OAuthRefreshLockTimeoutError' });
+  assert.equal(localErrorFrame(lock, { phase: 'transport' }).status, 502);
 });

@@ -1,7 +1,7 @@
 {
   "binarySHA256": "4f4178ce41d83e23341ebfbaecdbcf8ea6bf7baea0690025abe49eeec3a5d01d",
   "version": "2.1.312",
-  "extension": "ccgateway-v38-cc-2-1-312",
+  "extension": "ccgateway-v41-login-401",
   "bunVersion": "1.4.4",
   "capabilities": [
     "request_direct",

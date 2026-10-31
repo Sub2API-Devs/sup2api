@@ -1,3 +1,5 @@
+import { LoginRequiredError } from './request-error.js';
+
 // The request's protocol headers: its version and the betas Claude Code writes
 // for it, set over the headers CC built at the transport boundary. The list is
 // already final (request-betas.js); this module only validates and writes it.
@@ -40,7 +42,7 @@ export function authenticatedRequestHeaders(nativeHeaders, policy) {
   if (policy.apiKey) return apiKeyRequestHeaders(nativeHeaders, policy);
   const headers = new Headers(nativeHeaders);
   if (!/^Bearer \S+$/i.test(headers.get('authorization') ?? '') || headers.has('x-api-key')) {
-    throw Error('CC did not provide OAuth authentication; sign in or configure ANTHROPIC_API_KEY');
+    throw new LoginRequiredError('CC did not provide OAuth authentication; sign in or configure ANTHROPIC_API_KEY');
   }
   return setProtocolHeaders(headers, normalizeBetas(policy.betas), policy.version ?? '2023-06-01');
 }

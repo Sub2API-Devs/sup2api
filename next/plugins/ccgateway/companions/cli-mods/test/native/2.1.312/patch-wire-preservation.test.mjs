@@ -237,9 +237,10 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  // The 2.1.312 profile names its patch ccgateway-v38-cc-2-1-312 (2.1.310:
-  // ccgateway-v39-session-state; 2.1.304: ccgateway-v40-session-state).
-  assert.equal(patchManifest.extension, 'ccgateway-v38-cc-2-1-312');
+  // The 2.1.312 profile names its patch ccgateway-v41-login-401 (v38 before CC's
+  // login refusals became 401s; 2.1.310: ccgateway-v39-session-state; 2.1.304:
+  // ccgateway-v40-session-state).
+  assert.equal(patchManifest.extension, 'ccgateway-v41-login-401');
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_capture_v1'));
   assert(patchManifest.capabilities.includes('request_levels_v1'));

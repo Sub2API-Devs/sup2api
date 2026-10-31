@@ -147,3 +147,26 @@ func TestRateLimitRetryAfterClassification(t *testing.T) {
 		})
 	}
 }
+
+// CC refusing to send without a usable login (the CLI's 401/403 frame,
+// source input or transport) disables the account like an upstream 401: it
+// needs a new authorization (2026-11-01).
+func TestCLILoginRefusalDisables(t *testing.T) {
+	for _, tc := range []struct {
+		source string
+		status int32
+		body   string
+	}{
+		{"transport", 401, `{"type":"error","error":{"type":"authentication_error","code":"oauth_refresh_dead","message":"OAuth refresh token is no longer valid; run /login to re-authenticate"}}`},
+		{"input", 401, `{"type":"error","error":{"type":"authentication_error","code":"not_logged_in","message":"CC did not provide OAuth authentication; sign in or configure ANTHROPIC_API_KEY"}}`},
+		{"transport", 403, `{"type":"error","error":{"type":"permission_error","code":"oauth_account_on_hold","message":"OAuth account is on hold"}}`},
+	} {
+		out, err := New().ClassifyError(context.Background(), &pluginv1.ClassifyErrorRequest{Status: tc.status, BodyPrefix: []byte(tc.body),
+			Headers: map[string]string{"x-ccgateway-error-source": tc.source}, Account: &pluginv1.Account{Type: AccountTypeManaged}})
+		require.NoError(t, err)
+		require.Equal(t, pluginv1.ClassifyErrorResponse_ACTION_FAILOVER, out.GetAction(), tc.body)
+		require.Equal(t, pluginv1.ClassifyErrorResponse_ACCOUNT_EFFECT_DISABLE, out.GetAccountEffect(), tc.body)
+		require.False(t, out.GetLocalFailure(), tc.body)
+		require.Empty(t, out.GetClientErrorType(), "CC's message reaches the client as written")
+	}
+}

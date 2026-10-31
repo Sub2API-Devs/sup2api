@@ -36,6 +36,14 @@ export function httpErrorFrame(response, body, truncated = false) {
 
 export function localErrorFrame(error, { phase, timedOut, interrupted, responseStarted } = {}) {
   let source = 'transport', status = 502, type = 'api_error', code = 'cli_transport_error', message = 'CC request transport failed';
+  // CC refusing to send without a usable login is the account's verdict, as
+  // an upstream 401 would be: the account needs a new authorization, so it
+  // must not read as a transport failure the gateway retries (2026-11-01).
+  const login = loginFailure(error);
+  if (login) {
+    return { protocol: errorProtocol, source: phase === 'input' || phase === 'build' ? 'input' : 'transport', status: login.status,
+      error: { type: errorType(login.status), code: login.code, message: login.message }, responseStarted: !!responseStarted };
+  }
   if (phase === 'input' || phase === 'build') {
     source = 'input'; status = 400; type = 'invalid_request_error'; code = 'cli_invalid_request';
     message = phase === 'build' ? 'CC could not build the request components' : 'Invalid CLI request input or options';
@@ -61,6 +69,39 @@ export function localErrorFrame(error, { phase, timedOut, interrupted, responseS
 
 export function encodeErrorFrame(frame) {
   return errorPrefix + JSON.stringify(frame) + '\n';
+}
+
+// CC's login errors by class name (the names are literals in CC's build, so
+// they survive minification), with the status an upstream gives the same
+// verdict: a dead refresh token is an expired/revoked login (401); an account
+// on hold is the account's standing (403). Both disable the account
+// (ClassifyError); the message is CC's own, unchanged.
+const loginErrors = {
+  OAuthRefreshDeadError: { status: 401, code: 'oauth_refresh_dead' },
+  OAuthAccountOnHoldError: { status: 403, code: 'oauth_account_on_hold' },
+};
+
+// LoginRequiredError is the request command's own refusal to send without
+// CC's OAuth login (request-headers.js): the runtime is signed out.
+export class LoginRequiredError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'LoginRequiredError';
+    this.code = 'not_logged_in';
+  }
+}
+
+// loginFailure finds a login error in error or its causes.
+export function loginFailure(error) {
+  for (let e = error, depth = 0; e && typeof e === 'object' && depth < 4; e = e.cause, depth++) {
+    const message = typeof e.message === 'string' && e.message ? e.message : undefined;
+    if (e instanceof LoginRequiredError || e.name === 'LoginRequiredError') {
+      return { status: 401, code: 'not_logged_in', message: message ?? 'Claude Code is not signed in' };
+    }
+    const known = Object.hasOwn(loginErrors, e.name) ? loginErrors[e.name] : undefined;
+    if (known) return { ...known, message: message ?? e.name };
+  }
+  return undefined;
 }
 
 // policyDeniedFrame is the frame for a request CC's own fast-path policy refuses.

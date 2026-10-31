@@ -525,9 +525,10 @@ func (c *cliRun) writeOutcome(w http.ResponseWriter, d *requestDiagnostic, env [
 		}
 		c.fail(w, d, frame)
 	case frame != nil && c.err != nil:
-		if frame.Source == requestfailure.SourceHTTP && frame.Status == http.StatusUnauthorized {
+		if frame.Status == http.StatusUnauthorized {
 			// The usage query reports the stored token unusable until it
-			// changes (usage.go).
+			// changes (usage.go): Anthropic refused it, or CC found its
+			// refresh token dead before sending (2026-11-01).
 			noteAuthenticationRefused(env)
 		}
 		c.fail(w, d, frame)
