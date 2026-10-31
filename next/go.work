@@ -10,6 +10,7 @@ use (
 	./plugins/ccgateway/companions/contracts
 	./plugins/ccgateway/companions/worker
 	./plugins/claude-oauth
+	./plugins/dynweight
 	./plugins/gemini
 	./plugins/growth
 	./plugins/guard

@@ -189,11 +189,13 @@ ls -l "$OUT/market"
 # a local/SSH Claude Code gateway, then enables its managed account type.
 # mailer is install-only: it provides the "email" notification channel
 # (CONTRACTS §73.4) and does nothing until an operator sets its SMTP server.
+# dynweight is install-only: once enabled it is called on every scheduled
+# request, so it is enabled on purpose (CONTRACTS §73.5).
 #
 # Intentionally NOT built in: relay (a market-only account type), guard (an
 # optional gateway hook).
 BUILTIN_PLUGINS=${BUILTIN_PLUGINS:-anthropic openai gemini moderation}
-BUILTIN_PLUGINS_INSTALL_ONLY=${BUILTIN_PLUGINS_INSTALL_ONLY:-volcengine ccgateway mailer}
+BUILTIN_PLUGINS_INSTALL_ONLY=${BUILTIN_PLUGINS_INSTALL_ONLY:-volcengine ccgateway mailer dynweight}
 for name in $BUILTIN_PLUGINS_INSTALL_ONLY; do
   case " $BUILTIN_PLUGINS " in
     *" $name "*)

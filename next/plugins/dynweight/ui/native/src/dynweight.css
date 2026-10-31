@@ -1,0 +1,139 @@
+/*
+ * Dynweight plugin styles (CONTRACTS §23.4). Controls come from @sub2api/ui;
+ * only layout lives in these dw- prefixed classes. Colours are the console's
+ * semantic variables, which follow the light/dark theme.
+ */
+
+.dw-block {
+  margin-bottom: 1rem;
+}
+.dw-section {
+  margin-top: 1rem;
+}
+.dw-hint {
+  margin: 0 0 1rem;
+}
+.dw-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.dw-num {
+  font-variant-numeric: tabular-nums;
+}
+.dw-sub {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  color: rgb(var(--fg-subtle));
+}
+.dw-ml {
+  margin-left: 0.25rem;
+}
+.dw-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.dw-pager {
+  padding: 0 1rem;
+}
+
+/* filters */
+.dw-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+.dw-filter {
+  display: flex;
+  flex-direction: column;
+  width: 9.5rem;
+  min-width: 0;
+}
+.dw-filter-wide {
+  flex: 1 1 14rem;
+  width: auto;
+}
+.dw-filter-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-self: flex-end;
+}
+
+/* editors */
+.dw-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.dw-layer,
+.dw-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.dw-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid rgb(var(--line));
+  border-radius: 0.5rem;
+}
+.dw-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+}
+.dw-cond {
+  align-items: center;
+}
+.dw-grow {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.dw-end {
+  margin-left: auto;
+}
+.dw-w-6 {
+  width: 6rem;
+}
+.dw-w-8 {
+  width: 8rem;
+}
+.dw-w-10 {
+  width: 10rem;
+}
+.dw-w-12 {
+  width: 12rem;
+}
+.dw-when,
+.dw-when-members {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.dw-when-members {
+  padding-left: 1rem;
+  border-left: 2px solid rgb(var(--line));
+}
+.dw-when-nested {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .dw-filter {
+    width: calc(50% - 0.375rem);
+  }
+  .dw-filter-wide,
+  .dw-grow {
+    flex-basis: 100%;
+  }
+}

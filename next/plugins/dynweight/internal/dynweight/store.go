@@ -1,0 +1,371 @@
+package dynweight
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/dynweight/internal/rules"
+)
+
+// key identifies the state of an (account, group, client model).
+type key struct {
+	AccountID int64
+	GroupID   int64
+	Model     string
+}
+
+// store is the plugin schema.
+type store struct{ db *pgxpool.Pool }
+
+var errVersionConflict = errors.New("the configuration was changed meanwhile")
+
+// loadConfig reads the configuration; version 0 means the default.
+func (s store) loadConfig(ctx context.Context) (rules.Config, int64, error) {
+	var raw []byte
+	var version int64
+	err := s.db.QueryRow(ctx, `SELECT doc, version FROM config WHERE id = 1`).Scan(&raw, &version)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return rules.DefaultConfig(), 0, nil
+	}
+	if err != nil {
+		return rules.Config{}, 0, err
+	}
+	var c rules.Config
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return rules.Config{}, 0, fmt.Errorf("stored configuration: %w", err)
+	}
+	return c, version, nil
+}
+
+// saveConfig stores a normalized configuration if version is still the
+// stored one, and returns the new version.
+func (s store) saveConfig(ctx context.Context, c rules.Config, version, userID int64) (int64, error) {
+	raw, err := json.Marshal(c)
+	if err != nil {
+		return 0, err
+	}
+	tag, err := s.db.Exec(ctx, `INSERT INTO config (id, doc, version, updated_by) VALUES (1, $1, $2 + 1, $3)
+		ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc, version = EXCLUDED.version, updated_at = now(), updated_by = EXCLUDED.updated_by
+		WHERE config.version = $2`, raw, version, userID)
+	if err != nil {
+		return 0, err
+	}
+	if tag.RowsAffected() == 0 {
+		return 0, errVersionConflict
+	}
+	return version + 1, nil
+}
+
+func (s store) configVersion(ctx context.Context) (int64, error) {
+	var v int64
+	err := s.db.QueryRow(ctx, `SELECT version FROM config WHERE id = 1`).Scan(&v)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, nil
+	}
+	return v, err
+}
+
+// obsDelta is counters to add to a key's window.
+type obsDelta struct {
+	key
+	window int64
+	counts rules.Counts
+}
+
+// addObs adds counters; every node adds its own, so the fields are summed.
+func (s store) addObs(ctx context.Context, deltas []obsDelta) error {
+	b := &pgx.Batch{}
+	for _, d := range deltas {
+		fields, err := json.Marshal(d.counts.Fields())
+		if err != nil {
+			return err
+		}
+		b.Queue(`INSERT INTO obs (account_id, group_id, model, window_start, counts) VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (account_id, group_id, model, window_start) DO UPDATE SET counts = (
+				SELECT jsonb_object_agg(f, COALESCE((obs.counts->>f)::bigint, 0) + COALESCE((EXCLUDED.counts->>f)::bigint, 0))
+				FROM (SELECT jsonb_object_keys(obs.counts) UNION SELECT jsonb_object_keys(EXCLUDED.counts)) AS u(f))`,
+			d.AccountID, d.GroupID, d.Model, d.window, fields)
+	}
+	return s.db.SendBatch(ctx, b).Close()
+}
+
+// loadObs reads the counters of the windows from since on, by key and
+// window start.
+func (s store) loadObs(ctx context.Context, since int64) (map[key]map[int64]rules.Counts, error) {
+	rows, err := s.db.Query(ctx, `SELECT account_id, group_id, model, window_start, counts FROM obs WHERE window_start >= $1`, since)
+	if err != nil {
+		return nil, err
+	}
+	out := map[key]map[int64]rules.Counts{}
+	var k key
+	var window int64
+	var fields map[string]int64
+	_, err = pgx.ForEachRow(rows, []any{&k.AccountID, &k.GroupID, &k.Model, &window, &fields}, func() error {
+		if out[k] == nil {
+			out[k] = map[int64]rules.Counts{}
+		}
+		out[k][window] = rules.CountsOf(fields)
+		fields = nil
+		return nil
+	})
+	return out, err
+}
+
+// stateRow is a stored state with the generation it was read at.
+type stateRow struct {
+	rules.State
+	gen int64
+}
+
+// loadStates reads states, all of them or those matching filter.
+func (s store) loadStates(ctx context.Context, f filter) (map[key]stateRow, error) {
+	where, args := f.where()
+	rows, err := s.db.Query(ctx, `SELECT account_id, group_id, model, data, gen FROM state`+where, args...)
+	if err != nil {
+		return nil, err
+	}
+	out := map[key]stateRow{}
+	var k key
+	var raw []byte
+	var gen int64
+	_, err = pgx.ForEachRow(rows, []any{&k.AccountID, &k.GroupID, &k.Model, &raw, &gen}, func() error {
+		var st rules.State
+		if err := json.Unmarshal(raw, &st); err != nil {
+			return fmt.Errorf("state %v: %w", k, err)
+		}
+		out[k] = stateRow{State: st, gen: gen}
+		return nil
+	})
+	return out, err
+}
+
+// writeState stores a state if the stored one is still at gen (0 = none
+// stored). It reports false when another writer got there first.
+func (s store) writeState(ctx context.Context, k key, st rules.State, gen int64) (bool, error) {
+	raw, err := json.Marshal(st)
+	if err != nil {
+		return false, err
+	}
+	var tag interface{ RowsAffected() int64 }
+	if gen == 0 {
+		tag, err = s.db.Exec(ctx, `INSERT INTO state (account_id, group_id, model, data, base, eff, tombstone, eval_window)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING`,
+			k.AccountID, k.GroupID, k.Model, raw, st.WeightBase, st.WeightEff, st.Tombstone, st.LastEvalWindow)
+	} else {
+		tag, err = s.db.Exec(ctx, `UPDATE state SET data = $4, base = $5, eff = $6, tombstone = $7, eval_window = $8, gen = gen + 1, updated_at = now()
+			WHERE account_id = $1 AND group_id = $2 AND model = $3 AND gen = $9`,
+			k.AccountID, k.GroupID, k.Model, raw, st.WeightBase, st.WeightEff, st.Tombstone, st.LastEvalWindow, gen)
+	}
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// tombstone resets a key whatever its generation.
+func (s store) tombstone(ctx context.Context, k key, window int64) error {
+	raw, err := json.Marshal(rules.Tombstone(window))
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(ctx, `INSERT INTO state (account_id, group_id, model, data, base, eff, tombstone, eval_window)
+		VALUES ($1, $2, $3, $4, 0, 0, true, $5)
+		ON CONFLICT (account_id, group_id, model) DO UPDATE SET data = EXCLUDED.data, base = 0, eff = 0, tombstone = true,
+			eval_window = EXCLUDED.eval_window, gen = state.gen + 1, updated_at = now()`,
+		k.AccountID, k.GroupID, k.Model, raw, window)
+	return err
+}
+
+// weight is the effective weight of a key that is not at its base.
+type weight struct {
+	base int
+	eff  float64
+}
+
+// loadWeights reads the keys whose effective weight is not their base:
+// everything scheduling needs.
+func (s store) loadWeights(ctx context.Context) (map[key]weight, error) {
+	rows, err := s.db.Query(ctx, `SELECT account_id, group_id, model, base, eff FROM state WHERE NOT tombstone AND eff <> base`)
+	if err != nil {
+		return nil, err
+	}
+	out := map[key]weight{}
+	var k key
+	var w weight
+	_, err = pgx.ForEachRow(rows, []any{&k.AccountID, &k.GroupID, &k.Model, &w.base, &w.eff}, func() error {
+		out[k] = w
+		return nil
+	})
+	return out, err
+}
+
+// base is the weight an account has in a group, as scheduling saw it.
+type base struct {
+	Weight int
+	Name   string
+	SeenAt time.Time
+}
+
+type pair struct{ AccountID, GroupID int64 }
+
+func (s store) loadBases(ctx context.Context) (map[pair]base, error) {
+	rows, err := s.db.Query(ctx, `SELECT account_id, group_id, weight, name, seen_at FROM bases`)
+	if err != nil {
+		return nil, err
+	}
+	out := map[pair]base{}
+	var p pair
+	var b base
+	_, err = pgx.ForEachRow(rows, []any{&p.AccountID, &p.GroupID, &b.Weight, &b.Name, &b.SeenAt}, func() error {
+		out[p] = b
+		return nil
+	})
+	return out, err
+}
+
+func (s store) saveBases(ctx context.Context, bases map[pair]base) error {
+	b := &pgx.Batch{}
+	for p, v := range bases {
+		b.Queue(`INSERT INTO bases (account_id, group_id, weight, name, seen_at) VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (account_id, group_id) DO UPDATE SET weight = EXCLUDED.weight, name = EXCLUDED.name, seen_at = EXCLUDED.seen_at`,
+			p.AccountID, p.GroupID, v.Weight, v.Name, v.SeenAt)
+	}
+	return s.db.SendBatch(ctx, b).Close()
+}
+
+// eventRow is an event of a key.
+type eventRow struct {
+	key
+	rules.Event
+	Detail map[string]any
+}
+
+func (s store) addEvents(ctx context.Context, events []eventRow) error {
+	b := &pgx.Batch{}
+	for _, e := range events {
+		detail := map[string]any{}
+		for k, v := range e.Detail {
+			detail[k] = v
+		}
+		if e.Window != nil {
+			detail["window"] = e.Window
+		}
+		raw, err := json.Marshal(detail)
+		if err != nil {
+			return err
+		}
+		names := e.Rules
+		if names == nil {
+			names = []string{}
+		}
+		b.Queue(`INSERT INTO events (account_id, group_id, model, kind, reason, weight_from, weight_to, rules, detail)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+			e.AccountID, e.GroupID, e.Model, e.Kind, e.Reason, e.From, e.To, names, raw)
+	}
+	return s.db.SendBatch(ctx, b).Close()
+}
+
+// keys lists the keys matching f with a state, or with counters from since on.
+func (s store) keys(ctx context.Context, f filter, since int64) ([]key, error) {
+	stateWhere, _ := f.where()
+	obsWhere, args := f.where(cond{"window_start >= $%d", since})
+	rows, err := s.db.Query(ctx, `SELECT account_id, group_id, model FROM state`+stateWhere+
+		` UNION SELECT account_id, group_id, model FROM obs`+obsWhere, args...)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (key, error) {
+		var k key
+		return k, r.Scan(&k.AccountID, &k.GroupID, &k.Model)
+	})
+}
+
+// listEvents pages the events matching f (and kind), newest first.
+func (s store) listEvents(ctx context.Context, f filter, kind string, limit, offset int) ([]eventItem, int64, error) {
+	var extra []cond
+	if kind != "" {
+		extra = append(extra, cond{"kind = $%d", kind})
+	}
+	where, args := f.where(extra...)
+	var total int64
+	if err := s.db.QueryRow(ctx, `SELECT count(*) FROM events`+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := s.db.Query(ctx, `SELECT id, created_at, account_id, group_id, model, kind, reason, weight_from, weight_to, rules, detail
+		FROM events`+where+fmt.Sprintf(" ORDER BY id DESC LIMIT %d OFFSET %d", limit, offset), args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	items, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (eventItem, error) {
+		var e eventItem
+		return e, r.Scan(&e.ID, &e.CreatedAt, &e.AccountID, &e.GroupID, &e.Model, &e.Kind, &e.Reason, &e.From, &e.To, &e.Rules, &e.Detail)
+	})
+	return items, total, err
+}
+
+// filter narrows states and events to an account, a group and a model
+// (zero values match everything).
+type filter struct {
+	AccountID int64  `json:"account_id"`
+	GroupID   int64  `json:"group_id"`
+	Model     string `json:"model"`
+}
+
+// cond is an SQL condition with one %d placeholder for its argument.
+type cond struct {
+	sql string
+	arg any
+}
+
+// where builds the WHERE clause of f and the extra conditions.
+func (f filter) where(extra ...cond) (string, []any) {
+	var conds []cond
+	if f.AccountID > 0 {
+		conds = append(conds, cond{"account_id = $%d", f.AccountID})
+	}
+	if f.GroupID > 0 {
+		conds = append(conds, cond{"group_id = $%d", f.GroupID})
+	}
+	if f.Model != "" {
+		conds = append(conds, cond{"model = $%d", f.Model})
+	}
+	conds = append(conds, extra...)
+	if len(conds) == 0 {
+		return "", nil
+	}
+	parts, args := make([]string, len(conds)), make([]any, len(conds))
+	for i, c := range conds {
+		parts[i], args[i] = fmt.Sprintf(c.sql, i+1), c.arg
+	}
+	return " WHERE " + strings.Join(parts, " AND "), args
+}
+
+// prune deletes the counters older than since, the events older than
+// eventsBefore, the states with nothing left to evaluate (at the base or
+// reset, without counters since), and the bases and states of pairs
+// scheduling has not seen since staleBefore.
+func (s store) prune(ctx context.Context, since int64, eventsBefore, staleBefore time.Time) (int64, error) {
+	var n int64
+	for _, q := range []cond{
+		{`DELETE FROM obs WHERE window_start < $1`, since},
+		{`DELETE FROM events WHERE created_at < $1`, eventsBefore},
+		{`DELETE FROM state s WHERE (tombstone OR eff = base) AND eval_window < $1 AND NOT EXISTS (
+			SELECT 1 FROM obs o WHERE o.account_id = s.account_id AND o.group_id = s.group_id AND o.model = s.model)`, since},
+		{`DELETE FROM state s WHERE NOT EXISTS (SELECT 1 FROM bases b WHERE b.account_id = s.account_id AND b.group_id = s.group_id AND b.seen_at >= $1)`, staleBefore},
+		{`DELETE FROM bases WHERE seen_at < $1`, staleBefore},
+	} {
+		tag, err := s.db.Exec(ctx, q.sql, q.arg)
+		if err != nil {
+			return n, err
+		}
+		n += tag.RowsAffected()
+	}
+	return n, nil
+}
