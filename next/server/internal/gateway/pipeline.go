@@ -320,6 +320,9 @@ func (c *call) readBody() *gwError {
 	if limit <= 0 {
 		limit = defaultMaxBodyBytes
 	}
+	if env := c.environment(nil).Bytes(core.EnvMaxRequestBodyMB); env > 0 {
+		limit = env
+	}
 	if c.c.Request.Body != nil {
 		body, err := io.ReadAll(http.MaxBytesReader(c.c.Writer, c.c.Request.Body, limit))
 		if err != nil {

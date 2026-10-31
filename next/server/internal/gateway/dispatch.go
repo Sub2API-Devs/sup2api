@@ -452,8 +452,9 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 			fields[p] = r
 		}
 	}
+	env := c.environment(ref)
 	meta := c.metaFor(rt)
-	meta.Model = upModel
+	meta.Model, meta.Environment = upModel, env
 	buildRequest := &pluginv1.BuildUpstreamRequestRequest{Meta: meta, Account: pacct, Fields: fields, InboundHeaders: c.passHeaders(rt.passHeaders), Attempt: int32(n)}
 	if c.canExecute(rt) {
 		if failure := c.guardAvailability(ctx, ref); failure != nil {
@@ -553,6 +554,15 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	// Send. Canceling ctx (client gone) cancels the upstream request.
 	uctx, ucancel := context.WithCancel(ctx)
 	defer ucancel()
+	env := c.environment(&acc.AccountRef)
+	var relayTimedOut atomic.Bool
+	if total := env.Duration(core.EnvRelayTimeoutSeconds); total > 0 {
+		relayTimer := time.AfterFunc(total, func() {
+			relayTimedOut.Store(true)
+			ucancel()
+		})
+		defer relayTimer.Stop()
+	}
 	method := strings.ToUpper(built.GetMethod())
 	if method == "" {
 		method = http.MethodPost
@@ -620,7 +630,11 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		}
 	}
 
-	timer := time.AfterFunc(c.g.headerWait(c.stream), ucancel)
+	headerWait := c.g.headerWait(c.stream)
+	if d := env.Duration(core.EnvResponseHeaderTimeoutSeconds); d > 0 {
+		headerWait = d
+	}
+	timer := time.AfterFunc(headerWait, ucancel)
 	if execution != nil {
 		execution.sent = true
 	}
@@ -644,13 +658,19 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			return attemptResult{kind: attemptCanceled, err: canceledErr()}
 		}
 		msg := err.Error()
-		if headerTimedOut {
+		switch {
+		case relayTimedOut.Load():
+			msg = "upstream request exceeded relay_timeout_seconds"
+		case headerTimedOut:
 			msg = "timeout waiting for upstream response headers"
 		}
 		if execution != nil {
 			return execution.classify(ctx, 0, nil, nil, msg)
 		}
 		return c.classify(ctx, rt, pacct, 0, nil, nil, msg)
+	}
+	if idle := env.Duration(core.EnvStreamingIdleTimeoutSeconds); idle > 0 && c.stream {
+		resp.Body = newIdleBody(resp.Body, idle, ucancel)
 	}
 	defer resp.Body.Close()
 	if c.g.d.Observations != nil {

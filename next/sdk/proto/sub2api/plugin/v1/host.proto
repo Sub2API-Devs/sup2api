@@ -20,6 +20,10 @@ service HostService {
   // those sessions pick an account again on their next request (CONTRACTS
   // §73.2).
   rpc ClearStickyBindings(ClearStickyBindingsRequest) returns (ClearStickyBindingsResponse);
+  // environment (always granted): the resolved environment variables of a
+  // group and optionally an account, for work outside a gateway request
+  // (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
+  rpc GetEnvironment(GetEnvironmentRequest) returns (GetEnvironmentResponse);
   // Pure local tokenization. No upstream traffic and no billing side effects.
   rpc CountTokens(CountTokensRequest) returns (CountTokensResponse);
   // These callbacks are authorized only by an active Execute/Monitor scope,
@@ -189,6 +193,15 @@ message ClearStickyBindingsRequest {
 message ClearStickyBindingsResponse {
   int64 matched = 1;
   int64 cleared = 2;
+}
+
+message GetEnvironmentRequest {
+  int64 group_id = 1;
+  int64 account_id = 2; // 0 = the group alone
+}
+
+message GetEnvironmentResponse {
+  map<string, int64> environment = 1;
 }
 
 message CountTokensRequest {

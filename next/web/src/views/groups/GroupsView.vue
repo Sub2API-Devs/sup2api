@@ -2,8 +2,8 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SModal, SPageHeader, SPagination, SSelect, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
-import type { Group } from '@/api/types'
+import { SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SModal, SPageHeader, SPagination, SSelect, SSettingsGroup, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
+import type { EnvironmentValues, Group } from '@/api/types'
 import { deleteWithConfirm, toggleStatus, useStatusOptions } from '@/composables/crud'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
@@ -13,6 +13,7 @@ import { applyFormError } from '@/utils/formErrors'
 import StatusBadge from '@/components/StatusBadge.vue'
 import { formatNumber } from '@/utils/format'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
+import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
 import GroupAccountsEditor from './GroupAccountsEditor.vue'
 import GroupModelPolicyEditor from './GroupModelPolicyEditor.vue'
 import GroupPlatforms from '@/views/platforms/GroupPlatforms.vue'
@@ -118,7 +119,8 @@ const form = reactive({
   rate_multiplier: '1',
   visibility: 'public' as Group['visibility'],
   model_allowlist: [] as string[],
-  model_filter_mode: 'blacklist' as 'whitelist' | 'blacklist'
+  model_filter_mode: 'blacklist' as 'whitelist' | 'blacklist',
+  environment: {} as EnvironmentValues
 })
 
 const visibilityOptions = computed(() => [
@@ -130,7 +132,7 @@ const statusOptions = useStatusOptions()
 function openCreate() {
   loadModels(null)
   editing.value = null
-  Object.assign(form, { name: '', description: '', status: 'active', rate_multiplier: '1', visibility: 'public', model_allowlist: [], model_filter_mode: 'blacklist' })
+  Object.assign(form, { name: '', description: '', status: 'active', rate_multiplier: '1', visibility: 'public', model_allowlist: [], model_filter_mode: 'blacklist', environment: {} })
   errors.value = {}
   open.value = true
 }
@@ -145,7 +147,8 @@ function openEdit(g: Group) {
     rate_multiplier: String(g.rate_multiplier ?? '1'),
     visibility: g.visibility,
     model_allowlist: [...(g.model_allowlist || [])],
-    model_filter_mode: g.model_filter_mode || 'whitelist'
+    model_filter_mode: g.model_filter_mode || 'whitelist',
+    environment: { ...g.environment }
   })
   errors.value = {}
   open.value = true
@@ -166,7 +169,8 @@ async function submit() {
     rate_multiplier: rm,
     visibility: form.visibility,
     model_allowlist: form.model_allowlist,
-    model_filter_mode: form.model_filter_mode
+    model_filter_mode: form.model_filter_mode,
+    environment: form.environment
   }
   saving.value = true
   try {
@@ -285,6 +289,9 @@ function onAction(g: Group, key: string) {
         <SField v-if="editing" :label="t('platforms.served')">
           <GroupPlatforms :group="editing" hint />
         </SField>
+        <SSettingsGroup :title="t('settings.environment.title')" :description="t('settings.environment.groupHint')" data-testid="group-environment">
+          <EnvironmentEditor v-model="form.environment" layer="group" field="environment" :errors="errors" />
+        </SSettingsGroup>
         <SField v-if="canEditAccounts" :label="t('groups.accounts.title')" :hint="t('groups.accounts.hint')">
           <GroupAccountsEditor v-if="open" ref="accountsEditor" :group-id="editing?.id ?? null" @models="selectedModelSource = $event" />
         </SField>

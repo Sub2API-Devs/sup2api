@@ -132,7 +132,30 @@ export interface Group {
    * accounts (sorted ids). API keys bound to the group can call their endpoints.
    */
   platforms?: string[]
+  /** The group layer of the environment variables (CONTRACTS §73.3). */
+  environment?: EnvironmentValues
   created_at?: string
+}
+
+// ------------------------------------------------------------------ environment variables (CONTRACTS §73.3)
+
+/** A layer an environment variable can be set on. */
+export type EnvironmentLayer = 'global' | 'group' | 'account'
+
+/** The values set on one layer; an absent key follows the next layer. */
+export type EnvironmentValues = Record<string, number>
+
+/** A variable the core declares (GET /environment/variables). */
+export interface EnvironmentVariable {
+  key: string
+  unit: 'seconds' | 'minutes' | 'mb' | 'count'
+  min: number
+  max: number
+  name: Record<string, string>
+  help: Record<string, string>
+  layers: EnvironmentLayer[]
+  /** The process environment variable of the last layer. */
+  process_env: string
 }
 
 // ------------------------------------------------------------------ platforms (CONTRACTS §13)
@@ -382,6 +405,8 @@ export interface Account {
   spm_limit: number
   /** Limits of lists of client models on top of the account's own (CONTRACTS §68). */
   model_limits?: ModelLimit[]
+  /** The account layer of the environment variables (CONTRACTS §73.3). */
+  environment?: EnvironmentValues
   /** Read-only usage of the last 60 seconds (0 when Redis is unavailable), with one entry per model list. */
   rate_usage?: { rpm: number; tpm: number; sessions?: number; models?: ModelRateUsage[] }
   status: string

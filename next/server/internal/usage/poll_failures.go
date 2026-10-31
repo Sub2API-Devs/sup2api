@@ -46,6 +46,9 @@ func (s *Service) recordPollFailure(ctx context.Context, e *settleEntry, row *re
 	if reason == "" {
 		reason = "task query failed"
 	}
+	if e.task != nil {
+		cfg = s.withEnvironment(ctx, cfg, e.task.groupID, e.accountID)
+	}
 	if cfg.maxPollFailures > 0 && e.pollFailures+1 >= cfg.maxPollFailures {
 		s.failObservation(ctx, e, row, "task_poll_failed", fmt.Sprintf("%d consecutive query failures: %s", e.pollFailures+1, reason))
 		return

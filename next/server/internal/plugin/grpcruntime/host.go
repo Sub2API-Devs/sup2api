@@ -477,6 +477,22 @@ func (h *hostServer) ClearStickyBindings(ctx context.Context, in *pluginv1.Clear
 	return &pluginv1.ClearStickyBindingsResponse{Matched: matched, Cleared: cleared}, nil
 }
 
+// GetEnvironment needs no grant: the values are operating parameters every
+// plugin is expected to honour, not data (CONTRACTS §73.3).
+func (h *hostServer) GetEnvironment(ctx context.Context, in *pluginv1.GetEnvironmentRequest) (*pluginv1.GetEnvironmentResponse, error) {
+	if in.GetGroupId() < 0 || in.GetAccountId() < 0 {
+		return nil, status.Error(codes.InvalidArgument, "group_id and account_id must not be negative")
+	}
+	if h.i.rt.o.Environment == nil {
+		return nil, status.Error(codes.Unavailable, "environment unavailable")
+	}
+	env, err := h.i.rt.o.Environment.ResolveEnvironment(ctx, in.GetGroupId(), in.GetAccountId())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &pluginv1.GetEnvironmentResponse{Environment: env}, nil
+}
+
 func accountSummary(a core.PluginAccountSummary) *pluginv1.AccountSummary {
 	settings := string(a.Settings)
 	if settings == "" {

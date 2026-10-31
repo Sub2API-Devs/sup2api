@@ -532,7 +532,7 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 		}
 	}
 	meta := cl.metaFor(rt)
-	meta.Model = upModel
+	meta.Model, meta.Environment = upModel, cl.environment(&acc.AccountRef)
 	bctx, cancel := context.WithTimeout(ctx, cl.gw.platformTimeout())
 	built, err := rt.binding.Client.BuildUpstreamRequest(bctx, &pluginv1.BuildUpstreamRequestRequest{Meta: meta, Account: pacct,
 		Fields: fields, InboundHeaders: cl.passHeaders(rt.passHeaders), Attempt: int32(cl.rec.Attempts - 1)})

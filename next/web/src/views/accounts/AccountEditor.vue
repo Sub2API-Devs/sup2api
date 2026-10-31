@@ -13,7 +13,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SchemaForm, SChoiceCards, SField, SHint, SIcon, SInput, SLink, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSpinner, SSwitch, toast } from '@sub2api/ui'
-import type { Account, AccountType, ProxyProbeResult } from '@/api/types'
+import type { Account, AccountType, EnvironmentValues, ProxyProbeResult } from '@/api/types'
+import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
 import { schemaWidgets } from '@/components/schema/widgets'
 import PluginIframe from '@/components/plugin/PluginIframe.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
@@ -41,7 +42,7 @@ import { containerLocales, containerTimezones, environmentOptions } from './cont
 import { useContainerEnvironment } from './useContainerEnvironment'
 import { useModelEdit } from './useModelEdit'
 import { useAccountSave } from './useAccountSave'
-import { CONNECTION_FIELDS, SCHEDULING_FIELDS, mappingErrorText, modelsErrorText, splitFieldErrors, type EditorSection } from './editorErrors'
+import { CONNECTION_FIELDS, isSchedulingField, mappingErrorText, modelsErrorText, splitFieldErrors, type EditorSection } from './editorErrors'
 
 const props = defineProps<{ accountType: AccountType | null; accountTypeOptions?: AccountType[]; account?: Account | null }>()
 const emit = defineEmits<{ (e: 'change-type', at: AccountType): void; (e: 'saved', a: Account): void; (e: 'cancel'): void; (e: 'back'): void; (e: 'test', a: Account): void; (e: 'reauthorized', a: Account): void }>()
@@ -74,6 +75,7 @@ const basic = reactive({
   rpm_limit: 0,
   tpm_limit: 0,
   spm_limit: 0,
+  environment: {} as EnvironmentValues,
 })
 /** 指定模型限速 (CONTRACTS §68), edited as cards and saved as one entry per list. */
 const modelLimitCards = ref<ModelLimitCard[]>([])
@@ -194,7 +196,7 @@ const serverMappingError = computed(() => mappingErrorText(errors.value))
 const sectionErrors = computed<Record<EditorSection, boolean>>(() => ({
   connection: CONNECTION_FIELDS.some((k) => errors.value[k]) || Object.keys(credErrors.value).length > 0,
   models: !!(modelsError.value || serverModelsError.value || mappingError.value || serverMappingError.value),
-  scheduling: SCHEDULING_FIELDS.some((k) => errors.value[k]),
+  scheduling: Object.keys(errors.value).some(isSchedulingField),
   cc_features: Object.keys(errors.value).some(k => k.startsWith('cc_feature_policy'))
 }))
 
@@ -416,6 +418,7 @@ function fillForm(a: Account | null | undefined, at: AccountType | null) {
   basic.rpm_limit = a?.rpm_limit ?? 0
   basic.tpm_limit = a?.tpm_limit ?? 0
   basic.spm_limit = a?.spm_limit ?? 0
+  basic.environment = { ...a?.environment }
   modelLimitCards.value = toCards(a?.model_limits)
   if (!a) applyDefaultLimits(at)
   resetEnvironment(a?.settings)
@@ -706,6 +709,10 @@ const { save } = useAccountSave({
             <SSettingRow v-for="f in limitFields" :key="f.key" :label="f.label" :description="f.hint" :error="errors[f.key]">
               <SInput v-model.number="basic[f.key]" type="number" :min="0" :suffix="f.unit" class="w-full sm:w-48" :data-testid="`account-${f.key}`" />
             </SSettingRow>
+          </SSettingsGroup>
+
+          <SSettingsGroup :title="t('settings.environment.title')" :description="t('settings.environment.accountHint')" data-testid="account-environment">
+            <EnvironmentEditor v-model="basic.environment" layer="account" field="environment" :errors="errors" :disabled="saving" />
           </SSettingsGroup>
 
           <SSettingsGroup :title="t('accounts.modelLimits.title')" :description="t('accounts.modelLimits.hint')" data-testid="account-model-limits">

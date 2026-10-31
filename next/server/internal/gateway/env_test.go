@@ -839,23 +839,24 @@ const (
 )
 
 type env struct {
-	t        *testing.T
-	gw       *Gateway
-	srv      *httptest.Server
-	up       *upstream
-	reg      *fakeRegistry
-	gen      *fakeGen
-	plat     *fakePlatform
-	accounts *fakeAccounts
-	slots    *fakeSlots
-	settler  *fakeSettler
-	pricer   *fakePricer
-	balance  *fakeBalance
-	auth     *fakeAuth
-	mr       *miniredis.Miniredis
-	rdb      *redis.Client
-	man      *manifest.Manifest
-	conv     *convert.Registry
+	envGlobal core.EnvironmentValues
+	t         *testing.T
+	gw        *Gateway
+	srv       *httptest.Server
+	up        *upstream
+	reg       *fakeRegistry
+	gen       *fakeGen
+	plat      *fakePlatform
+	accounts  *fakeAccounts
+	slots     *fakeSlots
+	settler   *fakeSettler
+	pricer    *fakePricer
+	balance   *fakeBalance
+	auth      *fakeAuth
+	mr        *miniredis.Miniredis
+	rdb       *redis.Client
+	man       *manifest.Manifest
+	conv      *convert.Registry
 }
 
 type envOpt func(*env)
@@ -898,6 +899,7 @@ func newEnv(t *testing.T, opts ...envOpt) *env {
 		Slots: e.slots, Accounts: e.accounts, Proxies: fakeProxies{}, Settler: e.settler,
 		KeyWindows: ratelimit.NewMinute(e.rdb, "apikey"),
 		Config:     &config.Config{AllowPrivateUpstream: true}, Converters: e.conv,
+		Environment: fakeEnvironment{global: e.envGlobal},
 	})
 	t.Cleanup(e.gw.Close)
 	e.gw.randFloat = func() float64 { return 0 } // deterministic order within a priority

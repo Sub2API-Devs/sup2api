@@ -26,6 +26,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/cluster"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/environment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event/delivery"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/fallbackcredits"
@@ -156,7 +157,8 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 		b.canCoordinate = b.managed.coordinateAllowed
 		b.work.Admitted = b.canWork
 	}
-	b.settler = usage.New(b.db, bill, bill, b.events, usage.Options{CanRetry: b.canWork})
+	b.env = environment.New(b.db, b.cl.Bus)
+	b.settler = usage.New(b.db, bill, bill, b.events, usage.Options{CanRetry: b.canWork, Environment: b.env})
 	b.settler.Start(b.ctx)
 	b.stopper.add("settler", b.settler.Stop)
 
@@ -268,7 +270,7 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 
 	rt, err := grpcruntime.New(grpcruntime.Options{
 		DB: b.db, Redis: b.rdb, Bus: b.cl.Bus, Locker: b.cl.Locker, Cipher: b.cipher, Node: b.cl.Registry, Launcher: launcher,
-		Egress: egress, Authorizer: b.az, Ledger: b.bill, Prices: b.bill, Schemas: schemas, Accounts: b.acc, Sticky: gateway.NewStickyClearer(b.rdb),
+		Egress: egress, Authorizer: b.az, Ledger: b.bill, Prices: b.bill, Schemas: schemas, Accounts: b.acc, Sticky: gateway.NewStickyClearer(b.rdb), Environment: b.env,
 		HostVersion: b.version, DataDir: cfg.Plugins.DataDir, RunDir: cfg.Plugins.RunDir,
 		StrictNetwork: cfg.Plugins.StrictNetwork, Seccomp: cfg.Plugins.Seccomp, MaxMemoryMB: cfg.Plugins.MaxMemoryMB,
 		Logger: b.log,
@@ -296,7 +298,8 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 		Resources: resources, Skills: resources, Credits: fallbackcredits.New(b.db, 4096), ResourceTransport: b.ccg.ResourceTransport(),
 		DB: b.db, Redis: b.rdb, Bus: b.cl.Bus, Node: b.cl.Registry, Registry: b.reg,
 		Auth: b.keys, Pricer: b.bill, Balance: b.bill, Slots: b.cl.Slots,
-		Accounts: b.acc, Proxies: b.prx, Settler: b.settler, Observations: observations, Tasks: b.settler, Limiter: b.limiter, KeyWindows: b.keys.Windows, KeyUsage: b.keys, Quota: b.acc, Config: cfg, Converters: b.converters,
+		Environment: b.env,
+		Accounts:    b.acc, Proxies: b.prx, Settler: b.settler, Observations: observations, Tasks: b.settler, Limiter: b.limiter, KeyWindows: b.keys.Windows, KeyUsage: b.keys, Quota: b.acc, Config: cfg, Converters: b.converters,
 		Draining: b.gate.isDraining,
 	})
 
@@ -414,6 +417,7 @@ func (b *boot) registerRoutes(r *httpapi.Router) {
 	b.idm.RegisterRoutes(r)
 	b.az.RegisterRoutes(r)
 	b.grp.RegisterRoutes(r)
+	b.env.RegisterRoutes(r)
 	b.keys.RegisterRoutes(r)
 	b.prx.RegisterRoutes(r)
 	b.acc.RegisterRoutes(r)

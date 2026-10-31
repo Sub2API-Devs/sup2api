@@ -4,7 +4,10 @@
 export type EditorSection = 'connection' | 'models' | 'scheduling' | 'cc_features'
 
 export const CONNECTION_FIELDS = ['name', 'group_ids', 'proxy_id', 'proxy_url', 'settings', 'settings.locale', 'settings.timezone']
-export const SCHEDULING_FIELDS = ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit']
+const SCHEDULING_FIELDS = ['priority', 'weight', 'max_concurrency', 'rpm_limit', 'tpm_limit', 'spm_limit']
+
+/** Scheduling fields, and the account layer of the environment variables (`environment.<key>`). */
+export const isSchedulingField = (k: string) => SCHEDULING_FIELDS.includes(k) || k.startsWith('environment.')
 
 const CREDENTIAL_RE = /^credentials[.[]?(.*?)]?$/
 const isModelsField = (k: string) => k === 'models' || k.startsWith('models.') || k.startsWith('models[') || k.startsWith('model_mapping')

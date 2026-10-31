@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { api, type Query } from '@sub2api/host'
-import type { Group, Proxy } from '@/api/types'
+import type { EnvironmentValues, EnvironmentVariable, Group, Proxy } from '@/api/types'
 
 // Small cached lookups for selects (groups, proxies). Call refresh after
 // mutations that change them.
@@ -51,6 +51,24 @@ export function useProxiesLookup(force = false) {
       })
   }
   return { proxies, ready: proxiesP }
+}
+
+const environmentVariables = ref<EnvironmentVariable[]>([])
+const processEnvironment = ref<EnvironmentValues>({})
+let environmentP: Promise<void> | null = null
+
+/** The declared environment variables and the process layer (CONTRACTS §73.3); they change only with the core. */
+export function useEnvironmentVariables() {
+  environmentP ||= api
+    .get<{ variables: EnvironmentVariable[]; process: EnvironmentValues }>('/environment/variables')
+    .then((r) => {
+      environmentVariables.value = r?.variables ?? []
+      processEnvironment.value = r?.process ?? {}
+    })
+    .catch(() => {
+      environmentP = null
+    })
+  return { variables: environmentVariables, process: processEnvironment, ready: environmentP }
 }
 
 /** Groups visible to the current user (GET /me/groups), for API key creation. */

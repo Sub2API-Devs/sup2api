@@ -18,6 +18,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/cluster"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/environment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event/delivery"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway"
@@ -67,6 +68,7 @@ type boot struct {
 	az      *authz.Service
 	idm     *iam.Service
 	grp     *group.Service
+	env     *environment.Service
 	keys    *apikey.Service
 	prx     *proxy.Service
 	stats   *account.Stats

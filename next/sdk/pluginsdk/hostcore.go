@@ -22,3 +22,20 @@ func ClearStickyBindings(ctx context.Context, h Host, in *pluginv1.ClearStickyBi
 	}
 	return h.Client().ClearStickyBindings(ctx, in)
 }
+
+// GetEnvironment resolves the environment variables of a group and
+// optionally an account (CONTRACTS §73.3). Gateway requests already carry
+// theirs in RequestMeta.environment; this is for background work.
+func GetEnvironment(ctx context.Context, h Host, groupID, accountID int64) (map[string]int64, error) {
+	if h == nil || h.Client() == nil {
+		return nil, ErrHostNotReady
+	}
+	if h.Info().HostAPIVersion < protocol.EnvironmentHostAPIVersion {
+		return nil, status.Errorf(codes.FailedPrecondition, "environment variables require host API %d", protocol.EnvironmentHostAPIVersion)
+	}
+	resp, err := h.Client().GetEnvironment(ctx, &pluginv1.GetEnvironmentRequest{GroupId: groupID, AccountId: accountID})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetEnvironment(), nil
+}

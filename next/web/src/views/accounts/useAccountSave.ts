@@ -7,7 +7,7 @@ import { computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { toast } from '@sub2api/ui'
-import type { Account, AccountType } from '@/api/types'
+import type { Account, AccountType, EnvironmentValues } from '@/api/types'
 import { useProxiesLookup } from '@/composables/lookups'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { savedOverrides, validFeatureOverrides, type AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
@@ -31,6 +31,8 @@ export interface AccountBasics {
   rpm_limit: number
   tpm_limit: number
   spm_limit: number
+  /** The account layer of the environment variables (CONTRACTS §73.3). */
+  environment: EnvironmentValues
 }
 
 /** The account editor's model list / mapping editor (useModelEdit: its state and actions). */
@@ -132,7 +134,8 @@ export function useAccountSave(deps: AccountSaveDeps) {
       rpm_limit: Number(basic.rpm_limit) || 0,
       tpm_limit: Number(basic.tpm_limit) || 0,
       spm_limit: Number(basic.spm_limit) || 0,
-      model_limits: fromCards(deps.modelLimits.value)
+      model_limits: fromCards(deps.modelLimits.value),
+      environment: basic.environment
     }
     if (schedulingConfigurable.value) body.schedulable = basic.schedulable
     if (ccg.autoDisableEnabled.value === true && autoDisableConfigurable.value) body.auto_disable = basic.auto_disable

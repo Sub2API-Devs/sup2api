@@ -54,7 +54,7 @@ func (s *Service) registerTask(ctx context.Context, in core.TaskRegistration, be
 	if _, err := protocol.RewriteTaskID(in.Snapshot, in.IDPaths, in.UpstreamID, in.PublicID); err != nil {
 		return err
 	}
-	cfg := s.reconcileSettings(ctx)
+	cfg := s.withEnvironment(ctx, s.reconcileSettings(ctx), r.GroupID, r.AccountID)
 	now := time.Now()
 	deadline := now.Add(cfg.clampDeadline(in.Deadline))
 	next := now.Add(cfg.clampDelay(in.NextCheckAfter, 0))

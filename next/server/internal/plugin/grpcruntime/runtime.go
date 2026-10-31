@@ -61,6 +61,9 @@ type Options struct {
 	// Sticky serves HostService.ClearStickyBindings; nil makes it fail with
 	// UNAVAILABLE.
 	Sticky core.StickyBindingClearer
+	// Environment serves HostService.GetEnvironment; nil makes it fail with
+	// UNAVAILABLE.
+	Environment core.EnvironmentResolver
 
 	HostVersion   string
 	DataDir       string // plugin work directories live under DataDir/<key>/work

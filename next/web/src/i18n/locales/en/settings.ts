@@ -1,6 +1,7 @@
 export default {
   description: 'System-wide billing, gateway and scheduling settings.',
   tabs: {
+    environment: 'Environment variables',
     billing: 'Billing',
     gateway: 'Gateway',
     sticky: 'Sticky sessions',
@@ -27,6 +28,18 @@ export default {
       unavailable: 'Not ready',
       disabled: 'Disabled'
     }
+  },
+  environment: {
+    title: 'Environment variables',
+    subtitle: 'General runtime parameters of forwarding, declared by the core; plugins read the resolved values. Accounts and groups override these; empty follows the next layer (account → group → global → process environment variable). Changes apply to new requests on every node.',
+    groupHint: 'Overrides the global environment variables; empty follows the global value.',
+    accountHint: 'Overrides the group and global environment variables; empty follows the group.',
+    range: 'Range {min}–{max}.',
+    processSet: 'Process environment variable {name} = {value}.',
+    processUnset: 'The process environment variable {name} is the fallback.',
+    follow: 'Follow',
+    followValue: 'Follow ({value})',
+    units: { seconds: 's', minutes: 'min', mb: 'MB', count: 'times' }
   },
   gateway: {
     title: 'Gateway',
