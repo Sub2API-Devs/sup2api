@@ -32,7 +32,7 @@ const SHOWN = [
   'degraded_keys', 'pending_keys', 'config_version', 'runs_total', 'run_failures_total', 'last_run_ms', 'last_run_at',
   'evaluations_total', 'applied_total', 'skipped_total', 'lost_total', 'base_resets_total', 'key_failures_total', 'changed_total',
   'resets_total', 'observed_total', 'dropped_samples_total', 'flushes_total', 'flush_failures_total', 'flushed_keys_total',
-  'flushed_samples_total', 'events_logged_total', 'events_log_dropped_total'
+  'flushed_samples_total', 'events_logged_total', 'events_log_dropped_total', 'sticky_clears_total', 'sticky_clear_failures_total'
 ]
 
 const items = computed(() => {

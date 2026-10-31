@@ -16,7 +16,10 @@ type RuleResult struct {
 	Bitmap     string `json:"bitmap"`
 	Samples    int64  `json:"samples"`
 	Lookback   int    `json:"lookback"`
-	NoSamples  bool   `json:"no_samples"` // weight conditions only
+	NoSamples  bool   `json:"no_samples"` // weight conditions only, or conditions that passed without samples
+	// Unjudged: strict (min_samples_strict) and too few samples, even looking
+	// back as far as allowed; the window left the bitmap alone.
+	Unjudged bool `json:"unjudged"`
 }
 
 // ThresholdCount is how many samples reached a threshold (ms).
@@ -142,7 +145,7 @@ func ruleResults(res *Resolved, last *State, matched bool) []RuleResult {
 		}
 		rr := &out[i]
 		if i < len(last.LastRules) {
-			rr.Hit, rr.Fired = RuleHit(last.LastRules[i]), RuleFired(last.LastRules[i])
+			rr.Hit, rr.Fired, rr.Unjudged = RuleHit(last.LastRules[i]), RuleFired(last.LastRules[i]), RuleUnjudged(last.LastRules[i])
 		}
 		if i < len(last.Bitmaps) {
 			rr.Bitmap = last.Bitmaps[i]

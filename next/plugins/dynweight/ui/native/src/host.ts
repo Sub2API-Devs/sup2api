@@ -28,17 +28,23 @@ export type Op = 'gt' | 'gte' | 'lt' | 'lte'
 export type WeightMode = 'base_percent' | 'current_percent' | 'fixed'
 export type ActionType = 'weight_degrade' | 'weight_climb' | 'affinity_clear'
 
+export type Scope = 'all' | 'stream' | 'non_stream'
+
 export interface Condition {
   join?: 'and' | 'or'
   metric: Metric
   p?: number
   op: Op
   value: number
+  /** Counters the condition reads; absent = the rule's scope (not for weight). */
+  scope?: Scope
+  /** Without any sample: absent / 'fail' = false, 'pass' = true (not for weight). */
+  when_empty?: 'fail' | 'pass'
 }
 
 export interface Rule {
   name: string
-  scope?: '' | 'all' | 'stream' | 'non_stream'
+  scope?: '' | Scope
   enabled?: boolean
   conditions: Condition[]
   periods: number
@@ -67,6 +73,10 @@ export interface Layer {
   enabled: boolean
   window_seconds: number
   min_samples: number
+  /** Degrading rules short of min_samples after the whole lookback are not judged (default on). */
+  min_samples_strict: boolean
+  /** A key dropping to weight 0 clears all its sticky sessions (default on). */
+  clear_sticky_on_zero: boolean
   exempt_status_codes: string
   min_weight_mode: 'base_percent' | 'fixed'
   min_weight: number
@@ -151,8 +161,10 @@ export interface RuleResult {
   bitmap: string
   samples: number
   lookback: number
-  /** Weight conditions only: no samples to report. */
+  /** Weight conditions only (or conditions that passed without samples): no samples to report. */
   no_samples: boolean
+  /** Strict and too few samples even looking back: not judged, the bitmap left alone. */
+  unjudged: boolean
 }
 
 export interface ThresholdCount {
@@ -313,6 +325,8 @@ export function enumOptions(group: string, values: readonly string[]): SelectOpt
   const t = useDwHost().t
   return values.map((v) => ({ value: v, label: t(`${group}.${v}`) }))
 }
+
+export const scopes: readonly Scope[] = ['all', 'stream', 'non_stream']
 
 export const metrics: readonly Metric[] = ['error_rate', 'ttfb', 'latency', 'weight']
 export const percentileMetric = (m: Metric) => m === 'ttfb' || m === 'latency'

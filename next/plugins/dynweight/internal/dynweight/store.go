@@ -159,20 +159,51 @@ func (s store) loadStates(ctx context.Context, f filter) (map[key]stateRow, erro
 	return out, err
 }
 
+// execer is the pool or a transaction.
+type execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
 // writeState stores a state if the stored one is still at gen (0 = none
-// stored). It reports false when another writer got there first.
-func (s store) writeState(ctx context.Context, k key, st rules.State, gen int64) (bool, error) {
+// stored). It reports false when another writer got there first. A sticky
+// clear the evaluation decided is queued in the same transaction: it exists
+// exactly when its state was written.
+func (s store) writeState(ctx context.Context, k key, st rules.State, gen int64, clear *pendingClear) (bool, error) {
 	raw, err := json.Marshal(st)
 	if err != nil {
 		return false, err
 	}
-	var tag interface{ RowsAffected() int64 }
+	if clear == nil {
+		return putState(ctx, s.db, k, st, raw, gen)
+	}
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // a no-op once committed
+	if written, err := putState(ctx, tx, k, st, raw, gen); err != nil || !written {
+		return false, err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO sticky_pending (account_id, group_id, model, salt, percent, strategies, zero, weight)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (account_id, group_id, model) DO UPDATE SET salt = EXCLUDED.salt,
+			percent = GREATEST(sticky_pending.percent, EXCLUDED.percent), strategies = EXCLUDED.strategies,
+			zero = sticky_pending.zero OR EXCLUDED.zero, weight = EXCLUDED.weight, attempts = 0, created_at = now(), claimed_until = '-infinity'`,
+		k.AccountID, k.GroupID, k.Model, clear.Salt, clear.Percent, clear.Strategies, clear.Zero, clear.Weight); err != nil {
+		return false, err
+	}
+	return true, tx.Commit(ctx)
+}
+
+func putState(ctx context.Context, db execer, k key, st rules.State, raw []byte, gen int64) (bool, error) {
+	var tag pgconn.CommandTag
+	var err error
 	if gen == 0 {
-		tag, err = s.db.Exec(ctx, `INSERT INTO state (account_id, group_id, model, data, base, eff, tombstone, eval_window)
+		tag, err = db.Exec(ctx, `INSERT INTO state (account_id, group_id, model, data, base, eff, tombstone, eval_window)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT DO NOTHING`,
 			k.AccountID, k.GroupID, k.Model, raw, st.WeightBase, st.WeightEff, st.Tombstone, st.LastEvalWindow)
 	} else {
-		tag, err = s.db.Exec(ctx, `UPDATE state SET data = $4, base = $5, eff = $6, tombstone = $7, eval_window = $8, gen = gen + 1, updated_at = now()
+		tag, err = db.Exec(ctx, `UPDATE state SET data = $4, base = $5, eff = $6, tombstone = $7, eval_window = $8, gen = gen + 1, updated_at = now()
 			WHERE account_id = $1 AND group_id = $2 AND model = $3 AND gen = $9`,
 			k.AccountID, k.GroupID, k.Model, raw, st.WeightBase, st.WeightEff, st.Tombstone, st.LastEvalWindow, gen)
 	}
@@ -180,6 +211,58 @@ func (s store) writeState(ctx context.Context, k key, st rules.State, gen int64)
 		return false, err
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// pendingClear is a sticky clear an evaluation decided (sticky_pending): the
+// key, the salt (the window start), the share, the strategies that asked
+// for it (", "-joined; none for the clear of a weight dropping to 0), and
+// the key's effective weight then, for the event.
+type pendingClear struct {
+	key
+	Salt       string
+	Percent    int
+	Strategies string
+	Zero       bool
+	Weight     float64
+	Attempts   int
+	CreatedAt  time.Time
+}
+
+// claimClears leases up to limit pending clears no other run holds, oldest
+// first, counting the attempt.
+func (s store) claimClears(ctx context.Context, lease time.Duration, limit int) ([]pendingClear, error) {
+	rows, err := s.db.Query(ctx, `UPDATE sticky_pending p SET claimed_until = now() + make_interval(secs => $1), attempts = p.attempts + 1
+		FROM (SELECT account_id, group_id, model FROM sticky_pending WHERE claimed_until < now()
+			ORDER BY created_at LIMIT $2 FOR UPDATE SKIP LOCKED) c
+		WHERE p.account_id = c.account_id AND p.group_id = c.group_id AND p.model = c.model
+		RETURNING p.account_id, p.group_id, p.model, p.salt, p.percent, p.strategies, p.zero, p.weight, p.attempts, p.created_at`,
+		lease.Seconds(), limit)
+	if err != nil {
+		return nil, err
+	}
+	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (pendingClear, error) {
+		var c pendingClear
+		return c, r.Scan(&c.AccountID, &c.GroupID, &c.Model, &c.Salt, &c.Percent, &c.Strategies, &c.Zero, &c.Weight, &c.Attempts, &c.CreatedAt)
+	})
+	slices.SortFunc(out, func(a, b pendingClear) int {
+		return cmp.Or(a.CreatedAt.Compare(b.CreatedAt), compareKeys(a.key, b.key))
+	})
+	return out, err
+}
+
+// finishClear drops a pending clear (done, or given up) unless a newer one
+// replaced it meanwhile.
+func (s store) finishClear(ctx context.Context, c pendingClear) error {
+	_, err := s.db.Exec(ctx, `DELETE FROM sticky_pending WHERE account_id = $1 AND group_id = $2 AND model = $3 AND salt = $4`,
+		c.AccountID, c.GroupID, c.Model, c.Salt)
+	return err
+}
+
+// releaseClear hands a pending clear back to the next run at once.
+func (s store) releaseClear(ctx context.Context, c pendingClear) error {
+	_, err := s.db.Exec(ctx, `UPDATE sticky_pending SET claimed_until = '-infinity' WHERE account_id = $1 AND group_id = $2 AND model = $3 AND salt = $4`,
+		c.AccountID, c.GroupID, c.Model, c.Salt)
+	return err
 }
 
 // tombstone resets keys whatever their generation, in one statement: all of
@@ -394,9 +477,11 @@ func (f filter) whereFrom(first int, extra ...cond) (string, []any) {
 
 // prune deletes the counters older than since, the events older than
 // eventsBefore, the states with nothing left to evaluate (at the base or
-// reset, without counters since), and the bases and states of pairs
-// scheduling has not seen since staleBefore.
-func (s store) prune(ctx context.Context, since int64, eventsBefore, staleBefore time.Time) (int64, error) {
+// reset, without counters since), the bases and states of pairs scheduling
+// has not seen since staleBefore, and the pending sticky clears queued
+// before clearsBefore (the evaluate job gives up on them much sooner; this
+// only catches what a crash left).
+func (s store) prune(ctx context.Context, since int64, eventsBefore, staleBefore, clearsBefore time.Time) (int64, error) {
 	var n int64
 	for _, q := range []struct {
 		sql string
@@ -408,6 +493,7 @@ func (s store) prune(ctx context.Context, since int64, eventsBefore, staleBefore
 			SELECT 1 FROM obs o WHERE o.account_id = s.account_id AND o.group_id = s.group_id AND o.model = s.model)`, since},
 		{`DELETE FROM state s WHERE NOT EXISTS (SELECT 1 FROM bases b WHERE b.account_id = s.account_id AND b.group_id = s.group_id AND b.seen_at >= $1)`, staleBefore},
 		{`DELETE FROM bases WHERE seen_at < $1`, staleBefore},
+		{`DELETE FROM sticky_pending WHERE created_at < $1`, clearsBefore},
 	} {
 		tag, err := s.db.Exec(ctx, q.sql, q.arg)
 		if err != nil {

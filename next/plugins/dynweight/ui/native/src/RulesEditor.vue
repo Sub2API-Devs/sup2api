@@ -2,18 +2,23 @@
 import { computed } from 'vue'
 import { SButton, SField, SInput, SSelect, SSwitch } from '@sub2api/ui'
 import ItemActions from './ItemActions.vue'
-import { duplicateItem, enumOptions, metrics, moveItem, opsOf, percentileMetric, useDwHost, type Condition, type Metric, type Rule } from './host'
+import { duplicateItem, enumOptions, metrics, moveItem, opsOf, percentileMetric, scopes, useDwHost, type Condition, type Metric, type Rule, type Scope } from './host'
 
 // Judgement rules: conditions joined by and / or ("and" binds first), judged
-// per window; a rule fires once it hit in M of the last N windows. A name
-// change is committed on blur and reported so strategies can follow it. The
-// order is the order of the rule slots (and of the status page). An emptied
-// number is marked here; LayerEditor names the rule and blocks saving.
+// per window; a rule fires once it hit in M of the last N windows. A sample
+// condition can read other counters than its rule's (scope) and say what it
+// is without any sample (when_empty). A name change is committed on blur and
+// reported so strategies can follow it. The order is the order of the rule
+// slots (and of the status page). An emptied number is marked here;
+// LayerEditor names the rule and blocks saving.
 const rules = defineModel<Rule[]>({ required: true })
 const emit = defineEmits<{ (e: 'rename', from: string, to: string): void }>()
 const t = useDwHost().t
 
-const scopeOptions = computed(() => enumOptions('scope', ['all', 'stream', 'non_stream']))
+const scopeOptions = computed(() => enumOptions('scope', scopes))
+// A condition's own scope: '' follows the rule's.
+const condScopeOptions = computed(() => [{ value: '', label: t('rules.condScopeRule') }, ...enumOptions('scope', scopes)])
+const whenEmptyOptions = computed(() => enumOptions('whenEmpty', ['fail', 'pass']))
 const metricOptions = computed(() => enumOptions('metric', metrics))
 const joinOptions = computed(() => enumOptions('join', ['and', 'or']))
 const opOptions = (m: Metric) => enumOptions('op', opsOf(m))
@@ -22,6 +27,21 @@ function setMetric(c: Condition, m: Metric) {
   c.metric = m
   c.p = percentileMetric(m) ? (c.p ?? 95) : undefined
   if (!opsOf(m).includes(c.op)) c.op = 'gte'
+  // A weight condition has no samples: no scope, nothing to be empty.
+  if (m === 'weight') {
+    delete c.scope
+    delete c.when_empty
+  }
+}
+
+function setCondScope(c: Condition, v: string) {
+  if (v) c.scope = v as Scope
+  else delete c.scope
+}
+
+function setWhenEmpty(c: Condition, v: string) {
+  if (v === 'pass') c.when_empty = 'pass'
+  else delete c.when_empty
 }
 
 const newCondition = (): Condition => ({ join: 'and', metric: 'error_rate', op: 'gte', value: 30 })
@@ -75,6 +95,10 @@ function removeCondition(r: Rule, i: number) {
         </SInput>
         <SSelect class="dw-w-6" v-model="c.op" :options="opOptions(c.metric)" />
         <SInput v-model="c.value" class="dw-w-8" type="number" min="0" :error="c.value == null" :aria-label="t('rules.value')" :suffix="t(`unit.${c.metric}`)" />
+        <template v-if="c.metric !== 'weight'">
+          <SSelect class="dw-w-10" :model-value="c.scope ?? ''" :options="condScopeOptions" :aria-label="t('rules.condScope')" :title="t('rules.condScopeHint')" @update:model-value="setCondScope(c, String($event))" />
+          <SSelect class="dw-w-10" :model-value="c.when_empty ?? 'fail'" :options="whenEmptyOptions" :aria-label="t('rules.whenEmpty')" :title="t('rules.whenEmptyHint')" @update:model-value="setWhenEmpty(c, String($event))" />
+        </template>
         <SButton size="sm" variant="ghost" icon="x" icon-only :aria-label="t('remove')" :disabled="r.conditions.length <= 1" @click="removeCondition(r, j)" />
       </div>
       <SButton size="xs" icon="plus" :disabled="r.conditions.length >= 10" @click="r.conditions.push(newCondition())">{{ t('rules.addCondition') }}</SButton>

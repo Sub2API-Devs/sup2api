@@ -56,6 +56,7 @@ const zh = {
     bitmap: '各窗口是否命中，最新在右；触发后清空',
     hit: '本窗口命中',
     miss: '本窗口未命中',
+    unjudged: '样本不足，本窗口不判定',
     fired: '已触发',
     lastChange: '最近变化',
     nextEval: '最早下次评估'
@@ -92,7 +93,9 @@ const zh = {
     flushed_keys_total: '写入的（键、窗口）',
     flushed_samples_total: '写入的样本',
     events_logged_total: '写入日志的事件',
-    events_log_dropped_total: '超出日志上限的事件'
+    events_log_dropped_total: '超出日志上限的事件',
+    sticky_clears_total: '完成的粘性会话清理',
+    sticky_clear_failures_total: '失败的粘性会话清理（重试或放弃）'
   },
   events: {
     loadFailed: '加载权重事件失败',
@@ -102,6 +105,7 @@ const zh = {
     col: { time: '时间', kind: '类型', key: '账号 · 分组 / 模型', weight: '权重', rules: '触发规则', detail: '说明' },
     cleared: '{strategy}：清理了 {n} 个粘性会话',
     clearFailed: '{strategy}：清理粘性会话失败：{error}',
+    zero: '权重降到 0',
     window: '窗口 {total} 次，失败 {fail}',
     nothingReset: '没有需要重置的记录',
     keysAtBase: '{n} 个在基准上的键',
@@ -119,6 +123,7 @@ const zh = {
   verdict: { bad: '异常', good: '健康', neutral: '无判定' },
   reason: { base_mismatch: '账号权重已修改', rules_change: '规则已修改，历史清空', manual: '手动重置', status_change: '账号恢复正常状态' },
   scope: { all: '全部请求', stream: '仅流式', non_stream: '仅非流式' },
+  whenEmpty: { fail: '无样本时不成立', pass: '无样本时成立' },
   metric: { error_rate: '错误率', ttfb: '首字耗时', latency: '整次耗时', weight: '有效权重' },
   unit: { error_rate: '%', ttfb: 'ms', latency: 'ms', weight: '', second: '秒' },
   join: { and: '且', or: '或' },
@@ -133,6 +138,11 @@ const zh = {
     p: '分位',
     pPrefix: 'P',
     value: '阈值',
+    condScope: '条件的统计范围',
+    condScopeRule: '同规则',
+    condScopeHint: '这个条件读哪些请求的计数；整次耗时只适合仅非流式（流式的整次耗时就是整段回答的长度）',
+    whenEmpty: '无样本时',
+    whenEmptyHint: '回看完仍没有任何样本时条件是否成立；回升规则里可能没有样本的条件（没有流式就没有首字）应选“成立”',
     addCondition: '添加条件',
     add: '添加规则',
     newName: '规则 {n}'
@@ -141,7 +151,7 @@ const zh = {
   editMode: { visual: '可视化', json: 'JSON' },
   json: {
     rules: '规则 JSON',
-    rulesHint: '数组，每条：name、scope（all / stream / non_stream）、conditions（join、metric、p、op、value）、periods、hit_periods、enabled',
+    rulesHint: '数组，每条：name、scope（all / stream / non_stream）、conditions（join、metric、p、op、value，以及可选的 scope、when_empty：fail / pass）、periods、hit_periods、enabled',
     strategies: '策略 JSON',
     strategiesHint: '数组，每条：name、when（规则名，或 all / any 数组）、actions（type、mode、value、percent）、cooldown_seconds、enabled',
     notArray: '必须是一个数组',
@@ -179,6 +189,10 @@ const zh = {
     floorMode: '权重下限方式',
     floor: '权重下限',
     floorHint: '0 表示可降到 0，账号暂停调度',
+    strict: '样本不足不判定',
+    strictHint: '降权和清理用的规则回看到头样本仍不足时不判定；关闭则与 new-api 一样按已有样本判定',
+    clearOnZero: '降到 0 时清理粘性会话',
+    clearOnZeroHint: '权重降到 0 只拦新会话，已绑定的粘性会话仍会发往该账号',
     rules: '判定规则',
     rulesHint: '规则只判定，不动作；策略按规则名引用它们。',
     restoreRules: '恢复默认规则和策略',
@@ -278,6 +292,7 @@ const en: typeof zh = {
     bitmap: 'Hit in each window, newest on the right; cleared when the rule fires',
     hit: 'hit this window',
     miss: 'not hit this window',
+    unjudged: 'too few samples, not judged this window',
     fired: 'Fired',
     lastChange: 'Last change',
     nextEval: 'Next evaluation, at the earliest'
@@ -314,7 +329,9 @@ const en: typeof zh = {
     flushed_keys_total: '(key, window) counters written',
     flushed_samples_total: 'Samples written',
     events_logged_total: 'Events logged',
-    events_log_dropped_total: 'Events over the log cap'
+    events_log_dropped_total: 'Events over the log cap',
+    sticky_clears_total: 'Sticky session clears done',
+    sticky_clear_failures_total: 'Sticky session clears failed (retried or given up)'
   },
   events: {
     loadFailed: 'Failed to load the weight events',
@@ -324,6 +341,7 @@ const en: typeof zh = {
     col: { time: 'Time', kind: 'Kind', key: 'Account · group / model', weight: 'Weight', rules: 'Rules fired', detail: 'Detail' },
     cleared: '{strategy}: {n} sticky sessions cleared',
     clearFailed: '{strategy}: clearing sticky sessions failed: {error}',
+    zero: 'weight dropped to 0',
     window: 'window: {total} attempts, {fail} failed',
     nothingReset: 'nothing to reset',
     keysAtBase: '{n} keys at their base',
@@ -341,6 +359,7 @@ const en: typeof zh = {
   verdict: { bad: 'Unhealthy', good: 'Healthy', neutral: 'No verdict' },
   reason: { base_mismatch: 'Account weight changed', rules_change: 'Rules changed, history dropped', manual: 'Manual reset', status_change: 'Account active again' },
   scope: { all: 'All requests', stream: 'Streaming only', non_stream: 'Non-streaming only' },
+  whenEmpty: { fail: 'False without samples', pass: 'True without samples' },
   metric: { error_rate: 'Error rate', ttfb: 'First token', latency: 'Whole attempt', weight: 'Effective weight' },
   unit: { error_rate: '%', ttfb: 'ms', latency: 'ms', weight: '', second: 's' },
   join: { and: 'and', or: 'or' },
@@ -355,6 +374,11 @@ const en: typeof zh = {
     p: 'Percentile',
     pPrefix: 'P',
     value: 'Threshold',
+    condScope: 'Counted requests of the condition',
+    condScopeRule: 'Same as the rule',
+    condScopeHint: 'The requests whose counters the condition reads; time the whole attempt of non-streaming requests only (the whole attempt of a stream is the length of its answer)',
+    whenEmpty: 'Without samples',
+    whenEmptyHint: 'Whether the condition holds when looking back found no sample at all; in a climb rule, a condition that may have none (no streams, no first token) should be true',
     addCondition: 'Add condition',
     add: 'Add rule',
     newName: 'Rule {n}'
@@ -363,7 +387,7 @@ const en: typeof zh = {
   editMode: { visual: 'Visual', json: 'JSON' },
   json: {
     rules: 'Rules JSON',
-    rulesHint: 'An array; each rule: name, scope (all / stream / non_stream), conditions (join, metric, p, op, value), periods, hit_periods, enabled',
+    rulesHint: 'An array; each rule: name, scope (all / stream / non_stream), conditions (join, metric, p, op, value, and optionally scope and when_empty: fail / pass), periods, hit_periods, enabled',
     strategies: 'Strategies JSON',
     strategiesHint: 'An array; each strategy: name, when (a rule name, or an all / any array), actions (type, mode, value, percent), cooldown_seconds, enabled',
     notArray: 'must be an array',
@@ -401,6 +425,10 @@ const en: typeof zh = {
     floorMode: 'Weight floor',
     floor: 'Floor value',
     floorHint: '0 lets the weight drop to 0, which pauses the account',
+    strict: 'Judge only on enough samples',
+    strictHint: 'Rules that degrade or clear are not judged while their samples stay short after looking back as far as allowed; off, they are judged on what there is, as in new-api',
+    clearOnZero: 'Clear sticky sessions at 0',
+    clearOnZeroHint: 'A weight of 0 only keeps new sessions off; bound sticky sessions would keep going to the account',
     rules: 'Rules',
     rulesHint: 'Rules only judge; strategies reference them by name.',
     restoreRules: 'Restore default rules and strategies',

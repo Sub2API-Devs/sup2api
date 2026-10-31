@@ -53,7 +53,7 @@ func (p *Plugin) runCleanup(ctx context.Context) (*pluginv1.RunJobResponse, erro
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
 	now := p.now()
-	n, err := s.prune(ctx, obsSince(cfg, now.Unix()), now.Add(-eventRetention), now.Add(-staleAfter))
+	n, err := s.prune(ctx, obsSince(cfg, now.Unix()), now.Add(-eventRetention), now.Add(-staleAfter), now.Add(-stickyGiveUpAfter))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup: %v", err)
 	}
@@ -125,8 +125,16 @@ func (p *Plugin) runEvaluate(ctx context.Context) (*pluginv1.RunJobResponse, err
 	}
 	p.stats.add(cKeyFailures, int64(errs.n))
 	p.stats.add(cChanged, int64(e.changed))
-	p.record(ctx, s, e.events, e.changed > 0)
-	p.notify(ctx, cfg, e.notices)
+	// Events and notifications first: the sticky clears are slow (each call
+	// scans every binding) and queued with the states, so they can wait for
+	// the next run, the events of this one cannot. The states are written:
+	// what follows them gets time of its own even if the keys used up the
+	// job's.
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTimeout)
+	p.record(rctx, s, e.events, e.changed > 0)
+	p.notify(rctx, cfg, e.notices)
+	cancel()
+	p.runStickyClears(ctx, s)
 	if errs.n > 0 {
 		p.stats.add(cRunFailures, 1)
 		return nil, status.Errorf(codes.Internal, "%v", errs)
@@ -232,7 +240,11 @@ func (e *evaluation) evaluate(ctx context.Context, k key) error {
 		next = rules.Tombstone(window)
 	}
 	e.evaluated++
-	written, err := e.s.writeState(ctx, k, next, row.gen)
+	var clear *pendingClear
+	if out.Action == rules.ActionApplied && len(out.SideEffects) > 0 {
+		clear = pendingOf(k, window, out.WeightTo, out.SideEffects)
+	}
+	written, err := e.s.writeState(ctx, k, next, row.gen, clear)
 	if err != nil {
 		return err
 	}
@@ -254,9 +266,6 @@ func (e *evaluation) evaluate(ctx context.Context, k key) error {
 			e.notices = append(e.notices, notice{k: k, name: b.Name, ev: ev})
 		}
 	}
-	if len(out.SideEffects) > 0 {
-		e.events = append(e.events, e.clearAffinity(ctx, k, window, out.WeightTo, out.SideEffects))
-	}
 	return nil
 }
 
@@ -269,27 +278,116 @@ func (e *evaluation) series(k key, window int64, res *rules.Resolved) []rules.Co
 	return out
 }
 
-// clearAffinity deletes a share of the key's sticky bindings. The window
-// start is the salt (as in new-api), so successive windows rotate through
-// different bindings. Strategies clearing in the same window share it, so
-// the largest share selects a superset of the others: one call clears for
-// all of them.
-func (e *evaluation) clearAffinity(ctx context.Context, k key, window int64, weight float64, effects []rules.SideEffect) eventRow {
-	names, percent := make([]string, len(effects)), 0
-	for i, se := range effects {
-		names[i], percent = se.Strategy, max(percent, se.AffinityPercent)
+// pendingOf is the sticky clear of a key's side effects in a window. The
+// window start is the salt (as in new-api), so successive windows rotate
+// through different bindings, and a retry selects the same ones again.
+// Strategies clearing in the same window share it, so the largest share
+// selects a superset of the others: one call clears for all of them (a
+// weight dropping to 0 clears everything).
+func pendingOf(k key, window int64, weight float64, effects []rules.SideEffect) *pendingClear {
+	c := &pendingClear{key: k, Salt: strconv.FormatInt(window, 10), Weight: weight}
+	var names []string
+	for _, se := range effects {
+		c.Percent = max(c.Percent, se.AffinityPercent)
+		c.Zero = c.Zero || se.Zero
+		if se.Strategy != "" {
+			names = append(names, se.Strategy)
+		}
 	}
-	ev := eventRow{key: k, Event: rules.Event{Kind: rules.EventAffinityClear, From: weight, To: weight},
-		Detail: map[string]any{"strategy": strings.Join(names, ", "), "percent": percent}}
-	resp, err := pluginsdk.ClearStickyBindings(ctx, e.p.host, &pluginv1.ClearStickyBindingsRequest{AccountId: k.AccountID, GroupId: k.GroupID,
-		Model: k.Model, Percent: int32(percent), Salt: strconv.FormatInt(window, 10)})
+	c.Strategies = strings.Join(names, ", ")
+	return c
+}
+
+const (
+	// recordTimeout bounds the events, the weight broadcast and the
+	// notification of a run once its states are written.
+	recordTimeout = 15 * time.Second
+	// stickyBudget bounds the sticky clears of one evaluate run (a call scans
+	// every binding, up to 10 s in the core), within the job's own deadline
+	// less stickyMargin for their events; what is left waits for the next run.
+	stickyBudget = 30 * time.Second
+	stickyMargin = 5 * time.Second
+	// stickyBatch is how many pending clears one run leases at most.
+	stickyBatch = 100
+	// stickyMaxAttempts: a clear failing that often is given up (with an
+	// event saying why); one the host refuses outright at once.
+	stickyMaxAttempts = 10
+	// stickyGiveUpAfter: cleanup drops what is still queued after that long.
+	stickyGiveUpAfter = time.Hour
+)
+
+// runStickyClears runs the queued sticky clears, oldest first, within a
+// budget of their own: done or given up, a clear is dropped and recorded as
+// an affinity_cleared event; one that fails or runs out of time is handed
+// back to the next run. A clear is retried at least until it succeeds or is
+// given up; retrying selects the same bindings (same salt), so it does not
+// clear more than its share.
+func (p *Plugin) runStickyClears(ctx context.Context, s store) {
+	budget := stickyBudget
+	if deadline, ok := ctx.Deadline(); ok {
+		budget = min(budget, time.Until(deadline)-stickyMargin)
+	}
+	if budget < time.Second {
+		return
+	}
+	cctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	claimed, err := s.claimClears(cctx, budget+stickyMargin, stickyBatch)
 	if err != nil {
-		e.p.log.Warn("dynweight: clear sticky bindings failed", "account_id", k.AccountID, "error", err.Error())
-		ev.Detail["error"] = err.Error()
-		return ev
+		p.log.Warn("dynweight: read pending sticky clears failed", "error", err.Error())
+		return
 	}
-	ev.Detail["matched"], ev.Detail["cleared"] = resp.GetMatched(), resp.GetCleared()
-	return ev
+	// What follows the budget (handing back, the events) has its own time.
+	after, cancelAfter := context.WithTimeout(context.WithoutCancel(ctx), stickyMargin)
+	defer cancelAfter()
+	var events []eventRow
+	for i, c := range claimed {
+		if cctx.Err() != nil {
+			for _, rest := range claimed[i:] {
+				if err := s.releaseClear(after, rest); err != nil {
+					p.log.Warn("dynweight: hand back sticky clear failed", "account_id", rest.AccountID, "error", err.Error())
+				}
+			}
+			break
+		}
+		if ev, done := p.clearSticky(cctx, c); done {
+			if err := s.finishClear(after, c); err != nil {
+				p.log.Warn("dynweight: drop pending sticky clear failed", "account_id", c.AccountID, "error", err.Error())
+			}
+			events = append(events, ev)
+		} else if err := s.releaseClear(after, c); err != nil {
+			p.log.Warn("dynweight: hand back sticky clear failed", "account_id", c.AccountID, "error", err.Error())
+		}
+	}
+	p.record(after, s, events, false)
+}
+
+// clearSticky runs one clear: done when it succeeded or is given up, with
+// its event.
+func (p *Plugin) clearSticky(ctx context.Context, c pendingClear) (eventRow, bool) {
+	ev := eventRow{key: c.key, Event: rules.Event{Kind: rules.EventAffinityClear, From: c.Weight, To: c.Weight},
+		Detail: map[string]any{"strategy": c.Strategies, "percent": c.Percent}}
+	if c.Zero {
+		ev.Detail["zero"] = true
+	}
+	resp, err := pluginsdk.ClearStickyBindings(ctx, p.host, &pluginv1.ClearStickyBindingsRequest{AccountId: c.AccountID, GroupId: c.GroupID,
+		Model: c.Model, Percent: int32(c.Percent), Salt: c.Salt})
+	if err == nil {
+		p.stats.add(cStickyClears, 1)
+		ev.Detail["matched"], ev.Detail["cleared"] = resp.GetMatched(), resp.GetCleared()
+		return ev, true
+	}
+	p.stats.add(cStickyClearFailures, 1)
+	p.log.Warn("dynweight: clear sticky bindings failed", "account_id", c.AccountID, "group_id", c.GroupID, "model", c.Model,
+		"attempt", c.Attempts, "error", err.Error())
+	// The host refusing the request will refuse it again; anything else
+	// (unavailable, out of time) is retried by the next runs.
+	refused := status.Code(err) == codes.PermissionDenied || status.Code(err) == codes.InvalidArgument
+	if !refused && c.Attempts < stickyMaxAttempts {
+		return ev, false
+	}
+	ev.Detail["error"], ev.Detail["attempts"] = err.Error(), c.Attempts
+	return ev, true
 }
 
 // resetKeys puts the keys matching f back to their base, all of them or

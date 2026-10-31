@@ -23,16 +23,19 @@ const (
 	ActionApplied = "applied"
 )
 
-// The per-rule result characters of State.LastRules. Fired implies hit.
+// The per-rule result characters of State.LastRules. Fired implies hit;
+// unjudged (strict, too few samples) implies neither.
 const (
 	ruleNone     = '0'
 	ruleHit      = '1'
+	ruleUnjudged = '2'
 	ruleHitFired = '3'
 )
 
-// RuleHit / RuleFired read a State.LastRules character.
-func RuleHit(c byte) bool   { return c == ruleHit || c == ruleHitFired }
-func RuleFired(c byte) bool { return c == ruleHitFired }
+// RuleHit / RuleFired / RuleUnjudged read a State.LastRules character.
+func RuleHit(c byte) bool      { return c == ruleHit || c == ruleHitFired }
+func RuleFired(c byte) bool    { return c == ruleHitFired }
+func RuleUnjudged(c byte) bool { return c == ruleUnjudged }
 
 // Directions of the last weight change (State.WeightDir).
 const (
@@ -118,10 +121,13 @@ type Input struct {
 	State *State // nil = no state yet
 }
 
-// SideEffect is a non-weight action of a strategy that took effect.
+// SideEffect is a non-weight action that took effect: a strategy's
+// affinity_clear, or (Zero, no strategy) the clearing of every binding of a
+// key whose weight just dropped to 0 (Layer.ClearStickyOnZero).
 type SideEffect struct {
 	Strategy        string
 	AffinityPercent int
+	Zero            bool
 }
 
 // Output is the result of an evaluation.
@@ -248,6 +254,9 @@ func scopedWindows(obs []Counts, exempt []int, rules []Rule) [3]scopeWindows {
 	need := [3]bool{scopeAllIdx: true}
 	for _, r := range rules {
 		need[scopeIndex(r.Scope)] = true
+		for _, c := range r.Conditions {
+			need[scopeIndex(c.scopeIn(r.Scope))] = true
+		}
 	}
 	var out [3]scopeWindows
 	for idx := range out {
@@ -299,21 +308,29 @@ func cutLimit(window int64, windowSeconds, retention int, cut int64) int {
 	return max(limit, 1)
 }
 
-// ruleLedger is where a rule reads from: its scope, how far it may look
-// back (limit, after its cut) and how many windows are new since the last
+// ruleLedger is where a rule reads from: the scopes (each condition reads
+// its own, the rule's unless it says otherwise), how far it may look back
+// (limit, after its cut) and how many windows are new since the last
 // evaluation (fresh). A sample condition only holds with samples in the
 // newest min(depth, fresh) windows, or the same unconsumed old samples would
 // count again in every quiet window. weight conditions have no samples and
 // are judged on the current value, so `error_rate lt 30 or weight lte 0`
-// still hits without traffic.
+// still hits without traffic. strict: evidence short of the target after
+// the whole lookback is not judged (Layer.MinSamplesStrict).
 type ruleLedger struct {
-	scope scopeWindows
-	limit int
-	fresh int
+	scopes    *[3]scopeWindows
+	ruleScope string
+	limit     int
+	fresh     int
+	strict    bool
 }
 
-func (l ruleLedger) freshSamples(depth int, samples func(Family) int64) bool {
-	for _, f := range l.scope.fams[:min(depth, l.fresh)] {
+func (l ruleLedger) scopeOf(c Condition) scopeWindows {
+	return l.scopes[scopeIndex(c.scopeIn(l.ruleScope))]
+}
+
+func (l ruleLedger) freshSamples(s scopeWindows, depth int, samples func(Family) int64) bool {
+	for _, f := range s.fams[:min(depth, l.fresh)] {
 		if samples(f) > 0 {
 			return true
 		}
@@ -428,50 +445,73 @@ var (
 // condResult is a judged condition: its truth (new samples included), its
 // evidence, and whether the evidence is enough to consume (a condition
 // without any sample counts as consumed, or it would hold a rule's cut back
-// over samples of another dimension until the retention ends).
+// over samples of another dimension until the retention ends). passedEmpty:
+// it held for want of samples, so it gave the rule no evidence. short: strict
+// and short of the target, so it was not judged.
 type condResult struct {
-	truth   bool
-	stat    RuleStat
-	reached bool
+	truth       bool
+	stat        RuleStat
+	reached     bool
+	passedEmpty bool
+	short       bool
+}
+
+// judge turns a condition's evidence into its result: n samples over the
+// lookback (target wanted), holds the comparison on them, fresh whether any
+// is new. unknown: samples of the dimension but none for this threshold (it
+// was just added), which is not a healthy quiet window.
+func (l ruleLedger) judge(c Condition, n, target int64, holds, fresh, unknown bool, stat RuleStat) condResult {
+	switch {
+	case unknown:
+		return condResult{stat: stat}
+	case n == 0:
+		pass := c.passEmpty()
+		return condResult{truth: pass, stat: stat, reached: true, passedEmpty: pass}
+	case l.strict && n < target:
+		// Short of the target even after looking back as far as the cut and
+		// the retention allow: not judged, and the samples are kept.
+		return condResult{stat: stat, short: true}
+	}
+	// A pass condition only vetoes: old samples are evidence enough.
+	return condResult{truth: holds && (fresh || c.passEmpty()), stat: stat, reached: n >= target}
 }
 
 // percentileCondition looks back until percentileMin samples and judges
-// "pP >= threshold" (lt is its exact negation). Without samples neither
-// holds.
+// "pP >= threshold" (lt is its exact negation).
 func percentileCondition(l ruleLedger, c Condition, minSamples int, dim percentileDim) condResult {
+	s := l.scopeOf(c)
 	target := percentileMin(c.P, minSamples)
 	ms := int(c.Value)
-	cum := make([]int64, len(l.scope.fams))
+	cum := make([]int64, len(s.fams))
 	var n int64
-	for i, f := range l.scope.fams {
+	for i, f := range s.fams {
 		n += dim.samples(f, ms)
 		cum[i] = n
 	}
 	depth := lookbackDepth(cum[:l.limit], target)
 	n = cum[depth-1]
 	var count int64
-	for _, f := range l.scope.fams[:depth] {
+	for _, f := range s.fams[:depth] {
 		count += dim.count(f, ms)
 	}
-	// Samples of the dimension but none for this threshold (it was just
-	// added): unknown, not a healthy quiet window.
-	unknown := n == 0 && dim.cum(l.scope)[depth-1] > 0
-	truth := n > 0 && percentileViolated(c.P, count, n)
+	holds := percentileViolated(c.P, count, n)
 	if c.Op == OpLt {
-		truth = n > 0 && !truth
+		holds = !holds
 	}
-	fresh := l.freshSamples(depth, func(f Family) int64 { return dim.samples(f, ms) })
-	return condResult{truth: truth && !unknown && fresh, stat: RuleStat{N: n, Lookback: depth}, reached: !unknown && (n >= target || n == 0)}
+	unknown := n == 0 && dim.cum(s)[depth-1] > 0
+	fresh := l.freshSamples(s, depth, func(f Family) int64 { return dim.samples(f, ms) })
+	return l.judge(c, n, target, holds, fresh, unknown, RuleStat{N: n, Lookback: depth})
 }
 
 // errorRateCondition looks back until min_samples attempts and judges
 // fail*100 OP value*total.
 func errorRateCondition(l ruleLedger, c Condition, exempt []int, minSamples int64) condResult {
-	depth := lookbackDepth(l.scope.errTotal[:l.limit], minSamples)
-	total, fail := l.scope.errTotal[depth-1], l.scope.errFail[depth-1]
-	truth := total > 0 && opHolds(c.Op, fail*100, int64(c.Value)*total)
-	fresh := l.freshSamples(depth, func(f Family) int64 { return f.Total - f.exemptFails(exempt) })
-	return condResult{truth: truth && fresh, stat: RuleStat{N: total, Lookback: depth}, reached: total >= minSamples || total == 0}
+	s := l.scopeOf(c)
+	depth := lookbackDepth(s.errTotal[:l.limit], minSamples)
+	total, fail := s.errTotal[depth-1], s.errFail[depth-1]
+	holds := opHolds(c.Op, fail*100, int64(c.Value)*total)
+	fresh := l.freshSamples(s, depth, func(f Family) int64 { return f.Total - f.exemptFails(exempt) })
+	return l.judge(c, total, minSamples, holds, fresh, false, RuleStat{N: total, Lookback: depth})
 }
 
 // ruleOutcome is the rule layer's result.
@@ -492,6 +532,7 @@ func (o ruleOutcome) fired(idx int) bool {
 // circuit, the evidence covers them all), "and" before "or". weight
 // conditions compare lowView. weightOnly is the expression's value with
 // every sample condition false: what the skipped windows are padded with.
+// res.short: a condition was too short of samples to judge (strict).
 func evalRule(cfg *Resolved, idx int, l ruleLedger, lowView int64) (hit, weightOnly bool, res condResult) {
 	res.reached = true
 	group, weightGroup := true, true
@@ -514,7 +555,10 @@ func evalRule(cfg *Resolved, idx int, l ruleLedger, lowView int64) (hit, weightO
 			continue
 		}
 		res.reached = res.reached && cond.reached
-		res.stat = weakerStat(res.stat, cond.stat)
+		res.short = res.short || cond.short
+		if !cond.passedEmpty {
+			res.stat = weakerStat(res.stat, cond.stat)
+		}
 		group, weightGroup = group && cond.truth, false
 	}
 	return hit || group, weightOnly || weightGroup, res
@@ -535,7 +579,9 @@ func weightHolds(r Rule, lowView int64) bool {
 // last N windows); M hits fire it and clear the bitmap. Once the evidence is
 // consumed (enough samples, or fired) the cut moves to W; otherwise the next
 // window keeps looking back, so a sample is never consumed twice by a rule
-// nor lost for being alone.
+// nor lost for being alone. A strict rule too short of samples to be judged
+// (and not hit by another branch) leaves its bitmap alone: the window is no
+// verdict, so on sparse traffic the bitmap counts the last N judgements.
 func evalRules(in *Input, rules []Rule, l ledger, c carry, lowView int64) ruleOutcome {
 	out := ruleOutcome{lastRules: make([]byte, len(rules)), stats: make([]RuleStat, len(rules)),
 		weightHold: make([]bool, len(rules)), bitmaps: c.bitmaps, cuts: c.cuts}
@@ -547,10 +593,15 @@ func evalRules(in *Input, rules []Rule, l ledger, c carry, lowView int64) ruleOu
 		fresh = cutLimit(in.Window, in.Cfg.WindowSeconds, l.windows, in.State.LastEvalWindow)
 	}
 	for idx, r := range rules {
-		rl := ruleLedger{scope: l.scopes[scopeIndex(r.Scope)], limit: cutLimit(in.Window, in.Cfg.WindowSeconds, l.windows, out.cuts[idx]), fresh: fresh}
+		rl := ruleLedger{scopes: &l.scopes, ruleScope: r.Scope, limit: cutLimit(in.Window, in.Cfg.WindowSeconds, l.windows, out.cuts[idx]), fresh: fresh,
+			strict: idx < len(in.Cfg.StrictRules) && in.Cfg.StrictRules[idx]}
 		hit, weightOnly, res := evalRule(&in.Cfg, idx, rl, lowView)
 		out.stats[idx] = res.stat
 		out.weightHold[idx] = weightHolds(r, lowView)
+		if res.short && !hit {
+			out.lastRules[idx] = ruleUnjudged
+			continue
+		}
 		// Skipped windows have no evidence for sample conditions: they are
 		// padded with 0, except for rules a weight branch alone satisfies.
 		// lowView is constant over the gap (nothing was written in it), so
@@ -695,6 +746,11 @@ func Evaluate(in Input) Output {
 	eff, cooldowns, verdict, effects := applyStrategies(&in, strategies, ro, startEff, floor, zeroStart, c.cooldowns)
 	st.WeightEff = math.Floor(eff*1000000+0.5) / 1000000
 	st.Cooldowns = cooldowns
+	// Weight 0 only keeps new sessions off the account: the sticky ones
+	// would go on to it.
+	if in.Cfg.Enabled && in.Cfg.ClearStickyOnZero && !IsZero(from) && IsZero(st.WeightEff) {
+		effects = append(effects, SideEffect{AffinityPercent: 100, Zero: true})
+	}
 	revived := IsZero(from) && !IsZero(st.WeightEff)
 	change := ""
 	switch {

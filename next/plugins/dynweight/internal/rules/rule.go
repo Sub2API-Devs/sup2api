@@ -65,16 +65,43 @@ type Rule struct {
 	HitPeriods int         `json:"hit_periods"` // M, 1..N
 }
 
+// What a sample condition is without any sample (Condition.WhenEmpty).
+const (
+	WhenEmptyFail = "fail" // false (the default): no evidence, no hit
+	WhenEmptyPass = "pass" // true: no evidence against it
+)
+
 // Condition is one `metric op value`. ttfb / latency compare the P-th
 // percentile in milliseconds, error_rate a percentage and weight the integer
 // effective weight at the start of the window.
+//
+// A sample condition (all but weight) may read other counters than its
+// rule's (Scope), so one rule can judge the first token of the streams and
+// the whole attempt of the non-streaming requests. WhenEmpty says what it is
+// when the lookback found no sample at all: false (fail, the default), or
+// true (pass). A pass condition only vetoes: it also holds on old samples
+// alone, without needing new ones, so a recovery rule does not wait for a
+// kind of traffic the key may never get.
 type Condition struct {
-	Join   string  `json:"join,omitempty"` // and | or; empty on the first condition
-	Metric string  `json:"metric"`
-	P      int     `json:"p,omitempty"` // ttfb / latency: 50..100
-	Op     string  `json:"op"`
-	Value  float64 `json:"value"`
+	Join      string  `json:"join,omitempty"` // and | or; empty on the first condition
+	Metric    string  `json:"metric"`
+	P         int     `json:"p,omitempty"` // ttfb / latency: 50..100
+	Op        string  `json:"op"`
+	Value     float64 `json:"value"`
+	Scope     string  `json:"scope,omitempty"`      // "" = the rule's | all | stream | non_stream
+	WhenEmpty string  `json:"when_empty,omitempty"` // "" (= fail) | pass
 }
+
+// scopeIn is the scope the condition reads under a rule of scope rule.
+func (c Condition) scopeIn(rule string) string {
+	if c.Scope != "" {
+		return c.Scope
+	}
+	return rule
+}
+
+// passEmpty reports whether the condition holds without samples.
+func (c Condition) passEmpty() bool { return c.WhenEmpty == WhenEmptyPass }
 
 // UnmarshalJSON leaves a missing value NaN, so normalize refuses it rather
 // than reading it as 0.
@@ -145,11 +172,11 @@ func (r Rule) normalize(i int) (Rule, error) {
 	}
 	conds := make([]Condition, len(r.Conditions))
 	for j, c := range r.Conditions {
-		c, err := c.normalize(fmt.Sprintf("%s.conditions[%d]", path, j), j)
+		c, err := c.normalize(fmt.Sprintf("%s.conditions[%d]", path, j), j, r.Scope)
 		if err != nil {
 			return r, err
 		}
-		if r.Scope == ScopeNonStream && c.Metric == MetricTTFB {
+		if scopeIndex(c.scopeIn(r.Scope)) == scopeNonStreamIdx && c.Metric == MetricTTFB {
 			return r, fmt.Errorf("%s.conditions[%d]: ttfb has no non_stream samples", path, j)
 		}
 		conds[j] = c
@@ -169,8 +196,29 @@ func (r Rule) normalize(i int) (Rule, error) {
 	return r, nil
 }
 
-func (c Condition) normalize(path string, j int) (Condition, error) {
+// normalize validates a condition of a rule of scope ruleScope (already
+// canonical): a scope equal to the rule's is left out.
+func (c Condition) normalize(path string, j int, ruleScope string) (Condition, error) {
 	c.Join, c.Metric, c.Op = strings.TrimSpace(c.Join), strings.TrimSpace(c.Metric), strings.TrimSpace(c.Op)
+	c.Scope, c.WhenEmpty = strings.TrimSpace(c.Scope), strings.TrimSpace(c.WhenEmpty)
+	switch c.Scope {
+	case "", ScopeAll, ScopeStream, ScopeNonStream:
+	default:
+		return c, fmt.Errorf("%s.scope must be all, stream or non_stream", path)
+	}
+	switch c.WhenEmpty {
+	case "", WhenEmptyFail:
+		c.WhenEmpty = ""
+	case WhenEmptyPass:
+	default:
+		return c, fmt.Errorf("%s.when_empty must be fail or pass", path)
+	}
+	if c.Metric == MetricWeight && (c.Scope != "" || c.WhenEmpty != "") {
+		return c, fmt.Errorf("%s: scope and when_empty are only valid for error_rate, ttfb and latency", path)
+	}
+	if scopeIndex(c.Scope) == scopeIndex(ruleScope) {
+		c.Scope = ""
+	}
 	if j == 0 {
 		c.Join = ""
 	} else if c.Join != JoinAnd && c.Join != JoinOr {

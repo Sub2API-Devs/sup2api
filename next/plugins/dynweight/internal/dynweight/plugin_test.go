@@ -200,13 +200,14 @@ func TestDegradeNotifyAndReset(t *testing.T) {
 		t.Fatalf("status %+v", status.Data)
 	}
 	st := status.Data[0]
-	// The rule fired (2 of 3) and cleared its bitmap; the p95 rule saw both
-	// windows healthy, merged back for want of samples; the revival rule has
-	// a weight condition only.
+	// The rule fired (2 of 3) and cleared its bitmap; the p95 rule needs 20
+	// samples and the whole retention holds 10: strict (min_samples_strict),
+	// it is not judged and its bitmap stays empty (0.2.0 judged it "00"); the
+	// revival rule has a weight condition only.
 	r0, r1 := st.Rules[0], st.Rules[1]
 	if st.State != "degrading" || st.WeightMin != 0 || st.NextEvalAt <= st.EvalWindow || !st.ErrorEvaluable || st.TTFBSamples != 5 ||
 		r0.Bitmap != "" || r0.Periods != 3 || r0.HitPeriods != 2 || r0.Scope != rules.ScopeAll ||
-		r1.Bitmap != "00" || r1.Samples != 10 || !st.Rules[4].NoSamples {
+		r1.Bitmap != "" || !r1.Unjudged || r1.Samples != 10 || !st.Rules[4].NoSamples {
 		t.Fatalf("status detail %+v", st)
 	}
 	var weights struct {

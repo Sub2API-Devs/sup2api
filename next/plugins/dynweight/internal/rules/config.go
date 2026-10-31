@@ -31,6 +31,17 @@ type Layer struct {
 	// MinSamples is how many attempts a condition accumulates, looking back
 	// over the key's own earlier windows, before it is judged on them.
 	MinSamples int `json:"min_samples"`
+	// MinSamplesStrict (default on): a rule an enabled strategy that does not
+	// climb references is not judged while its samples, looked back over as
+	// far as the cut and the retention allow, stay short of what it needs
+	// (min_samples, ceil(100/(100-p)) for a percentile). Off, it is judged on
+	// what there is, as new-api does. Rules only climbs reference are always
+	// judged on what there is: a degraded key gets less traffic.
+	MinSamplesStrict bool `json:"min_samples_strict"`
+	// ClearStickyOnZero (default on) clears every sticky binding of a key
+	// whose effective weight drops to 0: scheduling stops picking the
+	// account, but bound sessions would keep going to it.
+	ClearStickyOnZero bool `json:"clear_sticky_on_zero"`
 	// ExemptStatusCodes are upstream failures the error rate leaves out of
 	// both numerator and denominator ("400,500-503").
 	ExemptStatusCodes string `json:"exempt_status_codes"`
@@ -74,13 +85,19 @@ type Config struct {
 }
 
 // defaultRules / defaultStrategies: error rate or p95 too slow in 2 of 3
-// windows, first token or the whole attempt hung in the window, a healthy
-// window climbs back, and a weight at 0 for 2 windows is revived.
+// windows, a stream's first token or a non-streaming attempt hung in the
+// window, a healthy window climbs back, and a weight at 0 for 2 windows is
+// revived. The whole attempt of a stream is as long as the answer, so only
+// non-streaming attempts are timed whole (0.2.0 timed every attempt, and a
+// normal long stream degraded the key and kept it down). The recovery rule
+// lets the timing conditions pass without samples: a key with no streams has
+// no first token, one with only streams no non-streaming attempt
+// (migrations/0002 moves the 0.2.0 defaults over).
 const (
 	defaultRules = `[{"name":"错误率过高","conditions":[{"metric":"error_rate","op":"gte","value":30}],"periods":3,"hit_periods":2},` +
 		`{"name":"首字 p95 过慢","conditions":[{"metric":"ttfb","p":95,"op":"gte","value":10000}],"periods":3,"hit_periods":2},` +
-		`{"name":"首字挂死","conditions":[{"metric":"ttfb","p":100,"op":"gte","value":60000},{"join":"or","metric":"latency","p":100,"op":"gte","value":120000}],"periods":1,"hit_periods":1},` +
-		`{"name":"健康恢复","conditions":[{"metric":"error_rate","op":"lt","value":15},{"join":"and","metric":"ttfb","p":95,"op":"lt","value":10000},{"join":"and","metric":"ttfb","p":100,"op":"lt","value":60000},{"join":"and","metric":"latency","p":100,"op":"lt","value":120000}],"periods":1,"hit_periods":1},` +
+		`{"name":"首字挂死","conditions":[{"metric":"ttfb","p":100,"op":"gte","value":60000},{"join":"or","metric":"latency","p":100,"op":"gte","value":120000,"scope":"non_stream"}],"periods":1,"hit_periods":1},` +
+		`{"name":"健康恢复","conditions":[{"metric":"error_rate","op":"lt","value":15},{"join":"and","metric":"ttfb","p":95,"op":"lt","value":10000,"when_empty":"pass"},{"join":"and","metric":"ttfb","p":100,"op":"lt","value":60000,"when_empty":"pass"},{"join":"and","metric":"latency","p":100,"op":"lt","value":120000,"scope":"non_stream","when_empty":"pass"}],"periods":1,"hit_periods":1},` +
 		`{"name":"复活探测","conditions":[{"metric":"weight","op":"lte","value":0}],"periods":2,"hit_periods":2}]`
 	defaultStrategies = `[{"name":"错误率过高","when":"错误率过高","actions":[{"type":"weight_degrade","mode":"current_percent","value":30}]},` +
 		`{"name":"首字 p95 过慢","when":"首字 p95 过慢","actions":[{"type":"weight_degrade","mode":"current_percent","value":30}]},` +
@@ -117,7 +134,8 @@ func (c *Config) decode(data []byte) (map[int64]json.RawMessage, error) {
 		Groups map[int64]json.RawMessage `json:"groups"`
 	}
 	doc.plain = (*plain)(c)
-	c.LogEvents = true
+	// Fields that are on unless the document says false.
+	c.LogEvents, c.MinSamplesStrict, c.ClearStickyOnZero = true, true, true
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return nil, err
 	}
@@ -225,7 +243,7 @@ func (c *Config) repair() []string {
 
 // DefaultLayer is the factory layer (adjustment off).
 func DefaultLayer() Layer {
-	l := Layer{WindowSeconds: 60, MinSamples: 10, ExemptStatusCodes: "400", MinWeightMode: ModeBasePercent}
+	l := Layer{WindowSeconds: 60, MinSamples: 10, MinSamplesStrict: true, ClearStickyOnZero: true, ExemptStatusCodes: "400", MinWeightMode: ModeBasePercent}
 	if json.Unmarshal([]byte(defaultRules), &l.Rules) != nil || json.Unmarshal([]byte(defaultStrategies), &l.Strategies) != nil {
 		panic("dynweight: invalid default rules")
 	}
@@ -356,11 +374,13 @@ func normalizeNamed[T any](label string, items []T, normalize func(T, int) (T, e
 // degraded weight never recovers on its own.
 func (l *Layer) NoClimb() bool { return noClimb(l.Strategies) }
 
-// warnings: a degraded weight that never recovers on its own.
+// warnings: a degraded weight that never recovers on its own, and rules the
+// traffic of some keys judges wrongly or never.
 func (l *Layer) warnings(path string) []string {
 	if l.NoClimb() {
-		return []string{path + "strategies: a strategy degrades the weight but no enabled strategy climbs; it never recovers on its own"}
+		return append([]string{path + "strategies: a strategy degrades the weight but no enabled strategy climbs; it never recovers on its own"}, l.ruleWarnings(path)...)
 	}
+	warnings := l.ruleWarnings(path)
 	weightRules := map[string]bool{}
 	for _, r := range l.Rules {
 		weightRules[r.Name] = r.HasWeightCondition()
@@ -373,9 +393,66 @@ func (l *Layer) warnings(path string) []string {
 		}
 	}
 	if degrade && !revive && l.MinWeight == 0 {
-		return []string{path + "strategies: no enabled climb references a rule with a weight condition; a weight that drops to 0 never recovers on its own"}
+		warnings = append(warnings, path+"strategies: no enabled climb references a rule with a weight condition; a weight that drops to 0 never recovers on its own")
 	}
-	return nil
+	return warnings
+}
+
+// ruleWarnings looks at the conditions of the enabled rules:
+//   - latency over streams: a stream's whole attempt is as long as its
+//     answer, so a normal long stream trips a "too slow" threshold, and keeps
+//     a "healthy" one from holding;
+//   - a rule a climb references with a condition some keys have no samples
+//     for (ttfb without streams, latency of one kind of request without it)
+//     that fails without samples: those keys never climb back;
+//   - an AND group with sample conditions only, all passing without samples:
+//     it holds in windows without any traffic.
+func (l *Layer) ruleWarnings(path string) []string {
+	climbs := map[string]bool{}
+	for _, s := range l.Strategies {
+		if s.IsEnabled() && s.Direction() == Climb && s.When != nil {
+			for _, r := range l.Rules {
+				if s.When.References(func(name string) bool { return name == r.Name }) {
+					climbs[r.Name] = true
+				}
+			}
+		}
+	}
+	var out []string
+	for i, r := range l.Rules {
+		if !r.IsEnabled() {
+			continue
+		}
+		at := fmt.Sprintf("%srules[%d] (%s)", path, i, r.Name)
+		emptyPassGroup, sampled := true, false
+		flush := func() {
+			if sampled && emptyPassGroup {
+				out = append(out, at+": every condition of an AND group passes without samples; it holds in windows without traffic")
+			}
+			emptyPassGroup, sampled = true, false
+		}
+		for j, c := range r.Conditions {
+			if j > 0 && c.Join == JoinOr {
+				flush()
+			}
+			if c.Metric == MetricWeight {
+				emptyPassGroup = false
+				continue
+			}
+			sampled = true
+			emptyPassGroup = emptyPassGroup && c.passEmpty()
+			scope := scopeIndex(c.scopeIn(r.Scope))
+			if c.Metric == MetricLatency && scope != scopeNonStreamIdx {
+				out = append(out, fmt.Sprintf("%s.conditions[%d]: latency of streaming attempts is the whole answer; a normal long stream trips it — set its scope to non_stream", at, j))
+			}
+			mayBeEmpty := c.Metric == MetricTTFB || (c.Metric == MetricLatency && scope != scopeAllIdx)
+			if climbs[r.Name] && mayBeEmpty && !c.passEmpty() {
+				out = append(out, fmt.Sprintf("%s.conditions[%d]: keys without such samples never climb back on this rule — set when_empty to pass", at, j))
+			}
+		}
+		flush()
+	}
+	return out
 }
 
 func checkWindow(v int) error {

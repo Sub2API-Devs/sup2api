@@ -74,7 +74,7 @@ const cur = computed(() => props.row.current)
             <i v-for="(b, j) in bits(r.bitmap, r.periods)" :key="j" :class="b === '1' ? 'dw-bit-hit' : b === '0' ? 'dw-bit-miss' : ''" />
           </span>
           <template v-if="row.eval_window && row.adjusting">
-            <span>{{ t(r.hit ? 'detail.hit' : 'detail.miss') }}</span>
+            <span>{{ t(r.unjudged ? 'detail.unjudged' : r.hit ? 'detail.hit' : 'detail.miss') }}</span>
             <span v-if="!r.no_samples" class="dw-sub">{{ t('status.ruleSamples', { n: r.samples, lookback: r.lookback }) }}</span>
             <SBadge v-if="r.fired" tone="danger" size="xs">{{ t('detail.fired') }}</SBadge>
           </template>

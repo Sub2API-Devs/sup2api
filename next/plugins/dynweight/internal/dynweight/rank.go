@@ -21,6 +21,12 @@ const maxWeight = 1000
 // to a lower tier for the effective weights alone. The candidates' own
 // weights are what the evaluation degrades from, so they are recorded as
 // the bases.
+//
+// The core hands in weights of at least 1, but a ranker ordered before this
+// one may have set 0 (taken the account out). Such a candidate is not ours:
+// its base is not learned (the last one stands, so a key does not reset each
+// time the other ranker flips it), it keeps its 0, and it neither keeps a
+// tier live nor gets the even split.
 func (p *Plugin) RankAccounts(_ context.Context, in *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error) {
 	resp := &pluginv1.RankAccountsResponse{}
 	meta := in.GetMeta()
@@ -33,9 +39,12 @@ func (p *Plugin) RankAccounts(_ context.Context, in *pluginv1.RankAccountsReques
 	effective := make([]int32, len(cands)) // -1: the candidate's own
 	live := map[int32]bool{}               // tiers with a candidate above 0
 	for i, c := range cands {
+		effective[i] = -1
+		if c.GetWeight() <= 0 {
+			continue
+		}
 		w, ok := weights[key{AccountID: c.GetAccountId(), GroupID: meta.GetGroupId(), Model: meta.GetModel()}]
 		// A state computed from another base is stale: the evaluation resets it.
-		effective[i] = -1
 		if ok && w.base == int(c.GetWeight()) {
 			effective[i] = effectiveWeight(w.eff)
 		}
@@ -45,7 +54,7 @@ func (p *Plugin) RankAccounts(_ context.Context, in *pluginv1.RankAccountsReques
 	}
 	for i, c := range cands {
 		w := effective[i]
-		if !live[c.GetPriority()] {
+		if w == 0 && !live[c.GetPriority()] {
 			w = 1
 		}
 		if w >= 0 {
@@ -75,11 +84,15 @@ func newBaseTracker() *baseTracker {
 	return &baseTracker{known: map[pair]base{}, pending: map[pair]base{}}
 }
 
-// see records the bases of a request's candidates, under one lock.
+// see records the bases of a request's candidates, under one lock. A weight
+// of 0 (an earlier ranker took the account out) is no base.
 func (t *baseTracker) see(groupID int64, candidates []*pluginv1.RankCandidate, now time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	for _, c := range candidates {
+		if c.GetWeight() <= 0 {
+			continue
+		}
 		p, weight, name := pair{AccountID: c.GetAccountId(), GroupID: groupID}, int(c.GetWeight()), c.GetName()
 		if k, ok := t.known[p]; ok && k.Weight == weight && k.Name == name && now.Sub(k.SeenAt) < seenRefresh {
 			continue

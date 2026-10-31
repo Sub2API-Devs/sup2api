@@ -26,6 +26,10 @@ type Resolved struct {
 	Layer
 	Rules      []Rule             // enabled rules only; the index is the rule's slot in State
 	Strategies []ResolvedStrategy // enabled strategies only; the index is the cooldown slot
+	// StrictRules marks the rules judged only on enough samples: with
+	// min_samples_strict, those an enabled strategy that does not climb
+	// references (indexed like Rules; nil = none).
+	StrictRules []bool
 	// Thresholds / LatencyThresholds are the percentile thresholds of the
 	// enabled rules (sorted, unique): what observations count per bucket.
 	Thresholds        []int
@@ -69,11 +73,38 @@ func derive(l Layer) derived {
 	cfg.Thresholds, cfg.LatencyThresholds = percentileThresholds(cfg.Rules)
 	var enabled []Strategy
 	cfg.Strategies, enabled = resolveStrategies(l.Strategies, cfg.Rules)
+	if l.MinSamplesStrict {
+		cfg.StrictRules = strictRules(cfg.Rules, cfg.Strategies)
+	}
 	rulesJSON, _ := json.Marshal(cfg.Rules)
 	strategiesJSON, _ := json.Marshal(enabled)
 	d.sigHead = strconv.Itoa(l.WindowSeconds) + "|" + strconv.Itoa(l.MinSamples) + "|"
+	// Strict is the default since 0.3.0: only the lenient mode marks the
+	// signature, so the states of 0.2.0 keep theirs.
+	if !l.MinSamplesStrict {
+		d.sigHead += "lenient|"
+	}
 	d.sigTail = "|" + string(rulesJSON) + "|" + string(strategiesJSON)
 	return d.withExempt(l.ExemptStatusCodes)
+}
+
+// strictRules marks the rules an enabled strategy that does not climb
+// references: they degrade (or clear sessions) on the evidence, so too few
+// samples must not do it. Climb-only rules stay lenient: a degraded key gets
+// less traffic, and would otherwise never gather enough to recover.
+func strictRules(rules []Rule, strategies []ResolvedStrategy) []bool {
+	strict := make([]bool, len(rules))
+	for _, s := range strategies {
+		if s.Direction() == Climb {
+			continue
+		}
+		// With every leaf true Eval visits all of them.
+		s.Tree.Eval(func(idx int) (bool, bool) {
+			strict[idx] = true
+			return true, false
+		})
+	}
+	return strict
 }
 
 // percentileThresholds lists the thresholds of the TTFB and of the latency

@@ -17,26 +17,28 @@ import (
 type counter int
 
 const (
-	cObserved         counter = iota // samples counted
-	cFlushes                         // flushes that wrote counters
-	cFlushFailures                   // flushes whose counters were kept for the next one
-	cFlushedKeys                     // (key, window) counters written
-	cFlushedSamples                  // samples in them
-	cRuns                            // evaluate runs on this node
-	cRunFailures                     // runs that could not load or had failed keys
-	cRunBusyUs                       // their wall time, microseconds
-	cLastRunMs                       // gauge: the last run's wall time
-	cLastRunAt                       // gauge: when it ended, unix seconds
-	cEvaluations                     // keys handed to the kernel
-	cApplied                         // evaluations written back
-	cSkipped                         // keys whose newest closed window was evaluated already
-	cLost                            // write-backs lost to an overlapping run or a reset
-	cBaseResets                      // keys reset for a changed account weight
-	cKeyFailures                     // keys whose evaluation failed
-	cChanged                         // keys whose effective weight changed
-	cResets                          // keys reset by hand or by a status change
-	cEventsLogged                    // events written to the plugin log
-	cEventsLogDropped                // events over the log cap (the events table has them)
+	cObserved            counter = iota // samples counted
+	cFlushes                            // flushes that wrote counters
+	cFlushFailures                      // flushes whose counters were kept for the next one
+	cFlushedKeys                        // (key, window) counters written
+	cFlushedSamples                     // samples in them
+	cRuns                               // evaluate runs on this node
+	cRunFailures                        // runs that could not load or had failed keys
+	cRunBusyUs                          // their wall time, microseconds
+	cLastRunMs                          // gauge: the last run's wall time
+	cLastRunAt                          // gauge: when it ended, unix seconds
+	cEvaluations                        // keys handed to the kernel
+	cApplied                            // evaluations written back
+	cSkipped                            // keys whose newest closed window was evaluated already
+	cLost                               // write-backs lost to an overlapping run or a reset
+	cBaseResets                         // keys reset for a changed account weight
+	cKeyFailures                        // keys whose evaluation failed
+	cChanged                            // keys whose effective weight changed
+	cResets                             // keys reset by hand or by a status change
+	cEventsLogged                       // events written to the plugin log
+	cEventsLogDropped                   // events over the log cap (the events table has them)
+	cStickyClears                       // sticky clears the core did
+	cStickyClearFailures                // sticky clear calls that failed (retried or given up)
 	nCounters
 )
 
@@ -45,6 +47,7 @@ var counterNames = [nCounters]string{
 	"runs_total", "run_failures_total", "run_busy_us_total", "last_run_ms", "last_run_at",
 	"evaluations_total", "applied_total", "skipped_total", "lost_total", "base_resets_total", "key_failures_total",
 	"changed_total", "resets_total", "events_logged_total", "events_log_dropped_total",
+	"sticky_clears_total", "sticky_clear_failures_total",
 }
 
 type counters [nCounters]atomic.Int64

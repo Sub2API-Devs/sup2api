@@ -7,7 +7,8 @@ import StrategiesEditor from './StrategiesEditor.vue'
 import { clone, enumOptions, rulesWithEmptyNumbers, useDwHost, type Layer, type When } from './host'
 
 // One configuration layer (the global one or a group's): window, sample
-// floor, exempt status codes, weight floor, rules and strategies.
+// floor and whether it is strict, exempt status codes, weight floor, the
+// sticky clearing at 0, rules and strategies.
 const props = defineProps<{ defaults: Layer | null; master?: boolean }>()
 const layer = defineModel<Layer>({ required: true })
 // Set while the JSON panel holds text that does not parse, or a number is
@@ -76,6 +77,14 @@ function restoreRules() {
       </SField>
       <SField class="dw-w-8" :label="t('layer.floor')" :hint="t('layer.floorHint')" :error="required(layer.min_weight)">
         <SInput v-model="layer.min_weight" type="number" min="0" :suffix="layer.min_weight_mode === 'base_percent' ? '%' : ''" />
+      </SField>
+    </div>
+    <div class="dw-row">
+      <SField :label="t('layer.strict')" :hint="t('layer.strictHint')">
+        <SSwitch v-model="layer.min_samples_strict" />
+      </SField>
+      <SField :label="t('layer.clearOnZero')" :hint="t('layer.clearOnZeroHint')">
+        <SSwitch v-model="layer.clear_sticky_on_zero" />
       </SField>
     </div>
 

@@ -63,7 +63,8 @@ function detailText(e: WeightEvent): string {
     return [t(`reason.${e.reason}`), extra].filter(Boolean).join(' · ')
   }
   if (e.kind === 'affinity_cleared') {
-    const strategy = String(d.strategy ?? '')
+    // A weight dropping to 0 clears without a strategy.
+    const strategy = d.strategy ? String(d.strategy) : d.zero ? t('events.zero') : ''
     return d.error ? t('events.clearFailed', { strategy, error: String(d.error) }) : t('events.cleared', { strategy, n: Number(d.cleared ?? 0) })
   }
   const w = d.window as { total?: number; fail?: number } | undefined

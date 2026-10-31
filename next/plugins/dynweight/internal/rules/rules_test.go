@@ -129,7 +129,7 @@ func TestConditionValueRequired(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"metric":"error_rate","op":"gt"}`), &c); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.normalize("c", 0); err == nil {
+	if _, err := c.normalize("c", 0, ""); err == nil {
 		t.Fatal("missing value accepted")
 	}
 }
@@ -269,7 +269,7 @@ func TestDegradeAndRecover(t *testing.T) {
 		t.Fatalf("fourth bad window: %v", out.WeightTo)
 	}
 	// Healthy windows climb by 10% of the base; the first one is a turning
-	// point. The default recovery rule needs TTFB samples (streams).
+	// point.
 	out = s.step(20, 0, 1000)
 	if out.WeightTo != 59 || ChangeKind(out) != EventWeightUpStart {
 		t.Fatalf("first healthy window: %v %s", out.WeightTo, ChangeKind(out))
@@ -289,7 +289,9 @@ func TestDegradeAndRecover(t *testing.T) {
 }
 
 func TestSamplesAccumulate(t *testing.T) {
-	s := newSim(t, compiled(t, nil), 100)
+	// Lenient, as new-api: once the lookback runs out (here the sim's two
+	// windows), a rule is judged on what there is.
+	s := newSim(t, compiled(t, func(c *Config) { c.MinSamplesStrict = false }), 100)
 	// 4 failures are under min_samples 10: the next window looks back over
 	// both, and the rule fires on the 8 real samples (never padded).
 	if out := s.step(0, 4, -1); out.State.LastRuleStats[0] != (RuleStat{N: 4, Lookback: 1}) || out.State.LastRules[0] != ruleHit {
