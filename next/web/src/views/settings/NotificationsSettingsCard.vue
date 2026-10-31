@@ -4,9 +4,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SHint, SInput, SPagination, SSectionTitle, SSelect, SSettingRow, SSettingsGroup, STable, localizedText, toast, type TableColumn, type Tone } from '@sub2api/ui'
+import { SDateTime, SBadge, SButton, SHint, SInput, SPagination, SSectionTitle, SSelect, SSettingRow, SSettingsGroup, STable, localizedText, toast, type TableColumn, type Tone } from '@sub2api/ui'
 import type { NotificationChannel, NotificationRecord, NotificationStatus } from '@/api/types'
-import TimeText from '@/components/TimeText.vue'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
@@ -109,7 +108,7 @@ onMounted(loadChannels)
       </SSettingRow>
     </SSettingsGroup>
 
-    <STable card :columns="recordColumns" :rows="records.items.value" :loading="records.loading.value" data-testid="notification-records">
+    <STable card :columns="recordColumns" :rows="records.items.value" :loading="records.loading.value" :error="records.error.value" data-testid="notification-records" @retry="records.reload">
       <template #toolbar>
         <div class="flex w-full flex-wrap items-center justify-between gap-2">
           <div>
@@ -119,7 +118,7 @@ onMounted(loadChannels)
           <SSelect v-model="records.filters.status" :options="statusOptions" class="w-40" />
         </div>
       </template>
-      <template #cell-created_at="{ row }"><TimeText :value="row.created_at" mode="relative" /></template>
+      <template #cell-created_at="{ row }"><SDateTime muted :value="row.created_at" mode="relative" /></template>
       <template #cell-channel="{ row }">
         <span class="font-mono text-xs">{{ row.channel }}</span>
         <div class="max-w-[16rem] truncate text-xs text-fg-muted" :title="row.recipients.join(', ')">{{ row.recipients.join(', ') }}</div>

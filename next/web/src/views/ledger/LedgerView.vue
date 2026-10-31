@@ -13,7 +13,7 @@ const { t } = useI18n()
 const route = useRoute()
 
 const range = ref<RangeKey>('month')
-const { items, loading, page, pageSize, total, filters, reload } = useList<LedgerEntry>('/ledger', {
+const { items, loading, error, page, pageSize, total, filters, reload } = useList<LedgerEntry>('/ledger', {
   ...rangeBounds('month'),
   // Opened from the users page with ?user_id=<id>.
   user_id: typeof route.query.user_id === 'string' ? route.query.user_id : '',
@@ -43,7 +43,7 @@ const adjustUser = computed(() => (/^\d+$/.test(String(filters.user_id || '')) ?
       </template>
     </SPageHeader>
 
-    <LedgerTable :rows="items" :loading="loading">
+    <LedgerTable :rows="items" :loading="loading" :error="error" @retry="reload">
       <template #footer><SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" /></template>
     </LedgerTable>
 

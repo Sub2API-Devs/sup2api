@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SChoiceCards, SField, SHint, SIcon, SInput, SModal, STable, toast, type ChoiceOption, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SChoiceCards, SField, SHint, SIcon, SInput, SFormModal, STable, toast, type ChoiceOption, type TableColumn } from '@sub2api/ui'
 import type { ReleaseRetiredKeyResult, RetiredKey } from '@/api/types'
 import { notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
@@ -107,7 +107,17 @@ defineExpose({ load })
       </template>
     </STable>
 
-    <SModal :open="!!releasing" :title="releasing ? t('plugins.retired.releaseTitle', { key: releasing.key }) : ''" width="md" @update:open="(v) => !v && (releasing = null)">
+    <SFormModal
+      :open="!!releasing"
+      :title="releasing ? t('plugins.retired.releaseTitle', { key: releasing.key }) : ''"
+      width="md"
+      :loading="busy"
+      :submit-disabled="!matches"
+      submit-variant="danger"
+      :submit-text="t('plugins.retired.release')"
+      @update:open="(v) => !v && (releasing = null)"
+      @submit="release"
+    >
       <div v-if="releasing" class="space-y-4 text-sm">
         <p>{{ t('plugins.retired.releaseBody') }}</p>
         <SChoiceCards
@@ -121,13 +131,9 @@ defineExpose({ load })
           <SIcon name="warning" class="h-4 w-4" />{{ t('plugins.retired.inheritWarn') }}
         </SHint>
         <SField :label="t('plugins.uninstall.typeKey', { key: releasing.key })">
-          <SInput v-model="typed" mono :placeholder="releasing.key" autocomplete="off" @keyup.enter="release" />
+          <SInput v-model="typed" mono :placeholder="releasing.key" autocomplete="off" />
         </SField>
       </div>
-      <template #footer>
-        <SButton :disabled="busy" @click="releasing = null">{{ t('common.cancel') }}</SButton>
-        <SButton variant="danger" :loading="busy" :disabled="!matches" @click="release">{{ t('plugins.retired.release') }}</SButton>
-      </template>
-    </SModal>
+    </SFormModal>
   </SCard>
 </template>

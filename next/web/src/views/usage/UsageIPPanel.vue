@@ -5,8 +5,7 @@
 // clears that filter.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SCard, SIPAddress, STable, type TableColumn } from '@sub2api/ui'
-import TimeText from '@/components/TimeText.vue'
+import { SDateTime, SCard, SIPAddress, STable, type TableColumn } from '@sub2api/ui'
 import type { UsageSummaryRow } from '@/api/types'
 import { formatMoney, formatNumber, formatPercent } from '@/utils/format'
 
@@ -62,7 +61,7 @@ const columns = computed<TableColumn[]>(() => [
         <template #cell-total_cost="{ row }"
           ><span class="font-mono text-xs tabular-nums">{{ formatMoney(row.total_cost) }}</span></template
         >
-        <template #cell-last_at="{ row }"><TimeText :value="row.last_at" mode="relative" class="text-xs" /></template>
+        <template #cell-last_at="{ row }"><SDateTime muted :value="row.last_at" mode="relative" class="text-xs" /></template>
       </STable>
     </div>
   </SCard>

@@ -8,7 +8,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SCard, SDateRange, SGrid, SSegmented, SStatCard, rangeBounds, type RangeKey } from '@sub2api/ui'
+import { SFilterBar, SAlert, SButton, SCard, SDateRange, SGrid, SSegmented, SStatCard, rangeBounds, type RangeKey } from '@sub2api/ui'
 import type { UsageOverview, UsageSummaryRow } from '@/api/types'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import DistributionCard from '@/components/stats/DistributionCard.vue'
@@ -188,7 +188,7 @@ watch(() => loadingOverview.value || users.loading.value || groups.loading.value
       <PluginSlot name="dashboard.widgets" />
     </SGrid>
 
-    <div class="card flex flex-wrap items-center gap-2 p-3">
+    <SFilterBar :aria-label="t('stats.filters')">
       <SDateRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" size="sm" :label="false" />
       <SSegmented
         :model-value="granularity"
@@ -200,8 +200,8 @@ watch(() => loadingOverview.value || users.loading.value || groups.loading.value
         :aria-label="t('stats.granularity')"
         @update:model-value="picked = $event as Granularity"
       />
-      <span class="ms-auto text-xs text-fg-subtle">{{ t('stats.tz', { tz: browserTZ() }) }}</span>
-    </div>
+      <template #end><span class="text-xs text-fg-subtle">{{ t('stats.tz', { tz: browserTZ() }) }}</span></template>
+    </SFilterBar>
     <UsageCharts summary-path="/usage/summary" :filters="filters" :granularity="granularity" layout="dashboard" :revision="chartsRevision" group="dashboard-admin" model-sources />
 
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">

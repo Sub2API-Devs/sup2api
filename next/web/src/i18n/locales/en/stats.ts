@@ -1,5 +1,6 @@
 export default {
   granularity: 'Granularity',
+  filters: 'Filters',
   day: 'Daily',
   hour: 'Hourly',
   hourTooLong: 'Ranges over 31 days are daily only',
