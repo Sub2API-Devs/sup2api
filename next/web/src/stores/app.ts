@@ -100,6 +100,7 @@ export const useAppStore = defineStore('app', () => {
       menus.value = ensureClientItems((data || []).map(normalizeSection), (p) => auth.has(p)).filter((s) => s.items.length > 0)
     } catch {
       // Fallback: core menu filtered by permissions + plugin menus.
+      await plugins.whenListed()
       const sections: NavSection[] = CORE_MENU.map((s) => ({
         key: s.key,
         items: s.items.filter((i) => auth.has(i.perm)).map(({ perm: _p, ...rest }) => rest)
