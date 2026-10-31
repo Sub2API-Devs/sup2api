@@ -1022,12 +1022,12 @@ func (p *Plugin) channelStats(ctx context.Context, db *pgxpool.Pool, ck clock, c
 
 // ---------------------------------------------------------------- cleanup
 
-// cleanupStats deletes statistics older than stats_retention_days.
+// cleanupStats deletes statistics older than stats_retention_days, in batches.
 func (p *Plugin) cleanupStats(ctx context.Context, db *pgxpool.Pool, now time.Time) error {
 	cut := now.Add(-time.Duration(p.cfg.Load().StatsRetentionDays) * 24 * time.Hour)
-	if _, err := db.Exec(ctx, `DELETE FROM stats_hourly WHERE hour < $1`, cut); err != nil {
+	if _, err := deleteBatches(ctx, db, "stats_hourly", `SELECT ctid FROM stats_hourly WHERE hour < $1`, cut); err != nil {
 		return err
 	}
-	_, err := db.Exec(ctx, `DELETE FROM user_daily WHERE day < $1`, cut.Truncate(24*time.Hour))
+	_, err := deleteBatches(ctx, db, "user_daily", `SELECT ctid FROM user_daily WHERE day < $1`, cut.Truncate(24*time.Hour))
 	return err
 }

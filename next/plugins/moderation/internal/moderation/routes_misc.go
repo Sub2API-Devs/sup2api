@@ -353,31 +353,82 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 	return &pluginv1.RunJobResponse{Message: fmt.Sprintf("deleted %d events, %d expired watch entries and %d expired blocks", events, watch, blocks)}, nil
 }
 
+// Retention purge batches (new-api cleanup.go cleanupBatch / cleanupPause):
+// each DELETE holds its locks briefly and the pause lets the writers of the
+// hook through. Variables so tests can shrink them.
+var (
+	purgeBatch = 5000
+	purgePause = 50 * time.Millisecond
+)
+
+// purgeLockKey is the session advisory lock that keeps the retention purge
+// on one node at a time (Configure starts it on every node); the schema
+// tells installs sharing a database apart.
+const purgeLockKey = `hashtextextended('moderation.retention_purge:' || current_schema(), 0)`
+
 // purgeRetention deletes the records past their keep_until or older than
 // the current retention of their result, and the statistics past
 // stats_retention_days: a shortened retention also applies to the rows
-// already stored (new-api cleanup.go). It returns the records deleted.
+// already stored (new-api cleanup.go). It runs on the node that takes the
+// advisory lock; the others return 0 at once. It returns the records deleted.
 func (p *Plugin) purgeRetention(ctx context.Context, db *pgxpool.Pool, now time.Time) (int64, error) {
-	tag, err := db.Exec(ctx, `DELETE FROM events WHERE keep_until < $1`, now)
+	conn, err := db.Acquire(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("events: %w", err)
+		return 0, err
 	}
-	deleted := tag.RowsAffected()
+	defer conn.Release()
+	var locked bool
+	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock(`+purgeLockKey+`)`).Scan(&locked); err != nil || !locked {
+		return 0, err
+	}
+	defer func() {
+		// A connection still holding the lock must not go back to the pool.
+		if _, err := conn.Exec(context.Background(), `SELECT pg_advisory_unlock(`+purgeLockKey+`)`); err != nil {
+			_ = conn.Conn().Close(context.Background())
+		}
+	}()
+	deleted, err := deleteBatches(ctx, db, "events", `SELECT ctid FROM events WHERE keep_until < $1`, now)
+	if err != nil {
+		return deleted, fmt.Errorf("events: %w", err)
+	}
 	retention := p.cfg.Load().retention
 	results, cuts := make([]string, 0, len(retention)), make([]time.Time, 0, len(retention))
 	for result, keep := range retention {
 		results, cuts = append(results, result), append(cuts, now.Add(-keep))
 	}
-	tag, err = db.Exec(ctx, `DELETE FROM events e USING unnest($1::text[], $2::timestamptz[]) AS r(result, cut)
-		WHERE e.result = r.result AND e.created_at < r.cut`, results, cuts)
+	n, err := deleteBatches(ctx, db, "events", `SELECT e.ctid FROM events e JOIN unnest($1::text[], $2::timestamptz[]) AS r(result, cut)
+		ON e.result = r.result AND e.created_at < r.cut`, results, cuts)
+	deleted += n
 	if err != nil {
 		return deleted, fmt.Errorf("events by retention: %w", err)
 	}
-	deleted += tag.RowsAffected()
 	if err := p.cleanupStats(ctx, db, now); err != nil {
 		return deleted, fmt.Errorf("stats: %w", err)
 	}
 	return deleted, nil
+}
+
+// deleteBatches deletes the rows of table whose ctid selectCtid returns,
+// purgeBatch per statement with purgePause between statements, until a
+// statement deletes fewer or ctx ends. It returns the rows deleted.
+func deleteBatches(ctx context.Context, db *pgxpool.Pool, table, selectCtid string, args ...any) (int64, error) {
+	query := fmt.Sprintf(`DELETE FROM %s WHERE ctid = ANY(ARRAY(%s LIMIT %d))`, table, selectCtid, purgeBatch)
+	var total int64
+	for {
+		tag, err := db.Exec(ctx, query, args...)
+		if err != nil {
+			return total, err
+		}
+		total += tag.RowsAffected()
+		if tag.RowsAffected() < int64(purgeBatch) {
+			return total, nil
+		}
+		select {
+		case <-ctx.Done():
+			return total, ctx.Err()
+		case <-time.After(purgePause):
+		}
+	}
 }
 
 // expireWatch removes the expired watch entries, writing their history.

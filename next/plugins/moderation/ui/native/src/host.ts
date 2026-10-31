@@ -1,4 +1,4 @@
-import { apiBase, isApiError, pluginApiBase, requestRaw, useList, type ApiClient, type ListResult, type PageInfo, type PluginHost, type Query } from '@sub2api/host'
+import { apiBase, isApiError, listAll, pluginApiBase, requestRaw, useList, type ApiClient, type ListResult, type PageInfo, type PluginHost, type Query } from '@sub2api/host'
 import type {
   Analysis,
   AnalysisDetail,
@@ -232,18 +232,9 @@ export const settingValue = (s: PluginSettings | null | undefined, key: string):
 
 /** Groups of the console (needs group:read); [] when not readable. */
 export async function fetchGroups(): Promise<Group[]> {
-  const PAGE = 200
-  const groups: Group[] = []
-  try {
-    for (let page = 1; ; page++) {
-      const r = await useModHost().api.list<Group>('/groups', { page, page_size: PAGE })
-      groups.push(...r.items)
-      if (r.items.length < PAGE || groups.length >= (r.page.total ?? 0)) return groups
-    }
-  } catch {
-    // A partial list would show the missing groups as unbound: none at all instead.
-    return []
-  }
+  // listAll never returns a partial list, which would show the missing
+  // groups as unbound: none at all instead.
+  return listAll<Group>(useModHost().api, '/groups').catch(() => [])
 }
 
 // ------------------------------------------------------------------ helpers

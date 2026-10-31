@@ -179,13 +179,14 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 		t.Fatalf("staff watch = %d %s", resp.GetStatus(), resp.GetBody())
 	}
 	// A user the core does not know is neither watched nor banned (new-api
-	// AddModerationWatch); the console gets names of a page in one call.
+	// AddModerationWatch); the console gets names of a page in one call, only
+	// for users the plugin's records name (32 exists but has none).
 	for _, path := range []string{"/watchlist", "/blocks"} {
 		if resp := h.Do("POST", path, nil, map[string]any{"user_id": 999}); resp.GetStatus() != http.StatusNotFound || !strings.Contains(string(resp.GetBody()), "user_not_found") {
 			t.Fatalf("%s unknown user = %d %s", path, resp.GetStatus(), resp.GetBody())
 		}
 	}
-	if us := decodeData[[]CoreUser](t, h.Do("GET", "/users", map[string]string{"ids": "31,999"}, nil)); len(us) != 1 || us[0].ID != 31 || us[0].DisplayName != "user 31" {
+	if us := decodeData[[]CoreUser](t, h.Do("GET", "/users", map[string]string{"ids": "31,32,999"}, nil)); len(us) != 1 || us[0].ID != 31 || us[0].DisplayName != "user 31" {
 		t.Fatalf("users = %+v", us)
 	}
 }

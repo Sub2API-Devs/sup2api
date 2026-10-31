@@ -3,11 +3,13 @@ import { isApiError } from '@sub2api/host'
 import { fetchCoreUser, fetchUsers, searchCoreUsers, useModHost } from './host'
 import type { CoreUser } from './types'
 
-// Users of the core, cached for the page: name, status and roles. The ids a
-// render asks for are looked up together through the plugin (GET /users,
-// grant users.read), which works for every moderator; when the plugin cannot
-// (no grant, older core) each id goes to the core's GET /users/:id, which
-// needs user:read and stops after the first 403 (the views then show #id).
+// Users of the core, cached for the page. The ids a render asks for are
+// looked up together through the plugin (GET /users, grant users.read),
+// which works for every moderator and gives display name and status only.
+// When the plugin cannot (503 users_unavailable: no grant, older core) each
+// id goes to the core's GET /users/:id, which needs user:read and adds email
+// and roles; it stops after the first 403 (the views then show #id). Other
+// plugin errors leave the batch unknown for RETRY_MS, then a render asks again.
 
 const users = reactive(new Map<number, CoreUser | null>())
 const inflight = new Set<number>()
@@ -15,6 +17,7 @@ const inflight = new Set<number>()
 const pending = new Set<number>()
 let viaPlugin = true
 let denied = false
+const RETRY_MS = 30_000
 
 const nameOf = (u: CoreUser | null | undefined) => u?.display_name || u?.email || ''
 
@@ -46,7 +49,12 @@ async function loadPending() {
         for (const u of await fetchUsers(batch)) users.set(u.id, u)
         for (const id of batch) if (!users.has(id)) users.set(id, null)
         continue
-      } catch {
+      } catch (e) {
+        if (!isApiError(e) || e.code !== 'users_unavailable') {
+          for (const id of batch) users.set(id, null)
+          setTimeout(() => batch.forEach((id) => users.get(id) === null && users.delete(id)), RETRY_MS)
+          continue
+        }
         viaPlugin = false
       }
     }

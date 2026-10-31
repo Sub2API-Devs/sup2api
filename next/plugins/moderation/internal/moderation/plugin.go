@@ -187,7 +187,8 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 			}()
 		}
 		// A shortened retention applies at once (new-api schedules a cleanup
-		// on save). Every node gets the change; the deletes are idempotent.
+		// on save). Every node gets the change; the node that takes the
+		// purge lock deletes, in batches (purgeRetention).
 		if old != nil && p.configured.Load() && c.retentionCut(old) {
 			go func() {
 				ctx, cancel := context.WithTimeout(p.bg, 10*time.Minute)

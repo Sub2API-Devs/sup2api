@@ -900,7 +900,7 @@ export type SimUserState = 'none' | 'observe' | 'enforce'
 
 // ---- core API (host.api)
 
-/** A console user as GET /users returns it (only the fields used here). */
+/** A core user (only the fields used here): the plugin's GET /users gives id, display_name and status; email and roles come only from the core (user:read). */
 export interface CoreUser {
   id: number
   email?: string

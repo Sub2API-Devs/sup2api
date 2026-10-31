@@ -148,7 +148,7 @@ func startDB(t *testing.T, llm *fakeLLM, extra map[string]any, beforeInit ...fun
 	// Users 1-100 exist in the core (GetUsers).
 	fh.Users = map[int64]*pluginv1.UserInfo{}
 	for id := int64(1); id <= 100; id++ {
-		fh.Users[id] = &pluginv1.UserInfo{Id: id, Email: fmt.Sprintf("u%d@example.com", id), DisplayName: fmt.Sprintf("user %d", id), Status: "active"}
+		fh.Users[id] = &pluginv1.UserInfo{Id: id, DisplayName: fmt.Sprintf("user %d", id), Status: "active"}
 	}
 	p := New()
 	for _, configure := range beforeInit {
@@ -502,6 +502,48 @@ func TestBansExemptAndModeOff(t *testing.T) {
 	}
 	if r := mustHook(t, h, hookReq("anything")); denied(r) {
 		t.Fatalf("mode off denied: %+v", r)
+	}
+}
+
+// The retention purge runs on the node holding the advisory lock and deletes
+// in batches until nothing is left (new-api cleanup.go deleteRecordBatches).
+func TestRetentionPurgeBatchesOnOneNode(t *testing.T) {
+	p, _, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	ctx := context.Background()
+	db, _ := p.db(ctx)
+	defer func(b int, d time.Duration) { purgeBatch, purgePause = b, d }(purgeBatch, purgePause)
+	purgeBatch, purgePause = 2, 0
+	if _, err := db.Exec(ctx, `INSERT INTO events (user_id, mode, verdict, action, result, keep_until, created_at)
+		SELECT 1, 'observe', 'pass', 'allow', 'pass', now() - interval '1 hour', now() - interval '2 days' FROM generate_series(1, 5)
+		UNION ALL SELECT 1, 'observe', 'flag', 'allow', 'hit', now() + interval '1 day', now() - interval '200 days' FROM generate_series(1, 3)
+		UNION ALL SELECT 1, 'observe', 'flag', 'allow', 'hit', now() + interval '1 day', now()`); err != nil {
+		t.Fatal(err)
+	}
+	other, err := db.Acquire(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := other.Exec(ctx, `SELECT pg_advisory_lock(`+purgeLockKey+`)`); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := p.purgeRetention(ctx, db, time.Now().UTC()); err != nil || n != 0 {
+		t.Fatalf("purge while another node holds the lock = %d %v", n, err)
+	}
+	if _, err := other.Exec(ctx, `SELECT pg_advisory_unlock(`+purgeLockKey+`)`); err != nil {
+		t.Fatal(err)
+	}
+	other.Release()
+	if n, err := p.purgeRetention(ctx, db, time.Now().UTC()); err != nil || n != 8 {
+		t.Fatalf("purge = %d %v, want 8", n, err)
+	}
+	var left int
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM events`).Scan(&left); err != nil || left != 1 {
+		t.Fatalf("left = %d %v, want the young hit", left, err)
+	}
+	// The purge let the lock go: another node can take it.
+	var free bool
+	if err := db.QueryRow(ctx, `SELECT pg_try_advisory_lock(`+purgeLockKey+`) AND pg_advisory_unlock(`+purgeLockKey+`)`).Scan(&free); err != nil || !free {
+		t.Fatalf("lock after the purge free = %v %v", free, err)
 	}
 }
 

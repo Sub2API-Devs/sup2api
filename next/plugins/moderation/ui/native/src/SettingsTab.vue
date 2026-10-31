@@ -109,11 +109,13 @@ const channelOptions = computed(() => [
   { value: 0, label: t('settingsTab.noAnalysis') },
   ...catalog.state.channels.filter((c) => c.type === 'llm').map((c) => ({ value: c.id, label: c.enabled ? c.name : `${c.name} (${t('disabled')})` }))
 ])
-/** The saved analysis channel is not an llm channel (e.g. set on the schema form): the server leaves analyses off. */
+/** The analysis channel is not a usable llm channel (status channel_problem): the server leaves analyses off. */
 const channelError = computed(() => {
   const id = Number(form.analysis_channel_id) || 0
-  const listed = !id || !catalog.state.loaded || channelOptions.value.some((o) => o.value === id)
-  return errs.analysis_channel_id || (listed ? '' : t('settingsTab.analysisChannelInvalid', { id }))
+  if (errs.analysis_channel_id || !id || !catalog.state.loaded) return errs.analysis_channel_id || ''
+  const ch = catalog.state.channels.find((c) => c.id === id && c.type === 'llm')
+  if (!ch) return t('settingsTab.analysisChannelInvalid', { id })
+  return ch.enabled ? '' : t('statusLine.analysisProblem.unusable')
 })
 
 const jevMode = computed({

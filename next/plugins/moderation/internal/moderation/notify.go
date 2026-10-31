@@ -2,7 +2,6 @@ package moderation
 
 import (
 	"bytes"
-	"cmp"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -120,7 +119,9 @@ func (p *Plugin) notifyWatchChange(uid int64, action, from, to, trend, suggestio
 	cancel()
 	name, who := "", fmt.Sprintf("#%d", uid)
 	if len(users) > 0 {
-		name = cmp.Or(users[0].GetDisplayName(), users[0].GetEmail())
+		name = users[0].GetDisplayName()
+	}
+	if name != "" {
 		who = name + " " + who
 	}
 	levelName := map[string]string{LevelObserve: "观察 observe", LevelEnforce: "拦截 enforce", "": "移出名单 removed"}

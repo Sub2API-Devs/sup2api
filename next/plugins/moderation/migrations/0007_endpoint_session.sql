@@ -1,4 +1,4 @@
--- plg_moderation 0007: moderation 0.4 (CONTRACTS §72.14): the client
+-- plg_moderation 0007: moderation 0.5.0 (CONTRACTS §72.14): the client
 -- endpoint (path pattern, e.g. /v1/messages) and the sticky-session
 -- fingerprint of each record, from RequestMeta.endpoint and
 -- session_fingerprint, so records can be filtered by endpoint and session
