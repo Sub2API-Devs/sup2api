@@ -17,9 +17,11 @@ const { t } = useI18n()
 // with the same title is only its filters and actions.
 provideTitleContext(() => (route.meta.title ? t(route.meta.title as string) : ''), toRef(app, 'pageDescription'))
 
-onMounted(async () => {
-  await plugins.refresh()
-  await app.loadMenus()
+// The menus do not wait for the plugin modules: GET /me/menus already lists
+// plugin menus, and the fallback waits for the plugin list only.
+onMounted(() => {
+  void plugins.refresh()
+  void app.loadMenus()
 })
 </script>
 
