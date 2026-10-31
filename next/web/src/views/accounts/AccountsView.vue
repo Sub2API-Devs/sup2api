@@ -19,6 +19,7 @@ import AccountTypeEndpoints from './AccountTypeEndpoints.vue'
 import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import AccountEditor from './AccountEditor.vue'
 import AccountNumberCell from './AccountNumberCell.vue'
+import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import AccountLimitsCell from './AccountLimitsCell.vue'
 import AccountLimitsTable from './AccountLimitsTable.vue'
 import { accountControl, sameCreationGroup } from './accountTypeChoices'
@@ -612,6 +613,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
       </template>
       <template v-for="field in (['priority', 'weight'] as const)" :key="field" #[`cell-${field}`]="{ row }">
         <AccountNumberCell :account="row" :field="field" :editable="canUpdate(row) && !row.orphaned" @saved="patchAccount(row.id, $event)" />
+        <PluginSlot v-if="field === 'weight'" name="account.list.weight" :props="{ account: row }" item-class="mt-0.5" />
       </template>
       <template #cell-limits="{ row }">
         <AccountLimitsCell :account="row" />

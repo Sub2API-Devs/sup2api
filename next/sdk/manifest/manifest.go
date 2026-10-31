@@ -780,7 +780,7 @@ type Column struct {
 }
 
 type Slot struct {
-	Slot       string `json:"slot"` // dashboard.widgets | account.detail.tabs | account.form.widgets
+	Slot       string `json:"slot"` // dashboard.widgets | account.detail.tabs | account.form.widgets | account.list.weight
 	Component  string `json:"component"`
 	Permission string `json:"permission,omitempty"`
 }
