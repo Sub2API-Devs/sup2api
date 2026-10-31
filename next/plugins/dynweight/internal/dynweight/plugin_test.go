@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -14,6 +16,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/observation"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -152,6 +155,9 @@ func TestDegradeNotifyAndReset(t *testing.T) {
 	e.configure(func(c *rules.Config) {
 		c.Notify = rules.Notify{Enabled: true, Channel: "email", Recipients: []string{"ops@example.com"}}
 		c.Strategies[0].Actions = append(c.Strategies[0].Actions, rules.Action{Type: rules.ActionAffinityClear, Percent: 50})
+		// A second strategy clearing on the same hit shares the call.
+		c.Strategies = append(c.Strategies, rules.Strategy{Name: "clear", When: c.Strategies[0].When,
+			Actions: []rules.Action{{Type: rules.ActionAffinityClear, Percent: 80}}})
 	})
 	if w := e.rank(100); w != 0 {
 		t.Fatalf("healthy account rewritten to %d", w)
@@ -169,7 +175,7 @@ func TestDegradeNotifyAndReset(t *testing.T) {
 	if len(e.notified) != 1 || e.notified[0].GetSeverity() != "warning" || e.notified[0].GetRecipients()[0] != "ops@example.com" {
 		t.Fatalf("notified %v", e.notified)
 	}
-	if len(e.cleared) != 1 || e.cleared[0].GetPercent() != 50 || e.cleared[0].GetModel() != testModel {
+	if len(e.cleared) != 1 || e.cleared[0].GetPercent() != 80 || e.cleared[0].GetModel() != testModel {
 		t.Fatalf("cleared %v", e.cleared)
 	}
 	e.mu.Unlock()
@@ -380,5 +386,49 @@ func TestAggregatorRestore(t *testing.T) {
 	again := a.take()
 	if len(again) != 2 || again[0].counts.Total != 2 || again[1].counts.Fail != 1 {
 		t.Fatalf("restored: %+v", again)
+	}
+}
+
+// The turning points of a run go out as one digest: the worst first, at its
+// severity, with a dedupe key independent of the evaluation order, and the
+// items past the cap counted.
+func TestNotifyDigest(t *testing.T) {
+	e := newEnv(t)
+	e.configure(func(c *rules.Config) {
+		c.Notify = rules.Notify{Enabled: true, Channel: "email", Recipients: []string{"ops@example.com"}, Language: "en"}
+	})
+	turn := func(account int64, kind string, from, to float64) notice {
+		return notice{k: key{AccountID: account, GroupID: testGroup, Model: testModel}, name: "acc",
+			ev: rules.Event{Kind: kind, From: from, To: to, Window: &rules.WindowSummary{Start: 600, Total: 10, Fail: 5}}}
+	}
+	batch := []notice{turn(1, rules.EventWeightDown, 100, 70), turn(2, rules.EventWeightDown, 100, 0), turn(3, rules.EventWeightRestored, 90, 100)}
+	cfg := e.p.cfg.Load()
+	e.p.notify(context.Background(), cfg, slices.Clone(batch))
+	slices.Reverse(batch)
+	e.p.notify(context.Background(), cfg, batch)
+	many := make([]notice, maxDigestItems+2)
+	for i := range many {
+		many[i] = turn(int64(i+1), rules.EventWeightDown, 100, 70)
+	}
+	e.p.notify(context.Background(), cfg, many)
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(e.notified) != 3 {
+		t.Fatalf("notified %d times", len(e.notified))
+	}
+	digest, capped := e.notified[0], e.notified[2]
+	if digest.GetSubject() != "Dynamic weight: 3 weight changes" || digest.GetSeverity() != protocol.SeverityCritical {
+		t.Fatalf("digest %q at %s", digest.GetSubject(), digest.GetSeverity())
+	}
+	body := digest.GetBody()
+	if !strings.HasPrefix(body, "Account acc (#2): weight degraded 100 → 0\nGroup: #2") || strings.Count(body, "\n\n") != 2 {
+		t.Fatalf("digest body:\n%s", body)
+	}
+	if digest.GetDedupeKey() != e.notified[1].GetDedupeKey() {
+		t.Fatal("dedupe key depends on the order")
+	}
+	if capped.GetSeverity() != protocol.SeverityWarning || !strings.HasSuffix(capped.GetBody(), "\n\nand 2 more") {
+		t.Fatalf("capped digest at %s:\n%s", capped.GetSeverity(), capped.GetBody())
 	}
 }

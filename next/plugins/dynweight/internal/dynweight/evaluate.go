@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -73,6 +74,7 @@ type evaluation struct {
 	bases  map[pair]base
 
 	events    []eventRow
+	notices   []notice
 	evaluated int
 	changed   int
 }
@@ -101,6 +103,7 @@ func (p *Plugin) runEvaluate(ctx context.Context) (*pluginv1.RunJobResponse, err
 		errs.add(k, e.evaluate(ctx, k))
 	}
 	p.record(ctx, s, e.events, e.changed > 0)
+	p.notify(ctx, cfg, e.notices)
 	if errs.n > 0 {
 		return nil, status.Errorf(codes.Internal, "%v", errs)
 	}
@@ -198,11 +201,11 @@ func (e *evaluation) evaluate(ctx context.Context, k key) error {
 	for _, ev := range rules.Events(&res, window, out) {
 		e.events = append(e.events, eventRow{key: k, Event: ev})
 		if rules.Notified(ev.Kind) {
-			e.p.notify(ctx, e.cfg, k, b, ev)
+			e.notices = append(e.notices, notice{k: k, name: b.Name, ev: ev})
 		}
 	}
-	for _, se := range out.SideEffects {
-		e.events = append(e.events, e.clearAffinity(ctx, k, window, out.WeightTo, se))
+	if len(out.SideEffects) > 0 {
+		e.events = append(e.events, e.clearAffinity(ctx, k, window, out.WeightTo, out.SideEffects))
 	}
 	return nil
 }
@@ -218,12 +221,18 @@ func (e *evaluation) series(k key, window int64, res *rules.Resolved) []rules.Co
 
 // clearAffinity deletes a share of the key's sticky bindings. The window
 // start is the salt (as in new-api), so successive windows rotate through
-// different bindings; strategies clearing in the same window share it.
-func (e *evaluation) clearAffinity(ctx context.Context, k key, window int64, weight float64, se rules.SideEffect) eventRow {
+// different bindings. Strategies clearing in the same window share it, so
+// the largest share selects a superset of the others: one call clears for
+// all of them.
+func (e *evaluation) clearAffinity(ctx context.Context, k key, window int64, weight float64, effects []rules.SideEffect) eventRow {
+	names, percent := make([]string, len(effects)), 0
+	for i, se := range effects {
+		names[i], percent = se.Strategy, max(percent, se.AffinityPercent)
+	}
 	ev := eventRow{key: k, Event: rules.Event{Kind: rules.EventAffinityClear, From: weight, To: weight},
-		Detail: map[string]any{"strategy": se.Strategy, "percent": se.AffinityPercent}}
+		Detail: map[string]any{"strategy": strings.Join(names, ", "), "percent": percent}}
 	resp, err := pluginsdk.ClearStickyBindings(ctx, e.p.host, &pluginv1.ClearStickyBindingsRequest{AccountId: k.AccountID, GroupId: k.GroupID,
-		Model: k.Model, Percent: int32(se.AffinityPercent), Salt: strconv.FormatInt(window, 10)})
+		Model: k.Model, Percent: int32(percent), Salt: strconv.FormatInt(window, 10)})
 	if err != nil {
 		e.p.log.Warn("dynweight: clear sticky bindings failed", "account_id", k.AccountID, "error", err.Error())
 		ev.Detail["error"] = err.Error()
