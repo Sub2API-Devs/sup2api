@@ -10,7 +10,9 @@ const t = useDwHost().t
 const weight = ref<AccountWeight | null>(null)
 
 async function load() {
-  weight.value = props.account?.id ? await loadAccountWeight(props.account.id) : null
+  const id = props.account?.id
+  const w = id ? await loadAccountWeight(id) : null
+  if (props.account?.id === id) weight.value = w // the row may show another account by now
 }
 
 onMounted(load)

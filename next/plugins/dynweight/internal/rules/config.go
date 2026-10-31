@@ -3,7 +3,9 @@ package rules
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
+	"slices"
 	"strings"
 )
 
@@ -81,6 +83,37 @@ const (
 		`{"name":"复活探测","when":"复活探测","actions":[{"type":"weight_climb","mode":"base_percent","value":10}]}]`
 )
 
+// UnmarshalJSON lays each group over the factory layer, adjusting unless it
+// says "enabled": false, as new-api does: a group that leaves a field out
+// gets the default, not a zero.
+func (c *Config) UnmarshalJSON(data []byte) error {
+	type plain Config
+	var doc struct {
+		*plain
+		Groups map[int64]json.RawMessage `json:"groups"`
+	}
+	doc.plain = (*plain)(c)
+	if err := json.Unmarshal(data, &doc); err != nil {
+		return err
+	}
+	c.Groups = nil
+	for id, raw := range doc.Groups {
+		if string(raw) == "null" {
+			continue
+		}
+		l := DefaultLayer()
+		l.Enabled = true
+		if err := json.Unmarshal(raw, &l); err != nil {
+			return fmt.Errorf("groups.%d: %w", id, err)
+		}
+		if c.Groups == nil {
+			c.Groups = map[int64]*Layer{}
+		}
+		c.Groups[id] = &l
+	}
+	return nil
+}
+
 // DefaultLayer is the factory layer (adjustment off).
 func DefaultLayer() Layer {
 	l := Layer{WindowSeconds: 60, MinSamples: 10, ExemptStatusCodes: "400", MinWeightMode: ModeBasePercent}
@@ -111,7 +144,8 @@ func (c *Config) Normalize() (warnings []string, err error) {
 	if warnings, err = c.Layer.normalize(""); err != nil {
 		return nil, err
 	}
-	for id, l := range c.Groups {
+	for _, id := range slices.Sorted(maps.Keys(c.Groups)) {
+		l := c.Groups[id]
 		if l == nil {
 			delete(c.Groups, id)
 			continue
@@ -126,7 +160,8 @@ func (c *Config) Normalize() (warnings []string, err error) {
 		}
 		warnings = append(warnings, w...)
 	}
-	for id, o := range c.Accounts {
+	for _, id := range slices.Sorted(maps.Keys(c.Accounts)) {
+		o := c.Accounts[id]
 		if id <= 0 {
 			return nil, fmt.Errorf("accounts.%d: invalid account id", id)
 		}
@@ -153,21 +188,23 @@ func (l *Layer) normalize(path string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%sexempt_status_codes: %w", path, err)
 	}
-	l.ExemptStatusCodes = codes
 	if len(l.Rules) > MaxRules {
 		return nil, fmt.Errorf("%srules: at most %d rules are allowed", path, MaxRules)
 	}
 	if len(l.Strategies) > MaxStrategies {
 		return nil, fmt.Errorf("%sstrategies: at most %d strategies are allowed", path, MaxStrategies)
 	}
-	if l.Rules, err = normalizeNamed("rules", l.Rules, Rule.normalize, func(r Rule) string { return r.Name }); err != nil {
+	rules, err := normalizeNamed("rules", l.Rules, Rule.normalize, func(r Rule) string { return r.Name })
+	if err != nil {
 		return nil, fmt.Errorf("%s%w", path, err)
 	}
-	index := ruleIndex(l.Rules)
-	normalizeStrategy := func(s Strategy, i int) (Strategy, error) { return s.normalize(i, l.Rules, index) }
-	if l.Strategies, err = normalizeNamed("strategies", l.Strategies, normalizeStrategy, func(s Strategy) string { return s.Name }); err != nil {
+	index := ruleIndex(rules)
+	normalizeStrategy := func(s Strategy, i int) (Strategy, error) { return s.normalize(i, rules, index) }
+	strategies, err := normalizeNamed("strategies", l.Strategies, normalizeStrategy, func(s Strategy) string { return s.Name })
+	if err != nil {
 		return nil, fmt.Errorf("%s%w", path, err)
 	}
+	l.ExemptStatusCodes, l.Rules, l.Strategies = codes, rules, strategies
 	return l.warnings(path), nil
 }
 

@@ -2,6 +2,7 @@ package rules
 
 import (
 	"encoding/json"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -86,6 +87,8 @@ func TestNormalizeRejects(t *testing.T) {
 		"p":              func(c *Config) { c.Rules[1].Conditions[0].P = 40 },
 		"join":           func(c *Config) { c.Rules[2].Conditions[1].Join = "xor" },
 		"hit periods":    func(c *Config) { c.Rules[0].HitPeriods = 4 },
+		"neg periods":    func(c *Config) { c.Rules[0].Periods = -3 },
+		"no value":       func(c *Config) { c.Rules[0].Conditions[0].Value = math.NaN() },
 		"non_stream":     func(c *Config) { c.Rules[1].Scope = ScopeNonStream },
 		"unknown rule":   func(c *Config) { c.Strategies[0].When = &When{Rule: "nope"} },
 		"disabled rule":  func(c *Config) { f := false; c.Rules[0].Enabled = &f },
@@ -107,10 +110,43 @@ func TestNormalizeRejects(t *testing.T) {
 			t.Errorf("%s accepted", name)
 		}
 	}
+	// A failed normalize leaves the configuration as it was.
 	c := DefaultConfig()
+	c.Rules[4].Name = c.Rules[0].Name
+	if _, err := c.Normalize(); err == nil || len(c.Rules) != 5 || len(c.Strategies) != 5 {
+		t.Fatalf("mutated on error: %v", err)
+	}
+	c = DefaultConfig()
 	c.Strategies = c.Strategies[:3]
 	if w, err := c.Normalize(); err != nil || len(w) != 1 || !strings.Contains(w[0], "never recovers") {
 		t.Fatalf("no climb: %v %v", w, err)
+	}
+}
+
+// A condition without a value is refused, not read as 0.
+func TestConditionValueRequired(t *testing.T) {
+	var c Condition
+	if err := json.Unmarshal([]byte(`{"metric":"error_rate","op":"gt"}`), &c); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.normalize("c", 0); err == nil {
+		t.Fatal("missing value accepted")
+	}
+}
+
+// A group is laid over the factory layer and adjusts unless it says not to.
+func TestGroupLayerDefaults(t *testing.T) {
+	var c Config
+	if err := json.Unmarshal([]byte(`{"window_seconds":60,"min_samples":10,"min_weight_mode":"base_percent",
+		"groups":{"7":{"window_seconds":30},"8":{"enabled":false},"9":null}}`), &c); err != nil {
+		t.Fatal(err)
+	}
+	g := c.Groups[7]
+	if !g.Enabled || g.WindowSeconds != 30 || g.MinSamples != 10 || len(g.Rules) != 5 || c.Groups[8].Enabled || c.Groups[9] != nil {
+		t.Fatalf("groups: %+v %+v", g, c.Groups)
+	}
+	if c.WindowSeconds != 60 || c.Enabled {
+		t.Fatalf("global: %+v", c.Layer)
 	}
 }
 

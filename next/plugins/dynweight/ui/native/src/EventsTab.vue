@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useList } from '@sub2api/host'
 import { SAlert, SBadge, SCard, SField, SHint, SPagination, SSelect, STable, type TableColumn } from '@sub2api/ui'
 import KeyFilters from './KeyFilters.vue'
-import { emptyFilter, enumOptions, errorMessage, eventKinds, eventTone, filterQuery, useDwHost, weightOf, type Filter, type WeightEvent } from './host'
+import { applyQuery, emptyFilter, enumOptions, errorMessage, eventKinds, eventTone, filterQuery, useDwHost, weightOf, type Filter, type WeightEvent } from './host'
 
 // Weight events (newest first): degrades, climbs, restores, revivals, cleared
 // sticky sessions and resets, filtered by key and kind.
@@ -19,11 +19,7 @@ const query = () => ({ ...filterQuery(filter), kind: kind.value })
 const list = useList<WeightEvent>(host.pluginApi, '/events', query(), { pageSize: 50 })
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('events.loadFailed')) : ''))
 
-function search() {
-  const next = query()
-  if (Object.entries(next).every(([k, v]) => list.filters[k] === v)) list.reload()
-  else Object.assign(list.filters, next)
-}
+const search = () => applyQuery(list, query())
 
 function clear() {
   Object.assign(filter, emptyFilter())

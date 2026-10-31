@@ -76,6 +76,18 @@ type Condition struct {
 	Value  float64 `json:"value"`
 }
 
+// UnmarshalJSON leaves a missing value NaN, so normalize refuses it rather
+// than reading it as 0.
+func (c *Condition) UnmarshalJSON(data []byte) error {
+	type plain Condition
+	p := plain{Value: math.NaN()}
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	*c = Condition(p)
+	return nil
+}
+
 // IsEnabled reports whether the rule is evaluated (the default).
 func (r Rule) IsEnabled() bool { return r.Enabled == nil || *r.Enabled }
 
@@ -143,6 +155,10 @@ func (r Rule) normalize(i int) (Rule, error) {
 		conds[j] = c
 	}
 	r.Conditions = conds
+	// 0 (left out) defaults to 1; a negative count is a mistake.
+	if r.Periods < 0 || r.HitPeriods < 0 {
+		return r, fmt.Errorf("%s.periods and hit_periods must be positive", path)
+	}
 	r.Periods, r.HitPeriods = max(r.Periods, 1), max(r.HitPeriods, 1)
 	if r.Periods > MaxPeriods {
 		return r, fmt.Errorf("%s.periods must be between 1 and %d", path, MaxPeriods)
@@ -173,7 +189,7 @@ func (c Condition) normalize(path string, j int) (Condition, error) {
 	if !slices.Contains(spec.ops, c.Op) {
 		return c, fmt.Errorf("%s.op must be one of %s", path, strings.Join(spec.ops, ", "))
 	}
-	if c.Value != math.Trunc(c.Value) || c.Value < spec.min || c.Value > spec.max {
+	if math.IsNaN(c.Value) || c.Value != math.Trunc(c.Value) || c.Value < spec.min || c.Value > spec.max {
 		return c, fmt.Errorf("%s.value must be an integer between %g and %g", path, spec.min, spec.max)
 	}
 	return c, nil

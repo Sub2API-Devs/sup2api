@@ -33,9 +33,18 @@ type configBody struct {
 	Warnings []string     `json:"warnings,omitempty"`
 }
 
-func (p *Plugin) getConfig(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
-	c := p.cfg.Load()
-	return pluginsdk.DataResponse(configBody{Config: c.Config, Version: c.version}), nil
+// getConfig reads the stored configuration, not this node's copy, so a save
+// right after another node's does not meet a stale version.
+func (p *Plugin) getConfig(ctx context.Context, _ *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	s, err := p.store(ctx)
+	if err != nil {
+		return pluginsdk.Unavailable(err.Error()), nil
+	}
+	c, version, err := s.loadConfig(ctx)
+	if err != nil {
+		return pluginsdk.Unavailable(err.Error()), nil
+	}
+	return pluginsdk.DataResponse(configBody{Config: c, Version: version}), nil
 }
 
 func (p *Plugin) getDefaults(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
@@ -105,11 +114,26 @@ func (p *Plugin) listChannels(ctx context.Context, _ *pluginv1.HTTPRequest) (*pl
 	return pluginsdk.DataResponse(out), nil
 }
 
-// filterOf reads account_id, group_id and model from the query.
-func filterOf(req *pluginv1.HTTPRequest) filter {
-	account, _ := strconv.ParseInt(pluginsdk.Query(req, "account_id"), 10, 64)
-	group, _ := strconv.ParseInt(pluginsdk.Query(req, "group_id"), 10, 64)
-	return filter{AccountID: account, GroupID: group, Model: strings.TrimSpace(pluginsdk.Query(req, "model"))}
+// filterOf reads account_id, group_id and model from the query; a bad id is
+// answered with 400 rather than ignored.
+func filterOf(req *pluginv1.HTTPRequest) (filter, *pluginv1.HTTPResponse) {
+	f := filter{Model: strings.TrimSpace(pluginsdk.Query(req, "model"))}
+	for _, q := range [...]struct {
+		name string
+		id   *int64
+	}{{"account_id", &f.AccountID}, {"group_id", &f.GroupID}} {
+		name, id := q.name, q.id
+		raw := strings.TrimSpace(pluginsdk.Query(req, name))
+		if raw == "" {
+			continue
+		}
+		v, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || v <= 0 {
+			return f, pluginsdk.BadRequest(name, "invalid", name+" must be a positive integer / 必须是正整数")
+		}
+		*id = v
+	}
+	return f, nil
 }
 
 // ruleResult is a rule's last result in a key's status.
@@ -144,11 +168,15 @@ type keyStatus struct {
 
 // listStatus lists the keys' states, degraded ones first.
 func (p *Plugin) listStatus(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	f, bad := filterOf(req)
+	if bad != nil {
+		return bad, nil
+	}
 	s, err := p.store(ctx)
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	states, err := s.loadStates(ctx, filterOf(req))
+	states, err := s.loadStates(ctx, f)
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
@@ -167,14 +195,24 @@ func (p *Plugin) listStatus(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 		}
 	}
 	slices.SortFunc(items, func(a, b keyStatus) int {
-		return cmp.Or(cmp.Compare(a.Effective/float64(max(a.Base, 1)), b.Effective/float64(max(b.Base, 1))),
-			cmp.Compare(a.AccountID, b.AccountID), cmp.Compare(a.GroupID, b.GroupID), strings.Compare(a.Model, b.Model))
+		return cmp.Or(cmp.Compare(a.ratio(), b.ratio()), compareKeys(a.key(), b.key()))
 	})
 	page, size := pluginsdk.Pagination(req, 50)
 	total := len(items)
 	items = items[min((page-1)*size, total):min(page*size, total)]
 	return pluginsdk.ListResponse(items, pluginsdk.Page{Page: page, PageSize: size, Total: int64(total)}), nil
 }
+
+// ratio orders the status list: most degraded first, reset keys (base 0)
+// with the keys at their base.
+func (s keyStatus) ratio() float64 {
+	if s.Reset || s.Base <= 0 {
+		return 1
+	}
+	return s.Effective / float64(s.Base)
+}
+
+func (s keyStatus) key() key { return key{AccountID: s.AccountID, GroupID: s.GroupID, Model: s.Model} }
 
 func statusOf(k key, st rules.State, res *rules.Resolved, name string) keyStatus {
 	out := keyStatus{AccountID: k.AccountID, AccountName: name, GroupID: k.GroupID, Model: k.Model, Base: st.WeightBase,
@@ -189,7 +227,7 @@ func statusOf(k key, st rules.State, res *rules.Resolved, name string) keyStatus
 		rr := ruleResult{Name: r.Name}
 		if i < len(st.LastRules) {
 			c := st.LastRules[i]
-			rr.Hit, rr.Fired = c == '1' || c == '3', c == '2' || c == '3'
+			rr.Hit, rr.Fired = rules.RuleHit(c), rules.RuleFired(c)
 		}
 		if i < len(st.LastRuleStats) {
 			rr.Samples, rr.Lookback = st.LastRuleStats[i].N, st.LastRuleStats[i].Lookback
@@ -214,20 +252,23 @@ type eventItem struct {
 }
 
 func (p *Plugin) listEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
+	f, bad := filterOf(req)
+	if bad != nil {
+		return bad, nil
+	}
 	s, err := p.store(ctx)
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	page, size := pluginsdk.Pagination(req, 50)
-	items, total, err := s.listEvents(ctx, filterOf(req), pluginsdk.Query(req, "kind"), size, (page-1)*size)
+	items, total, err := s.listEvents(ctx, f, pluginsdk.Query(req, "kind"), size, (page-1)*size)
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	return pluginsdk.ListResponse(items, pluginsdk.Page{Page: page, PageSize: size, Total: total}), nil
 }
 
-// reset puts the matching keys back to their base: their history is
-// dropped and the samples so far are never evaluated again.
+// reset is POST /reset {account_id?, group_id?, model?} (resetKeys).
 func (p *Plugin) reset(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var f filter
 	if err := pluginsdk.DecodeJSON(req, &f); err != nil {
@@ -236,31 +277,11 @@ func (p *Plugin) reset(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv
 	if f.AccountID <= 0 && f.GroupID <= 0 {
 		return pluginsdk.BadRequest("account_id", "required", "an account or a group is required / 请指定账号或分组"), nil
 	}
-	s, err := p.store(ctx)
+	n, err := p.resetKeys(ctx, f, req.GetCaller().GetUserId())
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	cfg, now := p.cfg.Load(), p.now().Unix()
-	keys, err := s.keys(ctx, f, now-2*cfg.RetentionSeconds())
-	if err != nil {
-		return pluginsdk.Unavailable(err.Error()), nil
-	}
-	events := make([]eventRow, 0, len(keys))
-	for _, k := range keys {
-		res := cfg.Resolve(k.AccountID, k.GroupID)
-		if err := s.tombstone(ctx, k, rules.LatestClosedWindow(k.AccountID, now, res.WindowSeconds)); err != nil {
-			return pluginsdk.Unavailable(err.Error()), nil
-		}
-		events = append(events, eventRow{key: k, Event: rules.Event{Kind: rules.EventReset, Reason: rules.ReasonManual},
-			Detail: map[string]any{"user_id": req.GetCaller().GetUserId()}})
-	}
-	if err := s.addEvents(ctx, events); err != nil {
-		p.log.Warn("dynweight: write reset events failed", "error", err.Error())
-	}
-	if len(keys) > 0 {
-		p.publish(ctx, TopicWeights, p.reloadWeights)
-	}
-	return pluginsdk.DataResponse(map[string]int{"reset": len(keys)}), nil
+	return pluginsdk.DataResponse(map[string]int{"reset": n}), nil
 }
 
 // accountWeight sums up an account's degraded keys for the account list.

@@ -1,6 +1,7 @@
 package dynweight
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"strconv"
@@ -88,9 +89,14 @@ func (p *Plugin) runEvaluate(ctx context.Context) (*pluginv1.RunJobResponse, err
 	if err != nil {
 		return nil, status.Errorf(codes.Unavailable, "load: %v", err)
 	}
+	// A key that fails does not stop the others: their states are written
+	// already, so their events and weights must follow.
+	var failed int
+	var firstErr error
 	for _, k := range e.keys() {
 		if err := e.evaluate(ctx, k); err != nil {
-			return nil, status.Errorf(codes.Internal, "evaluate %v: %v", k, err)
+			failed++
+			firstErr = cmp.Or(firstErr, fmt.Errorf("%v: %w", k, err))
 		}
 	}
 	if err := s.addEvents(ctx, e.events); err != nil {
@@ -98,6 +104,9 @@ func (p *Plugin) runEvaluate(ctx context.Context) (*pluginv1.RunJobResponse, err
 	}
 	if e.changed > 0 {
 		p.publish(ctx, TopicWeights, p.reloadWeights)
+	}
+	if failed > 0 {
+		return nil, status.Errorf(codes.Internal, "%d keys failed, first %v", failed, firstErr)
 	}
 	return &pluginv1.RunJobResponse{Message: fmt.Sprintf("evaluated %d keys, %d changed", e.evaluated, e.changed)}, nil
 }
@@ -187,4 +196,34 @@ func (e *evaluation) clearAffinity(ctx context.Context, k key, window int64, wei
 	}
 	ev.Detail["matched"], ev.Detail["cleared"] = resp.GetMatched(), resp.GetCleared()
 	return ev
+}
+
+// resetKeys puts the keys matching f back to their base: their history is
+// dropped and the samples so far are never evaluated again.
+func (p *Plugin) resetKeys(ctx context.Context, f filter, userID int64) (int, error) {
+	s, err := p.store(ctx)
+	if err != nil {
+		return 0, err
+	}
+	cfg, now := p.cfg.Load(), p.now().Unix()
+	keys, err := s.keys(ctx, f, now-2*cfg.RetentionSeconds())
+	if err != nil {
+		return 0, err
+	}
+	events := make([]eventRow, 0, len(keys))
+	for _, k := range keys {
+		res := cfg.Resolve(k.AccountID, k.GroupID)
+		if err := s.tombstone(ctx, k, rules.LatestClosedWindow(k.AccountID, now, res.WindowSeconds)); err != nil {
+			return 0, err
+		}
+		events = append(events, eventRow{key: k, Event: rules.Event{Kind: rules.EventReset, Reason: rules.ReasonManual},
+			Detail: map[string]any{"user_id": userID}})
+	}
+	if err := s.addEvents(ctx, events); err != nil {
+		p.log.Warn("dynweight: write reset events failed", "error", err.Error())
+	}
+	if len(keys) > 0 {
+		p.publish(ctx, TopicWeights, p.reloadWeights)
+	}
+	return len(keys), nil
 }

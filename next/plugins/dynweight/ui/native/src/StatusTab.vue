@@ -3,7 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { useList } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SField, SHint, SPagination, SSwitch, STable, type TableColumn } from '@sub2api/ui'
 import KeyFilters from './KeyFilters.vue'
-import { canManage, emptyFilter, errorMessage, filterQuery, resetWeights, useDwHost, weightOf, weightTone, type Filter, type KeyStatus } from './host'
+import { applyQuery, canManage, emptyFilter, errorMessage, filterQuery, resetWeights, useDwHost, weightOf, weightTone, type Filter, type KeyStatus } from './host'
 
 // Effective weights per (account, group, model), degraded first; a key, or
 // every key of the filtered account / group, can be reset to its base.
@@ -19,11 +19,7 @@ const query = () => ({ ...filterQuery(filter), degraded: degraded.value ? '1' : 
 const list = useList<KeyStatus>(host.pluginApi, '/status', query(), { pageSize: 50 })
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('status.loadFailed')) : ''))
 
-function search() {
-  const next = query()
-  if (Object.entries(next).every(([k, v]) => list.filters[k] === v)) list.reload()
-  else Object.assign(list.filters, next)
-}
+const search = () => applyQuery(list, query())
 
 function clear() {
   Object.assign(filter, emptyFilter())
@@ -64,12 +60,16 @@ async function reset(k: { account_id: number; group_id: number; model: string },
 
 const resetRow = (r: KeyStatus) => reset(r, t('status.resetKeyConfirm', { account: r.account_name || `#${r.account_id}`, group: r.group_id, model: r.model }), keyOf(r))
 
-// Reset every key the filter's account and/or group covers.
+// Reset every key the applied filter's account and/or group covers (not what
+// is typed but not searched yet).
+// null when an id is not a positive integer (the list then shows the error).
 const filtered = computed(() => {
-  const f = filterQuery(filter)
-  return { account_id: Number(f.account_id) || 0, group_id: Number(f.group_id) || 0, model: f.model }
+  const f = list.filters as Filter
+  const id = (v: string) => (v === '' ? 0 : /^\d+$/.test(v) ? Number(v) : NaN)
+  const k = { account_id: id(f.account_id), group_id: id(f.group_id), model: f.model }
+  return Number.isNaN(k.account_id) || Number.isNaN(k.group_id) || (!k.account_id && !k.group_id) ? null : k
 })
-const resetFiltered = () => reset(filtered.value, t('status.resetFilterConfirm'), 'filter')
+const resetFiltered = () => filtered.value && reset(filtered.value, t('status.resetFilterConfirm'), 'filter')
 
 const showEvents = (r: KeyStatus) => emit('show-events', { account_id: String(r.account_id), group_id: String(r.group_id), model: r.model })
 </script>
@@ -86,7 +86,7 @@ const showEvents = (r: KeyStatus) => emit('show-events', { account_id: String(r.
       </KeyFilters>
     </SCard>
 
-    <div v-if="manage && (filtered.account_id || filtered.group_id)" class="dw-toolbar">
+    <div v-if="manage && filtered" class="dw-toolbar">
       <SButton variant="danger" icon="refresh" :loading="busy === 'filter'" @click="resetFiltered">
         {{ t('status.resetFiltered') }}
       </SButton>

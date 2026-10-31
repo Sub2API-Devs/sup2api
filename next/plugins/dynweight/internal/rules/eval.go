@@ -34,9 +34,12 @@ const (
 const (
 	ruleNone     = '0'
 	ruleHit      = '1'
-	ruleFired    = '2'
 	ruleHitFired = '3'
 )
+
+// RuleHit / RuleFired read a State.LastRules character.
+func RuleHit(c byte) bool   { return c == ruleHit || c == ruleHitFired }
+func RuleFired(c byte) bool { return c == ruleHitFired }
 
 // Directions of the last weight change (State.WeightDir).
 const (
@@ -120,7 +123,6 @@ type Input struct {
 	State *State // nil = no state yet
 }
 
-func (in *Input) adjust() bool { return in.Cfg.Enabled }
 
 // SideEffect is a non-weight action of a strategy that took effect.
 type SideEffect struct {
@@ -161,7 +163,7 @@ func Precheck(in *Input) string {
 // at the last evaluated window), so windows already evaluated are not
 // consumed again when it is turned back on.
 func ruleSet(in *Input) (rules []Rule, strategies []ResolvedStrategy, slots int) {
-	if !in.adjust() {
+	if !in.Cfg.Enabled {
 		return nil, nil, MaxRules
 	}
 	return in.Cfg.Rules, in.Cfg.Strategies, len(in.Cfg.Rules)
@@ -358,7 +360,7 @@ func startState(in *Input, ruleCount, strategyCount int) (State, carry) {
 	c := carry{bitmaps: make([]string, ruleCount), cuts: make([]int64, ruleCount), cooldowns: make([]int64, strategyCount)}
 	c.sigReset = hasState && st.RulesSig != in.Cfg.RulesSig
 	switch {
-	case hasState && !c.sigReset && in.adjust():
+	case hasState && !c.sigReset && in.Cfg.Enabled:
 		copy(c.bitmaps, st.Bitmaps)
 		copy(c.cuts, st.Cuts)
 		copy(c.cooldowns, st.Cooldowns)
@@ -491,7 +493,7 @@ type ruleOutcome struct {
 }
 
 func (o ruleOutcome) fired(idx int) bool {
-	return o.lastRules[idx] == ruleFired || o.lastRules[idx] == ruleHitFired
+	return RuleFired(o.lastRules[idx])
 }
 
 // evalRule evaluates a rule's expression: every condition (no short
@@ -704,7 +706,7 @@ func Evaluate(in Input) Output {
 	revived := IsZero(from) && !IsZero(st.WeightEff)
 	change := ""
 	switch {
-	case !in.adjust():
+	case !in.Cfg.Enabled:
 		// Pinning the weight to the base is what "not adjusting" means, not
 		// a change: no new last change, and the old one no longer exists.
 		st.WeightEff, st.Cooldowns = float64(in.Base), nil
@@ -727,7 +729,7 @@ func Evaluate(in Input) Output {
 	st.LastRules, st.LastRuleStats = string(ro.lastRules), ro.stats
 	st.LastVerdict, st.Recent = verdict, l.recent
 	return Output{Action: ActionApplied, Verdict: verdict, State: st, WeightFrom: from, WeightTo: st.WeightEff,
-		Adjust: in.adjust(), SigReset: c.sigReset, Revived: revived, PrevDir: prevDir, Missed: ro.missed, SideEffects: effects}
+		Adjust: in.Cfg.Enabled, SigReset: c.sigReset, Revived: revived, PrevDir: prevDir, Missed: ro.missed, SideEffects: effects}
 }
 
 // pick keeps the counts of the configured thresholds (0 included).

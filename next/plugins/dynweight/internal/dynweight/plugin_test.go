@@ -256,6 +256,12 @@ func TestSampleOf(t *testing.T) {
 	if _, s, _ := sampleOf(transport); !s.Fail || s.FailStatus != 0 || s.LatencyMs != -1 || s.TTFBMs != -1 {
 		t.Fatalf("transport failure: %+v", s)
 	}
+	// A stream that fails after its first event has no timings (new-api).
+	failed := *base
+	failed.Success, failed.UpstreamStatusCode = false, 529
+	if _, s, _ := sampleOf(&failed); !s.Fail || s.FailStatus != 529 || s.TTFBMs != -1 || s.LatencyMs != -1 {
+		t.Fatalf("failed stream: %+v", s)
+	}
 	for name, o := range map[string]*pluginv1.RequestObservation{
 		"no group": {Phase: observation.AttemptFinished, AccountId: 1, Model: "m"},
 		"canceled": {Phase: observation.AttemptFinished, AccountId: 1, GroupId: 2, Model: "m", Canceled: true},
@@ -265,5 +271,24 @@ func TestSampleOf(t *testing.T) {
 		if _, _, ok := sampleOf(o); ok {
 			t.Errorf("%s counted", name)
 		}
+	}
+}
+
+// Counters a failed flush could not write are kept for the next one, and a
+// flush hands them over in key order.
+func TestAggregatorRestore(t *testing.T) {
+	a := newAggregator()
+	cfg := rules.Compile(rules.DefaultConfig()).Resolve(1, 2)
+	a.add(obsWindow{key: key{AccountID: 2, GroupID: 1, Model: "m"}, window: 60}, rules.Sample{Fail: true, TTFBMs: -1, LatencyMs: -1}, &cfg)
+	a.add(obsWindow{key: key{AccountID: 1, GroupID: 9, Model: "m"}, window: 60}, rules.Sample{TTFBMs: -1, LatencyMs: 5}, &cfg)
+	deltas := a.take()
+	if len(deltas) != 2 || deltas[0].AccountID != 1 || a.pending() != 0 {
+		t.Fatalf("take: %+v", deltas)
+	}
+	a.add(obsWindow{key: deltas[0].key, window: 60}, rules.Sample{TTFBMs: -1, LatencyMs: 7}, &cfg)
+	a.restore(deltas)
+	again := a.take()
+	if len(again) != 2 || again[0].counts.Total != 2 || again[1].counts.Fail != 1 {
+		t.Fatalf("restored: %+v", again)
 	}
 }

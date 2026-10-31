@@ -176,7 +176,8 @@ func CountsOf(fields map[string]int64) Counts {
 			f.LN = v
 		default:
 			for _, t := range tables {
-				if k, err := strconv.Atoi(strings.TrimPrefix(name, t.prefix)); err == nil && strings.HasPrefix(name, t.prefix) {
+				rest, ok := strings.CutPrefix(name, t.prefix)
+				if k, err := strconv.Atoi(rest); ok && err == nil {
 					addCount(t.of(f), k, v)
 					break
 				}

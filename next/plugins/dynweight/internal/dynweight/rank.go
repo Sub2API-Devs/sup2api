@@ -2,6 +2,7 @@ package dynweight
 
 import (
 	"context"
+	"maps"
 	"math"
 	"sync"
 	"time"
@@ -76,6 +77,8 @@ func (t *baseTracker) take() map[pair]base {
 	}
 	out := t.pending
 	t.pending = map[pair]base{}
+	// Pairs scheduling stopped seeing need not be remembered.
+	maps.DeleteFunc(t.known, func(_ pair, b base) bool { return time.Since(b.SeenAt) > 2*seenRefresh })
 	return out
 }
 

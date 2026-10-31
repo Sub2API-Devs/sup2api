@@ -125,7 +125,7 @@ func (s Strategy) normalize(i int, rules []Rule, index map[string]int) (Strategy
 func (a Action) normalize(path string) (Action, error) {
 	switch a.Type = strings.TrimSpace(a.Type); a.Type {
 	case ActionWeightDegrade, ActionWeightClimb:
-		a.Percent = 0
+		a.Percent, a.Mode = 0, strings.TrimSpace(a.Mode)
 		switch a.Mode {
 		case ModeBasePercent, ModeCurrentPercent:
 			if a.Value < 1 || a.Value > 100 {

@@ -48,8 +48,10 @@ type Plugin struct {
 	weights atomic.Pointer[map[key]weight]
 	obs     *aggregator
 	bases   *baseTracker
-	// reload serializes the configuration and weight reloads.
-	reload sync.Mutex
+	// reload serializes the configuration and weight reloads; flushing
+	// the flushes of the loop and the evaluation job.
+	reload   sync.Mutex
+	flushing sync.Mutex
 
 	bg     context.Context
 	cancel context.CancelFunc
@@ -151,10 +153,12 @@ func (p *Plugin) flush(ctx context.Context) {
 	if err != nil {
 		return
 	}
+	p.flushing.Lock()
+	defer p.flushing.Unlock()
 	if deltas := p.obs.take(); len(deltas) > 0 {
 		if err := s.addObs(ctx, deltas); err != nil {
-			p.obs.dropped.Add(int64(len(deltas)))
-			p.log.Warn("dynweight: write counters failed, dropped", "error", err.Error(), "keys", len(deltas))
+			p.obs.restore(deltas)
+			p.log.Warn("dynweight: write counters failed, kept for the next flush", "error", err.Error(), "keys", len(deltas))
 		}
 	}
 	if changed := p.bases.take(); len(changed) > 0 {

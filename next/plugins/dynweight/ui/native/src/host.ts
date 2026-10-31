@@ -1,4 +1,4 @@
-import type { PluginHost } from '@sub2api/host'
+import type { PluginHost, UseListResult } from '@sub2api/host'
 import type { SelectOption, Tone } from '@sub2api/ui'
 
 // Plugin-scoped host handed to register(); shared by all dynweight components.
@@ -127,6 +127,12 @@ export interface Filter {
 }
 
 export const emptyFilter = (): Filter => ({ account_id: '', group_id: '', model: '' })
+
+/** Applies a query to a useList; the same query reloads instead. */
+export function applyQuery(list: UseListResult<unknown>, next: Record<string, string>) {
+  if (Object.entries(next).every(([k, v]) => list.filters[k] === v)) list.reload()
+  else Object.assign(list.filters, next)
+}
 
 /** Query of a filter, trimmed. */
 export const filterQuery = (f: Filter): Filter => ({ account_id: f.account_id.trim(), group_id: f.group_id.trim(), model: f.model.trim() })

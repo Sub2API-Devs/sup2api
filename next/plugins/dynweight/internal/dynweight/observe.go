@@ -1,7 +1,9 @@
 package dynweight
 
 import (
+	"cmp"
 	"context"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -12,8 +14,8 @@ import (
 )
 
 // maxPendingKeys bounds the counters a node holds between two flushes;
-// beyond it new keys are dropped (and counted) rather than growing without
-// limit while the database is unreachable.
+// beyond it the samples of new keys are dropped (and counted) rather than
+// growing without limit while the database is unreachable.
 const maxPendingKeys = 50000
 
 // OnObservations implements pluginsdk.Observer: every finished attempt is
@@ -45,7 +47,9 @@ func sampleOf(o *pluginv1.RequestObservation) (key, rules.Sample, bool) {
 	}
 	s := rules.Sample{Stream: o.GetStream(), Fail: !o.GetSuccess(), TTFBMs: -1, LatencyMs: -1}
 	started := o.GetAttemptStartedAtUnixMs()
-	if first := o.GetFirstStreamEventAtUnixMs(); s.Stream && started > 0 && first >= started {
+	// Timings come from successful attempts only, as in new-api: a failure
+	// counts in the error rate, not again in the latency picture.
+	if first := o.GetFirstStreamEventAtUnixMs(); !s.Fail && s.Stream && started > 0 && first >= started {
 		s.TTFBMs = first - started
 	}
 	if !s.Fail && started > 0 {
@@ -69,7 +73,7 @@ type obsWindow struct {
 type aggregator struct {
 	mu      sync.Mutex
 	counts  map[obsWindow]*rules.Counts
-	dropped atomic.Int64
+	dropped atomic.Int64 // samples
 }
 
 func newAggregator() *aggregator { return &aggregator{counts: map[obsWindow]*rules.Counts{}} }
@@ -89,7 +93,8 @@ func (a *aggregator) add(w obsWindow, s rules.Sample, cfg *rules.Resolved) {
 	c.Record(s, cfg)
 }
 
-// take hands over the pending counters.
+// take hands over the pending counters in key order, so the upserts of
+// two nodes lock the same rows in the same order.
 func (a *aggregator) take() []obsDelta {
 	a.mu.Lock()
 	counts := a.counts
@@ -99,7 +104,29 @@ func (a *aggregator) take() []obsDelta {
 	for w, c := range counts {
 		deltas = append(deltas, obsDelta{key: w.key, window: w.window, counts: *c})
 	}
+	slices.SortFunc(deltas, func(a, b obsDelta) int {
+		return cmp.Or(compareKeys(a.key, b.key), cmp.Compare(a.window, b.window))
+	})
 	return deltas
+}
+
+// restore adds back counters whose write failed, within maxPendingKeys.
+func (a *aggregator) restore(deltas []obsDelta) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, d := range deltas {
+		w := obsWindow{key: d.key, window: d.window}
+		c := a.counts[w]
+		if c == nil {
+			if len(a.counts) >= maxPendingKeys {
+				a.dropped.Add(d.counts.Total)
+				continue
+			}
+			c = &rules.Counts{}
+			a.counts[w] = c
+		}
+		c.Add(d.counts)
+	}
 }
 
 func (a *aggregator) pending() int {

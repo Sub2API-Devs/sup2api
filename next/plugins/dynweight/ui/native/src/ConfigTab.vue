@@ -5,7 +5,7 @@ import { SAlert, SButton, SCard, SDisclosure, SField, SHint, SInput, SSegmented,
 import LayerEditor from './LayerEditor.vue'
 import {
   canManage, clone, errorMessage, fetchChannels, fetchConfig, fetchDefaults, saveConfig, useDwHost,
-  type AccountOverride, type Channel, type Config, type Layer
+  type AccountOverride, type Channel, type Config, type ConfigBody, type Layer
 } from './host'
 
 // Configuration: the global layer, group layers that replace it, account
@@ -23,13 +23,17 @@ const loading = ref(false)
 const error = ref('')
 const warnings = ref<string[]>([])
 
+function setDraft(body: ConfigBody) {
+  draft.value = { ...body.config, groups: body.config.groups ?? {}, accounts: body.config.accounts ?? {} }
+  version.value = body.version
+}
+
 async function reload() {
   loading.value = true
   error.value = ''
   try {
     const [body, d, ch] = await Promise.all([fetchConfig(), fetchDefaults(), fetchChannels().catch(() => [])])
-    draft.value = { ...body.config, groups: body.config.groups ?? {}, accounts: body.config.accounts ?? {} }
-    version.value = body.version
+    setDraft(body)
     defaults.value = d
     channels.value = ch
     warnings.value = []
@@ -56,8 +60,10 @@ const validId = (v: string) => /^\d+$/.test(v.trim()) && Number(v) > 0
 function addGroup() {
   const c = draft.value
   if (!c || !validId(newGroup.value) || c.groups![newGroup.value.trim()]) return
+  // A new group starts as a copy of the global layer that adjusts: the
+  // master switch stays the global one's.
   const { groups: _g, accounts: _a, notify: _n, ...global } = c
-  c.groups![newGroup.value.trim()] = clone(global)
+  c.groups![newGroup.value.trim()] = { ...clone(global), enabled: true }
   newGroup.value = ''
 }
 
@@ -110,8 +116,7 @@ async function save() {
   try {
     for (const o of Object.values(c.accounts ?? {})) if (o.exempt_status_codes === '') o.exempt_status_codes = undefined
     const body = await saveConfig({ config: c, version: version.value })
-    draft.value = { ...body.config, groups: body.config.groups ?? {}, accounts: body.config.accounts ?? {} }
-    version.value = body.version
+    setDraft(body)
     warnings.value = body.warnings ?? []
     host.toast(t('config.saved'), 'success')
   } catch (e) {

@@ -1,10 +1,13 @@
 package dynweight
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -19,6 +22,10 @@ type key struct {
 	AccountID int64
 	GroupID   int64
 	Model     string
+}
+
+func compareKeys(a, b key) int {
+	return cmp.Or(cmp.Compare(a.AccountID, b.AccountID), cmp.Compare(a.GroupID, b.GroupID), strings.Compare(a.Model, b.Model))
 }
 
 // store is the plugin schema.
@@ -215,6 +222,10 @@ type base struct {
 
 type pair struct{ AccountID, GroupID int64 }
 
+func comparePairs(a, b pair) int {
+	return cmp.Or(cmp.Compare(a.AccountID, b.AccountID), cmp.Compare(a.GroupID, b.GroupID))
+}
+
 func (s store) loadBases(ctx context.Context) (map[pair]base, error) {
 	rows, err := s.db.Query(ctx, `SELECT account_id, group_id, weight, name, seen_at FROM bases`)
 	if err != nil {
@@ -232,7 +243,9 @@ func (s store) loadBases(ctx context.Context) (map[pair]base, error) {
 
 func (s store) saveBases(ctx context.Context, bases map[pair]base) error {
 	b := &pgx.Batch{}
-	for p, v := range bases {
+	// In pair order, like the counters, so concurrent batches do not deadlock.
+	for _, p := range slices.SortedFunc(maps.Keys(bases), comparePairs) {
+		v := bases[p]
 		b.Queue(`INSERT INTO bases (account_id, group_id, weight, name, seen_at) VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (account_id, group_id) DO UPDATE SET weight = EXCLUDED.weight, name = EXCLUDED.name, seen_at = EXCLUDED.seen_at`,
 			p.AccountID, p.GroupID, v.Weight, v.Name, v.SeenAt)
@@ -250,9 +263,9 @@ type eventRow struct {
 func (s store) addEvents(ctx context.Context, events []eventRow) error {
 	b := &pgx.Batch{}
 	for _, e := range events {
-		detail := map[string]any{}
-		for k, v := range e.Detail {
-			detail[k] = v
+		detail := maps.Clone(e.Detail)
+		if detail == nil {
+			detail = map[string]any{}
 		}
 		if e.Window != nil {
 			detail["window"] = e.Window

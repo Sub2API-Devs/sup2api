@@ -113,7 +113,7 @@ func FiredRules(cfg *Resolved, lastRules string) []string {
 	}
 	var names []string
 	for idx, r := range cfg.Rules {
-		if referenced[idx] && idx < len(lastRules) && (lastRules[idx] == ruleFired || lastRules[idx] == ruleHitFired) {
+		if referenced[idx] && idx < len(lastRules) && RuleFired(lastRules[idx]) {
 			names = append(names, r.Name)
 		}
 	}
