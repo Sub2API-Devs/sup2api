@@ -5132,3 +5132,35 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 先发核心（72.2），再发插件 0.2.0（用 `sup2api-plugins-2026` 签名）。
   - 内置插件随核心的 builtin 目录重签，两个节点都要更新。
   - 迁移脚本在插件的 `migrations/`（`0003_*` 起），必须幂等，只加有默认值的列。
+
+## 73. 账号成功率、用量、原始倍率计费与用量限制（2026-10-31，用户要求参照 new-api）
+
+账号页新增「成功率 · 1 分钟」「用量」两列，原「用量」列（Claude Code 套餐窗口）改名「余额」，§52 的账号余额并入同一格。这次不做 API Key 的余额查询（以后按账号类型声明）。下面的功能都由核心实现，所有账号类型一样适用，插件不用改。
+
+### 73.1 成功率（1 分钟滚动窗口）
+
+- 核心观测消费者 `core.account` 同时订阅 `usage_finalized` 和 `attempt_finished`，新增指标 `failed_requests`（`sdk/observation.FailedRequests`）。
+- 失败 = 一次结束的尝试 `!success && !canceled && status_code != 400 && error_type != "rate_limited"`：400（请求本身有误）、客户端取消、网关自身限流都不算失败；其余每次失败的上游尝试计一次。成功侧仍是 `success_requests`（成功请求数）。
+- 账号列表视图新增 `outcomes: {success, failed}`（近 60 秒，与统计设置的窗口无关；Redis 不可用时为 null）。成功率 = success ÷ (success + failed)，无请求显示「—」；≥99% 绿、≥95% 黄、其余红。
+- `GET /accounts/stats` 的 `AccountStatsView` 新增 `failed_requests`；插件读核心指标的白名单同步加入 `failed_requests`。一次读取的 账号×指标 上限改为 800（200 个账号 × 4 个核心指标）。
+
+### 73.2 用量（核心统计）
+
+- 迁移 `0064_account_usage.sql`：`account_usage_hourly(account_id, hour, cost, raw_cost, requests, tokens)` 与 `account_usage_totals(account_id, …)`，由 `usage_logs` 上的触发器 `account_usage_track` 累计；首次迁移时回填全部历史行。
+- 口径与 §61 API Key 额度一致：`billed`/`reserved` 的行计入费用，转为 `free`/`failed` 时退回；`cost` 为计费后费用，`raw_cost` 为分组倍率前的费用（取 `billing_detail.cost`，缺失时 `total_cost / rate_multiplier`）；`requests` 为成功行数；`tokens` 为五类 token 之和。行换账号时从旧账号扣回。删除历史日志不回退累计值。
+- 两张表不引用 `accounts`（触发器在结算事务里执行，已清除的账号不能让写入失败）。小时桶按 UTC 整点。
+- 账号视图新增 `usage: {raw_cost_accounting, total, today, limit}`；`today` 从服务器时区当日零点起。`GET /accounts/:id/usage`（`account:read` / `account:own:read`）返回 `today`、`last_7_days`、`last_30_days`、`total` 和 `limit`。
+
+### 73.3 原始倍率计费与用量限制
+
+- 配置存于 `account_usage_limits`（随账号删除级联），接口：
+  - `GET /accounts/:id/usage-limit`（读权限）：未保存过时返回默认值 `{raw_cost_accounting:false, enabled:false, amount:"0", period:"month", period_count:1, anchor:null}`。
+  - `PUT /accounts/:id/usage-limit`（`account:update` / `account:own:update`）：整体替换并写审计 `account.usage_limit`，保存后立即对该账号生效，返回 `GET /usage` 同形的明细。
+- 字段：`raw_cost_accounting`（原始倍率计费：累计用量与限额都按 `raw_cost`）、`enabled`、`amount`（USD，0–1e9，最多 8 位小数，开启时须 > 0）、`period`（`hour|day|week|month|none`）、`period_count`（1–1000）、`anchor`（周期起点，取整点；null = 服务器时区 2024-01-01 00:00，即日/周一/月初的自然边界）。`none` 为总额度，按累计值计算、不重置。
+- 执行：账号服务每 5 秒的自动状态巡检后执行 `EnforceUsageLimits`：
+  - 启用中的账号本周期用量 ≥ 限额 → `status=auto_disabled`，`status_reason="usage limit reached: $<used> / $<amount> (<per month|per 2 weeks|total>)"`，`auto_disabled_until` = 本周期结束（总额度为 null）。不受账号「允许自动禁用」和全局自动禁用开关影响。
+  - 周期结束由现有的自动状态巡检（§42）自动启用。
+  - 被用量限制禁用、且现在不再超限（调高限额、关闭限制、改了周期）→ 立即恢复 `active`。
+  - 只处理 `status_reason` 以 `usage limit reached` 开头的自动禁用，其它原因的自动禁用和人工禁用不动。状态变更写审计 `account.usage_limit_state` 并发 `account.status_changed`。
+  - 「重置状态」恢复一个被用量限制禁用的账号时，记下当前周期（`waived_window`），本周期内不再禁用；保存配置会清除这一豁免。
+- 控制台：状态栏的自动禁用统一为黄色徽章（人工禁用仍为红色），原因与「何时自动启用」只在悬停时显示；用量限制的原因翻译为「用量已达上限：…」。编辑页「调度与限流」新增「用量限制」卡片，打开该分区时加载，账号保存成功后单独提交；提交失败只提示，不影响已保存的账号。
