@@ -110,8 +110,38 @@ func defaultFailurePolicy() FailurePolicy {
 		RetryRules: []FailureRule{}, AccountRules: []FailureRule{}}
 }
 
+// loginAccountRules disable an account on a login failure the provider,
+// Claude Code or the Worker names (401) and on an account the provider holds
+// (403). Migration 0072 writes the same rules into a published policy that
+// still had only the migrated rule.
+func loginAccountRules() []FailureRule {
+	rule := func(id, name, status string, keywords ...string) FailureRule {
+		return FailureRule{ID: id, Name: name, Enabled: true, Action: "disable",
+			Match: FailureMatch{Source: "upstream", StatusCodes: status, Keywords: keywords, Mode: "all"}}
+	}
+	return []FailureRule{
+		rule("login-invalid", "Login invalid (401)", "401",
+			"oauth access token has been revoked",
+			"oauth token has been revoked",
+			"oauth refresh token is no longer valid",
+			"oauth_refresh_dead",
+			"not_logged_in",
+			"has cleared its stored login",
+			"invalid x-api-key",
+			"invalid bearer token",
+			"the security token included in the request is invalid",
+			"your account is not authorized"),
+		rule("account-on-hold", "Account on hold (403)", "403",
+			"oauth_account_on_hold",
+			"oauth authentication is currently not allowed for this organization"),
+	}
+}
+
 // migrationDraft is a visible starting point, not an executable replacement
 // until published. Legacy plugin-specific decisions are intentionally not copied.
+// The old settings disabled on a status code or a keyword; a rule needs both
+// now, so the draft names login failures precisely, keeps the old keywords
+// at any status and keeps status codes other than the default 401 alone.
 func migrationDraft(gw GatewaySettings, ad AutoDisableSettings) FailurePolicy {
 	p := defaultFailurePolicy()
 	p.MaxRetries = gw.normalized().MaxAttempts - 1
@@ -120,9 +150,14 @@ func migrationDraft(gw GatewaySettings, ad AutoDisableSettings) FailurePolicy {
 	p.RetryRules = []FailureRule{{ID: "http-transient", Name: "HTTP transient errors", Enabled: true,
 		Match:  FailureMatch{Source: "upstream", StatusCodes: "408,429,500-599", Mode: "all"},
 		Action: failureRetry}}
-	if ad.StatusCodes != "" || len(ad.Keywords) > 0 {
-		p.AccountRules = []FailureRule{{ID: "migrated-disable", Name: "Existing automatic disable", Enabled: true,
-			Match: FailureMatch{Source: "upstream", StatusCodes: ad.StatusCodes, Keywords: ad.Keywords, Mode: "all"}, Action: "disable"}}
+	p.AccountRules = loginAccountRules()
+	if ad.StatusCodes != "" && ad.StatusCodes != "401" {
+		p.AccountRules = append(p.AccountRules, FailureRule{ID: "migrated-status", Name: "Existing automatic disable (status)", Enabled: true,
+			Match: FailureMatch{Source: "upstream", StatusCodes: ad.StatusCodes, Mode: "all"}, Action: "disable"})
+	}
+	if len(ad.Keywords) > 0 {
+		p.AccountRules = append(p.AccountRules, FailureRule{ID: "migrated-disable", Name: "Existing automatic disable", Enabled: true,
+			Match: FailureMatch{Source: "upstream", Keywords: ad.Keywords, Mode: "all"}, Action: "disable"})
 	}
 	return p
 }
