@@ -159,6 +159,7 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 		b.work.Admitted = b.canWork
 	}
 	b.env = environment.New(b.db, b.cl.Bus)
+	b.stopper.add("environment", b.env.Close)
 	b.settler = usage.New(b.db, bill, bill, b.events, usage.Options{CanRetry: b.canWork, Environment: b.env})
 	b.settler.Start(b.ctx)
 	b.stopper.add("settler", b.settler.Stop)

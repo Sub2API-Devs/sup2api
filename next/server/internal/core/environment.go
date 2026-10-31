@@ -2,10 +2,15 @@ package core
 
 import (
 	"context"
+	"log/slog"
+	"maps"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
 // Environment variables (CONTRACTS §73.3) are the general runtime parameters
@@ -14,15 +19,14 @@ import (
 // environment variable. 0 (or an absent key) follows the next layer. Plugins
 // read the resolved values and cannot declare their own.
 
-// Environment variable keys.
+// Environment variable keys, shared with plugins through the SDK.
 const (
-	EnvRelayTimeoutSeconds          = "relay_timeout_seconds"
-	EnvResponseHeaderTimeoutSeconds = "response_header_timeout_seconds"
-	EnvStreamingIdleTimeoutSeconds  = "streaming_idle_timeout_seconds"
-	EnvMaxRequestBodyMB             = "max_request_body_mb"
-	EnvMaxFileDownloadMB            = "max_file_download_mb"
-	EnvTaskTimeoutMinutes           = "task_timeout_minutes"
-	EnvTaskPollMaxFailures          = "task_poll_max_failures"
+	EnvRelayTimeoutSeconds          = protocol.EnvRelayTimeoutSeconds
+	EnvResponseHeaderTimeoutSeconds = protocol.EnvResponseHeaderTimeoutSeconds
+	EnvStreamingIdleTimeoutSeconds  = protocol.EnvStreamingIdleTimeoutSeconds
+	EnvMaxRequestBodyMB             = protocol.EnvMaxRequestBodyMB
+	EnvTaskTimeoutMinutes           = protocol.EnvTaskTimeoutMinutes
+	EnvTaskPollMaxFailures          = protocol.EnvTaskPollMaxFailures
 )
 
 // EnvironmentLayer is a layer an environment variable can be set on.
@@ -69,10 +73,6 @@ var EnvironmentVariables = []EnvironmentVariable{
 		Name: LocalizedText{"en": "Request body limit", "zh": "请求体上限"},
 		Help: LocalizedText{"en": "Largest client request body. Unset: what the endpoint declares, else 32 MB.",
 			"zh": "客户端请求体的上限。未设置：端点声明的值，否则 32 MB。"}},
-	{Key: EnvMaxFileDownloadMB, Unit: "mb", Min: 1, Max: 1024, Layers: allLayers, ProcessEnv: "SUB2API_MAX_FILE_DOWNLOAD_MB",
-		Name: LocalizedText{"en": "File download limit", "zh": "文件下载上限"},
-		Help: LocalizedText{"en": "Largest file (an image URL, for example) a plugin downloads for a request. Unset: the plugin's own limit.",
-			"zh": "插件为请求下载文件（例如图片 URL）的上限。未设置：插件自己的上限。"}},
 	{Key: EnvTaskTimeoutMinutes, Unit: "minutes", Min: 1, Max: 43200, Layers: allLayers, ProcessEnv: "SUB2API_TASK_TIMEOUT_MINUTES",
 		Name: LocalizedText{"en": "Async task timeout", "zh": "异步任务超时"},
 		Help: LocalizedText{"en": "How long the core keeps observing an async task (image, video). Unset: the reconcile settings.",
@@ -85,22 +85,16 @@ var EnvironmentVariables = []EnvironmentVariable{
 
 // EnvironmentVariableByKey finds a declared variable.
 func EnvironmentVariableByKey(key string) (EnvironmentVariable, bool) {
-	for _, v := range EnvironmentVariables {
-		if v.Key == key {
-			return v, true
-		}
+	i := slices.IndexFunc(EnvironmentVariables, func(v EnvironmentVariable) bool { return v.Key == key })
+	if i < 0 {
+		return EnvironmentVariable{}, false
 	}
-	return EnvironmentVariable{}, false
+	return EnvironmentVariables[i], true
 }
 
 // AllowedOn reports whether the variable can be set on the layer.
 func (v EnvironmentVariable) AllowedOn(layer EnvironmentLayer) bool {
-	for _, l := range v.Layers {
-		if l == layer {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(v.Layers, layer)
 }
 
 // EnvironmentValues are the values set on one layer; only set keys are kept.
@@ -109,33 +103,25 @@ type EnvironmentValues map[string]int64
 // ValidateEnvironmentValues checks the values of one layer and drops the
 // zeros (0 follows the next layer). field prefixes the field errors.
 func ValidateEnvironmentValues(ctx context.Context, layer EnvironmentLayer, field string, in EnvironmentValues) (EnvironmentValues, []FieldError) {
-	zh := Locale(ctx) == "zh"
 	out := EnvironmentValues{}
 	var fe []FieldError
-	for key, value := range in {
-		f := field + "." + key
+	for _, key := range slices.Sorted(maps.Keys(in)) {
+		value, f := in[key], field+"."+key
 		v, ok := EnvironmentVariableByKey(key)
 		switch {
 		case !ok:
-			fe = append(fe, FieldError{Field: f, Code: "invalid", Message: pick(zh, "unknown environment variable", "未知的环境变量")})
+			fe = append(fe, FieldError{Field: f, Code: "invalid", Message: Text(ctx, "unknown environment variable", "未知的环境变量")})
 		case !v.AllowedOn(layer):
-			fe = append(fe, FieldError{Field: f, Code: "invalid", Message: pick(zh, "cannot be set on this layer", "不能在这一层设置")})
+			fe = append(fe, FieldError{Field: f, Code: "invalid", Message: Text(ctx, "cannot be set on this layer", "不能在这一层设置")})
 		case value == 0:
 		case value < v.Min || value > v.Max:
 			fe = append(fe, FieldError{Field: f, Code: "invalid",
-				Message: pick(zh, "0 (follow) or "+rangeText(v), "0（跟随）或 "+rangeText(v))})
+				Message: Text(ctx, "0 (follow) or "+rangeText(v), "0（跟随）或 "+rangeText(v))})
 		default:
 			out[key] = value
 		}
 	}
 	return out, fe
-}
-
-func pick(zh bool, en, cn string) string {
-	if zh {
-		return cn
-	}
-	return en
 }
 
 func rangeText(v EnvironmentVariable) string {
@@ -150,20 +136,19 @@ type Environment map[string]int64
 // not hold (written before a variable lost that layer) or out of range is
 // skipped rather than trusted.
 func ResolveEnvironment(global, group, account EnvironmentValues) Environment {
+	layers := [...]struct {
+		layer  EnvironmentLayer
+		values EnvironmentValues
+	}{{EnvLayerAccount, account}, {EnvLayerGroup, group}, {EnvLayerGlobal, global}}
 	out := Environment{}
 	for _, v := range EnvironmentVariables {
-		for _, layer := range []struct {
-			l      EnvironmentLayer
-			values EnvironmentValues
-		}{{EnvLayerAccount, account}, {EnvLayerGroup, group}, {EnvLayerGlobal, global}} {
-			if x := layer.values[v.Key]; x >= v.Min && x <= v.Max && v.AllowedOn(layer.l) {
+		if x := processEnvironment[v.Key]; x > 0 {
+			out[v.Key] = x
+		}
+		for _, l := range layers {
+			if x := l.values[v.Key]; x >= v.Min && x <= v.Max && v.AllowedOn(l.layer) {
 				out[v.Key] = x
 				break
-			}
-		}
-		if _, ok := out[v.Key]; !ok {
-			if x := processEnvironment[v.Key]; x > 0 {
-				out[v.Key] = x
 			}
 		}
 	}
@@ -173,25 +158,25 @@ func ResolveEnvironment(global, group, account EnvironmentValues) Environment {
 // processEnvironment holds the process environment variables, read once.
 var processEnvironment = readProcessEnvironment()
 
-func readProcessEnvironment() map[string]int64 {
-	out := map[string]int64{}
+func readProcessEnvironment() EnvironmentValues {
+	out := EnvironmentValues{}
 	for _, v := range EnvironmentVariables {
-		x, err := strconv.ParseInt(strings.TrimSpace(os.Getenv(v.ProcessEnv)), 10, 64)
-		if err == nil && x >= v.Min && x <= v.Max {
-			out[v.Key] = x
+		raw := strings.TrimSpace(os.Getenv(v.ProcessEnv))
+		if raw == "" {
+			continue
 		}
+		x, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || x < v.Min || x > v.Max {
+			slog.Warn("environment: ignoring an invalid process environment variable", "name", v.ProcessEnv, "value", raw, "range", rangeText(v))
+			continue
+		}
+		out[v.Key] = x
 	}
 	return out
 }
 
 // ProcessEnvironment is the last layer, for display.
-func ProcessEnvironment() EnvironmentValues {
-	out := EnvironmentValues{}
-	for k, v := range processEnvironment {
-		out[k] = v
-	}
-	return out
-}
+func ProcessEnvironment() EnvironmentValues { return maps.Clone(processEnvironment) }
 
 // Duration reads a seconds or minutes variable; 0 when unset.
 func (e Environment) Duration(key string) time.Duration {

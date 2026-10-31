@@ -290,7 +290,7 @@ function onAction(g: Group, key: string) {
           <GroupPlatforms :group="editing" hint />
         </SField>
         <SSettingsGroup :title="t('settings.environment.title')" :description="t('settings.environment.groupHint')" data-testid="group-environment">
-          <EnvironmentEditor v-model="form.environment" layer="group" field="environment" :errors="errors" />
+          <EnvironmentEditor v-model="form.environment" layer="group" field="environment" :errors="errors" :disabled="saving" />
         </SSettingsGroup>
         <SField v-if="canEditAccounts" :label="t('groups.accounts.title')" :hint="t('groups.accounts.hint')">
           <GroupAccountsEditor v-if="open" ref="accountsEditor" :group-id="editing?.id ?? null" @models="selectedModelSource = $event" />

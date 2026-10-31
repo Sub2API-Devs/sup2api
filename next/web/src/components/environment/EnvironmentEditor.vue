@@ -38,7 +38,9 @@ function placeholder(v: EnvironmentVariable): string {
 
 function set(key: string, value: string | number | FileList | null) {
   const next = { ...model.value }
-  if (typeof value === 'number' && value !== 0) next[key] = value
+  // Whole numbers only: the server reads int64.
+  const n = typeof value === 'number' ? Math.round(value) : 0
+  if (n !== 0) next[key] = n
   else delete next[key]
   model.value = next
 }

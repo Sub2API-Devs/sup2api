@@ -23,24 +23,32 @@ import (
 const SettingsKey = "environment"
 
 // globalTTL bounds how stale the cached global layer gets on a node that
-// missed the config:changed broadcast.
-const globalTTL = 10 * time.Second
+// missed the config:changed broadcast; errorTTL is how long a failed read is
+// answered with an empty layer before the database is asked again.
+const (
+	globalTTL = 10 * time.Second
+	errorTTL  = 2 * time.Second
+)
 
 // Service serves the routes and implements core.EnvironmentResolver.
 type Service struct {
 	db  *store.DB
 	bus core.Bus
 
+	unsubscribe func()
+
 	mu       sync.Mutex
 	global   core.EnvironmentValues
 	globalAt time.Time
+	ttl      time.Duration
+	epoch    uint64 // bumped by invalidate, so a read in flight is not cached
 }
 
 // New wires the service; bus may be nil (single node, tests).
 func New(db *store.DB, bus core.Bus) *Service {
 	s := &Service{db: db, bus: bus}
 	if bus != nil {
-		bus.Subscribe(core.ChannelConfigChanged, func(payload []byte) {
+		s.unsubscribe = bus.Subscribe(core.ChannelConfigChanged, func(payload []byte) {
 			var msg struct{ Key string }
 			if json.Unmarshal(payload, &msg) == nil && msg.Key == SettingsKey {
 				s.invalidate()
@@ -50,8 +58,17 @@ func New(db *store.DB, bus core.Bus) *Service {
 	return s
 }
 
+// Close drops the config:changed subscription.
+func (s *Service) Close(context.Context) {
+	if s.unsubscribe != nil {
+		s.unsubscribe()
+	}
+}
+
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
-	r.Authed("GET", "/environment/variables", s.variables)
+	// The editors of all three layers show the declarations and the process
+	// layer they fall back to.
+	r.PermAny("GET", "/environment/variables", s.variables, "settings:read", "group:read", "account:read")
 	r.Perm("GET", "/settings/environment", "settings:read", s.get)
 	r.Perm("PUT", "/settings/environment", "settings:manage", s.put)
 }
@@ -59,26 +76,29 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 func (s *Service) invalidate() {
 	s.mu.Lock()
 	s.global, s.globalAt = nil, time.Time{}
+	s.epoch++
 	s.mu.Unlock()
 }
 
 // GlobalEnvironment returns the cached global layer. A read error yields an
-// empty layer (the process environment still applies) and is retried on the
-// next call.
+// empty layer (the process environment still applies) for errorTTL.
 func (s *Service) GlobalEnvironment(ctx context.Context) core.EnvironmentValues {
 	s.mu.Lock()
-	cached, at := s.global, s.globalAt
+	cached, at, ttl, epoch := s.global, s.globalAt, s.ttl, s.epoch
 	s.mu.Unlock()
-	if cached != nil && time.Since(at) < globalTTL {
+	if cached != nil && time.Since(at) < ttl {
 		return cached
 	}
 	values, err := loadGlobal(ctx, s.db.Pool)
+	ttl = globalTTL
 	if err != nil {
 		slog.WarnContext(ctx, "environment: read global layer", "err", err)
-		return core.EnvironmentValues{}
+		values, ttl = core.EnvironmentValues{}, errorTTL
 	}
 	s.mu.Lock()
-	s.global, s.globalAt = values, time.Now()
+	if s.epoch == epoch {
+		s.global, s.globalAt, s.ttl = values, time.Now(), ttl
+	}
 	s.mu.Unlock()
 	return values
 }

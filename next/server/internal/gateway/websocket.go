@@ -97,11 +97,7 @@ func (g *Gateway) serveWebSocket(ctx context.Context, cl *call) {
 		slog.InfoContext(ctx, "gateway: websocket upgrade failed", "request_id", cl.rid, "err", err)
 		return
 	}
-	limit := cl.ep.Request.MaxBodyBytes
-	if limit <= 0 {
-		limit = defaultMaxBodyBytes
-	}
-	conn.SetReadLimit(limit)
+	conn.SetReadLimit(cl.bodyLimit())
 	s := &wsSession{g: g, base: cl, client: conn, id: cl.rid}
 	s.run(ctx)
 }

@@ -474,7 +474,7 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	if err != nil {
 		return attemptResult{kind: attemptFailover, err: fromCore(core.ErrPluginUnavailable.WithCause(err), errTypePluginUnavailable)}
 	}
-	return c.forwardBuilt(ctx, rt, acc, pacct, upBody, built, nil)
+	return c.forwardBuilt(ctx, rt, acc, pacct, upBody, built, env, nil)
 }
 
 // validatePatches runs the guards that a plugin-built upstream request must
@@ -512,7 +512,7 @@ func (c *call) validatePatches(rt *typeRoute, upBody, body []byte) (attemptKind,
 	return attemptDone, nil
 }
 
-func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Account, pacct *pluginv1.Account, upBody []byte, built *pluginv1.BuildUpstreamRequestResponse, execution *gatewayExecution) attemptResult {
+func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Account, pacct *pluginv1.Account, upBody []byte, built *pluginv1.BuildUpstreamRequestResponse, env core.Environment, execution *gatewayExecution) attemptResult {
 	prepareCtx := ctx
 	if execution != nil {
 		var cancel context.CancelFunc
@@ -554,7 +554,6 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	// Send. Canceling ctx (client gone) cancels the upstream request.
 	uctx, ucancel := context.WithCancel(ctx)
 	defer ucancel()
-	env := c.environment(&acc.AccountRef)
 	var relayTimedOut atomic.Bool
 	if total := env.Duration(core.EnvRelayTimeoutSeconds); total > 0 {
 		relayTimer := time.AfterFunc(total, func() {

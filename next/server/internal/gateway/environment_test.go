@@ -28,7 +28,7 @@ func withEnvironment(global, group core.EnvironmentValues) envOpt {
 }
 
 func TestEnvironmentReachesBuildMeta(t *testing.T) {
-	e := newEnv(t, withEnvironment(core.EnvironmentValues{core.EnvMaxFileDownloadMB: 10, core.EnvRelayTimeoutSeconds: 300},
+	e := newEnv(t, withEnvironment(core.EnvironmentValues{core.EnvTaskPollMaxFailures: 10, core.EnvRelayTimeoutSeconds: 300},
 		core.EnvironmentValues{core.EnvRelayTimeoutSeconds: 120}))
 	e.accounts.mu.Lock()
 	e.accounts.accounts[1].Environment = core.EnvironmentValues{core.EnvRelayTimeoutSeconds: 90}
@@ -38,7 +38,7 @@ func TestEnvironmentReachesBuildMeta(t *testing.T) {
 	e.plat.mu.Lock()
 	meta := e.plat.builds[0].GetMeta()
 	e.plat.mu.Unlock()
-	require.Equal(t, map[string]int64{core.EnvMaxFileDownloadMB: 10, core.EnvRelayTimeoutSeconds: 90}, meta.GetEnvironment())
+	require.Equal(t, map[string]int64{core.EnvTaskPollMaxFailures: 10, core.EnvRelayTimeoutSeconds: 90}, meta.GetEnvironment())
 }
 
 func TestEnvironmentRequestBodyLimitFromGroup(t *testing.T) {

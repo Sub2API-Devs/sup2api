@@ -97,7 +97,11 @@ func (e *env) do(uid int64, method, path string, body any) (int, map[string]any)
 
 func TestGlobalLayerRoutes(t *testing.T) {
 	e := setup(t)
-	code, out := e.do(e.user, "GET", "/environment/variables", nil)
+	// The declarations are for the editors, not for every signed-in user.
+	if code, _ := e.do(e.user, "GET", "/environment/variables", nil); code != 403 {
+		t.Fatalf("variables perm: %d", code)
+	}
+	code, out := e.do(e.admin, "GET", "/environment/variables", nil)
 	if code != 200 || len(out["data"].(map[string]any)["variables"].([]any)) != len(core.EnvironmentVariables) {
 		t.Fatalf("variables: %d %v", code, out)
 	}

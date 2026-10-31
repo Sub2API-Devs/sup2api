@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"io"
-	"sync/atomic"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -31,15 +30,10 @@ type idleBody struct {
 	io.ReadCloser
 	timer *time.Timer
 	idle  time.Duration
-	fired *atomic.Bool
 }
 
 func newIdleBody(body io.ReadCloser, idle time.Duration, cancel func()) *idleBody {
-	fired := &atomic.Bool{}
-	return &idleBody{ReadCloser: body, idle: idle, fired: fired, timer: time.AfterFunc(idle, func() {
-		fired.Store(true)
-		cancel()
-	})}
+	return &idleBody{ReadCloser: body, idle: idle, timer: time.AfterFunc(idle, cancel)}
 }
 
 func (b *idleBody) Read(p []byte) (int, error) {

@@ -5170,8 +5170,9 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **已声明的变量**（定义见 `core/environment.go`）：
   - `relay_timeout_seconds`、`response_header_timeout_seconds`、`streaming_idle_timeout_seconds`
   - `max_request_body_mb`：没有账号层，因为选账号之前就要用到。
-  - `max_file_download_mb`
   - `task_timeout_minutes`、`task_poll_max_failures`
+  - 三个超时只作用于 HTTP 转发；WebSocket 会话是长连接，只用请求体上限（作为单条消息的上限）。
+  - 进程环境变量非法（非数字或超出范围）时启动日志告警并忽略。
 - **核心接口**：
   - `GET /environment/variables`：声明和进程层。
   - `GET|PUT /settings/environment`：全局层。
@@ -5179,6 +5180,8 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **插件**：
   - 网关请求的解析结果在 `RequestMeta.environment`。
   - 后台任务调用 `HostService.GetEnvironment(group_id, account_id)`，总是授权。
+  - 变量名常量在 SDK 的 `protocol` 包（`protocol.EnvRelayTimeoutSeconds` 等），核心复用同一组常量。
+- **读声明的接口** `GET /environment/variables` 需要 `settings:read`、`group:read` 或 `account:read` 之一（三层编辑器都要用）。
 
 ### 73.4 通知
 
