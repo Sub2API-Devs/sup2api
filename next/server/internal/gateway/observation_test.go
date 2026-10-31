@@ -72,3 +72,31 @@ func TestObservationGatewayLifecycleAndFailover(t *testing.T) {
 	require.Equal(t, []string{observation.AttemptStarted, observation.ResponseStarted, observation.AttemptFinished}, phases[1])
 	require.Equal(t, []string{observation.AttemptStarted, observation.ResponseStarted, observation.FirstStreamEvent, observation.AttemptFinished, observation.Completed, observation.UsageFinalized}, phases[2])
 }
+
+// The plugin's local_failure reaches the observation whether the plugin or
+// the failure policy decides the attempt (CONTRACTS §73.1).
+func TestObservationPluginLocalFailure(t *testing.T) {
+	for _, policy := range []bool{false, true} {
+		t.Run(map[bool]string{false: "plugin", true: "policy"}[policy], func(t *testing.T) {
+			e := newEnv(t)
+			capture := observationCapture{events: make(chan *pluginv1.RequestObservation, 64)}
+			e.gw.d.Observations = capture
+			if policy {
+				e.setFailurePolicy(testFailurePolicy())
+			}
+			e.plat.classifyHook = func(_ *pluginv1.ClassifyErrorRequest, out *pluginv1.ClassifyErrorResponse) { out.LocalFailure = true }
+			e.up.set("acc-1", &upstreamRule{status: 429})
+			e.messages(body(testModel, false))
+			finished := 0
+			for len(capture.events) > 0 {
+				event := <-capture.events
+				if event.AccountId == 1 && event.Phase == observation.AttemptFinished {
+					finished++
+					require.True(t, event.LocalFailure)
+					require.EqualValues(t, 429, event.UpstreamStatusCode)
+				}
+			}
+			require.Positive(t, finished)
+		})
+	}
+}

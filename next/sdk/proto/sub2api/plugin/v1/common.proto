@@ -174,8 +174,9 @@ message RequestMeta {
   map<string, string> query = 11;
   // Resolved environment variables of this attempt (CONTRACTS §73.3): the
   // nearest of account, group, global and process layers for every key some
-  // layer sets. Set on the requests that name an account (build, execute);
-  // a missing key means the plugin's own default.
+  // layer sets. Set on every request of an attempt on an account (build,
+  // execute, classify, usage extraction); a missing key means the plugin's
+  // own default.
   map<string, int64> environment = 12;
 }
 

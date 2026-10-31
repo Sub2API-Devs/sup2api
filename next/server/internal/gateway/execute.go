@@ -26,7 +26,6 @@ type gatewayExecution struct {
 	account                  *core.Account
 	acct                     *pluginv1.Account
 	body                     []byte
-	env                      core.Environment // resolved for the attempt
 	id                       string
 	records                  core.ExecutionRecords
 	network                  context.Context
@@ -34,7 +33,7 @@ type gatewayExecution struct {
 	result                   attemptResult
 	raw                      []byte
 	errorBody                *upstreamErrorBody
-	localFailure             *gwError
+	unclassified             *gwError // a failure the core decided before ClassifyError
 	header                   http.Header
 	observed, recorded, sent bool
 	base                     *core.UsageRecord
@@ -70,7 +69,7 @@ func (c *call) canExecute(rt *typeRoute) bool {
 }
 
 func (c *call) executeAttempt(ctx context.Context, rt *typeRoute, acc *core.Account, acct *pluginv1.Account, body []byte, request *pluginv1.BuildUpstreamRequestRequest) attemptResult {
-	x := &gatewayExecution{c: c, rt: rt, account: acc, acct: acct, body: body, env: request.GetMeta().GetEnvironment(), id: uuid.NewString(), network: ctx, records: c.g.d.Settler.(core.ExecutionRecords)}
+	x := &gatewayExecution{c: c, rt: rt, account: acc, acct: acct, body: body, id: uuid.NewString(), network: ctx, records: c.g.d.Settler.(core.ExecutionRecords)}
 	defer func() {
 		if x.spool != nil {
 			x.spool.close()
@@ -82,20 +81,15 @@ func (c *call) executeAttempt(ctx context.Context, rt *typeRoute, acc *core.Acco
 	defer cancel()
 	callbacks := core.ExecutionCallbacks{PrepareTimeout: c.gw.platformTimeout(), FinishTimeout: 15 * time.Second, Forward: x.forwardCallback, Record: x.record, Watch: x.watch}
 	out, err := rt.binding.Client.(core.ExecutePlugin).Execute(ectx, &pluginv1.ExecuteRequest{Request: request}, callbacks)
-	if x.localFailure != nil {
-		return attemptResult{kind: attemptReturn, err: x.localFailure}
+	if x.unclassified != nil {
+		return attemptResult{kind: attemptReturn, err: x.unclassified}
 	}
 	if x.response != nil && x.response.Error != nil {
 		cls := out.GetClassification()
 		if cls == nil {
 			cls = defaultClassification(int(x.response.Error.Status))
 		}
-		var result attemptResult
-		if c.failurePolicy != nil {
-			result = c.policyClassification(ctx, acct.GetId(), int(x.response.Error.Status), x.header, x.raw, x.response.Error.TransportError, rt.conv != nil, cls)
-		} else {
-			result = c.applyClassification(ctx, rt, acct, int(x.response.Error.Status), x.raw, x.response.Error.TransportError, cls)
-		}
+		result := c.applyClassification(ctx, rt, acct, int(x.response.Error.Status), x.header, x.raw, x.response.Error.TransportError, cls)
 		if c.ep.TaskSubmit() {
 			result.kind = attemptReturn
 		}
@@ -134,7 +128,10 @@ func (c *call) executeAttempt(ctx context.Context, rt *typeRoute, acc *core.Acco
 				// buffered response cannot be delivered. This return path skips
 				// dispatch's ordinary successful-attempt token accounting.
 				c.countTokens(context.WithoutCancel(ctx), acc.ID)
-				return attemptResult{kind: attemptReturn, err: fromCore(core.ErrUnavailable.WithMessage("upstream response incomplete"), errTypeUpstream)}
+				e := fromCore(core.ErrUnavailable.WithMessage("upstream response incomplete"), errTypeUpstream)
+				// The spool (temp file, size limit) failed here, not the account.
+				e.LocalFailure = x.spool.err != nil
+				return attemptResult{kind: attemptReturn, err: e}
 			}
 			if err := x.spool.publish(); err != nil {
 				slog.WarnContext(ctx, "gateway: committed response delivery failed", "request_id", c.rid, "err", err)
@@ -178,7 +175,7 @@ func (x *gatewayExecution) forwardCallback(ctx context.Context, in *pluginv1.For
 	if err != nil {
 		return nil, err
 	}
-	x.result = c.forwardBuilt(nctx, x.rt, x.account, x.acct, x.body, in.Request, x.env, x)
+	x.result = c.forwardBuilt(nctx, x.rt, x.account, x.acct, x.body, in.Request, x)
 	// Keep the network facts in x for the core. Returning an error terminates
 	// the default Execute flow before it invokes the plugin's ClassifyError.
 	if c.failurePolicy != nil && x.response.GetError() != nil {

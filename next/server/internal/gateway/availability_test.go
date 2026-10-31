@@ -331,7 +331,7 @@ func TestAvailabilityQuotaObservationPreservesAdminPolicy(t *testing.T) {
 			case "invalid":
 				q.Windows[0].Key = "bad key"
 			}
-			cl.applyClassification(context.Background(), &typeRoute{binding: e.gen.accountTypes[0]}, &pluginv1.Account{Id: 1}, 429, nil, "", cls)
+			cl.applyClassification(context.Background(), &typeRoute{binding: e.gen.accountTypes[0]}, &pluginv1.Account{Id: 1}, 429, nil, nil, "", cls)
 			if mode == "invalid" && len(source.observations) != 0 || mode != "invalid" && len(source.observations) != 1 {
 				t.Fatalf("observations: %v", source.observations)
 			}

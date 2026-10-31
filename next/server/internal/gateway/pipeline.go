@@ -48,6 +48,9 @@ type call struct {
 	autoDisable   AutoDisableSettings
 	failurePolicy *FailurePolicy
 	failureState  failureState
+	// env is the environment resolved for the current attempt's account
+	// (CONTRACTS §73.3); metaFor hands it to the plugin.
+	env core.Environment
 
 	principal *core.APIKeyPrincipal
 	body      []byte
@@ -683,7 +686,7 @@ func boundMeta(in map[string]string) map[string]string {
 // metaFor is meta for an upstream attempt on rt.
 func (c *call) metaFor(rt *typeRoute) *pluginv1.RequestMeta {
 	m := c.meta()
-	m.Protocol = rt.upstream
+	m.Protocol, m.Environment = rt.upstream, c.env
 	return m
 }
 

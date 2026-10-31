@@ -394,6 +394,10 @@ func (c *call) stickyValue(ctx context.Context, r *stickyRule) string {
 	return ""
 }
 
+// stickyDeleteIfValue deletes a binding only while it still holds the value
+// that was read, so a session rebound meanwhile keeps its new binding.
+const stickyDeleteIfValue = `if (redis.call('GET',KEYS[1]) or '') == ARGV[1] then return redis.call('DEL',KEYS[1]) end return 0`
+
 // dropBinding deletes the session binding unless bindings of disabled
 // accounts are kept.
 func (c *call) dropBinding(ctx context.Context, s *stickySession) {
@@ -402,7 +406,7 @@ func (c *call) dropBinding(ctx context.Context, s *stickySession) {
 	}
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stickyRedisTimeout)
 	defer cancel()
-	deleted, err := c.g.d.Redis.Eval(rctx, `if (redis.call('GET',KEYS[1]) or '') == ARGV[1] then return redis.call('DEL',KEYS[1]) end return 0`, []string{s.key}, s.policyValue).Int()
+	deleted, err := c.g.d.Redis.Eval(rctx, stickyDeleteIfValue, []string{s.key}, s.policyValue).Int()
 	if err != nil {
 		slog.WarnContext(ctx, "gateway: drop sticky binding", "err", err)
 	}

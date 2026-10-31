@@ -1026,8 +1026,9 @@ type RequestMeta struct {
 	Query map[string]string `protobuf:"bytes,11,rep,name=query,proto3" json:"query,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// Resolved environment variables of this attempt (CONTRACTS §73.3): the
 	// nearest of account, group, global and process layers for every key some
-	// layer sets. Set on the requests that name an account (build, execute);
-	// a missing key means the plugin's own default.
+	// layer sets. Set on every request of an attempt on an account (build,
+	// execute, classify, usage extraction); a missing key means the plugin's
+	// own default.
 	Environment map[string]int64 `protobuf:"bytes,12,rep,name=environment,proto3" json:"environment,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 }
 

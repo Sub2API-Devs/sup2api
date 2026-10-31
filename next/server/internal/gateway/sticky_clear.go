@@ -10,10 +10,6 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
-// stickyDeleteIfValue deletes a binding only while it still holds the value
-// that was read, so a session rebound meanwhile keeps its new binding.
-const stickyDeleteIfValue = `if redis.call('GET',KEYS[1]) == ARGV[1] then return redis.call('DEL',KEYS[1]) end return 0`
-
 // StickyClearer serves HostService.ClearStickyBindings (CONTRACTS §73.2). It
 // only needs Redis, so it is built before the plugin runtime and the gateway.
 type StickyClearer struct{ rdb redis.UniversalClient }

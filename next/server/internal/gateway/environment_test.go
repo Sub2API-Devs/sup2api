@@ -28,8 +28,8 @@ func withEnvironment(global, group core.EnvironmentValues) envOpt {
 }
 
 func TestEnvironmentReachesBuildMeta(t *testing.T) {
-	e := newEnv(t, withEnvironment(core.EnvironmentValues{core.EnvTaskPollMaxFailures: 10, core.EnvRelayTimeoutSeconds: 300},
-		core.EnvironmentValues{core.EnvRelayTimeoutSeconds: 120}))
+	e := newEnv(t, withEnvironment(core.EnvironmentValues{core.EnvRelayTimeoutSeconds: 300},
+		core.EnvironmentValues{core.EnvTaskPollMaxFailures: 10, core.EnvRelayTimeoutSeconds: 120}))
 	e.accounts.mu.Lock()
 	e.accounts.accounts[1].Environment = core.EnvironmentValues{core.EnvRelayTimeoutSeconds: 90}
 	e.accounts.mu.Unlock()

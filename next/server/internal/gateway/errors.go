@@ -103,8 +103,10 @@ type gwError struct {
 	// RecordType is the usage_logs.error_type for this failure.
 	RecordType string
 	// LocalFailure: the account is not to blame (ClassifyError's
-	// local_failure, or a response that could not be read locally). Request
-	// observations carry it so health statistics leave it out (§73.1).
+	// local_failure, or the core failed locally while relaying the
+	// response). Request observations report it, and any failure whose
+	// RecordType is not upstream_error, as local_failure so health
+	// statistics leave it out (§73.1, isLocalFailure).
 	LocalFailure bool
 }
 
