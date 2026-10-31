@@ -19,8 +19,10 @@ import (
 )
 
 // Notifications (CONTRACTS §72.14, new-api escalate.go notifyAutoChange and
-// stats.go alertErrorRate). The core has no "notify administrators" call, so
-// the plugin posts JSON to notify_webhook_url like the guard plugin's alerts.
+// stats.go alertErrorRate). The core's Notify (CONTRACTS §73.4) sends to a
+// channel and explicit recipients, not to the administrators holding a
+// permission, so the plugin still posts signed JSON to notify_webhook_url like
+// the guard plugin's alerts; moving to Notify waits on the owner's decision.
 // A notice never carries moderated text or an analysis summary (it may quote
 // the user).
 

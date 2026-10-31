@@ -115,8 +115,15 @@ func TestManifest(t *testing.T) {
 	hook := m.Hooks[0]
 	wantNeeds := []string{moderation.FieldModel, moderation.FieldMessages, moderation.FieldInput, moderation.FieldInputString, moderation.FieldGeminiContent}
 	if hook.ID != "moderation" || hook.Point != "gateway.request" || hook.Order != 200 || hook.TimeoutMs != 30000 ||
-		hook.Failure != "open" || !slices.Equal(hook.Needs, wantNeeds) || len(hook.Match.Protocols) != 5 {
+		hook.Failure != "open" || !slices.Equal(hook.Needs, wantNeeds) {
 		t.Fatalf("hook = %+v", hook)
+	}
+	// Every chat-style protocol, including the per-turn Responses WebSocket
+	// (CONTRACTS §72.2); a missing one lets enforce-level and banned users
+	// bypass moderation on it.
+	wantProtocols := []string{"anthropic.messages", "openai.chat", "openai.responses", "openai.responses_ws", "gemini.generate", "gemini.stream_generate"}
+	if !slices.Equal(hook.Match.Protocols, wantProtocols) {
+		t.Fatalf("hook protocols = %v, want %v", hook.Match.Protocols, wantProtocols)
 	}
 	fields, _ := granted["gateway.hook"].Scope["fields"].([]any)
 	if len(fields) != len(wantNeeds) {

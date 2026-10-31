@@ -51,6 +51,8 @@ func TestExtractTrailingUserRun(t *testing.T) {
 			{"role":"user","content":[{"type":"input_text","text":"new"},{"type":"input_image","image_url":"data:image/png;base64,` + png1 + `"}]}]}`,
 			"new", 1, FormatResponses},
 		{"responses string", `{"input":"just text"}`, "just text", 0, FormatResponses},
+		{"responses websocket turn", `{"type":"response.create","model":"m","previous_response_id":"r1","input":[{"role":"user","content":[{"type":"input_text","text":"ws turn"}]}]}`,
+			"ws turn", 0, FormatResponses},
 		{"gemini", `{"contents":[{"role":"model","parts":[{"text":"m"}]},{"parts":[{"text":"g1"},{"inlineData":{"mimeType":"image/jpeg","data":"abc"}},{"functionResponse":{}}]}]}`,
 			"g1", 1, FormatGemini},
 		{"two user messages joined", `{"messages":[{"role":"assistant","content":"a"},{"role":"user","content":"one"},{"role":"user","content":"two"}]}`, "one two", 0, FormatMessages},
