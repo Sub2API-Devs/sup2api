@@ -1,6 +1,7 @@
 package moderation
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -200,12 +201,15 @@ type Outcome struct {
 	TopCategory string        `json:"top_category,omitempty"`
 	TopScore    float64       `json:"top_score"`
 	Hits        []HitCategory `json:"hits,omitempty"`
-	LatencyMs   int64         `json:"latency_ms"`
-	Skipped     bool          `json:"skipped,omitempty"`
-	Err         error         `json:"-"`
-	ErrType     string        `json:"err,omitempty"`
-	Status      int           `json:"status,omitempty"`
-	Cost        *CallCost     `json:"cost,omitempty"` // console paths only
+	// Top lists the categories closest to their thresholds (score /
+	// threshold), hits or not; scored auditors only.
+	Top       []HitCategory `json:"top,omitempty"`
+	LatencyMs int64         `json:"latency_ms"`
+	Skipped   bool          `json:"skipped,omitempty"`
+	Err       error         `json:"-"`
+	ErrType   string        `json:"err,omitempty"`
+	Status    int           `json:"status,omitempty"`
+	Cost      *CallCost     `json:"cost,omitempty"` // console paths only
 }
 
 // audit calls the engine once through the bound channel and judges the
@@ -264,6 +268,7 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool,
 		return out
 	}
 	out.Hit = len(out.Hits) > 0
+	out.Top = a.nearest(out.Scores, 3)
 	for _, c := range a.order {
 		if s, ok := out.Scores[c]; ok && (out.TopCategory == "" || s > out.TopScore) {
 			out.TopCategory, out.TopScore = c, s
@@ -278,6 +283,21 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool,
 		}
 	}
 	return out
+}
+
+// nearest returns the n categories with the highest score / threshold.
+func (a *liveAuditor) nearest(scores map[string]float64, n int) []HitCategory {
+	if a.Type == AuditorLLMVerdict {
+		return nil
+	}
+	out := make([]HitCategory, 0, len(a.order))
+	for _, c := range a.order {
+		if th := a.thresholds[c]; th > 0 {
+			out = append(out, HitCategory{Category: c, Label: a.labels[c], Score: scores[c], Threshold: th})
+		}
+	}
+	slices.SortStableFunc(out, func(x, y HitCategory) int { return cmp.Compare(y.Score/y.Threshold, x.Score/x.Threshold) })
+	return out[:min(n, len(out))]
 }
 
 // judge compares every expected category with its threshold; a missing or

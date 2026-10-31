@@ -117,58 +117,6 @@ func callerID(req *pluginv1.HTTPRequest) *int64 {
 	return nil
 }
 
-func (p *Plugin) listWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
-	page, size, errs := pagination(req)
-	conds, args := []string{"(expires_at IS NULL OR expires_at > $1)"}, []any{p.now().UTC()}
-	if v := pluginsdk.Query(req, "level"); v != "" {
-		if v != LevelObserve && v != LevelEnforce {
-			errs = errs.Add("level", "enum", "level must be observe or enforce / level 取值为 observe、enforce")
-		} else {
-			args = append(args, v)
-			conds = append(conds, "level = $"+strconv.Itoa(len(args)))
-		}
-	}
-	if v := pluginsdk.Query(req, "user_id"); v != "" {
-		id, err := strconv.ParseInt(v, 10, 64)
-		if err != nil || id <= 0 {
-			errs = errs.Add("user_id", "invalid", "user_id must be a positive integer / user_id 必须是正整数")
-		} else {
-			args = append(args, id)
-			conds = append(conds, "user_id = $"+strconv.Itoa(len(args)))
-		}
-	}
-	if len(errs) > 0 {
-		return pluginsdk.FieldErrorResponse("invalid query / 查询参数无效", errs), nil
-	}
-	db, err := p.db(ctx)
-	if err != nil {
-		return pluginsdk.Unavailable(err.Error()), nil
-	}
-	where := strings.Join(conds, " AND ")
-	var total int64
-	if err := db.QueryRow(ctx, `SELECT count(*) FROM watchlist WHERE `+where, args...).Scan(&total); err != nil {
-		return nil, err
-	}
-	n := len(args)
-	args = append(args, size, (page-1)*size)
-	rows, err := db.Query(ctx, `SELECT `+watchColumns+` FROM watchlist WHERE `+where+
-		` ORDER BY level, last_hit_at DESC NULLS LAST, user_id LIMIT $`+strconv.Itoa(n+1)+` OFFSET $`+strconv.Itoa(n+2), args...)
-	if err != nil {
-		return nil, err
-	}
-	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Watch, error) { return scanWatch(r) })
-	if err != nil {
-		return nil, err
-	}
-	if list == nil {
-		list = []Watch{}
-	}
-	for i := range list {
-		list[i].fillRunning(p.now())
-	}
-	return pluginsdk.ListResponse(list, pluginsdk.Page{Page: page, PageSize: size, Total: total}), nil
-}
-
 // watchInput is the POST /watchlist and PATCH /watchlist/:user_id body.
 // days 0 = no expiry; absent = keep (PATCH) or watch_days (POST).
 type watchInput struct {
@@ -176,6 +124,16 @@ type watchInput struct {
 	Level  *string     `json:"level"`
 	Days   *int        `json:"days"`
 	Note   *string     `json:"note"`
+	// Reason goes into the history entry of the change (default: the note).
+	Reason *string `json:"reason"`
+}
+
+// reason is the history text of a change.
+func (in watchInput) reason(note string) string {
+	if in.Reason != nil {
+		return strings.TrimSpace(*in.Reason)
+	}
+	return note
 }
 
 func (in watchInput) validate(c *config, create bool) (uid int64, errs pluginsdk.FieldErrors) {
@@ -197,6 +155,9 @@ func (in watchInput) validate(c *config, create bool) (uid int64, errs pluginsdk
 	if in.Note != nil && utf8.RuneCountInString(*in.Note) > 500 {
 		errs = errs.Add("note", "too_long", "note must be at most 500 characters / 备注最多 500 字")
 	}
+	if in.Reason != nil && utf8.RuneCountInString(*in.Reason) > 500 {
+		errs = errs.Add("reason", "too_long", "reason must be at most 500 characters / 原因最多 500 字")
+	}
 	return uid, errs
 }
 
@@ -216,6 +177,9 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	}
 	c := p.cfg.Load()
 	uid, errs := in.validate(c, true)
+	if len(errs) == 0 && p.isStaff(ctx, uid) {
+		errs = errs.Add("user_id", "staff", "the user is a moderator; moderators are not watched / 该用户是管理员，管理员不进观察名单")
+	}
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}
@@ -236,7 +200,7 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$4)`, uid, w.Level, w.Source, now, w.ExpiresAt, w.ViolationEpoch, w.Note); err != nil {
 			return w, err
 		}
-		return w, watchEvent(ctx, tx, uid, "add", "", level, w.Note, callerID(req))
+		return w, watchEvent(ctx, tx, uid, "add", "", level, in.reason(w.Note), callerID(req))
 	})
 }
 
@@ -305,7 +269,7 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		} else if in.Note != nil && in.Level == nil && in.Days == nil {
 			action = "note"
 		}
-		return w, watchEvent(ctx, tx, uid, action, from, w.Level, w.Note, callerID(req))
+		return w, watchEvent(ctx, tx, uid, action, from, w.Level, in.reason(w.Note), callerID(req))
 	})
 }
 

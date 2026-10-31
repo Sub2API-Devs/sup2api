@@ -135,3 +135,54 @@ func TestListFigures(t *testing.T) {
 		t.Fatalf("type mismatch = %d", r.GetStatus())
 	}
 }
+
+// TestRecordAndWatchContext checks the record list trace, the record detail
+// context and the watch list filters and aggregates (CONTRACTS §72.14.3).
+func TestRecordAndWatchContext(t *testing.T) {
+	mod := newFakeMod(t)
+	_, h, fh := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	mustHook(t, h, hookReqAs(3, "rq-1", "MOD-HIT-sexual words"))
+	mustHook(t, h, hookReqAs(4, "", "MOD-HIT-violence words"))
+	ev := waitEvents(t, h, map[string]string{"user_id": "3"}, 1)
+	if ev[0].Trace == nil {
+		t.Fatal("list item without trace")
+	}
+	d := decodeData[EventDetail](t, h.Do("GET", fmt.Sprintf("/events/%d", ev[0].ID), nil, nil))
+	if d.FlowSnapshot == nil || d.FlowSnapshot.FlowID != flow || d.FlowSnapshot.Version != 1 || len(d.FlowSnapshot.Auditors) != 1 {
+		t.Fatalf("flow snapshot = %+v", d.FlowSnapshot)
+	}
+	if d.User == nil || d.User.Watch == nil || d.User.Watch.HitsSinceSeen != 1 || d.User.Staff || d.User.Exempt || d.Related == nil {
+		t.Fatalf("detail user = %+v related = %v", d.User, d.Related)
+	}
+	var trace Trace
+	raw, _ := json.Marshal(d.Trace)
+	if err := json.Unmarshal(raw, &trace); err != nil || len(trace.Stages[0].Outcomes[0].Top) != 3 || trace.Stages[0].Outcomes[0].Top[0].Category != "sexual" {
+		t.Fatalf("top categories = %s", raw)
+	}
+
+	list := decodeData[[]WatchItem](t, h.Do("GET", "/watchlist", map[string]string{"category": "violence", "sort": "total"}, nil))
+	if len(list) != 1 || list[0].UserID != 4 || list[0].SuspiciousTotal != 1 || len(list[0].TopCategories) != 1 ||
+		list[0].TopCategories[0].Category != "violence" || len(list[0].Groups) != 1 || list[0].Groups[0] != 9 {
+		t.Fatalf("watch list = %+v", list)
+	}
+	if all := decodeData[[]WatchItem](t, h.Do("GET", "/watchlist", map[string]string{"with_new": "1", "trend": "none"}, nil)); len(all) != 2 {
+		t.Fatalf("with_new = %+v", all)
+	}
+	for _, bad := range []map[string]string{{"sort": "name"}, {"trend": "up"}, {"q": "abc"}} {
+		if r := h.Do("GET", "/watchlist", bad, nil); r.GetStatus() != 400 {
+			t.Errorf("watch list %v = %d", bad, r.GetStatus())
+		}
+	}
+
+	decodeData[Watch](t, h.Do("PATCH", "/watchlist/4", nil, map[string]any{"level": LevelEnforce, "reason": "repeat"}))
+	hist := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/4/events", nil, nil))
+	if len(hist) == 0 || hist[0].Reason != "repeat" {
+		t.Fatalf("history = %+v", hist)
+	}
+
+	fh.Authz = func(uid int64, _ string) bool { return uid == 77 }
+	if r := h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 77}); r.GetStatus() != 400 {
+		t.Fatalf("watching a moderator = %d", r.GetStatus())
+	}
+}

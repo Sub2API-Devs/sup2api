@@ -331,6 +331,19 @@ type Event struct {
 type EventListItem struct {
 	Event
 	TextExcerpt string `json:"text_excerpt"`
+	Trace       any    `json:"trace"` // per-stage path and scores; null on 0.1 records
+}
+
+// scanEventListItem reads eventColumns, the excerpt and the trace.
+func scanEventListItem(r pgx.CollectableRow) (EventListItem, error) {
+	var it EventListItem
+	var trace []byte
+	err := r.Scan(append(it.scanTargets(), &it.TextExcerpt, &trace)...)
+	it.normalize()
+	if len(trace) > 0 {
+		it.Trace = jsonRaw(trace)
+	}
+	return it, err
 }
 
 // EventDetail is GET /events/:id: text is null when store_text was off,
@@ -339,6 +352,10 @@ type EventDetail struct {
 	Event
 	Text  *string `json:"text"`
 	Trace any     `json:"trace"`
+	// Context (event_context.go).
+	Related      []EventListItem `json:"related"`
+	FlowSnapshot *FlowSnapshot   `json:"flow_snapshot"`
+	User         *RecordUser     `json:"user"`
 }
 
 const eventColumns = `id, created_at, request_id, user_id, api_key_id, group_id, model, protocol, mode, timing, result,
@@ -545,17 +562,12 @@ func (p *Plugin) listEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	}
 	n := len(args)
 	args = append(args, size, (page-1)*size)
-	rows, err := db.Query(ctx, `SELECT `+eventColumns+`, left(coalesce(text, ''), 120) FROM events WHERE `+where+
+	rows, err := db.Query(ctx, `SELECT `+eventColumns+`, left(coalesce(text, ''), 120), trace FROM events WHERE `+where+
 		fmt.Sprintf(` ORDER BY created_at DESC, id DESC LIMIT $%d OFFSET $%d`, n+1, n+2), args...)
 	if err != nil {
 		return nil, err
 	}
-	items, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (EventListItem, error) {
-		var it EventListItem
-		err := r.Scan(append(it.scanTargets(), &it.TextExcerpt)...)
-		it.normalize()
-		return it, err
-	})
+	items, err := pgx.CollectRows(rows, scanEventListItem)
 	if err != nil {
 		return nil, err
 	}
@@ -586,6 +598,9 @@ func (p *Plugin) getEvent(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	d.normalize()
 	if len(trace) > 0 {
 		d.Trace = jsonRaw(trace)
+	}
+	if err := p.fillEventContext(ctx, db, &d); err != nil {
+		return nil, err
 	}
 	return pluginsdk.DataResponse(d), nil
 }
