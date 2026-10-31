@@ -9,7 +9,8 @@ import { emptyFailurePolicy } from './failurePolicy'
 const api = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), list: vi.fn() }))
 const permissions = vi.hoisted(() => ({ manage: true }))
 const route = reactive({ query: { tab: 'billing' } })
-vi.mock('vue-router', async original => ({ ...(await original<object>()), useRoute: () => route }))
+const router = { replace: vi.fn((to: { query: { tab: string } }) => { route.query.tab = to.query.tab }) }
+vi.mock('vue-router', async original => ({ ...(await original<object>()), useRoute: () => route, useRouter: () => router }))
 vi.mock('@sub2api/host', async original => ({ ...(await original<object>()), api }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => permissions.manage || key.endsWith(':read') }) }))
 enableAutoUnmount(afterEach)
@@ -33,18 +34,40 @@ beforeEach(() => {
 })
 
 describe('system settings use platform title ownership', () => {
-  it('does not repeat any active tab title while preserving distinct groups', async () => {
+  it('does not repeat any active section title while preserving distinct groups', async () => {
     const wrapper = mount(SettingsView, { global: { plugins: [i18n, createPinia()] } })
     for (const tab of ['billing', 'gateway', 'failure', 'sticky', 'offload', 'updates']) {
       route.query.tab = tab
       await flushPromises()
-      const selected = wrapper.get('[role="tab"][aria-selected="true"]')
+      const selected = wrapper.get(`[data-testid="settings-nav-${tab}"]`)
+      expect(selected.attributes('aria-current')).toBe('page')
       const title = selected.text()
-      const panel = wrapper.get('[role="tabpanel"]')
+      const panel = wrapper.get('[data-testid="settings-panel"]')
+      expect(panel.attributes('aria-label')).toBe(title)
       expect(panel.findAll('h1,h2,h3,h4,h5,h6').map(el => el.text())).not.toContain(title)
-      expect(panel.attributes('id')).toBe(selected.attributes('aria-controls'))
       if (tab === 'failure') expect(panel.findAll('h5').map(el => el.text())).toEqual(['自动重试', '自动禁用'])
     }
+  })
+
+  it('groups the sections and lists enabled plugins with settings', async () => {
+    const base = api.get.getMockImplementation()!
+    api.get.mockImplementation(path => path === '/plugins'
+      ? Promise.resolve([
+        { key: 'mailer', name: { zh: '邮件' }, status: 'enabled', has_settings: true },
+        { key: 'guard', name: { zh: '请求守卫' }, status: 'disabled', has_settings: true },
+        { key: 'relay', name: { zh: '中转' }, status: 'enabled', has_settings: false }
+      ])
+      : base(path))
+    const wrapper = mount(SettingsView, { global: { plugins: [i18n, createPinia()], stubs: { PluginSettings: true } } })
+    await flushPromises()
+    const nav = wrapper.get('[data-testid="settings-nav"]')
+    expect(nav.findAll('.text-xxs').map(el => el.text())).toEqual(['网关', '计费', '通知', '系统', '插件设置'])
+    expect(wrapper.find('[data-testid="settings-nav-plugin:guard"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="settings-nav-plugin:relay"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="settings-nav-plugin:mailer"]').trigger('click')
+    await flushPromises()
+    expect(router.replace).toHaveBeenCalledWith({ query: { tab: 'plugin:mailer' } })
+    expect(wrapper.get('[data-testid="settings-panel"]').attributes('aria-label')).toBe('邮件')
   })
 
   it('retains saving and removes the empty billing header for read-only users', async () => {

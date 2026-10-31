@@ -775,7 +775,8 @@ type UI struct {
 
 // MenuSection is a sidebar group declared by a plugin. It is shown as its
 // own group, placed among the core groups by Order (overview 100, gateway
-// 200, finance 300, system 400, me 500, plugins 600).
+// 200, security 300, finance 400, users 500, plugins 600, system 700, me
+// 800); without Order it goes after plugins (650).
 type MenuSection struct {
 	ID    string        `json:"id"`
 	Label LocalizedText `json:"label"`
@@ -784,9 +785,9 @@ type MenuSection struct {
 
 type Menu struct {
 	ID string `json:"id"`
-	// Section is "plugins" (the shared group at the bottom), a core group
-	// (overview | gateway | finance | system | me: the item is appended to
-	// it) or the id of one of UI.Sections.
+	// Section is "plugins" (the shared plugin group), a core group
+	// (overview | gateway | security | finance | users | system | me: the
+	// item is appended to it) or the id of one of UI.Sections.
 	Section    string        `json:"section"`
 	Label      LocalizedText `json:"label"`
 	Icon       string        `json:"icon,omitempty"`
@@ -824,6 +825,18 @@ type Page struct {
 	// (filters[]) rather than another string in this one, and adding them
 	// leaves "search" meaning exactly what it means now.
 	Search string `json:"search,omitempty"`
+	// Create puts a "New" button on a table page that opens another page of
+	// the plugin (a form page), so a create form needs no sidebar entry of
+	// its own. The button is shown only to callers holding Permission.
+	Create *PageLink `json:"create,omitempty"`
+}
+
+// PageLink points at another page of the same plugin.
+type PageLink struct {
+	Page string `json:"page"`
+	// Permission is a plugin permission key (userPermissions) the caller
+	// needs to see the link; empty means everyone who sees the page.
+	Permission string `json:"permission,omitempty"`
 }
 
 type Column struct {

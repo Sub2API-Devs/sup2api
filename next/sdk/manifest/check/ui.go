@@ -140,7 +140,10 @@ func (v *validator) menuIcon(field, icon string) {
 
 // coreMenuSections are the sidebar groups of the console a plugin menu may
 // join (authz/menus.go).
-var coreMenuSections = map[string]bool{"overview": true, "gateway": true, "finance": true, "system": true, "me": true}
+var coreMenuSections = map[string]bool{
+	"overview": true, "gateway": true, "security": true, "finance": true,
+	"users": true, "system": true, "me": true,
+}
 
 func (v *validator) ui() {
 	u := v.m.UI
@@ -192,7 +195,7 @@ func (v *validator) uiMenus(u *manifest.UI, sectionIDs map[string]bool) {
 		}
 		menuIDs[mn.ID] = true
 		if mn.Section != "plugins" && !coreMenuSections[mn.Section] && !sectionIDs[mn.Section] {
-			v.add(f+".section", "invalid", "section must be \"plugins\", a core section (overview, gateway, finance, system, me) or one of ui.sections")
+			v.add(f+".section", "invalid", "section must be \"plugins\", a core section (overview, gateway, security, finance, users, system, me) or one of ui.sections")
 		}
 		if firstText(mn.Label) == "" {
 			v.add(f+".label", "required", "label is required")
@@ -257,6 +260,27 @@ func (v *validator) uiPages(u *manifest.UI) {
 			v.add(f+".type", "invalid", "page type must be table, form, iframe or native")
 		}
 		v.pageSearch(f+".search", pg)
+		v.pageCreate(f+".create", u, pg)
+	}
+}
+
+// pageCreate validates a table page's "New" link: it must name a form page
+// of the same plugin and, when given, a declared permission.
+func (v *validator) pageCreate(f string, u *manifest.UI, pg manifest.Page) {
+	if pg.Create == nil {
+		return
+	}
+	if pg.Type != "table" {
+		v.add(f, "invalid", "only table pages can link a create page")
+		return
+	}
+	if target, ok := u.Pages[pg.Create.Page]; !ok {
+		v.add(f+".page", "unknown", "page %q is not declared in ui.pages", pg.Create.Page)
+	} else if target.Type != "form" {
+		v.add(f+".page", "invalid", "page %q must be a form page", pg.Create.Page)
+	}
+	if pg.Create.Permission != "" && !v.userPerm(pg.Create.Permission) {
+		v.add(f+".permission", "unknown", "permission %q is not declared in userPermissions", pg.Create.Permission)
 	}
 }
 

@@ -44,7 +44,7 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "volcengine" || m.Version != "0.12.5" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
+	if m.Key != "volcengine" || m.Version != "0.12.6" || m.Publisher != "sub2api" || m.APIVersion != manifest.APIVersion {
 		t.Fatalf("identity = %s %s %s", m.Key, m.Version, m.Publisher)
 	}
 	if m.Name["en"] == "" || m.Name["zh"] == "" || m.Description["en"] == "" || m.Description["zh"] == "" {
@@ -53,7 +53,9 @@ func TestManifest(t *testing.T) {
 	if m.Runtime != "grpc" || m.Entry.GRPC == nil || m.Entry.GRPC.Binaries == "" || m.HostCompat == "" {
 		t.Fatalf("runtime/entry/hostCompat = %s %+v %s", m.Runtime, m.Entry, m.HostCompat)
 	}
-	for version, want := range map[string]bool{"0.1.123": false, "0.1.124": false, "0.1.125": true} {
+	// 0.1.224 is the first core that renders a table page's "create" link
+	// (the asset forms have no sidebar entry of their own).
+	for version, want := range map[string]bool{"0.1.125": false, "0.1.223": false, "0.1.224": true} {
 		if got, err := check.HostCompatible(m.HostCompat, version); err != nil || got != want {
 			t.Fatalf("host %s compatibility: %v %v", version, got, err)
 		}
@@ -547,7 +549,13 @@ func TestAssetRoutesAndPages(t *testing.T) {
 		}
 	}
 	// Every menu points at a declared page and carries the permission of the
-	// route behind it.
+	// route behind it. The create forms are opened from their tables' "New"
+	// buttons, which need the manage permission.
+	for id, pg := range m.UI.Pages {
+		if pg.Create != nil && (pg.Create.Permission != volcengine.PermAssetsManage || m.UI.Pages[pg.Create.Page].Type != "form") {
+			t.Errorf("page %s create link = %+v", id, pg.Create)
+		}
+	}
 	for _, mn := range m.UI.Menus {
 		if _, ok := m.UI.Pages[mn.Page]; !ok {
 			t.Errorf("menu %s points at unknown page %q", mn.ID, mn.Page)
@@ -592,7 +600,7 @@ func TestValidate(t *testing.T) {
 	for _, icon := range []string{"assets/volcengine-color.svg", "assets/doubao-color.svg"} {
 		files[icon] = mustFile(t, icon)
 	}
-	if err := check.Validate(decodeManifest(t), files, check.ValidateOptions{HostVersion: "0.1.125"}); err != nil {
+	if err := check.Validate(decodeManifest(t), files, check.ValidateOptions{HostVersion: "0.1.224"}); err != nil {
 		t.Fatalf("core manifest validation: %v", err)
 	}
 }

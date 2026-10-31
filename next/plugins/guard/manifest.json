@@ -6,12 +6,12 @@
     "en": "Blocks gateway requests whose prompt matches keyword or regex rules, counts traffic from usage events, and shows a dashboard.",
     "zh": "按关键词或正则规则拦截网关请求，基于用量事件统计流量，并提供统计大盘。"
   },
-  "version": "0.2.6",
+  "version": "0.2.7",
   "publisher": "sub2api",
   "icon": "text:G",
   "runtime": "grpc",
   "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
-  "hostCompat": ">=0.1.0 <0.2.0",
+  "hostCompat": ">=0.1.224 <0.2.0",
   "hostUICompat": ">=1.0.0 <4.0.0",
 
   "capabilities": [
@@ -60,7 +60,7 @@
     "menus": [
       {
         "id": "guard",
-        "section": "plugins",
+        "section": "security",
         "label": { "en": "Guard", "zh": "请求守卫" },
         "icon": "shield",
         "page": "dashboard",

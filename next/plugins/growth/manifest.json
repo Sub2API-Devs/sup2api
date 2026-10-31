@@ -6,7 +6,7 @@
     "en": "Referral rewards and daily check-in. Invitees' usage/recharge triggers commission credited to the inviter's balance. Daily check-in awards random quota.",
     "zh": "邀请返利与每日签到。被邀请人消费或充值后按比例返利给邀请人；每日签到获得随机额度奖励。"
   },
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "sub2api",
   "icon": "text:G",
   "runtime": "grpc",
@@ -58,9 +58,6 @@
   ],
 
   "ui": {
-    "sections": [
-      { "id": "growth", "label": { "en": "Growth", "zh": "增长" }, "order": 250 }
-    ],
     "menus": [
       {
         "id": "my-referral",
@@ -82,7 +79,7 @@
       },
       {
         "id": "growth-admin",
-        "section": "growth",
+        "section": "finance",
         "label": { "en": "Growth Dashboard", "zh": "增长管理" },
         "icon": "chart",
         "page": "admin",

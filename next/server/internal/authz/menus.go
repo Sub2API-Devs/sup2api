@@ -40,7 +40,10 @@ type coreMenuSection struct {
 	items []coreMenuItem
 }
 
-// coreMenus follows ARCHITECTURE appendix A.1.
+// coreMenus follows ARCHITECTURE appendix A.1. Each section stays short
+// (at most six core items): gateway resources, security, finance, users and
+// permissions, the plugin ecosystem and cluster operations are separate
+// groups so plugins can join the one their pages belong to.
 var coreMenus = []coreMenuSection{
 	{"overview", lt("Overview", "概览"), []coreMenuItem{
 		{"dashboard", lt("Dashboard", "仪表盘"), "dashboard", "/dashboard", nil},
@@ -48,20 +51,28 @@ var coreMenus = []coreMenuSection{
 	{"gateway", lt("Gateway", "网关"), []coreMenuItem{
 		{"groups", lt("Groups", "分组"), "group", "/groups", []string{"group:read"}},
 		{"accounts", lt("Accounts", "账号"), "account", "/accounts", []string{"account:read", "account:own:read", "account:own:create"}},
+		// Platforms configure accounts and share their permissions.
+		{"platforms", lt("Platforms", "平台"), "globe", "/platforms", []string{"account:read", "account:own:read", "account:own:create"}},
 		{"proxies", lt("Proxies", "代理"), "proxy", "/proxies", []string{"proxy:read", "proxy:own:read", "proxy:own:manage"}},
 		{"prices", lt("Model prices", "模型价格"), "price", "/prices", []string{"price:read"}},
 		{"usage", lt("Usage records", "使用记录"), "usage", "/usage", []string{"usage:all:read"}},
 	}},
-	// No core items: the all-user ledger (/ledger) is opened from the users
-	// page. The section stays so plugin menus can still target "finance".
-	{"finance", lt("Finance", "财务"), nil},
-	{"system", lt("System", "系统"), []coreMenuItem{
+	// No core items: request guards and moderation are plugins and join it.
+	{"security", lt("Security", "安全"), nil},
+	{"finance", lt("Finance", "财务"), []coreMenuItem{
+		{"ledger", lt("Balance ledger", "余额流水"), "ledger", "/ledger", []string{"balance:all:read"}},
+	}},
+	{"users", lt("Users & access", "用户与权限"), []coreMenuItem{
 		{"users", lt("Users", "用户"), "user", "/users", []string{"user:read"}},
-		{"platforms", lt("Platforms", "平台"), "globe", "/platforms", []string{"account:read", "account:own:read", "account:own:create"}},
 		{"roles", lt("Roles & permissions", "角色与权限"), "role", "/roles", []string{"role:read"}},
-		{"plugins", lt("Plugins", "插件"), "plugin", "/plugins", []string{"plugin:read"}},
+	}},
+	// Plugin menus with section "plugins" are appended after these.
+	{"plugins", lt("Plugins", "插件"), []coreMenuItem{
+		{"plugins", lt("Installed plugins", "已安装插件"), "plugin", "/plugins", []string{"plugin:read"}},
 		{"market", lt("Plugin market", "插件市场"), "market", "/market", []string{"plugin:market:read"}},
 		{"publishers", lt("Publishers", "发布者"), "publisher", "/publishers", []string{"publisher:read"}},
+	}},
+	{"system", lt("System", "系统"), []coreMenuItem{
 		{"nodes", lt("Cluster nodes", "集群节点"), "node", "/nodes", []string{"node:read"}},
 		{"upgrades", lt("Core updates", "核心升级"), "refresh", "/system/upgrades", []string{"system:update:read"}},
 		{"audit", lt("Audit logs", "审计日志"), "clock", "/system/audit", []string{"audit:read"}},
@@ -76,12 +87,20 @@ var coreMenus = []coreMenuSection{
 }
 
 // Core sections are placed by these orders; plugin sections (manifest
-// ui.sections) interleave with them by their own order.
-var coreSectionOrder = map[string]int{"overview": 100, "gateway": 200, "finance": 300, "system": 400, "me": 500, "plugins": 600}
+// ui.sections) interleave with them by their own order, and a plugin section
+// without one goes after the shared "plugins" section (pluginSectionOrder).
+var coreSectionOrder = map[string]int{
+	"overview": 100, "gateway": 200, "security": 300, "finance": 400,
+	"users": 500, "plugins": 600, "system": 700, "me": 800,
+}
+
+// pluginSectionOrder places a plugin's own section that declares no order:
+// after the shared "plugins" section, before system.
+const pluginSectionOrder = 650
 
 // Menus builds the sidebar of userID: core menus filtered by permission,
-// plugin menus appended to the core section they name, plugin-declared
-// sections placed by order, and the shared "plugins" section last (600).
+// plugin menus appended to the core section they name (the shared "plugins"
+// section included) and plugin-declared sections placed by order.
 func (s *Service) Menus(ctx context.Context, userID int64) ([]MenuSection, error) {
 	set, err := s.PermissionSet(ctx, userID)
 	if err != nil {
@@ -174,7 +193,7 @@ func (s *Service) pluginMenus(set core.PermissionSet) []pluginMenu {
 				}
 			default:
 				pm.sectionKey = p.Key + ":" + m.Section
-				pm.sectionLabel, pm.sectionOrder = core.LocalizedText{"en": m.Section}, coreSectionOrder["plugins"]
+				pm.sectionLabel, pm.sectionOrder = core.LocalizedText{"en": m.Section}, pluginSectionOrder
 				for _, sec := range p.Manifest.UI.Sections {
 					if sec.ID == m.Section {
 						if l := core.LocalizedText(sec.Label); l != nil {

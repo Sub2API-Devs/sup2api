@@ -55,23 +55,7 @@ func (a *API) uiPlugins(c *gin.Context) {
 		allowed := func(perm string) bool { return perm == "" || ps.Has(install.PermissionKey(p.Key, perm)) }
 		item := UIPlugin{Key: p.Key, Version: p.Version, Name: core.LocalizedText(m.Name), AssetBase: p.AssetBase,
 			Menus: []manifest.Menu{}, Pages: map[string]manifest.Page{}, Slots: []manifest.Slot{}, Trust: p.Trust, HostUICompat: m.HostUICompat}
-		hiddenPages := map[string]bool{}
-		for _, mn := range m.UI.Menus {
-			if allowed(mn.Permission) {
-				item.Menus = append(item.Menus, mn)
-			} else {
-				hiddenPages[mn.Page] = true
-			}
-		}
-		visiblePages := map[string]bool{}
-		for _, mn := range item.Menus {
-			visiblePages[mn.Page] = true
-		}
-		for id, pg := range m.UI.Pages {
-			if visiblePages[id] || !hiddenPages[id] {
-				item.Pages[id] = pg
-			}
-		}
+		item.Menus, item.Pages = visibleMenusAndPages(m.UI, allowed)
 		for _, sl := range m.UI.Slots {
 			if allowed(sl.Permission) {
 				item.Slots = append(item.Slots, sl)
@@ -86,6 +70,42 @@ func (a *API) uiPlugins(c *gin.Context) {
 		out = append(out, item)
 	}
 	httpapi.OK(c, out)
+}
+
+// visibleMenusAndPages filters a plugin's menus and pages for one caller.
+// A page reached only through menus the caller may not see is dropped; so is
+// a table's "New" link the caller may not use, and the form page it opens
+// unless a visible menu reaches it. Pages no menu or link names stay (their
+// routes check permissions themselves).
+func visibleMenusAndPages(ui *manifest.UI, allowed func(perm string) bool) ([]manifest.Menu, map[string]manifest.Page) {
+	menus := []manifest.Menu{}
+	pages := map[string]manifest.Page{}
+	hidden := map[string]bool{}
+	visible := map[string]bool{}
+	for _, mn := range ui.Menus {
+		if allowed(mn.Permission) {
+			menus = append(menus, mn)
+			visible[mn.Page] = true
+		} else {
+			hidden[mn.Page] = true
+		}
+	}
+	for _, pg := range ui.Pages {
+		if pg.Create != nil && !allowed(pg.Create.Permission) {
+			hidden[pg.Create.Page] = true
+		}
+	}
+	shown := func(id string) bool { return visible[id] || !hidden[id] }
+	for id, pg := range ui.Pages {
+		if !shown(id) {
+			continue
+		}
+		if pg.Create != nil && (!allowed(pg.Create.Permission) || !shown(pg.Create.Page)) {
+			pg.Create = nil
+		}
+		pages[id] = pg
+	}
+	return menus, pages
 }
 
 // ---------------------------------------------------------------- market

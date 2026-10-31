@@ -18,7 +18,7 @@ const { t } = useI18n()
 provideTitleContext(() => (route.meta.title ? t(route.meta.title as string) : ''), toRef(app, 'pageDescription'))
 
 // The menus do not wait for the plugin modules: GET /me/menus already lists
-// plugin menus, and the fallback waits for the plugin list only.
+// plugin menus, and the fallback is a fixed dashboard entry.
 onMounted(() => {
   void plugins.refresh()
   void app.loadMenus()

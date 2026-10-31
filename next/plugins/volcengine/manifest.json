@@ -9,7 +9,7 @@
     "en": "Official Volcengine Ark access for OpenAI-compatible APIs, Anthropic Messages, image and video generation. Existing relay text integrations remain compatible. Prices are configured by the administrator.",
     "zh": "提供方舟官方 OpenAI 兼容接口、Anthropic Messages、图片与视频生成。保留既有中转文本接入兼容，不内置价格。"
   },
-  "version": "0.12.5",
+  "version": "0.12.6",
   "publisher": "sub2api",
   "icon": "assets/volcengine-color.svg",
   "runtime": "grpc",
@@ -18,7 +18,7 @@
       "binaries": "runtimes/{os}-{arch}/plugin"
     }
   },
-  "hostCompat": ">=0.1.125 <0.2.0",
+  "hostCompat": ">=0.1.224 <0.2.0",
   "capabilities": [
     {
       "id": "platform.adapter.v1"
@@ -677,30 +677,6 @@
         "page": "asset_groups",
         "permission": "assets:read",
         "order": 110
-      },
-      {
-        "id": "volcengine-new-asset-group",
-        "section": "volcengine",
-        "label": {
-          "en": "New asset group",
-          "zh": "新建素材组"
-        },
-        "icon": "plus",
-        "page": "new_asset_group",
-        "permission": "assets:manage",
-        "order": 120
-      },
-      {
-        "id": "volcengine-new-asset",
-        "section": "volcengine",
-        "label": {
-          "en": "New asset",
-          "zh": "新建素材"
-        },
-        "icon": "plus",
-        "page": "new_asset",
-        "permission": "assets:manage",
-        "order": 130
       }
     ],
     "pages": {
@@ -712,6 +688,10 @@
         },
         "source": "GET /assets",
         "search": "q",
+        "create": {
+          "page": "new_asset",
+          "permission": "assets:manage"
+        },
         "columns": [
           {
             "key": "id",
@@ -795,6 +775,10 @@
         },
         "source": "GET /asset-groups",
         "search": "q",
+        "create": {
+          "page": "new_asset_group",
+          "permission": "assets:manage"
+        },
         "columns": [
           {
             "key": "id",

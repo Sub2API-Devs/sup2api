@@ -388,11 +388,11 @@ func TestHTTP(t *testing.T) {
 	if code, out = c.do("GET", "/me", tok, nil); code != 200 || out["data"].(map[string]any)["superuser"] != true {
 		t.Fatalf("me: %d %v", code, out)
 	}
-	// A superuser sees every core section that still has items: overview,
-	// gateway, system, me. finance lost its last core item when the全站
-	// ledger left the sidebar, and authz.Menus() drops empty sections, so
-	// the count is 4, not 5.
-	if code, out = c.do("GET", "/me/menus", tok, nil); code != 200 || len(out["data"].([]any)) != 4 {
+	// A superuser sees every core section that has items: overview,
+	// gateway, finance, users, plugins, system, me. security has no core
+	// item (only plugins join it) and authz.Menus() drops empty sections,
+	// so the count is 7.
+	if code, out = c.do("GET", "/me/menus", tok, nil); code != 200 || len(out["data"].([]any)) != 7 {
 		t.Fatalf("menus: %d %v", code, out)
 	}
 	if code, out = c.do("GET", "/permissions", tok, nil); code != 200 {
