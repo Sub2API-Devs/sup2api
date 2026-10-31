@@ -29,9 +29,11 @@ type FlowView struct {
 	Groups      []int64         `json:"groups"`
 	Dirty       bool            `json:"dirty"` // draft differs from the published spec
 	// StageTimeoutSumMs is the automatic total timeout of the draft (detail only).
-	StageTimeoutSumMs int       `json:"stage_timeout_sum_ms,omitempty"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
+	StageTimeoutSumMs int `json:"stage_timeout_sum_ms,omitempty"`
+	// Stats24h is the last 24 hours (list only).
+	Stats24h  *FlowStat `json:"stats_24h,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 func (p *Plugin) flowViews(ctx context.Context, q interface {
@@ -65,6 +67,14 @@ func (p *Plugin) listFlows(ctx context.Context, _ *pluginv1.HTTPRequest) (*plugi
 	list, err := p.flowViews(ctx, db, "")
 	if err != nil {
 		return nil, err
+	}
+	stats, err := flowStats24h(ctx, db, p.now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		st := stats[list[i].ID]
+		list[i].Stats24h = &st
 	}
 	return pluginsdk.DataResponse(list), nil
 }
@@ -269,8 +279,7 @@ func (p *Plugin) setFlowGroups(ctx context.Context, req *pluginv1.HTTPRequest) (
 			return err
 		}
 		if len(conflicts) > 0 && !in.Force {
-			resp = pluginsdk.JSONResponse(http.StatusConflict, map[string]any{"error": map[string]any{
-				"code": "group_conflict", "message": "groups are bound to other flows / 分组已绑定其他流程", "details": map[string]any{"conflicts": conflicts}}})
+			resp = conflictResponse("group_conflict", "groups are bound to other flows / 分组已绑定其他流程", map[string]any{"conflicts": conflicts})
 			return errRollback
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM flow_groups WHERE flow_id = $1 OR group_id = ANY($2)`, id, in.Groups); err != nil {

@@ -73,6 +73,18 @@ func (p *Plugin) routes() {
 	p.Handle("GET", "/defaults", p.getJevDefaults)
 }
 
+// conflictResponse is a 409 error carrying details.
+func conflictResponse(code, message string, details map[string]any) *pluginv1.HTTPResponse {
+	return pluginsdk.JSONResponse(http.StatusConflict, map[string]any{"error": map[string]any{"code": code, "message": message, "details": details}})
+}
+
+// requestTZ is the tz query parameter, UTC when absent or invalid (list
+// figures only; the statistics endpoints reject an invalid tz).
+func requestTZ(req *pluginv1.HTTPRequest) *time.Location {
+	loc, _ := parseTZ(req)
+	return loc
+}
+
 func parseID(req *pluginv1.HTTPRequest, name string) (int64, *pluginv1.HTTPResponse) {
 	id, err := strconv.ParseInt(pluginsdk.Param(req, name), 10, 64)
 	if err != nil || id <= 0 {

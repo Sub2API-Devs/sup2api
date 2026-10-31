@@ -30,6 +30,12 @@ const (
 )
 
 // channelTypeOf is the channel type an auditor type binds to.
+// Upstream paths of the scored engines.
+const (
+	pathModerations = "/v1/moderations"
+	pathSystemOne   = "/v1/systemone"
+)
+
 var channelTypeOf = map[string]string{AuditorOpenAI: ChannelOpenAI, AuditorTypeSafe: ChannelTypeSafe, AuditorLLMVerdict: ChannelLLM}
 
 // OpenAICategories are the 13 omni-moderation categories.
@@ -347,7 +353,7 @@ func callModerations(ctx context.Context, ch *liveChannel, text, img string) (ma
 			CategoryScores map[string]float64 `json:"category_scores"`
 		} `json:"results"`
 	}
-	if err := callJSON(ctx, ch, "/v1/moderations", nil, map[string]any{"model": ch.Model, "input": input}, &out); err != nil {
+	if err := callJSON(ctx, ch, pathModerations, nil, map[string]any{"model": ch.Model, "input": input}, &out); err != nil {
 		return nil, "", err
 	}
 	if len(out.Results) == 0 {
@@ -471,7 +477,7 @@ func callSystemOne(ctx context.Context, ch *liveChannel, qs *JevQuestions, text 
 		header = map[string]string{jevImagesHeader: "true"}
 	}
 	var out systemOneAnswers
-	err := callJSON(ctx, ch, "/v1/systemone", header, body, &out)
+	err := callJSON(ctx, ch, pathSystemOne, header, body, &out)
 	return out, err
 }
 

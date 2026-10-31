@@ -1,6 +1,7 @@
 package moderation
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 )
@@ -78,5 +79,59 @@ func TestStatsEndpoints(t *testing.T) {
 	w := decodeData[Watch](t, h.Do("PATCH", "/watchlist/3", nil, map[string]any{"level": LevelEnforce}))
 	if w.HitsSinceSeen != 0 {
 		t.Fatalf("hits_since_seen after a level change = %d", w.HitsSinceSeen)
+	}
+}
+
+// TestListFigures checks the list columns, the channel delete checks, the
+// tested URL and trying an unsaved auditor (CONTRACTS §72.14.3).
+func TestListFigures(t *testing.T) {
+	mod := newFakeMod(t)
+	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	mustHook(t, h, hookReq("MOD-HIT-sexual words"))
+	waitEvents(t, h, map[string]string{"result": "block"}, 1)
+	h.Do("GET", "/status", nil, nil) // flushes this node's counts
+
+	flows := decodeData[[]FlowView](t, h.Do("GET", "/flows", nil, nil))
+	if len(flows) != 1 || flows[0].ID != flow || flows[0].Stats24h == nil || flows[0].Stats24h.Audited != 1 || flows[0].Stats24h.SuspiciousRate != 1 {
+		t.Fatalf("flow stats = %+v", flows[0].Stats24h)
+	}
+	auds := decodeData[[]AuditorView](t, h.Do("GET", "/auditors", map[string]string{"tz": "480"}, nil))
+	if len(auds) != 1 || auds[0].Today == nil || auds[0].Today.Calls != 1 {
+		t.Fatalf("auditor today = %+v", auds[0].Today)
+	}
+	chans := decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))
+	ch := chans[0]
+	if ch.Health == nil || ch.Health.Calls1h != 1 || len(ch.UsedBy) != 1 || ch.UsedBy[0].ID != auds[0].ID || ch.IsAnalysis {
+		t.Fatalf("channel figures = %+v used_by %+v", ch.Health, ch.UsedBy)
+	}
+
+	r := h.Do("DELETE", fmt.Sprintf("/channels/%d", ch.ID), nil, nil)
+	var conflict struct {
+		Error struct {
+			Code    string `json:"code"`
+			Details struct {
+				Auditors []IDName `json:"auditors"`
+			} `json:"details"`
+		} `json:"error"`
+	}
+	_ = json.Unmarshal(r.GetBody(), &conflict)
+	if r.GetStatus() != 409 || conflict.Error.Code != "channel_in_use" || len(conflict.Error.Details.Auditors) != 1 {
+		t.Fatalf("delete in use = %d %s", r.GetStatus(), r.GetBody())
+	}
+
+	test := decodeData[ChannelTestResult](t, h.Do("POST", fmt.Sprintf("/channels/%d/test", ch.ID), nil, nil))
+	if test.URL != mod.srv.URL+"/v1/moderations" {
+		t.Fatalf("tested url = %q", test.URL)
+	}
+
+	// An unsaved auditor: type and channel from the body, no stored row.
+	try := decodeData[TryResult](t, h.Do("POST", "/auditors/0/try", nil, map[string]any{
+		"text": "MOD-HIT-sexual words", "type": AuditorOpenAI, "channel_id": ch.ID, "config": map[string]any{"thresholds": map[string]float64{"sexual": 1}}}))
+	if try.Outcome.Hit {
+		t.Fatalf("draft threshold not applied: %+v", try.Outcome)
+	}
+	if r := h.Do("POST", "/auditors/0/try", nil, map[string]any{"text": "x", "type": AuditorTypeSafe, "channel_id": ch.ID}); r.GetStatus() != 400 {
+		t.Fatalf("type mismatch = %d", r.GetStatus())
 	}
 }
