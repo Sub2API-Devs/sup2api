@@ -6,6 +6,8 @@
 
 2026-10-31 网关 **0.1.129**（`b55479dad`，镜像 ID `b19e596b…`，两个节点都已更新）：只把 `HostAPIVersion` 从 7 改为 8，外壳才能接受并签发 Host API 8 的核心。同日核心 **0.1.222**（发布号 `v0.1.222-r2`，manifest `91c90b0c…`，迁移 0064–0070）两节点升级完成，计划约 60 秒；内置插件随之升级：moderation 0.6.0，dynweight 0.3.0、mailer 0.1.1 只安装不启用（install-only）。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
+2026-11-01 核心 **0.1.223**（`f138979f8`，manifest `b8a0de4d…`，无 schema 变化）：插件自带页面的设置可以带 schema（CONTRACTS §75.5），moderation 0.6.1 的全部设置移到插件自己的「设置」标签，插件详情页不再有设置。`start-primary` 第一次以 “waiting for fresh follower observations” 暂停（两节点已停，16:20:16–16:23:10 UTC 入口 503 约 3 分钟），`sub2api-shell resume -id <计划>` 后 20 秒完成；以后遇到这条原因直接 resume。
+
 **2026-10-31 事故（14:22–14:32 UTC，两节点 503 约 10 分钟）**：第一次用 0.1.128 外壳签发 `v0.1.222`，manifest 的 Host API 写成 7，候选核心报 8，`start-primary` 在 Prepare 前失败、计划暂停，两节点都已停服。迁移未执行。schema 变化的计划不允许回滚、破坏性步骤后也不允许取消，最后在 `updater.upgrades` 手工把计划标为 cancelled，重启两节点外壳回到 0.1.221 基线。**教训**：核心的 `HostAPIVersion`（或集群/任务协议）变了，先升外壳，再用新外壳镜像签核心包。
 
 2026-10-31 最新发布（北京时间 03:10–03:20）：Core 两节点 **0.1.221** + moderation **0.3.1**（CONTRACTS §72.13 P2），并把 new-api 的内容审核配置迁了过来、给审核渠道补了模型价格。
