@@ -23,6 +23,7 @@ export { default as SDrawer } from './SDrawer.vue'
 export { default as SDropdown } from './SDropdown.vue'
 export { default as SEmpty } from './SEmpty.vue'
 export { default as SField } from './SField.vue'
+export { default as SFilterBar } from './SFilterBar.vue'
 export { default as SIcon } from './SIcon.vue'
 // Icon vocabulary: the authoritative list of names <SIcon> (and therefore
 // manifest ui.menus[].icon) accepts.
