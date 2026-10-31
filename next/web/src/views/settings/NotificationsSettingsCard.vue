@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Notifications (CONTRACTS §73.4): the channels plugins deliver, a test send,
+// Notifications (CONTRACTS §74.4): the channels plugins deliver, a test send,
 // and the delivery record of what the core and plugins sent.
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'

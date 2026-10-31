@@ -122,11 +122,11 @@ func TestManifest(t *testing.T) {
 	if n := granted["net"]; n == nil || !n.Optional {
 		t.Error("net must be optional")
 	}
-	// users.read (§74.3) is optional: without it user ids are not checked.
+	// users.read (§75.3) is optional: without it user ids are not checked.
 	if u := granted["users.read"]; u == nil || !u.Optional {
 		t.Error("users.read must be declared and optional")
 	}
-	// moderation:manage may edit the settings (§74.1).
+	// moderation:manage may edit the settings (§75.1).
 	if m.UI.Settings == nil || m.UI.Settings.Permission != "moderation:manage" {
 		t.Errorf("ui.settings = %+v", m.UI.Settings)
 	}

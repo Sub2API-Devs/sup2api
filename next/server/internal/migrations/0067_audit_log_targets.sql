@@ -1,4 +1,4 @@
--- Audit log filters by target and actor (CONTRACTS §74.2): the plugin detail
+-- Audit log filters by target and actor (CONTRACTS §75.2): the plugin detail
 -- page lists one plugin's audit rows (target_type 'plugin', target_id the key),
 -- including the writes its admin routes served. Plain CREATE INDEX: core
 -- migrations run inside a transaction (see 0028).

@@ -18,19 +18,19 @@ service HostService {
   // sticky.clear (grant "sticky.clear"): delete a share of the sticky session
   // bindings that point at an account and could serve (group_id, model), so
   // those sessions pick an account again on their next request (CONTRACTS
-  // §73.2).
+  // §74.2).
   rpc ClearStickyBindings(ClearStickyBindingsRequest) returns (ClearStickyBindingsResponse);
   // environment (always granted): the resolved environment variables of a
   // group and optionally an account, for work outside a gateway request
-  // (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
+  // (CONTRACTS §74.3). Requests carry theirs in RequestMeta.environment.
   rpc GetEnvironment(GetEnvironmentRequest) returns (GetEnvironmentResponse);
   // users.read (grant "users.read"): basic facts of console users by id, to
-  // check that a user exists or to show who they are (CONTRACTS §74.3). At
+  // check that a user exists or to show who they are (CONTRACTS §75.3). At
   // most 500 ids per call; unknown and deleted users are left out.
   rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
   // notify.send (grant "notify.send"): the notification channels of the
   // enabled plugins, and sending through one by its id; the core queues,
-  // deduplicates, rate limits and retries (CONTRACTS §73.4).
+  // deduplicates, rate limits and retries (CONTRACTS §74.4).
   rpc ListNotificationChannels(ListNotificationChannelsRequest) returns (ListNotificationChannelsResponse);
   rpc Notify(NotifyRequest) returns (NotifyResponse);
   // Pure local tokenization. No upstream traffic and no billing side effects.
@@ -222,7 +222,7 @@ message GetUsersResponse {
 }
 
 // UserInfo carries no email or roles: a plugin must not pass user data on to
-// callers with weaker permissions than users.read (CONTRACTS §74.3).
+// callers with weaker permissions than users.read (CONTRACTS §75.3).
 message UserInfo {
   int64 id = 1;
   string display_name = 2;

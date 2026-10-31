@@ -537,7 +537,7 @@ func (x *GetUsersResponse) GetUsers() []*UserInfo {
 }
 
 // UserInfo carries no email or roles: a plugin must not pass user data on to
-// callers with weaker permissions than users.read (CONTRACTS §74.3).
+// callers with weaker permissions than users.read (CONTRACTS §75.3).
 type UserInfo struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

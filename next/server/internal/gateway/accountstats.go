@@ -97,7 +97,7 @@ func (c *call) observeAttemptResult(ref *core.AccountRef, result attemptResult) 
 }
 
 // isLocalFailure tells whether a failed attempt is not the account's fault
-// (CONTRACTS §73.1): it was flagged so, or it is not an upstream failure -
+// (CONTRACTS §74.1): it was flagged so, or it is not an upstream failure -
 // the others happen before or beside the upstream call.
 func isLocalFailure(flagged bool, errType string) bool {
 	return flagged || errType != errTypeUpstream

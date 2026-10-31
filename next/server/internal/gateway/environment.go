@@ -9,7 +9,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
-// environment resolves the environment variables (CONTRACTS §73.3) of an
+// environment resolves the environment variables (CONTRACTS §74.3) of an
 // attempt on ref; a nil ref resolves the request before an account is chosen.
 func (c *call) environment(ref *core.AccountRef) core.Environment {
 	var global, group, account core.EnvironmentValues

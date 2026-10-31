@@ -41,7 +41,7 @@ type VersionAssets interface {
 func WithVersionAssets(assets VersionAssets) Option { return func(h *Handler) { h.assets = assets } }
 
 // WithAudit records every POST/PUT/PATCH/DELETE an admin route served
-// (CONTRACTS §74.2).
+// (CONTRACTS §75.2).
 func WithAudit(a core.PluginWriteAuditor) Option { return func(h *Handler) { h.audit = a } }
 
 // HealthChecker reports whether this node may serve traffic

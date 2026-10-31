@@ -18,11 +18,14 @@ type AccountStatsSnapshot struct {
 }
 
 type AccountStatsView struct {
-	AccountID       int64    `json:"account_id"`
-	SuccessRequests *int64   `json:"success_requests"`
-	SuccessTokens   *int64   `json:"success_tokens"`
-	PendingUsage    *int64   `json:"pending_usage"`
-	RPM             *float64 `json:"rpm"`
-	TPM             *float64 `json:"tpm"`
-	InUse           *int     `json:"in_use"`
+	AccountID       int64  `json:"account_id"`
+	SuccessRequests *int64 `json:"success_requests"`
+	SuccessTokens   *int64 `json:"success_tokens"`
+	PendingUsage    *int64 `json:"pending_usage"`
+	// FailedRequests counts failed attempts on the account in the window (CONTRACTS §73):
+	// 400s, client cancellations and the gateway's own rate limiting are not failures.
+	FailedRequests *int64   `json:"failed_requests"`
+	RPM            *float64 `json:"rpm"`
+	TPM            *float64 `json:"tpm"`
+	InUse          *int     `json:"in_use"`
 }

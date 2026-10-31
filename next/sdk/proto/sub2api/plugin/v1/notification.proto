@@ -5,7 +5,7 @@ package sub2api.plugin.v1;
 option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
 
 // NotificationService is served by a plugin declaring notification channels
-// ("notify.channel.v1", CONTRACTS §73.4). The core calls it from its delivery
+// ("notify.channel.v1", CONTRACTS §74.4). The core calls it from its delivery
 // worker, at least once per notification: a provider that must not send twice
 // keys on DeliverNotificationRequest.id.
 service NotificationService {

@@ -62,7 +62,7 @@ export function canManage(): boolean {
 
 /**
  * May edit the plugin settings: core plugin:manage, or moderation:manage
- * (manifest ui.settings.permission, CONTRACTS §74.1).
+ * (manifest ui.settings.permission, CONTRACTS §75.1).
  */
 export function canManageSettings(): boolean {
   const h = useModHost()
@@ -269,7 +269,7 @@ export function errorDetails<K extends keyof ErrorDetails>(e: unknown, key: K): 
 /** Draft differs from the published version (has_draft_changes, else dirty). */
 export const hasDraftChanges = (f: Pick<Flow, 'dirty' | 'has_draft_changes'>) => f.has_draft_changes ?? f.dirty
 
-/** Path of the plugin's settings in the console: its page's tab, or the settings-only page without plugin:read (§74.1). */
+/** Path of the plugin's settings in the console: its page's tab, or the settings-only page without plugin:read (§75.1). */
 export function settingsPath(): string {
   const h = useModHost()
   const key = encodeURIComponent(h.plugin.key)

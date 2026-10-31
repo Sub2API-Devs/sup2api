@@ -458,6 +458,36 @@ function rateUsage(a: any) {
   }
 }
 
+// Success rate of the last minute and the usage record (CONTRACTS §73), made up
+// from the account id so the list is stable between reloads.
+function outcomesOf(a: any) {
+  const success = (a.in_use || 0) * 37 + ((a.id * 13) % 50)
+  const failed = a.id % 5 === 0 ? 6 : a.id % 3 === 0 ? 1 : 0
+  return { success, failed }
+}
+const usageLimits = new Map<number, any>()
+const defaultLimit = () => ({ raw_cost_accounting: false, enabled: false, amount: '0', period: 'month', period_count: 1, anchor: null })
+function usageFigures(a: any, scale: number) {
+  const cost = Math.round(a.id * 97.31 * scale) / 100
+  return { cost: cost.toFixed(8), raw_cost: (cost / 1.2).toFixed(8), requests: Math.round(a.id * 41 * scale), tokens: Math.round(a.id * 1_234_567 * scale) }
+}
+function usageOf(a: any) {
+  const l = usageLimits.get(a.id) || defaultLimit()
+  const total = usageFigures(a, 10)
+  const used = (l.raw_cost_accounting ? Number(total.raw_cost) : Number(total.cost)) / 3
+  const end = new Date()
+  end.setMonth(end.getMonth() + 1, 1)
+  end.setHours(0, 0, 0, 0)
+  const start = new Date(end)
+  start.setMonth(start.getMonth() - 1)
+  return {
+    raw_cost_accounting: l.raw_cost_accounting,
+    total,
+    today: usageFigures(a, 0.3),
+    limit: l.enabled ? { amount: l.amount, used: used.toFixed(8), period: l.period, period_count: l.period_count, window_start: l.period === 'none' ? null : start.toISOString(), window_end: l.period === 'none' ? null : end.toISOString() } : null
+  }
+}
+
 const withGroups = (a: any) => ({
   ...a,
   models: a.models || [],
@@ -468,6 +498,8 @@ const withGroups = (a: any) => ({
   created_by: a.created_by ?? null,
   created_by_email: userEmail(a.created_by),
   rate_usage: rateUsage(a),
+  outcomes: outcomesOf(a),
+  usage: usageOf(a),
   quota: quotaOf(a),
   refresh: refreshOf(a),
   last_test: a.last_test ?? null,
@@ -853,6 +885,27 @@ on('POST', '/accounts/:id/models/fetch', (req) => {
 })
 // Subscription quota (QuotaSnapshot). Explicit refreshes have no cooldown;
 // the page coalesces in-flight clicks. A rejected window stays rejected.
+on('GET', '/accounts/:id/usage', (req) => {
+  const r = scopedAccount(req, 'read')
+  if (!('a' in r)) return r
+  const u = usageOf(r.a)
+  return { ...u, last_7_days: usageFigures(r.a, 2), last_30_days: usageFigures(r.a, 7) }
+})
+on('GET', '/accounts/:id/usage-limit', (req) => {
+  const r = scopedAccount(req, 'read')
+  if (!('a' in r)) return r
+  return usageLimits.get(r.a.id) || defaultLimit()
+})
+on('PUT', '/accounts/:id/usage-limit', (req) => {
+  const r = scopedAccount(req, 'update')
+  if (!('a' in r)) return r
+  const b = req.body || {}
+  if (b.enabled && !(Number(b.amount) > 0)) return fail(400, 'validation_failed', 'invalid', { fields: [{ field: 'amount', code: 'invalid', message: 'set an amount above 0 to enable the usage limit' }] })
+  usageLimits.set(r.a.id, { ...defaultLimit(), ...b })
+  const u = usageOf(r.a)
+  return { ...u, last_7_days: usageFigures(r.a, 2), last_30_days: usageFigures(r.a, 7) }
+})
+
 on('GET', '/accounts/:id/quota', async (req) => {
   const r = scopedAccount(req, 'read')
   if (!('a' in r)) return r

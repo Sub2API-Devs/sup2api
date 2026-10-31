@@ -13,6 +13,12 @@ type StatsConsumer struct{}
 func (StatsConsumer) OnObservations(_ context.Context, in *pluginv1.ObservationBatch) (*pluginv1.ObservationResult, error) {
 	out := &pluginv1.ObservationResult{}
 	for _, event := range in.GetObservations() {
+		if event.GetPhase() == observation.AttemptFinished {
+			if failedAttempt(event) {
+				out.Contributions = append(out.Contributions, &pluginv1.ObservationContribution{ObservationId: event.Id, Metrics: map[string]int64{observation.FailedRequests: 1}})
+			}
+			continue
+		}
 		if event.GetPhase() != observation.UsageFinalized || (!event.Success && event.Revision <= 1) {
 			continue
 		}
@@ -30,6 +36,61 @@ func (StatsConsumer) OnObservations(_ context.Context, in *pluginv1.ObservationB
 		out.Contributions = append(out.Contributions, &pluginv1.ObservationContribution{ObservationId: event.Id, Metrics: metrics})
 	}
 	return out, nil
+}
+
+// failedAttempt reports whether a finished attempt counts against the
+// account's success rate (CONTRACTS §73): every unsuccessful attempt except a
+// 400 (the request itself is wrong), a client cancellation, and the gateway's
+// own rate limiting (no upstream answer to judge the account by). A local
+// failure is never the account's fault (§74.1), and the 400 is the upstream's
+// answer when there was one: the client may see a mapped status.
+func failedAttempt(event *pluginv1.RequestObservation) bool {
+	if event.GetSuccess() || event.GetCanceled() || event.GetLocalFailure() {
+		return false
+	}
+	status := event.GetUpstreamStatusCode()
+	if status == 0 {
+		status = event.GetStatusCode()
+	}
+	return status != 400 && event.GetErrorType() != "rate_limited"
+}
+
+// outcomesWindowSeconds is the window of the success-rate column: one minute,
+// rolling, whatever window the account statistics settings choose.
+const outcomesWindowSeconds = 60
+
+// Outcomes is the success-rate figure of one account (CONTRACTS §73).
+type Outcomes struct {
+	Success int64 `json:"success"`
+	Failed  int64 `json:"failed"`
+}
+
+// fillOutcomes sets View.Outcomes from the observation statistics, leaving it
+// null when they cannot be read (no Redis, or a read error).
+func (s *Service) fillOutcomes(ctx context.Context, out []*View) {
+	if s.d.Stats == nil || len(out) == 0 {
+		return
+	}
+	byID := make(map[int64]*View, len(out))
+	ids := make([]int64, 0, len(out))
+	for _, v := range out {
+		byID[v.ID] = v
+		ids = append(ids, v.ID)
+	}
+	for start := 0; start < len(ids); start += statsMaxAccounts {
+		chunk := ids[start:min(start+statsMaxAccounts, len(ids))]
+		snap, err := s.d.Stats.AccountStats(ctx, chunk, outcomesWindowSeconds)
+		if err != nil || snap.Status == "unavailable" {
+			continue
+		}
+		for _, row := range snap.Accounts {
+			v := byID[row.AccountID]
+			if v == nil || row.SuccessRequests == nil || row.FailedRequests == nil {
+				continue
+			}
+			v.Outcomes = &Outcomes{Success: *row.SuccessRequests, Failed: *row.FailedRequests}
+		}
+	}
 }
 
 func (s *Service) ReadPluginObservationMetrics(ctx context.Context, key string, all bool, in *pluginv1.ReadObservationMetricsRequest) (*pluginv1.ReadObservationMetricsResponse, error) {

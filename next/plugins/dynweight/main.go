@@ -1,5 +1,5 @@
 // Command dynweight is the sub2api-next dynamic weight plugin
-// (CONTRACTS §73.5).
+// (CONTRACTS §74.5).
 package main
 
 import (

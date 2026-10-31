@@ -1,4 +1,4 @@
-// Package dynweight is the dynamic weight plugin (CONTRACTS §73.5). It
+// Package dynweight is the dynamic weight plugin (CONTRACTS §74.5). It
 // counts the attempts of every (account, group, client model) per window,
 // evaluates the closed windows against configurable rules and strategies,
 // and rewrites the scheduling weight of the candidates with the effective

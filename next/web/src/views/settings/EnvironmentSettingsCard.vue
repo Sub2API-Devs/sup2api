@@ -8,7 +8,7 @@ import SettingsSaveBar from '@/components/SettingsSaveBar.vue'
 import { useSettingsForm } from '@/composables/useSettingsForm'
 import { useAuthStore } from '@/stores/auth'
 
-// The global layer of the environment variables (GET/PUT /settings/environment, CONTRACTS §73.3).
+// The global layer of the environment variables (GET/PUT /settings/environment, CONTRACTS §74.3).
 const { t } = useI18n()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has('settings:manage'))

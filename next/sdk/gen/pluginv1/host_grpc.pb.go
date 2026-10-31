@@ -27,19 +27,19 @@ type HostServiceClient interface {
 	// sticky.clear (grant "sticky.clear"): delete a share of the sticky session
 	// bindings that point at an account and could serve (group_id, model), so
 	// those sessions pick an account again on their next request (CONTRACTS
-	// §73.2).
+	// §74.2).
 	ClearStickyBindings(ctx context.Context, in *ClearStickyBindingsRequest, opts ...grpc.CallOption) (*ClearStickyBindingsResponse, error)
 	// environment (always granted): the resolved environment variables of a
 	// group and optionally an account, for work outside a gateway request
-	// (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
+	// (CONTRACTS §74.3). Requests carry theirs in RequestMeta.environment.
 	GetEnvironment(ctx context.Context, in *GetEnvironmentRequest, opts ...grpc.CallOption) (*GetEnvironmentResponse, error)
 	// users.read (grant "users.read"): basic facts of console users by id, to
-	// check that a user exists or to show who they are (CONTRACTS §74.3). At
+	// check that a user exists or to show who they are (CONTRACTS §75.3). At
 	// most 500 ids per call; unknown and deleted users are left out.
 	GetUsers(ctx context.Context, in *GetUsersRequest, opts ...grpc.CallOption) (*GetUsersResponse, error)
 	// notify.send (grant "notify.send"): the notification channels of the
 	// enabled plugins, and sending through one by its id; the core queues,
-	// deduplicates, rate limits and retries (CONTRACTS §73.4).
+	// deduplicates, rate limits and retries (CONTRACTS §74.4).
 	ListNotificationChannels(ctx context.Context, in *ListNotificationChannelsRequest, opts ...grpc.CallOption) (*ListNotificationChannelsResponse, error)
 	Notify(ctx context.Context, in *NotifyRequest, opts ...grpc.CallOption) (*NotifyResponse, error)
 	// Pure local tokenization. No upstream traffic and no billing side effects.
@@ -446,19 +446,19 @@ type HostServiceServer interface {
 	// sticky.clear (grant "sticky.clear"): delete a share of the sticky session
 	// bindings that point at an account and could serve (group_id, model), so
 	// those sessions pick an account again on their next request (CONTRACTS
-	// §73.2).
+	// §74.2).
 	ClearStickyBindings(context.Context, *ClearStickyBindingsRequest) (*ClearStickyBindingsResponse, error)
 	// environment (always granted): the resolved environment variables of a
 	// group and optionally an account, for work outside a gateway request
-	// (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
+	// (CONTRACTS §74.3). Requests carry theirs in RequestMeta.environment.
 	GetEnvironment(context.Context, *GetEnvironmentRequest) (*GetEnvironmentResponse, error)
 	// users.read (grant "users.read"): basic facts of console users by id, to
-	// check that a user exists or to show who they are (CONTRACTS §74.3). At
+	// check that a user exists or to show who they are (CONTRACTS §75.3). At
 	// most 500 ids per call; unknown and deleted users are left out.
 	GetUsers(context.Context, *GetUsersRequest) (*GetUsersResponse, error)
 	// notify.send (grant "notify.send"): the notification channels of the
 	// enabled plugins, and sending through one by its id; the core queues,
-	// deduplicates, rate limits and retries (CONTRACTS §73.4).
+	// deduplicates, rate limits and retries (CONTRACTS §74.4).
 	ListNotificationChannels(context.Context, *ListNotificationChannelsRequest) (*ListNotificationChannelsResponse, error)
 	Notify(context.Context, *NotifyRequest) (*NotifyResponse, error)
 	// Pure local tokenization. No upstream traffic and no billing side effects.

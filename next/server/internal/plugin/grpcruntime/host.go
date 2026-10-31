@@ -482,7 +482,7 @@ func (h *hostServer) ClearStickyBindings(ctx context.Context, in *pluginv1.Clear
 }
 
 // GetEnvironment needs no grant: the values are operating parameters every
-// plugin is expected to honour, not data (CONTRACTS §73.3).
+// plugin is expected to honour, not data (CONTRACTS §74.3).
 func (h *hostServer) GetEnvironment(ctx context.Context, in *pluginv1.GetEnvironmentRequest) (*pluginv1.GetEnvironmentResponse, error) {
 	if in.GetGroupId() < 0 || in.GetAccountId() < 0 {
 		return nil, status.Error(codes.InvalidArgument, "group_id and account_id must not be negative")

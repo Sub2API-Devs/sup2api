@@ -106,7 +106,7 @@ type gwError struct {
 	// local_failure, or the core failed locally while relaying the
 	// response). Request observations report it, and any failure whose
 	// RecordType is not upstream_error, as local_failure so health
-	// statistics leave it out (§73.1, isLocalFailure).
+	// statistics leave it out (§74.1, isLocalFailure).
 	LocalFailure bool
 }
 

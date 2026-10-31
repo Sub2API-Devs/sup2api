@@ -74,7 +74,7 @@ func TestObservationGatewayLifecycleAndFailover(t *testing.T) {
 }
 
 // The plugin's local_failure reaches the observation whether the plugin or
-// the failure policy decides the attempt (CONTRACTS §73.1).
+// the failure policy decides the attempt (CONTRACTS §74.1).
 func TestObservationPluginLocalFailure(t *testing.T) {
 	for _, policy := range []bool{false, true} {
 		t.Run(map[bool]string{false: "plugin", true: "policy"}[policy], func(t *testing.T) {
@@ -102,7 +102,7 @@ func TestObservationPluginLocalFailure(t *testing.T) {
 }
 
 // A failed attempt is local unless it is an upstream failure (CONTRACTS
-// §73.1), also when the attempt finished with a failed record instead of an
+// §74.1), also when the attempt finished with a failed record instead of an
 // error (forward's credit storage).
 func TestObservationAttemptLocalFailure(t *testing.T) {
 	for _, tc := range []struct {

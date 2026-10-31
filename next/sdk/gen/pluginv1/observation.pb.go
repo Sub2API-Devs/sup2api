@@ -50,16 +50,16 @@ type RequestObservation struct {
 	Tokens                   *ObservationTokens `protobuf:"bytes,23,opt,name=tokens,proto3" json:"tokens,omitempty"`
 	ResponseStartedAtUnixMs  int64              `protobuf:"varint,24,opt,name=response_started_at_unix_ms,json=responseStartedAtUnixMs,proto3" json:"response_started_at_unix_ms,omitempty"`
 	FirstStreamEventAtUnixMs int64              `protobuf:"varint,25,opt,name=first_stream_event_at_unix_ms,json=firstStreamEventAtUnixMs,proto3" json:"first_stream_event_at_unix_ms,omitempty"`
-	// API key group the request was scheduled in (CONTRACTS §73.1).
+	// API key group the request was scheduled in (CONTRACTS §74.1).
 	GroupId int64 `protobuf:"varint,26,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
 	// The attempt failed for a local reason the account is not to blame for:
 	// the platform plugin's ClassifyError said local_failure, the core failed
 	// locally while relaying the response, or the error type is not
-	// upstream_error (CONTRACTS §73.1).
+	// upstream_error (CONTRACTS §74.1).
 	LocalFailure bool `protobuf:"varint,27,opt,name=local_failure,json=localFailure,proto3" json:"local_failure,omitempty"`
 	// HTTP status the upstream answered this attempt with; 0 when it sent no
 	// response (connection failure, timeout before the headers). status_code
-	// is what the client got, which a plugin may have mapped (CONTRACTS §73.1).
+	// is what the client got, which a plugin may have mapped (CONTRACTS §74.1).
 	UpstreamStatusCode int32 `protobuf:"varint,28,opt,name=upstream_status_code,json=upstreamStatusCode,proto3" json:"upstream_status_code,omitempty"`
 }
 

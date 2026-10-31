@@ -1,6 +1,6 @@
 package protocol
 
-// Environment variable keys (CONTRACTS §73.3). The core declares them;
+// Environment variable keys (CONTRACTS §74.3). The core declares them;
 // plugins read the resolved values from RequestMeta.environment or
 // HostService.GetEnvironment.
 const (

@@ -1,4 +1,4 @@
-// Package mailer is the "email" notification channel (CONTRACTS §73.4): the
+// Package mailer is the "email" notification channel (CONTRACTS §74.4): the
 // core hands it notifications and it sends them over SMTP.
 package mailer
 

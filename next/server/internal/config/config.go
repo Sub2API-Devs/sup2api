@@ -69,7 +69,7 @@ type Config struct {
 	ShutdownDelay time.Duration
 
 	// Environment is the process layer of the environment variables
-	// (CONTRACTS §73.3): each declared ProcessEnv that is set.
+	// (CONTRACTS §74.3): each declared ProcessEnv that is set.
 	Environment core.EnvironmentValues
 }
 

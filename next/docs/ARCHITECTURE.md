@@ -608,8 +608,8 @@ stateDiagram-v2
 | 等级 | 权限 |
 |---|---|
 | 🟢 低 | `kv`、`config`、`log`、`broadcast`、`secrets`（§72.2）、`prices`（只读按模型价格试算费用，§72.13.1） |
-| 🟡 中 | `routes.admin`、`routes.user`、`events`、`jobs`、`ui.menu`、`ui.iframe`、`accounts.read`、`lock`（CONTRACTS §27.3）、`notify.send`（经其他插件的渠道发通知，核心限速，§73.4） |
-| 🟠 高 | `accounts.auto_state`、`db.schema`、`net`（白名单模式下）、`routes.public`、`routes.webhook`、`gateway.hook`、`gateway.endpoint`、`gateway.observe`、`platform.register`、`scheduler.rank`、`sticky.clear`（§73.2）、`users.read` |
+| 🟡 中 | `routes.admin`、`routes.user`、`events`、`jobs`、`ui.menu`、`ui.iframe`、`accounts.read`、`lock`（CONTRACTS §27.3）、`notify.send`（经其他插件的渠道发通知，核心限速，§74.4） |
+| 🟠 高 | `accounts.auto_state`、`db.schema`、`net`（白名单模式下）、`routes.public`、`routes.webhook`、`gateway.hook`、`gateway.endpoint`、`gateway.observe`、`platform.register`、`scheduler.rank`、`sticky.clear`（§74.2）、`users.read` |
 | 🔴 极高 | `accounts.credentials`、`ledger.credit`、`ledger.debit`、`ui.native`、`users.write`、`db.core_views` |
 
 - 高和极高风险需要逐项勾选；极高风险只能由拥有 `plugin:grant:critical` 的用户批准（2026-10-05 起不再要求再次输入密码，CONTRACTS §3.3）
@@ -834,7 +834,7 @@ sequenceDiagram
 - 全局开关、默认 TTL、每条规则的命中率统计（Redis 计数），在控制台"粘性会话"页查看和管理，支持按规则清空绑定
 - 使用记录中记录本次请求是否命中粘性绑定（`sticky_rule`、`sticky_hit`）
 - 规则存在 `sticky_rules` 表：`source=builtin` 由核心启动时同步，`source=admin` 由管理员维护；插件安装、升级、卸载都不改它（约束 `sticky_rules_core_only`，迁移 0048）
-- 插件不声明规则，但有 `sticky.clear` 授权的插件可以调用 `HostService.ClearStickyBindings`，按比例删除指向某账号的绑定（例如降权后分流会话，CONTRACTS §73.2）
+- 插件不声明规则，但有 `sticky.clear` 授权的插件可以调用 `HostService.ClearStickyBindings`，按比例删除指向某账号的绑定（例如降权后分流会话，CONTRACTS §74.2）
 
 ### 6.6 平台、账号类型、账号、分组与端点
 

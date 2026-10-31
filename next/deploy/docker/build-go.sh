@@ -188,9 +188,9 @@ ls -l "$OUT/market"
 # ccgateway is also install-only: the operator first configures and authorizes
 # a local/SSH Claude Code gateway, then enables its managed account type.
 # mailer is install-only: it provides the "email" notification channel
-# (CONTRACTS §73.4) and does nothing until an operator sets its SMTP server.
+# (CONTRACTS §74.4) and does nothing until an operator sets its SMTP server.
 # dynweight is install-only: once enabled it is called on every scheduled
-# request, so it is enabled on purpose (CONTRACTS §73.5).
+# request, so it is enabled on purpose (CONTRACTS §74.5).
 #
 # Intentionally NOT built in: relay (a market-only account type), guard (an
 # optional gateway hook).

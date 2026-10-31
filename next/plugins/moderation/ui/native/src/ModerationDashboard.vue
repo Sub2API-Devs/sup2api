@@ -18,7 +18,7 @@ import type { TabKey } from './types'
 
 // Prompt moderation page (CONTRACTS §72.15): overview, records, watch list,
 // bans, flows, auditors, channels, playground and, for those who may edit
-// the settings (plugin:manage or moderation:manage, §74.1), the
+// the settings (plugin:manage or moderation:manage, §75.1), the
 // moderation settings (the full schema form stays on the plugin page).
 const host = useModHost()
 const t = host.t

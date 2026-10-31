@@ -39,7 +39,7 @@ type SettingsView struct {
 	Values    map[string]any  `json:"values"`
 	Secrets   []string        `json:"secret_fields"`
 	// Permission is the RBAC key of ui.settings.permission: its holders may
-	// read and edit these settings too (CONTRACTS §74.1).
+	// read and edit these settings too (CONTRACTS §75.1).
 	Permission string `json:"permission,omitempty"`
 }
 

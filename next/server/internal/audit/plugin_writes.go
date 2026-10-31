@@ -18,7 +18,7 @@ import (
 
 // ActionPluginWrite is the audit_logs action of a write served by a plugin's
 // admin route (target_type "plugin", target_id the plugin key; CONTRACTS
-// §74.2).
+// §75.2).
 const ActionPluginWrite = "plugin.route.write"
 
 // PluginWriteRetention is how long PluginWrites keeps its rows by default.

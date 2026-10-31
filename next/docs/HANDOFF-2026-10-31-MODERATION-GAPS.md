@@ -4,7 +4,7 @@
 > - 第 1 节的状态已按插件现有代码（0.4.0 及之后的修补）逐条核对：原先标"缺失""部分"的大多已经实现，表里写的是现在的状态。
 > - 实现情况、有意保留的差异、仍缺的核心接口，见 CONTRACTS §72.14；界面见 §72.15。
 > - 2026-10-31 补上的几项：记录保存 endpoint 和会话指纹并可筛选（核心 `RequestMeta` 新增字段，迁移 0007），AI 分析工具恢复 `session_fp`；缩短保留期立即生效（按当前保留期删除已有记录，保存后马上清理一次）；试跑、测试、模拟可上传或粘贴图片；`/costs` 的按天分桶改按浏览器时区；分析渠道不是大模型渠道时在 `/status` 和设置页提示。
-> - 核心 §74 补上后已接入（插件 0.5.0，管理员需重新批准）：`ui.settings.permission = moderation:manage`；`GetUsers`（可选权限 `users.read`）用于手动加入名单和封禁时校验用户存在、界面批量显示用户名、通知带用户名；管理接口的写操作由核心自动审计（`plugin.route.write`）。
+> - 核心 §75 补上后已接入（插件 0.5.0，管理员需重新批准）：`ui.settings.permission = moderation:manage`；`GetUsers`（可选权限 `users.read`）用于手动加入名单和封禁时校验用户存在、界面批量显示用户名、通知带用户名；管理接口的写操作由核心自动审计（`plugin.route.write`）。
 > - 2026-10-31 评审后修补：保留期清理只在取到 advisory lock 的一个节点上执行，并分批删除（每批 5000 行、批间停 50 ms，照 new-api `deleteRecordBatches`）；插件 `GET /users` 只返回 id、显示名、状态，只回答插件自己的表里出现过的用户，通知不再用邮箱代替用户名；界面只在 503 `users_unavailable` 时改走核心 `/users/:id`，其他错误 30 秒后重查；设置页对停用的分析渠道也提示（同 `channel_problem` 的 `unusable`）。
 > - 仍要等核心：按权限通知管理员（及各管理员自己的订阅）。
 
@@ -23,7 +23,7 @@
 
 - 统计（小时统计表、延迟分桶、漏斗、健康度、性能）、通知告警、流程画布、记录详情、观察名单详情和筛选排序都已实现。
 - 原"已知 bug"（发布流程时把自动算出的总超时写回草稿）已修：草稿保持 0，发布的版本存算出的值（`stats_api_test.go` TestFlowDraftTimeoutAndDelete）。
-- 剩下要等核心的只有按权限通知管理员；用户校验、管理审计、设置页权限已由核心 §74 补上。
+- 剩下要等核心的只有按权限通知管理员；用户校验、管理审计、设置页权限已由核心 §75 补上。
 - 有意不同：统计里用户每日计数（`user_daily`）按 UTC 日期；结尾 user 消息最多取 16 条（§72.4）；手动分析排队、不返回 503。
 
 ## 1. 各区域对照
@@ -114,7 +114,7 @@
 | 分析渠道下拉，只列 llm 渠道，并做校验 | 已有下拉；校验见说明 | 设置由核心保存，不经插件（核心没有保存前的校验钩子，Configure 失败只记日志，启动时失败会让插件起不来）。插件在应用时把不存在、非 llm 或停用的渠道当作未配置，`/status` 返回 `channel_problem`，概览状态条写明原因；设置页按渠道列表对所选渠道同样提示（停用时用 `unusable` 的文案） |
 | Jev 默认题集编辑器，可恢复内置 | 已有 | `SettingsTab.vue`、`JevQuestionsEditor.vue` |
 | 分析准则默认文本、提示词预览、工具表、类别字典 | 已有 | `AnalysisPromptModal.vue` |
-| 设置页的权限：有写权限就能改 | 已有：manifest `ui.settings.permission = moderation:manage`（核心 §74.1）；没有 `plugin:read` 的人走 `/plugins/moderation/settings` | `manifest.json`；`ui/native/src/host.ts` canManageSettings、settingsPath |
+| 设置页的权限：有写权限就能改 | 已有：manifest `ui.settings.permission = moderation:manage`（核心 §75.1）；没有 `plugin:read` 的人走 `/plugins/moderation/settings` | `manifest.json`；`ui/native/src/host.ts` canManageSettings、settingsPath |
 
 ### 通知、告警、审计
 
@@ -122,7 +122,7 @@
 |---|---|---|
 | AI 自动升级、降级、移出名单后通知管理员 | 已有：发到设置的签名 webhook；按权限发给管理员等核心 | `notify.go` |
 | 流程异常率越过阈值时告警 | 已有（`alerts` 任务，KV 去重） | `notify.go`、`stats_api.go` |
-| 管理操作写审计 | 已有：核心自动审计插件管理接口的写操作（§74.2 `plugin.route.write`） | 名单操作另记在 `watch_events` |
+| 管理操作写审计 | 已有：核心自动审计插件管理接口的写操作（§75.2 `plugin.route.write`） | 名单操作另记在 `watch_events` |
 
 ## 2. 拖拽画布编辑器（用 Vue 重写所需的规格）
 
@@ -349,7 +349,7 @@
 
 ## 4. 通知
 
-**收件人**：启用中、角色为管理员及以上、订阅了渠道通知、并且有内容审核读或写权限的人。通过 `service.NotifyUser` 发邮件或 webhook，用收件人设置的语言。核心通知（§73.4）只按渠道 + 接收人发送，不能按权限找收件人，所以插件仍自己发签名 webhook（是否迁到核心通知等用户决定），做法参照 `next/plugins/guard/internal/guard/hook.go` 的 alertSender。
+**收件人**：启用中、角色为管理员及以上、订阅了渠道通知、并且有内容审核读或写权限的人。通过 `service.NotifyUser` 发邮件或 webhook，用收件人设置的语言。核心通知（§74.4）只按渠道 + 接收人发送，不能按权限找收件人，所以插件仍自己发签名 webhook（是否迁到核心通知等用户决定），做法参照 `next/plugins/guard/internal/guard/hook.go` 的 alertSender。
 
 **名单自动变更**（auto_block、auto_downgrade、auto_remove 各发一条）：
 - 内容：用户名、原级别、新级别、趋势、建议和跳转链接。
@@ -370,9 +370,9 @@
 | 识别管理员 | 名单、统计 | 已用 `AuthzCheck(moderation:read)` 实现（`staff.go`） |
 | 用户当前所在的分组 | 上下文条 | 取该用户最近一条记录的分组 |
 | 全部分组列表 | 找出未绑定流程的分组、已失效的分组 | 界面调 `/groups`（需要 group:read 权限） |
-| 按权限给管理员发通知 | 第 4 节 | 核心已有 `Notify`（§73.4），但只按渠道 + 接收人发送；按权限找收件人、各管理员订阅仍缺。插件继续发自己的 webhook |
-| 管理操作审计 | recordManageAudit | 已有：核心自动审计插件管理接口的写操作（§74.2 `plugin.route.write`），插件不用改 |
+| 按权限给管理员发通知 | 第 4 节 | 核心已有 `Notify`（§74.4），但只按渠道 + 接收人发送；按权限找收件人、各管理员订阅仍缺。插件继续发自己的 webhook |
+| 管理操作审计 | recordManageAudit | 已有：核心自动审计插件管理接口的写操作（§75.2 `plugin.route.write`），插件不用改 |
 | 请求端点路径、粘性会话指纹 | 记录的 endpoint 和 session_fp 筛选 | 已有：`RequestMeta.endpoint`、`session_fingerprint`（§25.1，2026-10-31），插件已接上 |
 | 渠道代理 | 渠道 proxy 字段 | 已实现（`proxy.go`）：Transport 从 SDK 装好之后的 `http.DefaultTransport` Clone 出来，继续走出口隧道 |
-| 设置页的权限 | new-api 的设置页只要有写权限就能改 | 已有：manifest `ui.settings.permission`（§74.1），插件设为 `moderation:manage` |
+| 设置页的权限 | new-api 的设置页只要有写权限就能改 | 已有：manifest `ui.settings.permission`（§75.1），插件设为 `moderation:manage` |
 | 保存设置前让插件校验 | 分析渠道必须是已有的 llm 渠道（`controller:229-239`） | 核心保存设置不问插件；Configure 拒绝只记日志（启动时拒绝会让插件起不来），所以插件只能在应用时把错误的渠道当作未配置，并在 `/status` 和设置页提示 |

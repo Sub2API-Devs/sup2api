@@ -49,7 +49,7 @@ type call struct {
 	failurePolicy *FailurePolicy
 	failureState  failureState
 	// env is the environment resolved for the current attempt's account
-	// (CONTRACTS §73.3); metaFor hands it to the plugin.
+	// (CONTRACTS §74.3); metaFor hands it to the plugin.
 	env core.Environment
 
 	principal *core.APIKeyPrincipal

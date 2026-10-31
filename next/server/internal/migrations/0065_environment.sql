@@ -1,4 +1,4 @@
--- Environment variables (CONTRACTS §73.3): the group and account layers. The
+-- Environment variables (CONTRACTS §74.3): the group and account layers. The
 -- global layer is the "environment" row of settings. Only set keys are kept;
 -- an absent key follows the next layer. An older core ignores the columns.
 ALTER TABLE groups ADD COLUMN IF NOT EXISTS environment jsonb NOT NULL DEFAULT '{}';

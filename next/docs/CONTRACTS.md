@@ -1391,7 +1391,7 @@ message RankedAccount {
 
 ### 24.3 调用时机与边界
 
-1. **只在粘性绑定不服务的那次挑选时调用**。命中粘性绑定的请求直接用绑定账号，完全不调插件——热路径不为这个扩展点付代价。绑定账号失败、转入普通调度时补调一次（2026-10-31 修订，原先取严不补调；动态权重 §73 需要在这时避开已降权的账号，与 new-api 亲和失败后的重试一致），结果供后续失败切换复用。
+1. **只在粘性绑定不服务的那次挑选时调用**。命中粘性绑定的请求直接用绑定账号，完全不调插件——热路径不为这个扩展点付代价。绑定账号失败、转入普通调度时补调一次（2026-10-31 修订，原先取严不补调；动态权重 §74 需要在这时避开已降权的账号，与 new-api 亲和失败后的重试一致），结果供后续失败切换复用。
 2. **每个请求只调一次**；失败切换重试时复用同一次的结果，不重新调用，结果也不跨请求缓存。
 3. **故障一律 fail open**：超时、报错、插件不可用、应答非法（含响应对象为空）、或把所有候选的 `weight` 都置 0 —— 全部回退到账号自身的 `priority` / `weight`，并记一条警告日志。插件不能让网关无账号可用。（`accounts` 为空数组不算故障，见 §24.2。）
 4. **插件只能改写核心已经筛出的候选，不能凭空加账号**：响应里出现不在 `candidates` 中的 `account_id` 一律忽略（记警告）。
@@ -4741,7 +4741,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 1. **取结尾的消息不改核心**：gjson 自带的多路径写法 `messages|@reverse|[0,1,…,15]` 就能取到倒数 16 条（倒序；数组不足 16 条时缺的位置自动跳过，2026-10-30 用 gjson v1.19.0 实测）。插件把结果倒回正序，再算出结尾连续的 user 消息，不必把整段历史传过去。下文用 `TAIL16` 代指 `|@reverse|[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]`。
 2. **宿主调用 `SecretSeal` / `SecretOpen`**（HostService，宿主权限 `secrets`，风险 low，即无需管理员额外同意，插件升级时自动授予）：用核心的主密钥做 AES-256-GCM（`secret.Cipher`），AAD = `plugin-secret:{插件 key}:{context}`，context 由插件指定（≤128 字节，例如 `channel:3`），明文 ≤64 KiB。插件 A 封存的数据插件 B 解不开，同一插件换了 context 也解不开；解不开时一律返回 `InvalidArgument "ciphertext does not open"`，不区分原因。SDK：`Host.SealSecret` / `Host.OpenSecret`；`pluginsdktest.FakeHost` 用公开的测试密钥实现同样的绑定。审核渠道的 API Key 和代理地址密文存在插件表里（new-api 存明文；我们的账号凭证都加密，这里不降级）。旧核心没有这两个调用，返回 Unimplemented。
-3. **钩子请求的消息大小**：插件侧 gRPC 默认只收 4 MiB，带图片的请求会超过。SDK 加选项 `pluginsdk.WithMaxRecvMsgSize(n)`（编译进插件），moderation 设 64 MiB（`main.go` 的 `maxRecvMsgSize`），覆盖正常的请求（上游自己也限制请求大小，原先固定的请求体上限是 32 MiB）。核心作为客户端的发送上限是 gRPC 默认值（不限），钩子字段只是请求体的片段。§73.3 的 `max_request_body_mb` 允许管理员把请求体调大，个别请求可能超过插件的接收上限：这样的调用以 `RESOURCE_EXHAUSTED`（"larger than max"）失败，核心按该钩子的 failure 处理这一次，**但不计入熔断**（2026-10-31，`hooks.go` `tooLarge`），插件是健康的，不能因为个别超大请求让整个集群暂停审核。
+3. **钩子请求的消息大小**：插件侧 gRPC 默认只收 4 MiB，带图片的请求会超过。SDK 加选项 `pluginsdk.WithMaxRecvMsgSize(n)`（编译进插件），moderation 设 64 MiB（`main.go` 的 `maxRecvMsgSize`），覆盖正常的请求（上游自己也限制请求大小，原先固定的请求体上限是 32 MiB）。核心作为客户端的发送上限是 gRPC 默认值（不限），钩子字段只是请求体的片段。§74.3 的 `max_request_body_mb` 允许管理员把请求体调大，个别请求可能超过插件的接收上限：这样的调用以 `RESOURCE_EXHAUSTED`（"larger than max"）失败，核心按该钩子的 failure 处理这一次，**但不计入熔断**（2026-10-31，`hooks.go` `tooLarge`），插件是健康的，不能因为个别超大请求让整个集群暂停审核。
 4. `moderation` 的 `hostCompat` 改为 `>=` 本次核心版本（因为要用 `secrets`）；**发布顺序是先核心、后插件**。
 5. 不改：钩子点（仍然只有 `gateway.request`）、`usage_logs`、权限目录。插件权限在 manifest 里声明。
 
@@ -4812,7 +4812,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - 改 `base_url` 的 scheme 或 host、或者改了代理时，必须重新填 key（new-api `channel.go:147-159`）。
 - 代理：P1 不做（`proxy_enc` 列已建好但不用），渠道都走插件默认出口（SDK 隧道，`net` 权限）。
-- **`llm` 渠道指回本网关**时，审核调用就是普通的网关流量（只是钩子按自身请求标记跳过审核）：dynweight（§73.5）照常给这些账号计数、调权。moderation 的 `ttft_timeout_ms`（72.14）到点后取消请求，核心看到的是客户端取消，dynweight 不计入，所以学不到这类慢。建议给审核用的 Key 单独建一个分组，并让 `ttft_timeout_ms` 与该分组 dynweight 规则里的首字（`ttfb`）阈值一致。
+- **`llm` 渠道指回本网关**时，审核调用就是普通的网关流量（只是钩子按自身请求标记跳过审核）：dynweight（§74.5）照常给这些账号计数、调权。moderation 的 `ttft_timeout_ms`（72.14）到点后取消请求，核心看到的是客户端取消，dynweight 不计入，所以学不到这类慢。建议给审核用的 Key 单独建一个分组，并让 `ttft_timeout_ms` 与该分组 dynweight 规则里的首字（`ttfb`）阈值一致。
 
 **审核器**（表 `auditors`）有名称、类型、`channel_id`（只能绑同类型的渠道）、`config` jsonb、软删除。
 
@@ -4961,7 +4961,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 0.4 删掉了三个旧接口：`GET /overview`（改用 `GET /status`）、`GET /defaults`（同 `GET /jev/default-questions`）、`GET /watchlist/:user_id`（改用 `GET /users/:user_id`）。
 
-所有修改接口都广播相应的变更事件。管理接口的写操作由核心自动审计（§74.2，`plugin.route.write`），插件不用自己写；名单的操作另外记在 `watch_events` 里。
+所有修改接口都广播相应的变更事件。管理接口的写操作由核心自动审计（§75.2，`plugin.route.write`），插件不用自己写；名单的操作另外记在 `watch_events` 里。
 
 ### 72.12 老配置转换与导入
 
@@ -5129,7 +5129,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - `alerts` 任务每分钟检查一次：近 1 小时内某个流程至少有 20 次运行，且异常率超过 `error_rate_alert_percent` 时告警。告警状态存在 KV 里，TTL 2 小时；只要仍然超标，每次检查都刷新 TTL，所以一段连续超标只发一次通知。`error_rate_alert_percent` 设为 0 表示关闭告警。
 - AI 分析自动调整名单级别时也会发通知。
 - 通知发到 `notify_webhook_url`：JSON POST，中英双语，可以用 `notify_webhook_secret` 做 HMAC 签名（请求头 `X-Signature: sha256=…`）。通知里不带被审核的原文。设置表单里，密钥是 `writeOnly`，URL 是 `x-sensitive`。
-- 核心现在有通知（§73.4 `Notify`），但它按"渠道 + 接收人"发送，不按权限找管理员。是否把 moderation 的签名 webhook 迁到核心通知，等用户决定；在此之前继续用 webhook。
+- 核心现在有通知（§74.4 `Notify`），但它按"渠道 + 接收人"发送，不按权限找管理员。是否把 moderation 的签名 webhook 迁到核心通知，等用户决定；在此之前继续用 webhook。
 
 **用户信息**：
 - `GET /users/:user_id`：任意用户 id 都能查，不要求在名单上。返回以下内容：
@@ -5139,7 +5139,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 上下文栏：最近一条记录的分组、该分组现在绑定的流程，以及 30 天内的来源（分组 → 流程@版本，各带 AI 计数，标出当前来源）；
   - 30 天的 `user_daily`；
   - 最近一次分析和分析进度。
-- 用户名、状态：界面把一次渲染用到的 id 合起来调插件的 `GET /users?ids=`（`moderation:read`，最多 500 个；插件用宿主的 `GetUsers`，§74.3），所以没有核心 `user:read` 的审核员也能看到用户名。
+- 用户名、状态：界面把一次渲染用到的 id 合起来调插件的 `GET /users?ids=`（`moderation:read`，最多 500 个；插件用宿主的 `GetUsers`，§75.3），所以没有核心 `user:read` 的审核员也能看到用户名。
   - 每项只有 `{id, display_name, status}`，不含邮箱和角色。
   - 只回答插件自己的表里出现过的 id（`events`、`watchlist`、`watch_events` 的用户和操作者、`blocks`、`unblocks`、`user_analyses`、`user_daily`），其余 id 当作不存在，所以不能借它列出核心的用户。
   - 插件查不了（没授予 `users.read`，或核心早于 Host API 8）时回答 503 `users_unavailable`，界面此后改为逐个调核心的 `/users/:id`（需要 `user:read`，遇到 403 就停止）；邮箱和角色只从这条路得到，没有显示名时界面才显示邮箱。其他错误（查询失败等）不切换：这批 id 暂记为未知，30 秒后再次渲染时重查。
@@ -5167,9 +5167,9 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 手动分析改为排队，不返回 503。
 
 **仍缺核心支持**：
-- 按权限通知管理员、各管理员自己订阅：核心通知（§73.4）只按渠道和接收人发送，还不能发给"持有 `moderation:read` 的管理员"，也没有各管理员的订阅和语言。
+- 按权限通知管理员、各管理员自己订阅：核心通知（§74.4）只按渠道和接收人发送，还不能发给"持有 `moderation:read` 的管理员"，也没有各管理员的订阅和语言。
 
-**已由核心补上**（§74，插件 0.5.0）：
+**已由核心补上**（§75，插件 0.5.0）：
 - 设置权限：manifest `ui.settings.permission = "moderation:manage"`，持有 `moderation:manage` 的用户可以读写插件设置（不再要求核心 `plugin:manage`）。
 - 管理审计：核心自动审计插件管理接口的写操作（`plugin.route.write`）。
 - 用户查询：`GetUsers`（`users.read`），见上面"用户信息"。
@@ -5177,7 +5177,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 72.15 界面（插件 `ui/native`，只用 `@sub2api/ui` 和 `@sub2api/host`）
 
-**标签页**：概览、记录、观察名单、封禁、流程、审核器、渠道、测试、设置。设置标签页对核心 `plugin:manage` 或 `moderation:manage`（§74.1）可见；没有核心 `plugin:read` 的人，"完整设置"链接打开 `/plugins/moderation/settings`；它只编辑本插件常用的几项，完整设置仍然在插件详情页的 schema 表单里。
+**标签页**：概览、记录、观察名单、封禁、流程、审核器、渠道、测试、设置。设置标签页对核心 `plugin:manage` 或 `moderation:manage`（§75.1）可见；没有核心 `plugin:read` 的人，"完整设置"链接打开 `/plugins/moderation/settings`；它只编辑本插件常用的几项，完整设置仍然在插件详情页的 schema 表单里。
 
 - **概览**：数据来自 `/status` 和 `/stats/*`。内容包括：状态行、KPI、需关注用户、AI 复核、今日费用、性能、分类、漏斗、趋势、健康度、队列。
 - **流程**：拖拽画布，与 new-api 一致。支持模板、发布、版本与回滚、模拟（可选用户状态），分组单元格遇到 409 时可以强制覆盖。
@@ -5212,7 +5212,39 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 内置插件随核心的 builtin 目录重签，两个节点都要更新。
   - 迁移脚本在插件的 `migrations/`（`0003_*` 起），必须幂等，只加有默认值的列。
 
-## 73. 动态权重 dynweight 与它需要的核心能力（2026-10-31，用户要求参照 new-api codingplus 的动态权重迁移）
+## 73. 账号成功率、用量、原始倍率计费与用量限制（2026-10-31，用户要求参照 new-api）
+
+账号页新增「成功率 · 1 分钟」「用量」两列，原「用量」列（Claude Code 套餐窗口）改名「余额」，§52 的账号余额并入同一格。这次不做 API Key 的余额查询（以后按账号类型声明）。下面的功能都由核心实现，所有账号类型一样适用，插件不用改。
+
+### 73.1 成功率（1 分钟滚动窗口）
+
+- 核心观测消费者 `core.account` 同时订阅 `usage_finalized` 和 `attempt_finished`，新增指标 `failed_requests`（`sdk/observation.FailedRequests`）。
+- 失败 = 一次结束的尝试 `!success && !canceled && !local_failure && status != 400 && error_type != "rate_limited"`，`status` 取 `upstream_status_code`，没有上游响应时取 `status_code`：400（请求本身有误）、客户端取消、网关自身限流、本地失败（§74.1，不怪账号）都不算失败；其余每次失败的上游尝试计一次。成功侧仍是 `success_requests`（成功请求数）。
+- 账号列表视图新增 `outcomes: {success, failed}`（近 60 秒，与统计设置的窗口无关；Redis 不可用时为 null）。成功率 = success ÷ (success + failed)，无请求显示「—」；≥99% 绿、≥95% 黄、其余红。
+- `GET /accounts/stats` 的 `AccountStatsView` 新增 `failed_requests`；插件读核心指标的白名单同步加入 `failed_requests`。一次读取的 账号×指标 上限改为 800（200 个账号 × 4 个核心指标）。
+
+### 73.2 用量（核心统计）
+
+- 迁移 `0064_account_usage.sql`：`account_usage_hourly(account_id, hour, cost, raw_cost, requests, tokens)` 与 `account_usage_totals(account_id, …)`，由 `usage_logs` 上的触发器 `account_usage_track` 累计；首次迁移时回填全部历史行。
+- 口径与 §61 API Key 额度一致：`billed`/`reserved` 的行计入费用，转为 `free`/`failed` 时退回；`cost` 为计费后费用，`raw_cost` 为分组倍率前的费用（取 `billing_detail.cost`，缺失时 `total_cost / rate_multiplier`）；`requests` 为成功行数；`tokens` 为五类 token 之和。行换账号时从旧账号扣回。删除历史日志不回退累计值。
+- 两张表不引用 `accounts`（触发器在结算事务里执行，已清除的账号不能让写入失败）。小时桶按 UTC 整点。
+- 账号视图新增 `usage: {raw_cost_accounting, total, today, limit}`；`today` 从服务器时区当日零点起。`GET /accounts/:id/usage`（`account:read` / `account:own:read`）返回 `today`、`last_7_days`、`last_30_days`、`total` 和 `limit`。
+
+### 73.3 原始倍率计费与用量限制
+
+- 配置存于 `account_usage_limits`（随账号删除级联），接口：
+  - `GET /accounts/:id/usage-limit`（读权限）：未保存过时返回默认值 `{raw_cost_accounting:false, enabled:false, amount:"0", period:"month", period_count:1, anchor:null}`。
+  - `PUT /accounts/:id/usage-limit`（`account:update` / `account:own:update`）：整体替换并写审计 `account.usage_limit`，保存后立即对该账号生效，返回 `GET /usage` 同形的明细。
+- 字段：`raw_cost_accounting`（原始倍率计费：累计用量与限额都按 `raw_cost`）、`enabled`、`amount`（USD，0–1e9，最多 8 位小数，开启时须 > 0）、`period`（`hour|day|week|month|none`）、`period_count`（1–1000）、`anchor`（周期起点，取整点；null = 服务器时区 2024-01-01 00:00，即日/周一/月初的自然边界）。`none` 为总额度，按累计值计算、不重置。
+- 执行：账号服务每 5 秒的自动状态巡检后执行 `EnforceUsageLimits`：
+  - 启用中的账号本周期用量 ≥ 限额 → `status=auto_disabled`，`status_reason="usage limit reached: $<used> / $<amount> (<per month|per 2 weeks|total>)"`，`auto_disabled_until` = 本周期结束（总额度为 null）。不受账号「允许自动禁用」和全局自动禁用开关影响。
+  - 周期结束由现有的自动状态巡检（§42）自动启用。
+  - 被用量限制禁用、且现在不再超限（调高限额、关闭限制、改了周期）→ 立即恢复 `active`。
+  - 只处理 `status_reason` 以 `usage limit reached` 开头的自动禁用，其它原因的自动禁用和人工禁用不动。状态变更写审计 `account.usage_limit_state` 并发 `account.status_changed`。
+  - 「重置状态」恢复一个被用量限制禁用的账号时，记下当前周期（`waived_window`），本周期内不再禁用；保存配置会清除这一豁免。
+- 控制台：状态栏的自动禁用统一为黄色徽章（人工禁用仍为红色），原因与「何时自动启用」只在悬停时显示；用量限制的原因翻译为「用量已达上限：…」。编辑页「调度与限流」新增「用量限制」卡片，打开该分区时加载，账号保存成功后单独提交；提交失败只提示，不影响已保存的账号。
+
+## 74. 动态权重 dynweight 与它需要的核心能力（2026-10-31，用户要求参照 new-api codingplus 的动态权重迁移）
 
 new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_weight*.go`）。sup2api 把它拆成两部分：
 
@@ -5227,13 +5259,13 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - 通知走核心通知架构，邮件是一个插件。
 - new-api 里和动态权重混在一起的"变量"拆出来，由核心提供，叫**环境变量**。
 
-### 73.1 请求观测的新字段（`RequestObservation`）
+### 74.1 请求观测的新字段（`RequestObservation`）
 
 - `group_id`（26）：请求所在分组。
 - `local_failure`（27）：这次失败不怪账号。来源是平台插件的 `ClassifyError` 判为 local_failure，核心在本地转交响应时出错（例如缓冲响应的临时文件写失败），或者失败不是上游失败（错误类型不是 `upstream_error`，例如账号不可用、资源准备失败）。上游的错误响应读不完整（连接被重置、卡住）仍算上游失败。判断看的是这次尝试最终记下的错误类型：转发完成但在本地出错的尝试（例如额度写入失败）同样算本地失败。WebSocket 会话的每一轮同样按这三条判断。健康统计应把它排除。
 - `upstream_status_code`（28）：上游对这次尝试回的状态码。上游没有响应时为 0。客户端看到的 `status_code` 可能经过映射，也可能是合成的 502，所以健康统计按这个字段算。流式响应开始时就记下，上游回 200 以外的状态也照记。
 
-### 73.2 清理粘性会话（`HostService.ClearStickyBindings`，Host API 8，授权 `sticky.clear`）
+### 74.2 清理粘性会话（`HostService.ClearStickyBindings`，Host API 8，授权 `sticky.clear`）
 
 - **请求**：`{account_id, group_id, model, percent 1..100, salt}`。删除指向该账号、且可能服务这个（分组、客户端模型）的粘性绑定，删其中 `percent` 的比例。
   - 键里没有分组或模型维度的绑定，按两者都匹配处理。
@@ -5241,7 +5273,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **回答**：`{matched, cleared}`。
 - **用途**：降权后把一部分会话放到别的账号上，避免被粘性会话绑死。
 
-### 73.3 环境变量
+### 74.3 环境变量
 
 转发用到的通用运行参数由核心声明，插件不能自己声明。
 
@@ -5265,7 +5297,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 目前没有插件读这两处：转发由核心完成，变量也由核心应用。它们是留给自己向上游转发的插件（自带 HTTP 客户端、后台任务直接调上游）的扩展点，这类插件应按同样的变量设超时和上限。
 - **读声明的接口** `GET /environment/variables` 需要 `settings:read`、`group:read` 或 `account:read` 之一（三层编辑器都要用）。
 
-### 73.4 通知
+### 74.4 通知
 
 - **渠道由插件提供**：插件声明 `notify.channel.v1`，在 manifest 的 `notifications.channels` 里写 `[{id, label, description, recipient: email|text}]`，并实现 `NotificationChannel.DeliverNotification`。
   - 渠道 id 全局唯一，冲突时先声明的插件生效。
@@ -5281,7 +5313,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 控制台的测试通知以 `core:test` 为来源，不占核心通知的限速额度。
 - **控制台**：`GET /notifications/channels`、`GET /notifications`，以及 `POST /notifications/test`（需要 `settings:manage`）。
 
-### 73.5 dynweight 插件
+### 74.5 dynweight 插件
 
 #### 能力与授权
 
@@ -5380,17 +5412,17 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 分组和账号的名称经核心接口取得，用的是查看者自己的 `group:read` / `account:read`：分组一次读入（`@sub2api/host` 的 `listAll`，最多 1000 个，失败后下次再读）；账号不整表读入，选择框按输入的名称搜索 `GET /accounts?q=`（前 20 个），其他地方要显示的账号名按 id 读 `GET /accounts/:id`。选择框总能直接输入数字 id；选中的 id 不在列表里时显示为名称或 `#id`。没有这些权限时名称显示为 `#id`（状态和事件里的账号名仍来自插件自己记下的名称）。
 - **账号列表**：`account.list.weight` 插槽在权重下方显示"动态 N"。同一帧内所有行的请求合并成一次 `/weights`。
 
-### 73.6 发布
+### 74.6 发布
 
-- 带迁移 `0064_environment`、`0065_notifications` 和 Host API 8 的核心改变了 schema 契约，不能滚动更新（§33：v1 只滚动 schema 和 Host API 不变的版本）。按 primary-first（§34）发布：从节点停止、主节点迁移，期间入口 503，要预留维护窗口；签名时传旧的 schema 契约。
+- 带迁移 `0065_environment`、`0066_notifications`、`0067_audit_log_targets` 和 Host API 8 的核心改变了 schema 契约，不能滚动更新（§33：v1 只滚动 schema 和 Host API 不变的版本）。按 primary-first（§34）发布：从节点停止、主节点迁移，期间入口 503，要预留维护窗口；签名时传旧的 schema 契约。
 - 所有节点都是新核心后，再由管理员启用 `dynweight`。
 - dynweight 0.2.0 新增 `app.events.v1` 能力和 `events` 授权（`account.status_changed`），升级时需要管理员重新确认授权。状态文档新增的 `last_ln`、`last_latency_counts` 字段在旧状态里缺省为空，下一次评估写入；没有迁移。
 
-## 74. 插件设置权限、插件写操作审计、按 id 查用户（2026-10-31，审计 moderation 与 dynweight 时发现的通用缺口）
+## 75. 插件设置权限、插件写操作审计、按 id 查用户（2026-10-31，审计 moderation 与 dynweight 时发现的通用缺口）
 
 核心只提供通用机制，不认识具体插件。
 
-### 74.1 插件设置权限（manifest `ui.settings.permission`）
+### 75.1 插件设置权限（manifest `ui.settings.permission`）
 
 - **字段**：`ui.settings.permission`，值是插件自己 `userPermissions` 里的一个 key（插件内的本地 key，例如 `moderation:manage`）。
   - 应当是**管理级**权限（`*:manage` 一类）：持有它的人能改插件的全部设置，包括地址类设置（webhook、`base_url`）。不要用只读或日常操作级的权限。
@@ -5409,7 +5441,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 没有 `plugin:read` 的用户打开 `/plugins/:key?tab=settings`（插件页面里的"设置"链接用的就是这个地址）会被转到 `/plugins/:key/settings`。路由的 `meta.deniedRedirect` 提供这个转向。
   - 插件自己的界面要显示设置入口时，判断 `plugin:manage` 或自己的那个权限即可。
 
-### 74.2 插件管理接口的写操作审计
+### 75.2 插件管理接口的写操作审计
 
 - **记录什么**：`/api/v1/p/:key/*` 中 `scope = admin` 的路由，方法是 POST、PUT、PATCH、DELETE，并且请求已转给插件（通过登录和权限检查）时，核心在回答后写一行 `audit_logs`：
   - `action = "plugin.route.write"`，`target_type = "plugin"`，`target_id = 插件 key`，`user_id`，`ip`；
@@ -5423,7 +5455,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 回答先发给调用方（flush）再写审计行。写审计失败只记日志，不影响插件的回答。插件不能选择不记录。
 - **保留**：`plugin.route.write` 保留 180 天。后台每小时删除一次过期行，只在拿到集群锁 `audit:plugin-writes` 的节点上执行（受后台准入控制），每批 1 万行直到删完；不在请求路径上。其他审计行不删除。
 - **实现位置**：`routes.WithAudit`（插件路由转发处唯一的挂点，接 `core.PluginWriteAuditor` / `core.PluginWrite`），写入和删除由 `audit.PluginWrites` 完成（`Run` 是删除循环）。
-- **迁移 `0066_audit_log_targets`**：`audit_logs` 增加索引 `(target_type, target_id, id DESC)` 和 `(user_id, id DESC)`。
+- **迁移 `0067_audit_log_targets`**：`audit_logs` 增加索引 `(target_type, target_id, id DESC)` 和 `(user_id, id DESC)`。
 - **查询接口** `GET /audit-logs`（仍要求 `audit:read`，分页规则同 §3.1，按 id 倒序）：
   - 筛选参数：`action`、`target_type`、`target_id`、`user_id`、`from`、`to`（RFC 3339，`created_at` 的 `[from, to)`）。
   - 每行多两个字段：`user_email`、`user_name`（操作者的邮箱和显示名，系统操作为 null）。
@@ -5431,7 +5463,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 插件详情页新增"审计"标签页（需要 `audit:read`），列出 `target_type=plugin&target_id=<key>` 的行：生命周期、设置修改和管理接口的写操作；写操作在操作名下显示 `方法 路径 → 状态`，展开看 `detail`。
   - 系统审计页与它共用同一个表格组件，操作者显示名字或邮箱。
 
-### 74.3 按 id 查用户（`HostService.GetUsers`，Host API 8，授权 `users.read`）
+### 75.3 按 id 查用户（`HostService.GetUsers`，Host API 8，授权 `users.read`）
 
 - **请求**：`{user_ids}`，最多 500 个（`protocol.GetUsersMaxIDs`），超过返回 `INVALID_ARGUMENT`。
 - **回答**：`{users: [UserInfo]}`，`UserInfo = {id, display_name, status (active|disabled)}`。按最少必要原则不给邮箱和角色（2026-10-31 删去；Host API 8 未发布，字段号重排为 1–3）。
@@ -5439,10 +5471,10 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 用途：校验手动加入名单的用户是否存在、在界面和通知里显示用户名。
   - **插件不得把用户数据转给权限更弱的调用方**：`users.read` 是管理员授予插件的，不是授予插件的每个用户的。插件通过自己的路由返回用户信息时，要么要求足以查看用户的插件权限，要么只回答与调用方的工作相关的用户（例如只回答插件自己的记录里出现过的用户），不能让调用方借插件枚举核心用户。
 - **授权**：`users.read`（风险等级 High，原来就在授权表里，现在才有调用）。
-- **Host API**：仍是 8。Host API 8 还没有发布（§73.6），GetUsers 跟它一起发布；`protocol.UsersHostAPIVersion = 8`。
+- **Host API**：仍是 8。Host API 8 还没有发布（§74.6），GetUsers 跟它一起发布；`protocol.UsersHostAPIVersion = 8`。
 - **SDK**：`pluginsdk.GetUsers(ctx, host, ids)`：先去重，再按每批 500 个分批调用，所以 ids 不限个数；测试用 `pluginsdktest.FakeHost.Users`（`map[int64]*pluginv1.UserInfo`）。
 - **核心**：`core.UserDirectory`（`iam` 实现，回答 `core.UserSummary`，由 `grpcruntime` 转成 `UserInfo`；`iam` 不依赖 proto），`grpcruntime.Options.Users`。
 
-### 74.4 已有的 `account.status_changed` 事件
+### 75.4 已有的 `account.status_changed` 事件
 
 插件通过 `app.events.v1` 订阅即可收到，载荷是 `{account_id, plugin_key, type, name, status（新状态）, reason, cooldown_until?, auto_disabled_until?}`。载荷里没有旧状态。

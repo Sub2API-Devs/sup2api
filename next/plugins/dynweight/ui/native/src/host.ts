@@ -2,7 +2,7 @@ import type { PluginHost, UseListResult } from '@sub2api/host'
 import type { SelectOption, Tone } from '@sub2api/ui'
 
 // Plugin-scoped host handed to register(); shared by all dynweight components.
-// All API shapes (CONTRACTS §73.5) live in this file.
+// All API shapes (CONTRACTS §74.5) live in this file.
 let host: PluginHost | null = null
 
 export function setHost(h: PluginHost | null) {
@@ -230,7 +230,7 @@ export const resetWeights = (k: Key & { account_ids?: number[] }) => api().post<
 /** The most accounts one reset takes (POST /reset). */
 export const MAX_RESET_ACCOUNTS = 500
 
-/** This node's runtime counters (GET /stats), with node_id and started_at; see CONTRACTS §73.5. */
+/** This node's runtime counters (GET /stats), with node_id and started_at; see CONTRACTS §74.5. */
 export type RuntimeStats = Record<string, number | boolean | string>
 export const fetchStats = () => api().get<RuntimeStats>('/stats')
 

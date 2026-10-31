@@ -64,7 +64,7 @@ func (h *hostServer) ReadObservationMetrics(ctx context.Context, in *pluginv1.Re
 			return nil, status.Error(codes.InvalidArgument, "invalid account id")
 		}
 	}
-	allowed := []string{observation.SuccessRequests, observation.SuccessTokens, observation.PendingUsage}
+	allowed := []string{observation.SuccessRequests, observation.SuccessTokens, observation.PendingUsage, observation.FailedRequests}
 	if in.Namespace == "plugin" {
 		allowed = nil
 		if d := h.i.pkg.Manifest.Observations; d != nil {

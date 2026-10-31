@@ -191,12 +191,19 @@ type View struct {
 	TPMLimit     int64             `json:"tpm_limit"`
 	SPMLimit     int               `json:"spm_limit"`
 	ModelLimits  []core.ModelLimit `json:"model_limits"`
-	// Environment is the account layer of the environment variables (§73.3).
-	Environment    core.EnvironmentValues `json:"environment"`
-	RateUsage      core.RateUsage         `json:"rate_usage"`
-	InUse          int                    `json:"in_use"`
-	CooldownUntil  *time.Time             `json:"cooldown_until"`
-	CooldownReason string                 `json:"cooldown_reason,omitempty"`
+	// Environment is the account layer of the environment variables (§74.3).
+	Environment core.EnvironmentValues `json:"environment"`
+	RateUsage   core.RateUsage         `json:"rate_usage"`
+	// Outcomes are the successful requests and failed attempts of the last 60
+	// seconds behind the success-rate column (CONTRACTS §73); null when the
+	// statistics are unavailable.
+	Outcomes *Outcomes `json:"outcomes"`
+	// Usage is the core's usage record of the account and its usage limit
+	// (CONTRACTS §73); null when it cannot be read.
+	Usage          *UsageView `json:"usage"`
+	InUse          int        `json:"in_use"`
+	CooldownUntil  *time.Time `json:"cooldown_until"`
+	CooldownReason string     `json:"cooldown_reason,omitempty"`
 	// Quota is the subscription quota snapshot (CONTRACTS §44), read from
 	// the database only; null for account types without quota (API keys).
 	Quota *QuotaSnapshot `json:"quota"`
@@ -328,6 +335,8 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 		}
 	}
 	s.fillModelInUse(ctx, out)
+	s.fillOutcomes(ctx, out)
+	s.fillUsage(ctx, out)
 	s.fillQuota(ctx, rows, out)
 	s.fillBalance(ctx, rows, out)
 	s.fillRefresh(ctx, rows, out)
@@ -544,7 +553,7 @@ type input struct {
 	TPMLimit       *int64             `json:"tpm_limit"`
 	SPMLimit       *int               `json:"spm_limit"`
 	ModelLimits    *[]core.ModelLimit `json:"model_limits"`
-	// Environment replaces the account layer as a whole (§73.3).
+	// Environment replaces the account layer as a whole (§74.3).
 	Environment    *core.EnvironmentValues `json:"environment"`
 	Credentials    json.RawMessage         `json:"credentials"`
 	Settings       json.RawMessage         `json:"settings"`
@@ -1449,6 +1458,13 @@ func (s *Service) resetStatus(c *gin.Context) {
 	}
 	s.evictQuotaCache(ctx, id)
 	s.evictBalanceCache(ctx, id)
+	if strings.HasPrefix(a.StatusReason, usageLimitReason) {
+		// Brought back by hand: the usage limit leaves it running for the
+		// rest of the period (CONTRACTS §73).
+		if err := s.waiveUsageLimit(ctx, id); err != nil {
+			slog.WarnContext(ctx, "account: waive usage limit", "account", id, "err", err)
+		}
+	}
 	s.changed(ctx, id)
 	s.kickCCGateway(id, a.PluginKey, a.Type)
 	v, err := s.fullView(ctx, id, scope)

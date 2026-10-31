@@ -172,7 +172,7 @@ message RequestMeta {
   // by name when more), keys cut to 64 bytes and values to 512 bytes on a
   // UTF-8 boundary, invalid UTF-8 dropped.
   map<string, string> query = 11;
-  // Resolved environment variables of this attempt (CONTRACTS §73.3): the
+  // Resolved environment variables of this attempt (CONTRACTS §74.3): the
   // nearest of account, group, global and process layers for every key some
   // layer sets. Set on every request of an attempt on an account (build,
   // execute, classify, usage extraction); a missing key means the plugin's

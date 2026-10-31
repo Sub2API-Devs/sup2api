@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// The values of one layer of the environment variables (CONTRACTS §73.3): a
+// The values of one layer of the environment variables (CONTRACTS §74.3): a
 // row per variable the layer may hold. An empty value follows the next layer
 // (account → group → global → process environment variable).
 import { computed } from 'vue'

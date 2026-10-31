@@ -294,7 +294,7 @@ func TestAPIFlow(t *testing.T) {
 		t.Fatalf("settings = %v", data(out))
 	}
 	// ui.settings.permission lets its holders read and edit the settings
-	// without plugin:read / plugin:manage (CONTRACTS §74.1).
+	// without plugin:read / plugin:manage (CONTRACTS §75.1).
 	if code, out = h.do("GET", "/plugins/guard/settings", "nobody", nil); code != http.StatusForbidden {
 		t.Fatalf("settings without permission = %d %v", code, out)
 	}

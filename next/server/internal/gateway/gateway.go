@@ -37,7 +37,7 @@ type Deps struct {
 	Bus       core.Bus
 	Node      core.Node
 	// Environment supplies the global layer of the environment variables
-	// (CONTRACTS §73.3); nil leaves only the group, account and process
+	// (CONTRACTS §74.3); nil leaves only the group, account and process
 	// layers.
 	Environment   core.EnvironmentResolver
 	Registry      core.PluginRegistry

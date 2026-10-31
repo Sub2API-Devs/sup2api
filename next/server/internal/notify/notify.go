@@ -1,4 +1,4 @@
-// Package notify is the core's notification service (CONTRACTS §73.4).
+// Package notify is the core's notification service (CONTRACTS §74.4).
 // Plugins declaring "notify.channel.v1" provide channels (the mailer's
 // "email", for example); the core and plugins holding "notify.send" send by
 // channel id. Notify validates, deduplicates, rate limits and queues; the

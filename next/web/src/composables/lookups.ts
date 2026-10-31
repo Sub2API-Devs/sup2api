@@ -57,7 +57,7 @@ const environmentVariables = ref<EnvironmentVariable[]>([])
 const processEnvironment = ref<EnvironmentValues>({})
 let environmentP: Promise<void> | null = null
 
-/** The declared environment variables and the process layer (CONTRACTS §73.3); they change only with the core. */
+/** The declared environment variables and the process layer (CONTRACTS §74.3); they change only with the core. */
 export function useEnvironmentVariables() {
   environmentP ||= api
     .get<{ variables: EnvironmentVariable[]; process: EnvironmentValues }>('/environment/variables')

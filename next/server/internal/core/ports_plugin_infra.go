@@ -193,7 +193,7 @@ type PluginAccountReader interface {
 }
 
 // StickyClearRequest selects the sticky session bindings HostService.
-// ClearStickyBindings deletes (CONTRACTS §73.2).
+// ClearStickyBindings deletes (CONTRACTS §74.2).
 type StickyClearRequest struct {
 	AccountID int64
 	GroupID   int64
@@ -209,21 +209,21 @@ type StickyBindingClearer interface {
 }
 
 // UserSummary is what HostService.GetUsers tells a plugin about a user: no
-// email, no roles (CONTRACTS §74.3).
+// email, no roles (CONTRACTS §75.3).
 type UserSummary struct {
 	ID          int64
 	DisplayName string
 	Status      string // active | disabled
 }
 
-// UserDirectory (owner: iam) serves HostService.GetUsers (CONTRACTS §74.3).
+// UserDirectory (owner: iam) serves HostService.GetUsers (CONTRACTS §75.3).
 type UserDirectory interface {
 	// LookupUsers returns the users among ids that exist and are not
 	// deleted, once each, in the order of ids.
 	LookupUsers(ctx context.Context, ids []int64) ([]UserSummary, error)
 }
 
-// PluginWrite is one write a plugin admin route served (CONTRACTS §74.2).
+// PluginWrite is one write a plugin admin route served (CONTRACTS §75.2).
 type PluginWrite struct {
 	UserID    int64
 	Plugin    string

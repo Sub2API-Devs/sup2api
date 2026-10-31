@@ -58,7 +58,7 @@ type Group struct {
 	Visibility      string   `json:"visibility"`
 	ModelAllowlist  []string `json:"model_allowlist"`
 	ModelFilterMode string   `json:"model_filter_mode"`
-	// Environment is the group layer of the environment variables (§73.3).
+	// Environment is the group layer of the environment variables (§74.3).
 	Environment  core.EnvironmentValues `json:"environment"`
 	AccountCount int64                  `json:"account_count"`
 	APIKeyCount  int64                  `json:"api_key_count"`

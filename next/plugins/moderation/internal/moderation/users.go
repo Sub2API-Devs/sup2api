@@ -13,7 +13,7 @@ import (
 )
 
 // Users of the core (HostService.GetUsers, grant users.read, host API 8,
-// CONTRACTS §74.3): a user must exist before it is put on the watch list or
+// CONTRACTS §75.3): a user must exist before it is put on the watch list or
 // banned (new-api AddModerationWatch), and the console shows names for the
 // ids of a page with one call (GET /users?ids=).
 

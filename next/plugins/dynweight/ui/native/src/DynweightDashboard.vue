@@ -6,7 +6,7 @@ import EventsTab from './EventsTab.vue'
 import ConfigTab from './ConfigTab.vue'
 import { useDwHost, type Filter } from './host'
 
-// Dynamic weight page (CONTRACTS §73.5): effective weights, weight events and
+// Dynamic weight page (CONTRACTS §74.5): effective weights, weight events and
 // the configuration. Tabs are mounted on first visit and synced to ?tab.
 const host = useDwHost()
 const t = host.t

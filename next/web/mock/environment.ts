@@ -1,4 +1,4 @@
-// Core environment variables and notifications (CONTRACTS §73.3, §73.4).
+// Core environment variables and notifications (CONTRACTS §74.3, §74.4).
 import { fail, nextId, now, on, paginate } from './router'
 
 const ALL = ['global', 'group', 'account']

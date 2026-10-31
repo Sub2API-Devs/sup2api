@@ -10,7 +10,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
-// Environment variables (CONTRACTS §73.3) are the general runtime parameters
+// Environment variables (CONTRACTS §74.3) are the general runtime parameters
 // of forwarding that the core declares and an administrator overrides per
 // layer: account, then group, then the global setting, then the process
 // environment variable. 0 (or an absent key) follows the next layer. Plugins

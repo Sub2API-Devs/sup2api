@@ -1024,7 +1024,7 @@ type RequestMeta struct {
 	// by name when more), keys cut to 64 bytes and values to 512 bytes on a
 	// UTF-8 boundary, invalid UTF-8 dropped.
 	Query map[string]string `protobuf:"bytes,11,rep,name=query,proto3" json:"query,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	// Resolved environment variables of this attempt (CONTRACTS §73.3): the
+	// Resolved environment variables of this attempt (CONTRACTS §74.3): the
 	// nearest of account, group, global and process layers for every key some
 	// layer sets. Set on every request of an attempt on an account (build,
 	// execute, classify, usage extraction); a missing key means the plugin's

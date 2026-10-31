@@ -17,6 +17,32 @@ export default {
     title: '并发 / RPM / TPM / 会话 明细', scope: '范围', allModels: '全部模型', lists: '{n} 组模型', sessions: '会话',
     windowHint: 'RPM、TPM、会话为近 60 秒的用量，token 在响应结束后计入；会话是近 60 秒内活跃的会话数（按粘性会话键，没有命中粘性规则的请求各算一个）。没设上限的只显示用量。指定模型的请求同时计入账号总量和所在列表。'
   },
+  usage: {
+    column: '用量', title: '账号用量', raw: '原始', rawHint: '按原始倍率计费：分组倍率视为 1',
+    today: '今日 {cost} · {n} 次', range: '时间', rawCost: '原始费用', cost: '计费后', requests: '请求',
+    ranges: { today: '今日', last7: '近 7 天', last30: '近 30 天', total: '累计' },
+    periodShort: { hour: '时', day: '日', week: '周', month: '月', none: '总' }, periodShortN: '{n}{unit}',
+    limitLine: '用量限制（{period}）：{used} / {amount}', resetsAt: '{time} 重置', loadFailed: '用量明细加载失败',
+    limitReached: '用量已达上限：{detail}',
+    hint: '数据来自使用记录（核心统计）。开启原始倍率计费时，累计用量和用量限制都按原始费用计算（分组倍率视为 1）。'
+  },
+  usageLimit: {
+    title: '用量限制', description: '按账号的费用用量限额。达到上限后自动禁用该账号，到下一个周期自动启用；调高限额或关闭限制后立即启用。所有账号类型都适用。',
+    rawCost: '原始倍率计费', rawCostHint: '开启后，账号的累计用量和用量限制都按原始费用计算（分组倍率视为 1）。核心同时记录两种口径，切换后历史数据也按新口径显示。',
+    enabled: '启用用量限制', enabledHint: '关闭时只统计用量，不会自动禁用。不受「允许自动禁用」开关影响。',
+    amount: '限额', amountHint: '按{basis}计算', basisRaw: '原始费用', basisCost: '计费后费用', unit: 'USD',
+    period: '重置周期', periodHint: '「不重置」即总额度：用满后保持自动禁用，调高限额后自动启用。',
+    periods: { hour: '每小时', day: '每天', week: '每周', month: '每月', none: '不重置' },
+    periodCount: '周期长度', periodCountHint: '例如 2 + 每周 = 每两周重置一次', periodCountUnit: '个周期',
+    anchor: '周期起点', anchorHint: '从这个时间开始计算周期（按整点，服务器时区）；留空则从 2024-01-01 00:00 开始，日、周、月落在自然边界上。',
+    current: '本周期已用（{start} → {end}）', currentTotal: '累计已用', summary: '用量限制 {amount}/{period}', saveFailed: '账号已保存，但用量限制保存失败：{error}',
+    amountInvalid: '开启用量限制需要填写 0-1000000000 之间、大于 0 的限额', periodCountInvalid: '周期长度必须为 1-1000'
+  },
+  successRate: {
+    column: '成功率 · 1 分钟', title: '成功率（近 60 秒）', success: '成功请求', failed: '失败尝试',
+    requests: '{success} / {total} 次', idle: '近 1 分钟无请求',
+    hint: '成功率 = 成功 ÷（成功 + 失败），按近 60 秒滚动窗口统计。每次失败的上游尝试都计一次；400（请求本身有误）、客户端主动取消和网关自身限流不算失败。'
+  },
   modelLimits: {
     title: '指定模型限速',
     hint: '为指定模型单独限制并发、RPM、TPM、每分钟会话数。一张卡片一组限额，卡片内可建多个列表：同一列表的模型共用一个计数器，不同列表各自计数。与账号总限额同时生效，任一达到上限就不再调度该账号；0 表示不限。',
@@ -229,7 +255,7 @@ export default {
   selectAll: '全选',
   selectNone: '全不选',
   quota: {
-    column: '用量',
+    column: '余额',
     windows: { '5h': '5 小时', '7d': '7 天', '7d_sonnet': '7 天 Sonnet', '7d_fable': '7 天 Fable' },
     windowsShort: { '5h': '5h', '7d': '7d', '7d_sonnet': '7d S', '7d_fable': '7d F' },
     rejectedHint: '上游已拒绝该窗口的请求，需等待重置',
@@ -294,6 +320,7 @@ export default {
   balance: {
     column: '余额',
     label: '余额',
+    accountLabel: '账户余额',
     refresh: '刷新余额',
     refreshHint: '查询账号当前余额',
     refreshing: '正在查询',

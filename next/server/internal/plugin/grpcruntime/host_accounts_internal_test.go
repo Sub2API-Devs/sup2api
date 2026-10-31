@@ -265,7 +265,7 @@ func (f *fakeUsers) LookupUsers(_ context.Context, ids []int64) ([]core.UserSumm
 	return []core.UserSummary{{ID: ids[0], DisplayName: "Ann", Status: "active"}}, nil
 }
 
-// GetUsers needs users.read and at most GetUsersMaxIDs ids (CONTRACTS §74.3).
+// GetUsers needs users.read and at most GetUsersMaxIDs ids (CONTRACTS §75.3).
 func TestHostGetUsers(t *testing.T) {
 	ctx := context.Background()
 	h, _ := accountsEnv(t, registry.Grants{})

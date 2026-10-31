@@ -200,7 +200,7 @@ func (a *auditor) AuditPluginWrite(_ context.Context, w core.PluginWrite) {
 }
 
 // Writes served by admin routes are audited with who, what and the answer;
-// reads and webhooks are not (CONTRACTS §74.2).
+// reads and webhooks are not (CONTRACTS §75.2).
 func TestPluginAPIWritesAudited(t *testing.T) {
 	m := registrytest.Manifest("demo", "1.0.0")
 	m.Routes = append(m.Routes, manifest.Route{Method: "PUT", Path: "/rules/:id", Scope: "admin", Permission: "rules:read"})

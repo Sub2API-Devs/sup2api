@@ -13,7 +13,7 @@ import (
 
 // ClearStickyBindings deletes a share of the sticky session bindings that
 // point at an account and could serve (group, model). It needs the
-// "sticky.clear" grant (CONTRACTS §73.2).
+// "sticky.clear" grant (CONTRACTS §74.2).
 func ClearStickyBindings(ctx context.Context, h Host, in *pluginv1.ClearStickyBindingsRequest) (*pluginv1.ClearStickyBindingsResponse, error) {
 	if err := requireHostAPI(h, protocol.StickyClearHostAPIVersion, "sticky binding clearing"); err != nil {
 		return nil, err
@@ -22,7 +22,7 @@ func ClearStickyBindings(ctx context.Context, h Host, in *pluginv1.ClearStickyBi
 }
 
 // GetEnvironment resolves the environment variables of a group and
-// optionally an account (CONTRACTS §73.3). Gateway requests already carry
+// optionally an account (CONTRACTS §74.3). Gateway requests already carry
 // theirs in RequestMeta.environment; this is for background work.
 func GetEnvironment(ctx context.Context, h Host, groupID, accountID int64) (map[string]int64, error) {
 	if err := requireHostAPI(h, protocol.EnvironmentHostAPIVersion, "environment variables"); err != nil {
@@ -36,7 +36,7 @@ func GetEnvironment(ctx context.Context, h Host, groupID, accountID int64) (map[
 }
 
 // ListNotificationChannels lists the notification channels of the enabled
-// plugins; it needs the "notify.send" grant (CONTRACTS §73.4).
+// plugins; it needs the "notify.send" grant (CONTRACTS §74.4).
 func ListNotificationChannels(ctx context.Context, h Host) ([]*pluginv1.NotificationChannel, error) {
 	if err := requireHostAPI(h, protocol.NotificationHostAPIVersion, "notifications"); err != nil {
 		return nil, err
@@ -59,7 +59,7 @@ func Notify(ctx context.Context, h Host, in *pluginv1.NotifyRequest) (*pluginv1.
 
 // GetUsers returns the users among ids that exist, once each, in the order
 // of ids, asking the host protocol.GetUsersMaxIDs ids at a time. It needs
-// the "users.read" grant (CONTRACTS §74.3).
+// the "users.read" grant (CONTRACTS §75.3).
 func GetUsers(ctx context.Context, h Host, ids []int64) ([]*pluginv1.UserInfo, error) {
 	if err := requireHostAPI(h, protocol.UsersHostAPIVersion, "user lookup"); err != nil {
 		return nil, err

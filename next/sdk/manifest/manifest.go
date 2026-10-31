@@ -98,7 +98,7 @@ type Observations struct {
 }
 
 // Notifications declares the channels a plugin delivers notifications on
-// ("notify.channel.v1", CONTRACTS §73.4). A channel id is unique across the
+// ("notify.channel.v1", CONTRACTS §74.4). A channel id is unique across the
 // enabled plugins: other plugins send through HostService.Notify by the id
 // and never talk to the provider themselves.
 type Notifications struct {
@@ -577,7 +577,7 @@ type Form struct {
 	Component string `json:"component,omitempty"`
 	// Permission (ui.settings only) is one of the plugin's own
 	// userPermissions whose holders may read and edit the plugin settings
-	// through the core, besides plugin:read / plugin:manage (CONTRACTS §74.1).
+	// through the core, besides plugin:read / plugin:manage (CONTRACTS §75.1).
 	Permission string `json:"permission,omitempty"`
 }
 

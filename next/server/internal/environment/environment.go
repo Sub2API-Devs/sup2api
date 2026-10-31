@@ -1,4 +1,4 @@
-// Package environment serves the environment variables (CONTRACTS §73.3): the
+// Package environment serves the environment variables (CONTRACTS §74.3): the
 // global layer (the "environment" row of settings), the declared variables,
 // and resolution outside a gateway request. The group and account layers are
 // columns of their own tables, edited with the group and the account.

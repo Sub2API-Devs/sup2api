@@ -10,7 +10,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
-// StickyClearer serves HostService.ClearStickyBindings (CONTRACTS §73.2). It
+// StickyClearer serves HostService.ClearStickyBindings (CONTRACTS §74.2). It
 // only needs Redis, so it is built before the plugin runtime and the gateway.
 type StickyClearer struct{ rdb redis.UniversalClient }
 

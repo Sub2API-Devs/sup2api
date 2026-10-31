@@ -1,4 +1,4 @@
--- Notifications (CONTRACTS §73.4): the queue and delivery record of what the
+-- Notifications (CONTRACTS §74.4): the queue and delivery record of what the
 -- core and plugins send through the channels plugins declare. A row is
 -- pending, sending (claimed until next_attempt_at, the lease), sent or failed.
 CREATE TABLE IF NOT EXISTS notifications (

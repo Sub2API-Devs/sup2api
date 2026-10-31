@@ -21,6 +21,9 @@ import AccountEditor from './AccountEditor.vue'
 import AccountNumberCell from './AccountNumberCell.vue'
 import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import AccountLimitsCell from './AccountLimitsCell.vue'
+import AccountSuccessRateCell from './AccountSuccessRateCell.vue'
+import AccountUsageCell from './AccountUsageCell.vue'
+import { usageLimitReasonDetail } from './accountUsage'
 import AccountLimitsTable from './AccountLimitsTable.vue'
 import { accountControl, sameCreationGroup } from './accountTypeChoices'
 import AccountQuotaCell from './AccountQuotaCell.vue'
@@ -95,10 +98,12 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'priority', label: t('accounts.priority'), width: '84px' },
   { key: 'weight', label: t('accounts.weight'), width: '84px' },
   { key: 'limits', label: t('accounts.listUi.limitsColumn') },
-  // Only when a row of this page has plan windows (subscription accounts).
-  ...(list.items.value.some((a) => hasQuota(a.quota)) ? [{ key: 'quota', label: t('accounts.quota.column') }] : []),
-  // Only when a row of this page has balance (balance-enabled account types).
-  ...(list.items.value.some((a) => hasBalance(a.balance)) ? [{ key: 'balance', label: t('accounts.balance.column') }] : []),
+  { key: 'success_rate', label: t('accounts.successRate.column') },
+  // The core's usage record (CONTRACTS §73), every account type.
+  { key: 'usage', label: t('accounts.usage.column') },
+  // What the upstream says is left: plan windows (Claude Code) and balance,
+  // only when a row of this page has either.
+  ...(list.items.value.some((a) => hasQuota(a.quota) || hasBalance(a.balance)) ? [{ key: 'quota', label: t('accounts.balance.column') }] : []),
   { key: 'last_test', label: t('accounts.lastTest.column') },
   { key: 'actions', label: t('common.actions'), align: 'right', width: '210px' }
 ])
@@ -127,9 +132,15 @@ type StatusView = { tone: ReturnType<typeof accountStatusTone>; label: string; d
 function statusOf(a: Account): StatusView {
   const key = accountStatusKey(a)
   const cooling = key === 'active' && coolingDown(a)
-  const reason = a.orphaned ? t('accounts.orphanedHint', { plugin: a.plugin_key }) : (cooling && a.cooldown_reason) || a.status_reason
+  const usageLimit = usageLimitReasonDetail(a.status_reason)
+  const statusReason = usageLimit !== null ? t('accounts.usage.limitReached', { detail: usageLimit }) : a.status_reason
+  const reason = a.orphaned ? t('accounts.orphanedHint', { plugin: a.plugin_key }) : (cooling && a.cooldown_reason) || statusReason
   const view: StatusView = { tone: accountStatusTone(a), label: t(`accounts.status.${key}`), detail: reason || undefined }
-  if (key === 'auto_disabled' && a.auto_disabled_until) view.note = t('accounts.autoReleaseAt', { time: formatDateTime(a.auto_disabled_until) })
+  // Auto-disabled reads as one yellow badge; why, and when it comes back, show on hover.
+  if (key === 'auto_disabled' && a.auto_disabled_until) {
+    const release = t('accounts.autoReleaseAt', { time: formatDateTime(a.auto_disabled_until) })
+    view.detail = view.detail ? `${view.detail}\n${release}` : release
+  }
   if (cooling) view.note = t('accounts.cooldownUntil', { time: formatTime(a.cooldown_until) })
   return view
 }
@@ -618,14 +629,18 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
       <template #cell-limits="{ row }">
         <AccountLimitsCell :account="row" />
       </template>
-      <template #cell-quota="{ row }">
-        <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id)" />
-        <!-- no plan limits (API keys): show nothing, not even the table's "—" fallback -->
-        <span v-else />
+      <template #cell-success_rate="{ row }">
+        <AccountSuccessRateCell :outcomes="row.outcomes" />
       </template>
-      <template #cell-balance="{ row }">
-        <AccountBalanceCell v-if="hasBalance(row.balance)" :balance="row.balance" :refreshing="balanceRefresh.refreshing.has(row.id)" @refresh="balanceRefresh.refresh(row.id, row.balance)" />
-        <!-- no balance (types without balance support): show nothing -->
+      <template #cell-usage="{ row }">
+        <AccountUsageCell :account-id="row.id" :usage="row.usage" />
+      </template>
+      <template #cell-quota="{ row }">
+        <div v-if="hasQuota(row.quota) || hasBalance(row.balance)" class="space-y-2">
+          <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id)" />
+          <AccountBalanceCell v-if="hasBalance(row.balance)" :balance="row.balance" :refreshing="balanceRefresh.refreshing.has(row.id)" @refresh="balanceRefresh.refresh(row.id, row.balance)" />
+        </div>
+        <!-- nothing from the upstream (API keys): show nothing, not even the table's "—" fallback -->
         <span v-else />
       </template>
       <template #cell-actions="{ row }">
@@ -715,8 +730,9 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
                   <span :class="credRefreshText(detail).warn ? 'text-warning-600' : ''" class="text-sm">{{ credRefreshText(detail).text }}</span>
                   <SLink v-if="canRefreshCreds(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.credRefresh.actionHint')" :disabled="refreshingCreds.has(detail.id)" @click="refreshCreds(detail)">{{ t('accounts.credRefresh.action') }}</SLink>
               </SDescItem>
+              <SDescItem :label="t('accounts.usage.column')"><AccountUsageCell :account-id="detail.id" :usage="detail.usage" /></SDescItem>
               <SDescItem v-if="hasQuota(detail.quota)" :label="t('accounts.quota.column')"><AccountQuotaCell :quota="detail.quota" :refreshing="quotaRefresh.refreshing.has(detail.id)" @refresh="quotaRefresh.refresh(detail.id)" /></SDescItem>
-              <SDescItem v-if="hasBalance(detail.balance)" :label="t('accounts.balance.label')"><AccountBalanceCell :balance="detail.balance" :refreshing="balanceRefresh.refreshing.has(detail.id)" @refresh="balanceRefresh.refresh(detail.id, detail.balance)" /></SDescItem>
+              <SDescItem v-if="hasBalance(detail.balance)" :label="t('accounts.balance.accountLabel')"><AccountBalanceCell :balance="detail.balance" :refreshing="balanceRefresh.refreshing.has(detail.id)" @refresh="balanceRefresh.refresh(detail.id, detail.balance)" /></SDescItem>
               <SDescItem :label="t('accounts.models')">
                 <span v-if="detail.models?.length" class="flex flex-wrap gap-1">
                   <SBadge v-for="m in detail.models" :key="m" tone="gray"><span class="font-mono">{{ m }}</span></SBadge>

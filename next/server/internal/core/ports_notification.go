@@ -8,7 +8,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
 )
 
-// Notifications (CONTRACTS §73.4): a provider plugin declares channels
+// Notifications (CONTRACTS §74.4): a provider plugin declares channels
 // ("notify.channel.v1", e.g. the mailer's "email"); the core queues what
 // plugins (HostService.Notify) and the core itself send, and delivers it
 // through the channel's provider. Senders only know channel ids.

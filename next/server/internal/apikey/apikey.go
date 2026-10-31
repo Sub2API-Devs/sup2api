@@ -177,7 +177,7 @@ type cached struct {
 	RateMultiplier  string     `json:"rate_multiplier,omitempty"`
 	ModelAllowlist  []string   `json:"model_allowlist,omitempty"`
 	ModelFilterMode string     `json:"model_filter_mode,omitempty"`
-	// GroupEnvironment is the group layer of the environment (§73.3).
+	// GroupEnvironment is the group layer of the environment (§74.3).
 	GroupEnvironment core.EnvironmentValues `json:"group_environment,omitempty"`
 	GroupAvailable   bool                   `json:"group_available,omitempty"`
 	AllowedIPs       []string               `json:"allowed_ips"`

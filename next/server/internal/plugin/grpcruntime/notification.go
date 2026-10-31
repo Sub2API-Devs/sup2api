@@ -19,7 +19,7 @@ const TimeoutNotification = 30 * time.Second
 func notifierOf(p *proc) pluginv1.NotificationServiceClient { return p.notifier }
 
 // Notifier is the plugin's NotificationService when it implements
-// notify.channel.v1 (CONTRACTS §73.4).
+// notify.channel.v1 (CONTRACTS §74.4).
 func (i *Instance) Notifier() core.NotificationChannelPlugin {
 	if !i.has(manifest.CapNotifyChannel) {
 		return nil
