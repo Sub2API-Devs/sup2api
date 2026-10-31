@@ -326,8 +326,9 @@ func TestStickyRulesFromDBDriveScheduling(t *testing.T) {
 }
 
 // The gateway writes the built-in platforms' default rules at start
-// (source=builtin); administrators only switch and reorder them, and an
-// admin rule of the same name overrides one.
+// (source=builtin). Administrators switch, reorder and edit them; an edited
+// definition survives restarts until restored to the default, a rename is
+// refused, and an admin rule of the same name overrides one.
 func TestBuiltinStickyDefaults(t *testing.T) {
 	e := newDBEnv(t)
 	ctx := context.Background()
@@ -337,7 +338,7 @@ func TestBuiltinStickyDefaults(t *testing.T) {
 		for _, r := range p.StickyRules {
 			want = append(want, r.Name)
 			got := findRule(res.Get("data"), r.Name, sourceBuiltin)
-			if !got.Exists() || got.Get("plugin_key").Exists() || !got.Get("enabled").Bool() {
+			if !got.Exists() || got.Get("plugin_key").Exists() || !got.Get("enabled").Bool() || got.Get("customized").Bool() {
 				t.Fatalf("builtin rule %s: %s", r.Name, res.Raw)
 			}
 		}
@@ -347,19 +348,31 @@ func TestBuiltinStickyDefaults(t *testing.T) {
 	}
 	r := findRule(res.Get("data"), want[0], sourceBuiltin)
 	id := r.Get("id").Int()
-	if code, _ := e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"ttl_seconds": 5}); code != 400 {
-		t.Fatalf("patch builtin definition: %d", code)
-	}
+	defaultTTL := r.Get("ttl_seconds").Int()
 	if code, _ := e.api("DELETE", "/sticky-rules/"+itoa(id), nil); code != 400 {
 		t.Fatalf("delete builtin: %d", code)
 	}
-	if code, res := e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"enabled": false, "priority": 3}); code != 200 ||
-		res.Get("data.enabled").Bool() {
+	if code, _ := e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"name": "renamed"}); code != 400 {
+		t.Fatalf("rename builtin: %d", code)
+	}
+	// Submitting the unchanged definition with the switches is no edit.
+	unchanged := map[string]any{"name": want[0], "enabled": false, "priority": 3, "ttl_seconds": defaultTTL,
+		"match": r.Get("match").Value(), "key_sources": r.Get("key_sources").Value(), "value_regex": r.Get("value_regex").String(),
+		"key_includes": r.Get("key_includes").Value(), "on_failure": r.Get("on_failure").String()}
+	if code, res := e.api("PATCH", "/sticky-rules/"+itoa(id), unchanged); code != 200 ||
+		res.Get("data.enabled").Bool() || res.Get("data.customized").Bool() {
 		t.Fatalf("disable builtin: %d %s", code, res.Raw)
 	}
+	if code, res := e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"ttl_seconds": 5}); code != 200 ||
+		res.Get("data.ttl_seconds").Int() != 5 || !res.Get("data.customized").Bool() {
+		t.Fatalf("edit builtin definition: %d %s", code, res.Raw)
+	}
+	if code, _ := e.api("PATCH", "/sticky-rules/"+itoa(id), map[string]any{"key_sources": []any{map[string]any{"type": "plugin"}}}); code != 400 {
+		t.Fatalf("invalid builtin definition: %d", code)
+	}
 
-	// A restart keeps the administrator's switches and drops stale built-in
-	// rules.
+	// A restart keeps the administrator's switches and edits and drops stale
+	// built-in rules.
 	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO sticky_rules (name, source, key_sources) VALUES ('stale', 'builtin', '[]')`); err != nil {
 		t.Fatal(err)
 	}
@@ -368,10 +381,26 @@ func TestBuiltinStickyDefaults(t *testing.T) {
 	}
 	_, res = e.api("GET", "/sticky-rules", nil)
 	r = findRule(res.Get("data"), want[0], sourceBuiltin)
-	if r.Get("id").Int() != id || r.Get("enabled").Bool() || r.Get("priority").Int() != 3 {
+	if r.Get("id").Int() != id || r.Get("enabled").Bool() || r.Get("priority").Int() != 3 || r.Get("ttl_seconds").Int() != 5 {
 		t.Fatalf("after restart: %s", r.Raw)
 	}
 	if findRule(res.Get("data"), "stale", sourceBuiltin).Exists() {
 		t.Fatalf("stale rule: %s", res.Raw)
+	}
+
+	// Restoring the default brings the code's definition back, keeps the
+	// switches, and is refused for admin rules.
+	code, res := e.api("POST", "/sticky-rules/"+itoa(id)+"/reset", nil)
+	if code != 200 || res.Get("data.ttl_seconds").Int() != defaultTTL || res.Get("data.customized").Bool() ||
+		res.Get("data.enabled").Bool() || res.Get("data.priority").Int() != 3 {
+		t.Fatalf("reset builtin: %d %s", code, res.Raw)
+	}
+	code, res = e.api("POST", "/sticky-rules", map[string]any{"name": "admin-only",
+		"key_sources": []any{map[string]any{"type": "header", "name": "x-session"}}})
+	if code != 201 {
+		t.Fatalf("create admin rule: %d %s", code, res.Raw)
+	}
+	if code, _ := e.api("POST", "/sticky-rules/"+itoa(res.Get("data.id").Int())+"/reset", nil); code != 400 {
+		t.Fatalf("reset admin rule: %d", code)
 	}
 }

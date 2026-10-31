@@ -1110,12 +1110,14 @@ export interface StickyRule {
   source: 'builtin' | 'admin'
   enabled: boolean
   priority: number
-  match: { protocols?: string[]; models?: string[]; userAgentContains?: string[] }
+  match: { protocols?: string[]; models?: string[]; user_agent_contains?: string[] }
   key_sources: Array<{ type: 'body' | 'header' | 'api_key' | 'user'; path?: string; name?: string }>
   value_regex: string
   ttl_seconds: number
   key_includes: string[]
   on_failure: 'failover' | 'stick'
+  // A built-in rule whose definition an administrator edited; upgrades keep it.
+  customized?: boolean
 }
 
 export interface StickyStats {

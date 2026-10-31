@@ -35,6 +35,7 @@ func (g *Gateway) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("PATCH", "/sticky-rules/:id", "sticky:manage", g.updateRuleHandler)
 	r.Perm("DELETE", "/sticky-rules/:id", "sticky:manage", g.deleteRuleHandler)
 	r.Perm("POST", "/sticky-rules/:id/flush", "sticky:manage", g.flushRuleHandler)
+	r.Perm("POST", "/sticky-rules/:id/reset", "sticky:manage", g.resetRuleHandler)
 	r.Perm("GET", "/settings/sticky", "sticky:read", g.getStickySettingsHandler)
 	r.Perm("PUT", "/settings/sticky", "sticky:manage", g.putStickySettingsHandler)
 }
@@ -65,6 +66,7 @@ type ruleDTO struct {
 	TTLSeconds  int            `json:"ttl_seconds"`
 	KeyIncludes []string       `json:"key_includes"`
 	OnFailure   string         `json:"on_failure"`
+	Customized  bool           `json:"customized"`
 	UpdatedBy   *int64         `json:"updated_by"`
 	UpdatedAt   time.Time      `json:"updated_at"`
 }
@@ -82,7 +84,7 @@ func toDTO(r *stickyRule) ruleDTO {
 		Match: ruleMatchDTO{Protocols: nonNil(r.Match.Protocols), Models: nonNil(r.Match.Models),
 			UserAgentContains: nonNil(r.Match.UserAgentContains)},
 		KeySources: []keySourceDTO{}, ValueRegex: r.ValueRegex, TTLSeconds: r.TTLSeconds,
-		KeyIncludes: nonNil(r.KeyIncludes), OnFailure: r.OnFailure, UpdatedBy: r.UpdatedBy, UpdatedAt: r.UpdatedAt.UTC(),
+		KeyIncludes: nonNil(r.KeyIncludes), OnFailure: r.OnFailure, Customized: r.Customized, UpdatedBy: r.UpdatedBy, UpdatedAt: r.UpdatedAt.UTC(),
 	}
 	for _, s := range r.KeySources {
 		d.KeySources = append(d.KeySources, keySourceDTO{Type: s.Type, Path: s.Path, Name: s.Name})
@@ -101,11 +103,6 @@ type ruleInput struct {
 	TTLSeconds  *int            `json:"ttl_seconds"`
 	KeyIncludes *[]string       `json:"key_includes"`
 	OnFailure   *string         `json:"on_failure"`
-}
-
-func (in *ruleInput) definitionChanged() bool {
-	return in.Name != nil || in.Match != nil || in.KeySources != nil || in.ValueRegex != nil ||
-		in.TTLSeconds != nil || in.KeyIncludes != nil || in.OnFailure != nil
 }
 
 func (in *ruleInput) applyTo(r *stickyRule) {
@@ -381,29 +378,35 @@ func (g *Gateway) updateRuleHandler(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
-	if r.Source != sourceAdmin && in.definitionChanged() {
-		// Built-in defaults follow the core's code; only the switches an
-		// administrator owns survive an upgrade. Overrides are admin rules of
-		// the same name.
-		msg := "built-in rules only accept enabled and priority; create an admin rule with the same name to override it"
+	if r.Source != sourceAdmin && in.Name != nil && strings.TrimSpace(*in.Name) != r.Name {
+		// A built-in rule is known by its name: the start-up sync and the
+		// admin rules that shadow it find it by name.
+		msg := "built-in rules cannot be renamed; create an admin rule to use another name"
 		if core.Locale(ctx) == "zh" {
-			msg = "内置规则只能修改启用状态和优先级；如需覆盖，请新建同名的管理员规则"
+			msg = "内置规则不能改名；如需其它名称，请新建管理员规则"
 		}
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage(msg))
+		httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "name", Code: "invalid", Message: msg}))
 		return
 	}
 	stored := append([]string(nil), r.Match.Protocols...)
+	before := ruleDefinition(r)
 	in.applyTo(r)
-	if r.Source == sourceAdmin {
-		// Protocols are only checked when the request carries a match, and
-		// the ones the rule already had are kept: the console submits the
-		// whole rule, so changing the TTL or a switch of a rule whose
-		// platform went away (plugin disabled or uninstalled) must not be
-		// rejected. A protocol added by this request is still checked.
-		var known func(string) bool
-		if in.Match != nil {
-			known = keeping(g.knownProtocol(), stored)
-		}
+	// An edited definition of a built-in rule is the administrator's from
+	// now on: upgrades keep it until it is restored to the default
+	// (resetRuleHandler). The console submits the whole rule, so only a
+	// definition that actually changed counts.
+	changed := ruleDefinition(r) != before
+	customized := r.Customized || r.Source != sourceAdmin && changed
+	// Protocols are only checked when the request carries a match, and
+	// the ones the rule already had are kept: the console submits the
+	// whole rule, so changing the TTL or a switch of a rule whose
+	// platform went away (plugin disabled or uninstalled) must not be
+	// rejected. A protocol added by this request is still checked.
+	var known func(string) bool
+	if in.Match != nil {
+		known = keeping(g.knownProtocol(), stored)
+	}
+	if r.Source == sourceAdmin || changed {
 		if fe := validateRule(ctx, r, known); len(fe) > 0 {
 			httpapi.Fail(c, core.InvalidFields(fe...))
 			return
@@ -412,10 +415,10 @@ func (g *Gateway) updateRuleHandler(c *gin.Context) {
 	uid, _ := core.UserID(ctx)
 	_, err = db.Pool.Exec(ctx, `
 		UPDATE sticky_rules SET name = $2, enabled = $3, priority = $4, match = $5, key_sources = $6,
-			value_regex = $7, ttl_seconds = $8, key_includes = $9, on_failure = $10, updated_by = $11, updated_at = now()
+			value_regex = $7, ttl_seconds = $8, key_includes = $9, on_failure = $10, updated_by = $11, customized = $12, updated_at = now()
 		WHERE id = $1`,
 		id, r.Name, r.Enabled, r.Priority, mustJSON(r.Match), mustJSON(r.KeySources), r.ValueRegex, r.TTLSeconds,
-		mustJSON(nonNil(r.KeyIncludes)), r.OnFailure, nullID(uid))
+		mustJSON(nonNil(r.KeyIncludes)), r.OnFailure, nullID(uid), customized)
 	if store.IsUniqueViolation(err, "") {
 		httpapi.Fail(c, core.ErrConflict.WithMessage("an admin sticky rule with this name already exists"))
 		return
@@ -628,19 +631,16 @@ func (g *Gateway) putStickySettingsHandler(c *gin.Context) {
 // ---------------------------------------------------------------- default rules
 
 // SyncBuiltinDefaults writes the default sticky rules of the built-in
-// platforms (source=builtin): definitions follow the code, administrators
-// only switch them on or off and reorder them. Called when the gateway
-// starts.
+// platforms (source=builtin): definitions follow the code unless an
+// administrator edited them (customized, kept until restored to the
+// default); the switches (enabled, priority) are always the administrator's.
+// Called when the gateway starts.
 func (g *Gateway) SyncBuiltinDefaults(ctx context.Context) error {
 	if g.d.DB == nil {
 		return nil
 	}
-	var rules []manifest.StickyRule
-	for _, p := range platforms.Builtin() {
-		rules = append(rules, p.StickyRules...)
-	}
 	if err := g.d.DB.Tx(ctx, func(tx pgx.Tx) error {
-		return syncBuiltinRules(ctx, tx, rules)
+		return syncBuiltinRules(ctx, tx, builtinStickyRules())
 	}); err != nil {
 		return err
 	}
@@ -648,8 +648,18 @@ func (g *Gateway) SyncBuiltinDefaults(ctx context.Context) error {
 	return nil
 }
 
-// syncBuiltinRules upserts rules as the built-in defaults and deletes the
-// built-in defaults no longer listed.
+// builtinStickyRules are the default sticky rules of the built-in platforms.
+func builtinStickyRules() []manifest.StickyRule {
+	var rules []manifest.StickyRule
+	for _, p := range platforms.Builtin() {
+		rules = append(rules, p.StickyRules...)
+	}
+	return rules
+}
+
+// syncBuiltinRules upserts rules as the built-in defaults, leaving the
+// definition of a customized one alone, and deletes the built-in defaults no
+// longer listed.
 func syncBuiltinRules(ctx context.Context, tx pgx.Tx, rules []manifest.StickyRule) error {
 	names := make([]string, 0, len(rules))
 	for i, r := range rules {
@@ -671,7 +681,8 @@ func syncBuiltinRules(ctx context.Context, tx pgx.Tx, rules []manifest.StickyRul
 			VALUES ($1, 'builtin', true, $2, $3, $4, $5, $6, $7, $8, now())
 			ON CONFLICT (name, source) DO UPDATE SET match = EXCLUDED.match, key_sources = EXCLUDED.key_sources,
 				value_regex = EXCLUDED.value_regex, ttl_seconds = EXCLUDED.ttl_seconds,
-				key_includes = EXCLUDED.key_includes, on_failure = EXCLUDED.on_failure, updated_at = now()`,
+				key_includes = EXCLUDED.key_includes, on_failure = EXCLUDED.on_failure, updated_at = now()
+			WHERE NOT sticky_rules.customized`,
 			name, 100+i, mustJSON(r.Match), mustJSON(r.KeySources), r.ValueRegex, max(r.TTLSeconds, 0),
 			mustJSON(includes), onFailure); err != nil {
 			return err
@@ -680,4 +691,60 @@ func syncBuiltinRules(ctx context.Context, tx pgx.Tx, rules []manifest.StickyRul
 	}
 	_, err := tx.Exec(ctx, `DELETE FROM sticky_rules WHERE source = 'builtin' AND NOT (name = ANY($1))`, names)
 	return err
+}
+
+// ruleDefinition is what tells whether a rule's definition changed (not its
+// name or switches); empty and missing lists are the same.
+func ruleDefinition(r *stickyRule) string {
+	sources := r.KeySources
+	if sources == nil {
+		sources = []manifest.StickyKeySource{}
+	}
+	return string(mustJSON([]any{nonNil(r.Match.Protocols), nonNil(r.Match.Models), nonNil(r.Match.UserAgentContains),
+		sources, r.ValueRegex, r.TTLSeconds, nonNil(r.KeyIncludes), r.OnFailure}))
+}
+
+// resetRuleHandler restores a built-in rule to the core's default
+// definition; its switches (enabled, priority) stay the administrator's.
+func (g *Gateway) resetRuleHandler(c *gin.Context) {
+	ctx := c.Request.Context()
+	db, err := g.db()
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	r, err := getRule(ctx, db.Pool, id)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	if r.Source == sourceAdmin {
+		msg := "only built-in rules have a default to restore"
+		if core.Locale(ctx) == "zh" {
+			msg = "只有内置规则可以恢复默认"
+		}
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage(msg))
+		return
+	}
+	uid, _ := core.UserID(ctx)
+	if err := db.Tx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE sticky_rules SET customized = false, updated_by = $2 WHERE id = $1`, id, nullID(uid)); err != nil {
+			return err
+		}
+		return syncBuiltinRules(ctx, tx, builtinStickyRules())
+	}); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	g.changed(ctx, "sticky_rules")
+	updated, err := getRule(ctx, db.Pool, id)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, toDTO(updated))
 }

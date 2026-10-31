@@ -86,6 +86,7 @@ function actions(r: Row): MenuAction[] {
   return [
     { key: 'edit', label: t('common.edit') },
     { key: 'copy', label: t('sticky.copyAsAdmin'), hidden: admin },
+    { key: 'reset', label: t('sticky.resetDefault'), hidden: admin || !r.customized },
     // Without "rule" in key_includes the bindings are shared; the server refuses to flush them.
     { key: 'flush', label: t('sticky.flush'), hidden: !(r.key_includes || []).includes('rule') },
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !admin }
@@ -109,6 +110,15 @@ async function onAction(r: Row, key: string) {
     editing.value = r
     copying.value = key === 'copy'
     modalOpen.value = true
+  } else if (key === 'reset') {
+    if (!(await confirm({ message: t('sticky.resetConfirm', { name: r.name }) }))) return
+    try {
+      await api.post(`/sticky-rules/${r.id}/reset`)
+      toast(t('sticky.resetDone'), 'success')
+      await load()
+    } catch (e) {
+      notifyError(e)
+    }
   } else if (key === 'flush') {
     if (!(await confirm({ message: t('sticky.flushConfirm', { name: r.name }), danger: true }))) return
     try {
@@ -158,6 +168,7 @@ async function toggle(r: Row, v: boolean) {
             <SBadge :tone="row.source === 'admin' ? 'primary' : 'accent'">
               {{ t(`sticky.source.${row.source}`) }}
             </SBadge>
+            <SBadge v-if="row.customized" tone="warning" :title="t('sticky.customizedHint')">{{ t('sticky.customized') }}</SBadge>
           </div>
         </template>
         <template #cell-enabled="{ row }">
@@ -169,9 +180,9 @@ async function toggle(r: Row, v: boolean) {
             <dd class="font-mono">{{ list(row.match?.protocols) }}</dd>
             <dt class="text-fg-muted">{{ t('sticky.modal.models') }}</dt>
             <dd class="font-mono">{{ list(row.match?.models) }}</dd>
-            <template v-if="row.match?.userAgentContains?.length">
+            <template v-if="row.match?.user_agent_contains?.length">
               <dt class="text-fg-muted">{{ t('sticky.cols.ua') }}</dt>
-              <dd class="font-mono">{{ list(row.match.userAgentContains) }}</dd>
+              <dd class="font-mono">{{ list(row.match.user_agent_contains) }}</dd>
             </template>
             <dt class="text-fg-muted">{{ t('sticky.cols.keySources') }}</dt>
             <dd class="font-mono">{{ sourcesSummary(row) || '—' }}<SHint v-if="row.value_regex" inline size="xs"> /{{ row.value_regex }}/</SHint></dd>

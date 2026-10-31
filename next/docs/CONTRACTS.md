@@ -427,7 +427,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 **core**：`EndpointBinding{Plugin, Platform, Endpoint}`；`PlatformBinding{Plugin, Builtin, Platform}`（去掉 `Client`）；`Generation.Platforms()`、`Platform(id)`、`PlatformForProtocol(protocol)`、`AccountTypesForPlatform(platformID)`（取代 `PlatformsForProtocol`、`AccountTypesForProtocol`）；`AccountTypeBinding.Supports(platformID)`（取代 `Protocol()`）。`Generation.Endpoints()` 包含内置平台和已启用插件平台的端点。
 
-**调度**：端点 → 平台 P、协议 X；候选账号类型 = `AccountTypesForPlatform(P)`（原生），加上支持其他平台 Q、且 Q 的某个协议 Y 满足 `CanConvert(X, Y)` 的类型；候选账号 = API Key 所属分组中这些类型的账号。requestFields / passHeaders：账号类型对该平台的覆盖 → 平台默认。用量规则：账号类型 `usage[协议]` → 端点 `usage` → 平台 `usage`（需转换时按上游协议 Y 所属平台和端点取）。内置平台的默认粘性规则写入 `sticky_rules`，`source='builtin'`、`plugin_key` 为空，只允许改启用状态和优先级。
+**调度**：端点 → 平台 P、协议 X；候选账号类型 = `AccountTypesForPlatform(P)`（原生），加上支持其他平台 Q、且 Q 的某个协议 Y 满足 `CanConvert(X, Y)` 的类型；候选账号 = API Key 所属分组中这些类型的账号。requestFields / passHeaders：账号类型对该平台的覆盖 → 平台默认。用量规则：账号类型 `usage[协议]` → 端点 `usage` → 平台 `usage`（需转换时按上游协议 Y 所属平台和端点取）。内置平台的默认粘性规则写入 `sticky_rules`，`source='builtin'`、`plugin_key` 为空，除名称外都可修改，改过的定义升级不覆盖、可恢复默认（§15.5）。
 
 **REST 变更**
 
@@ -606,13 +606,15 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | `ttl_seconds` | 0–2592000，0 表示使用 `/settings/sticky` 的 `default_ttl_seconds` |
 | `key_includes` | `group` \| `model` \| `rule` 的子集，新建默认三项全含 |
 | `on_failure` | `failover`（默认）\| `stick` |
+| `customized` | 只读；`builtin` 规则的定义被管理员改过为 `true`（迁移 0071），启动同步不再覆盖它，直到恢复默认；`admin` 规则总是 `false` |
 | `updated_by`、`updated_at` | |
 
 | 方法 路径 | 权限 | 请求 / 响应 | 约定 |
 |---|---|---|---|
 | GET `/sticky-rules` | `sticky:read` | → `[规则]` | 不分页 |
 | POST `/sticky-rules` | `sticky:manage` | `{name, enabled?, priority?, match?, key_sources, value_regex?, ttl_seconds?, key_includes?, on_failure?}` → 201 规则 | 只能创建 `source=admin`；同名 admin 规则已存在返回 409 |
-| PATCH `/sticky-rules/:id` | `sticky:manage` | 同上字段均可选 → 200 规则 | `admin` 规则可改全部字段；`builtin` 规则**只能改 `enabled`、`priority`**，带其他字段返回 400 `invalid_argument`（如需改定义，新建同名 admin 规则覆盖）；控制台编辑内置规则时只提交这两项 |
+| PATCH `/sticky-rules/:id` | `sticky:manage` | 同上字段均可选 → 200 规则 | `admin` 规则可改全部字段；`builtin` 规则除 `name` 外都可改（改名返回 400，字段 `name`：内置规则按名称同步和遮蔽），定义（`match`、`key_sources`、`value_regex`、`ttl_seconds`、`key_includes`、`on_failure`）确实变了才置 `customized=true`，提交未变的全量 body 不算修改（2026-11-01，原先只能改 `enabled`、`priority`） |
+| POST `/sticky-rules/:id/reset` | `sticky:manage` | → 200 规则 | 只对 `builtin` 规则：定义恢复为代码里的默认，`customized=false`，`enabled`、`priority` 不变；`admin` 规则返回 400 |
 | DELETE `/sticky-rules/:id` | `sticky:manage` | 204 | 只能删 `admin` 规则，其他返回 400；已有绑定不删除（等 TTL 过期），若没有其他同名规则则清除统计 |
 | POST `/sticky-rules/:id/flush` | `sticky:manage` | → `{deleted: n}` | 删除该规则名下的全部绑定，`deleted` 为删除的 Redis key 数（无 Redis 时为 0）；Redis 出错返回 503。`key_includes` 不含 `rule` 的规则返回 409 `conflict`：它的绑定 key 是 `sticky:_:…`，与其他同类规则共用，无法单独清除，只能等 TTL 过期 |
 | GET `/sticky-rules/stats` | `sticky:read` | → `[{rule_id, rule, source, hits, misses, rebinds}]` | 每条规则一项，顺序同规则列表；`rule_id` 对应规则 `id`，`rule` 为规则名 |
@@ -622,7 +624,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 - **同名遮蔽**：同名规则只有来源级别最高的一条参与调度（`admin` > `builtin`），级别比较时**不看 `enabled`**，所以停用的同名 admin 规则也会遮蔽内置规则。
 - **统计与绑定按规则名**（不是 id）：统计 key `sticky:stats:{name}`，绑定 key `sticky:{name}:{group}:{model}:{sha256}`（名称中 `[A-Za-z0-9_.-]` 以外的字符替换为 `_`）。同名规则共享同一份统计，`/stats` 中同名的多项数值相同；flush 任一同名规则都会清除该名称下的全部绑定。
 - `key_includes` 不含 `rule` 的规则，其绑定 key 的规则段为 `_`，与其他同类规则共用；flush 这类规则返回 409，控制台不显示"清除绑定"。
-- 内置规则在网关启动时同步：定义跟随代码，保留管理员设置的 `enabled`、`priority`，代码里不再有的内置规则删除。插件安装、升级、卸载都不改规则表。
+- 内置规则在网关启动时同步：定义跟随代码（`customized` 的除外，保留管理员改过的定义），保留管理员设置的 `enabled`、`priority`，代码里不再有的内置规则删除（改过的也删）。插件安装、升级、卸载都不改规则表。
 - **`match.protocols` 的取值与校验**：协议的权威来源是平台的端点声明 —— 内置平台（`sdk/platforms/{anthropic,openai,gemini}.json` 的 `endpoints[].protocol`）与插件 manifest 的 `platforms[].endpoints[].protocol`；注册表按协议建索引（`Generation.PlatformForProtocol`）。空数组表示不限；含 `*`/`?` 的值按通配与已注册协议集合比较（与运行时 `matchList` 的语义一致），匹配不到任何协议才算无效。
   - 管理员规则（`source=admin`）保存时校验：POST 中每个协议都必须命中，否则 400，`error.details.fields` 含一项 `{field:"match.protocols", code:"invalid"}`，消息点明是哪些协议无效（同一次提交的多个无效协议合并为一条错误）。
   - **PATCH 只校验本次新增的协议**：不在库中原有 `match.protocols` 里的值才校验，原有值一律放行（即使它现在已经无法命中注册表）。控制台提交的是全量 body，这样一条引用了已停用/卸载插件协议的旧规则，改 TTL 或开关不会被锁死，只能删掉重建；而编辑时新加一个拼错的协议仍会被拒。不带 `match` 的 PATCH（只改 `enabled`/`priority`）完全不校验协议。
