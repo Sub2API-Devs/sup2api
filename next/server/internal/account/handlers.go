@@ -1344,6 +1344,11 @@ func (s *Service) update(c *gin.Context) {
 			in.AutoDisable, in.AutoModels, limits, in.SPMLimit, in.Environment); err != nil {
 			return err
 		}
+		if statusChanged && *in.Status == "active" && isUsageLimitReason(locked.StatusReason) {
+			if err := waiveUsageLimit(ctx, tx, id); err != nil { // enabled by hand (§73.4)
+				return err
+			}
+		}
 		if in.GroupIDs != nil {
 			if err := setGroups(ctx, tx, id, groupIDs); err != nil {
 				return err
@@ -1439,6 +1444,13 @@ func (s *Service) resetStatus(c *gin.Context) {
 				WHERE id = $1`, id); err != nil {
 				return err
 			}
+			// Brought back by hand: the usage limit leaves it running for
+			// the rest of the period (CONTRACTS §73.4).
+			if isUsageLimitReason(a.StatusReason) {
+				if err := waiveUsageLimit(ctx, tx, id); err != nil {
+					return err
+				}
+			}
 		}
 		if err := audit.Audit(ctx, tx, uid, "account.reset_status", "account", itoa(id),
 			map[string]any{"cooldown_cleared": cleared, "status_reset": statusReset, "previous_status": a.Status}); err != nil {
@@ -1458,13 +1470,6 @@ func (s *Service) resetStatus(c *gin.Context) {
 	}
 	s.evictQuotaCache(ctx, id)
 	s.evictBalanceCache(ctx, id)
-	if strings.HasPrefix(a.StatusReason, usageLimitReason) {
-		// Brought back by hand: the usage limit leaves it running for the
-		// rest of the period (CONTRACTS §73).
-		if err := s.waiveUsageLimit(ctx, id); err != nil {
-			slog.WarnContext(ctx, "account: waive usage limit", "account", id, "err", err)
-		}
-	}
 	s.changed(ctx, id)
 	s.kickCCGateway(id, a.PluginKey, a.Type)
 	v, err := s.fullView(ctx, id, scope)

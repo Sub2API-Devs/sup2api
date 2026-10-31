@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"regexp"
+	"time"
 )
 
 type ctxKey int
@@ -14,6 +16,7 @@ const (
 	ctxLocale
 	ctxGranted
 	ctxClientIP
+	ctxTimeZone
 )
 
 func WithClientIP(ctx context.Context, ip string) context.Context {
@@ -85,6 +88,33 @@ func Locale(ctx context.Context) string {
 		return l
 	}
 	return "en"
+}
+
+var timeZoneName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-]+)*$`)
+
+// LoadTimeZone loads an IANA time zone name. "Local" (the process zone, which
+// differs between nodes) and anything outside a conservative pattern are
+// refused, so the name is also safe for PostgreSQL's AT TIME ZONE.
+func LoadTimeZone(name string) (*time.Location, bool) {
+	if len(name) > 64 || name == "Local" || !timeZoneName.MatchString(name) {
+		return nil, false
+	}
+	loc, err := time.LoadLocation(name)
+	return loc, err == nil
+}
+
+// WithTimeZone stores the time zone the caller reads calendar figures in
+// (tz=<IANA name> on the request).
+func WithTimeZone(ctx context.Context, loc *time.Location) context.Context {
+	return context.WithValue(ctx, ctxTimeZone, loc)
+}
+
+// TimeZone returns the request's time zone, UTC when it named none.
+func TimeZone(ctx context.Context) *time.Location {
+	if loc, ok := ctx.Value(ctxTimeZone).(*time.Location); ok && loc != nil {
+		return loc
+	}
+	return time.UTC
 }
 
 // Text picks the message for the request locale: zh when the caller asked

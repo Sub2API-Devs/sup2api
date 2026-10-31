@@ -295,7 +295,7 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 	stopHelperHistory := startHelperHistoryMaintenance(b.ctx, b.settler, helpers, b.canWork)
 	b.stopper.add("helper-history", stopHelperHistory)
 	observations := observer.New(b.reg, b.stats, observer.Consumer{Namespace: observation.CoreNamespace, AllAccounts: true,
-		Phases: []string{observation.UsageFinalized, observation.AttemptFinished}, Metrics: []string{observation.SuccessRequests, observation.SuccessTokens, observation.PendingUsage, observation.FailedRequests}, Client: account.StatsConsumer{}})
+		Phases: []string{observation.UsageFinalized, observation.AttemptFinished}, Metrics: observation.CoreMetrics, Client: account.StatsConsumer{}})
 	b.stopper.add("observations", observations.Close)
 	b.gw = gateway.New(gateway.Deps{
 		CCGateway:     b.ccg,

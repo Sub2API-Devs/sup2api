@@ -22,6 +22,10 @@ const (
 	MaxWindow              = 3600
 )
 
+// CoreMetrics are the core's own account metrics (namespace CoreNamespace),
+// in the order the core reads them back.
+var CoreMetrics = []string{SuccessRequests, SuccessTokens, PendingUsage, FailedRequests}
+
 var metricKey = regexp.MustCompile(`^[a-z][a-z0-9_]{0,47}$`)
 
 func ValidMetric(name string) bool { return metricKey.MatchString(name) }

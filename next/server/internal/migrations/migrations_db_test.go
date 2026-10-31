@@ -7,6 +7,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/migrations"
@@ -356,9 +357,10 @@ func TestAccountSPMLimitMigration(t *testing.T) {
 	require.Error(t, exec(`UPDATE accounts SET spm_limit = 10000001 WHERE name='spm'`))
 }
 
-// 0064 sums an account's usage (CONTRACTS §73): existing rows are backfilled
-// once, then the trigger follows settlement, reconcile, refunds and a moved
-// account; deleting history takes nothing back and a re-run counts nothing twice.
+// 0064 and 0068 sum an account's usage (CONTRACTS §73): existing rows are
+// backfilled once, then the trigger journals settlement, reconcile, refunds
+// and a moved account, and account_usage_fold sums the journal; deleting
+// history takes nothing back and a re-run counts nothing twice.
 func TestAccountUsageMigrationAndTrigger(t *testing.T) {
 	db := testutil.DB(t)
 	ctx := t.Context()
@@ -367,8 +369,14 @@ func TestAccountUsageMigrationAndTrigger(t *testing.T) {
 		_, err := db.Pool.Exec(ctx, sql, args...)
 		require.NoError(t, err)
 	}
+	fold := func() {
+		t.Helper()
+		exec(`SELECT account_usage_fold(2)`) // a small batch: folding takes several statements
+		exec(`SELECT account_usage_fold(1000)`)
+	}
 	totals := func(name string) string {
 		t.Helper()
+		fold()
 		var v string
 		err := db.Pool.QueryRow(ctx, `SELECT coalesce((SELECT cost::text||' '||raw_cost::text||' '||requests||' '||tokens
 			FROM account_usage_totals WHERE account_id=(SELECT id FROM accounts WHERE name=$1)),'none')`, name).Scan(&v)
@@ -377,6 +385,7 @@ func TestAccountUsageMigrationAndTrigger(t *testing.T) {
 	}
 	hourly := func(name string) string {
 		t.Helper()
+		fold()
 		var v string
 		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT coalesce(sum(cost),0)::text||' '||count(*) FROM account_usage_hourly
 			WHERE account_id=(SELECT id FROM accounts WHERE name=$1)`, name).Scan(&v))
@@ -395,8 +404,9 @@ func TestAccountUsageMigrationAndTrigger(t *testing.T) {
 			$4::numeric, $3, $5::jsonb, $6::numeric, 10, 5, 100, $8::timestamptz)`, rid, account, status, cost, detail, rate, success, at)
 	}
 	exec(`DROP TRIGGER account_usage_track ON usage_logs; DROP FUNCTION account_usage_track(); DROP FUNCTION account_usage_add(bigint, timestamptz, numeric, numeric, bigint, bigint);
-		DROP TABLE account_usage_totals, account_usage_hourly, account_usage_limits;
-		DELETE FROM schema_migrations WHERE id='0064_account_usage.sql';
+		DROP FUNCTION account_usage_fold(int);
+		DROP TABLE account_usage_totals, account_usage_hourly, account_usage_limits, account_usage_deltas;
+		DELETE FROM schema_migrations WHERE id IN ('0064_account_usage.sql', '0068_account_usage_journal.sql');
 		INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES ('a','fixture','apikey',''), ('b','fixture','apikey','')`)
 	usage("old-billed", "a", "billed", "1.2", `{"cost":"1.0"}`, "1.2", true, "2026-10-01T10:15:00Z")
 	usage("old-no-detail", "a", "billed", "0.6", `{}`, "1.5", true, "2026-10-01T10:45:00Z")
@@ -417,8 +427,34 @@ func TestAccountUsageMigrationAndTrigger(t *testing.T) {
 	require.Equal(t, "0.50000000 0.25000000 1 115", totals("b"), "moved here")
 	exec(`DELETE FROM usage_logs WHERE request_id = 'old-no-detail'`)
 	require.Equal(t, "0.60000000 0.40000000 2 460", totals("a"), "deleting history takes nothing back")
+	usage("tiny", "b", "billed", "0", `{"cost":"0.000000525"}`, "0", true, "2026-10-02T01:00:00Z")
+	require.Equal(t, "0.50000000 0.25000053 2 230", totals("b"), "billing_detail.cost with more than 8 decimals, rounded; a free group still has raw cost")
 
-	exec(`DELETE FROM schema_migrations WHERE id='0064_account_usage.sql'`)
+	// Two settler batches writing the same accounts in opposite orders: the
+	// journal takes no row locks, so neither waits on the other (0064's
+	// in-place sums deadlocked here).
+	tx1, err := db.Pool.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = tx1.Rollback(ctx) }()
+	tx2, err := db.Pool.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = tx2.Rollback(ctx) }()
+	insert := func(tx pgx.Tx, rid, account string) {
+		t.Helper()
+		_, err := tx.Exec(ctx, `INSERT INTO usage_logs (request_id, user_id, api_key_id, group_id, account_id, protocol, endpoint, status_code, success,
+			total_cost, billing_status, rate_multiplier, input_tokens, output_tokens)
+			VALUES ($1, 1, 1, 1, (SELECT id FROM accounts WHERE name=$2), 'anthropic.messages', '/v1/messages', 200, true, 1, 'billed', 1, 1, 1)`, rid, account)
+		require.NoError(t, err)
+	}
+	insert(tx1, "batch1-a", "a")
+	insert(tx2, "batch2-b", "b")
+	insert(tx1, "batch1-b", "b")
+	insert(tx2, "batch2-a", "a")
+	require.NoError(t, tx1.Commit(ctx))
+	require.NoError(t, tx2.Commit(ctx))
+	require.Equal(t, "2.60000000 2.40000000 4 464", totals("a"))
+
+	exec(`DELETE FROM schema_migrations WHERE id IN ('0064_account_usage.sql', '0068_account_usage_journal.sql')`)
 	migrate()
-	require.Equal(t, "0.60000000 0.40000000 2 460", totals("a"), "a re-run does not backfill again")
+	require.Equal(t, "2.60000000 2.40000000 4 464", totals("a"), "a re-run does not backfill again")
 }

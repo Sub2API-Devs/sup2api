@@ -8,24 +8,42 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 )
 
-// Periods are counted from the anchor (default: 2024-01-01 00:00, a Monday,
-// local time), in multiples of period_count; months follow the calendar.
+// Periods are counted from the anchor (default: 2024-01-01 00:00, a Monday)
+// on the wall clock of the limit's time zone, in multiples of period_count:
+// days keep midnight across daylight saving, months follow the calendar and
+// clamp a day the month lacks.
 func TestUsageLimitWindow(t *testing.T) {
-	local := func(y int, m time.Month, d, h int) time.Time { return time.Date(y, m, d, h, 0, 0, 0, time.Local) }
-	anchor := local(2026, 1, 31, 8)
+	zone := func(name string) func(y int, m time.Month, d, h, min int) time.Time {
+		loc, err := time.LoadLocation(name)
+		require.NoError(t, err)
+		return func(y int, m time.Month, d, h, min int) time.Time { return time.Date(y, m, d, h, min, 0, 0, loc) }
+	}
+	sh, ny, in := zone("Asia/Shanghai"), zone("America/New_York"), zone("Asia/Kolkata")
+	anchor := sh(2026, 1, 31, 8, 0)
+	limit := func(tz, period string, count int, anchor *time.Time) UsageLimit {
+		return UsageLimit{Timezone: tz, Period: period, PeriodCount: count, Anchor: anchor}
+	}
 	for _, tc := range []struct {
 		name       string
 		limit      UsageLimit
 		now        time.Time
 		start, end time.Time
 	}{
-		{"day, default anchor", UsageLimit{Period: usagePeriodDay, PeriodCount: 1}, local(2026, 10, 31, 15), local(2026, 10, 31, 0), local(2026, 11, 1, 0)},
-		{"week starts on Monday", UsageLimit{Period: usagePeriodWeek, PeriodCount: 1}, local(2026, 10, 31, 15), local(2026, 10, 26, 0), local(2026, 11, 2, 0)},
-		{"month", UsageLimit{Period: usagePeriodMonth, PeriodCount: 1}, local(2026, 10, 31, 15), local(2026, 10, 1, 0), local(2026, 11, 1, 0)},
-		{"two months from an anchor", UsageLimit{Period: usagePeriodMonth, PeriodCount: 2, Anchor: &anchor}, local(2026, 6, 15, 0), local(2026, 5, 31, 8), local(2026, 7, 31, 8)},
-		{"six hours, before the anchor", UsageLimit{Period: usagePeriodHour, PeriodCount: 6, Anchor: &anchor}, local(2026, 1, 31, 3), local(2026, 1, 31, 2), local(2026, 1, 31, 8)},
+		{"day, default anchor", limit("Asia/Shanghai", usagePeriodDay, 1, nil), sh(2026, 10, 31, 15, 0), sh(2026, 10, 31, 0, 0), sh(2026, 11, 1, 0, 0)},
+		{"week starts on Monday", limit("Asia/Shanghai", usagePeriodWeek, 1, nil), sh(2026, 10, 31, 15, 0), sh(2026, 10, 26, 0, 0), sh(2026, 11, 2, 0, 0)},
+		{"month", limit("Asia/Shanghai", usagePeriodMonth, 1, nil), sh(2026, 10, 31, 15, 0), sh(2026, 10, 1, 0, 0), sh(2026, 11, 1, 0, 0)},
+		{"two months from an anchor", limit("Asia/Shanghai", usagePeriodMonth, 2, &anchor), sh(2026, 6, 15, 0, 0), sh(2026, 5, 31, 8, 0), sh(2026, 7, 31, 8, 0)},
+		{"the 31st falls on Feb 28", limit("Asia/Shanghai", usagePeriodMonth, 1, &anchor), sh(2026, 3, 1, 0, 0), sh(2026, 2, 28, 8, 0), sh(2026, 3, 31, 8, 0)},
+		{"six hours, before the anchor", limit("Asia/Shanghai", usagePeriodHour, 6, &anchor), sh(2026, 1, 31, 3, 0), sh(2026, 1, 31, 2, 0), sh(2026, 1, 31, 8, 0)},
+		{"day across daylight saving", limit("America/New_York", usagePeriodDay, 1, nil), ny(2026, 7, 1, 0, 30), ny(2026, 7, 1, 0, 0), ny(2026, 7, 2, 0, 0)},
+		{"week across daylight saving", limit("America/New_York", usagePeriodWeek, 1, nil), ny(2026, 11, 3, 12, 0), ny(2026, 11, 2, 0, 0), ny(2026, 11, 9, 0, 0)},
+		{"half-hour zone", limit("Asia/Kolkata", usagePeriodDay, 1, nil), in(2026, 10, 31, 0, 10), in(2026, 10, 31, 0, 0), in(2026, 11, 1, 0, 0)},
+		{"unknown zone reads as UTC", limit("", usagePeriodDay, 1, nil), time.Date(2026, 10, 31, 15, 0, 0, 0, time.UTC),
+			time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC), time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			start, end := tc.limit.window(tc.now)
@@ -50,6 +68,7 @@ func TestUsageLimitDisablesAndRecovers(t *testing.T) {
 		total_cost, billing_status, billing_detail, rate_multiplier, input_tokens, output_tokens)
 		VALUES ('u1', 1, 1, 1, $1, 'anthropic.messages', '/v1/messages', 200, true, 6, 'billed', '{"cost":"5"}', 1.2, 100, 20)`, id)
 	require.NoError(t, err)
+	require.NoError(t, foldUsage(ctx, e.db.Pool), "the trigger journals, the sweep folds")
 	account := func() map[string]any {
 		t.Helper()
 		code, body := e.do("GET", "/accounts/"+itoa(id), nil)
@@ -104,8 +123,38 @@ func TestUsageLimitDisablesAndRecovers(t *testing.T) {
 	putLimit(map[string]any{"enabled": false, "amount": "6", "period": "none", "period_count": 1})
 	assert.Equal(t, "active", account()["status"], "turned off")
 
-	code, out := e.do("PUT", "/accounts/"+itoa(id)+"/usage-limit", map[string]any{"enabled": true, "amount": "0", "period": "year", "period_count": 0})
-	assert.Equal(t, 400, code, out)
+	putLimit(map[string]any{"enabled": true, "amount": "5.5", "period": "day", "period_count": 1})
+	require.Equal(t, "auto_disabled", account()["status"])
+	putLimit(map[string]any{"enabled": true, "amount": "5.5", "period": "week", "period_count": 1})
+	a = account()
+	assert.True(t, strings.HasSuffix(a["status_reason"].(string), "(per week)"), "still over a changed limit: the reason follows it, %v", a["status_reason"])
+	_, end = UsageLimit{Period: usagePeriodWeek, PeriodCount: 1}.window(time.Now())
+	until, err = time.Parse(time.RFC3339, a["auto_disabled_until"].(string))
+	require.NoError(t, err)
+	assert.True(t, end.Equal(until), "and so does the release time: %s, want %s", until, *end)
+	assert.Equal(t, true, a["usage"].(map[string]any)["limit_disabled"])
+
+	clear := &pluginv1.AccountAutomaticState{Action: pluginv1.AccountAutomaticState_ACTION_CLEAR}
+	_, err = e.svc.ApplyPluginAccountAutomaticState(ctx, "anthropic", id, clear)
+	require.NoError(t, err)
+	assert.Equal(t, "auto_disabled", account()["status"], "a plugin's clear does not lift the limit's disable")
+
+	code, out := e.do("PATCH", "/accounts/"+itoa(id), map[string]any{"status": "active"})
+	require.Equal(t, 200, code, out)
+	require.NoError(t, e.svc.EnforceUsageLimits(ctx, nil))
+	assert.Equal(t, "active", account()["status"], "enabled by hand: released for the rest of the period")
+
+	for _, bad := range []map[string]any{
+		{"enabled": true, "amount": "0", "period": "year", "period_count": 0},
+		{"enabled": true, "amount": "1", "period": "month", "period_count": 13},
+		{"enabled": true, "amount": "1", "period": "day", "period_count": 1, "anchor": "1900-01-01T00:00:00Z"},
+		{"enabled": true, "amount": "1", "period": "day", "period_count": 1, "timezone": "Local"},
+	} {
+		code, out = e.do("PUT", "/accounts/"+itoa(id)+"/usage-limit", bad)
+		assert.Equal(t, 400, code, out)
+	}
+	code, out = e.do("PUT", "/accounts/"+itoa(id)+"/usage-limit", map[string]any{"enabled": false, "amount": "5.000000000", "period": "day", "period_count": 1})
+	assert.Equal(t, 200, code, "trailing zeros are not decimals: %s", out)
 
 	_, err = e.db.Pool.Exec(ctx, `UPDATE accounts SET status = 'auto_disabled', status_reason = 'upstream says no' WHERE id = $1`, id)
 	require.NoError(t, err)

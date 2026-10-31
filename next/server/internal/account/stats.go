@@ -27,10 +27,11 @@ const (
 	statsSettingsKey = "account-stats"
 	statsMaxWindow   = observation.MaxWindow
 	statsMaxAccounts = 200
-	// statsMaxCells caps accounts × metrics of one read: every account of a
-	// full page with the core's four metrics (CONTRACTS §73).
-	statsMaxCells = statsMaxAccounts * 4
 )
+
+// statsMaxCells caps accounts × metrics of one read: every account of a full
+// page with the core's metrics (CONTRACTS §73).
+var statsMaxCells = statsMaxAccounts * len(observation.CoreMetrics)
 
 var applyStats = redis.NewScript(`
 local clock = redis.call('TIME')
@@ -507,7 +508,7 @@ func (s *Stats) readInternalCounters(ctx context.Context, namespace string, ids 
 }
 
 func (s *Stats) AccountStats(ctx context.Context, ids []int64, seconds int) (core.AccountStatsSnapshot, error) {
-	raw, err := s.ReadObservationMetrics(ctx, observation.CoreNamespace, ids, []string{observation.SuccessRequests, observation.SuccessTokens, observation.PendingUsage, observation.FailedRequests}, seconds)
+	raw, err := s.ReadObservationMetrics(ctx, observation.CoreNamespace, ids, observation.CoreMetrics, seconds)
 	out := core.AccountStatsSnapshot{WindowSeconds: int(raw.WindowSeconds), AsOf: time.UnixMilli(raw.AsOfUnixMs).UTC(), Status: raw.Status, Accounts: make([]core.AccountStatsView, 0, len(raw.Accounts))}
 	if raw.ObservedSinceUnixMs > 0 {
 		at := time.UnixMilli(raw.ObservedSinceUnixMs).UTC()
@@ -519,7 +520,7 @@ func (s *Stats) AccountStats(ctx context.Context, ids []int64, seconds int) (cor
 			n := int(*row.InUse)
 			v.InUse = &n
 		}
-		if len(row.Metrics) == 4 {
+		if len(row.Metrics) == len(observation.CoreMetrics) { // in CoreMetrics order
 			r, t, p, f := row.Metrics[0].Sum, row.Metrics[1].Sum, row.Metrics[2].Sum, row.Metrics[3].Sum
 			rpm, tpm := row.Metrics[0].PerMinute, row.Metrics[1].PerMinute
 			v.SuccessRequests, v.SuccessTokens, v.PendingUsage, v.FailedRequests, v.RPM, v.TPM = &r, &t, &p, &f, &rpm, &tpm

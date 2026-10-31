@@ -56,7 +56,7 @@ func (h *hostServer) ReadObservationMetrics(ctx context.Context, in *pluginv1.Re
 	if in == nil || len(in.AccountIds) > 200 || len(in.Metrics) == 0 || len(in.Metrics) > observation.MaxMetrics || (in.Namespace != "core" && in.Namespace != "plugin") {
 		return nil, status.Error(codes.InvalidArgument, "invalid metrics query")
 	}
-	if len(in.AccountIds)*len(in.Metrics) > 600 || (in.WindowSeconds != 0 && (in.WindowSeconds < 5 || in.WindowSeconds > observation.MaxWindow)) {
+	if len(in.AccountIds)*len(in.Metrics) > 200*len(observation.CoreMetrics) || (in.WindowSeconds != 0 && (in.WindowSeconds < 5 || in.WindowSeconds > observation.MaxWindow)) {
 		return nil, status.Error(codes.InvalidArgument, "invalid metrics window or query size")
 	}
 	for _, id := range in.AccountIds {
@@ -64,7 +64,7 @@ func (h *hostServer) ReadObservationMetrics(ctx context.Context, in *pluginv1.Re
 			return nil, status.Error(codes.InvalidArgument, "invalid account id")
 		}
 	}
-	allowed := []string{observation.SuccessRequests, observation.SuccessTokens, observation.PendingUsage, observation.FailedRequests}
+	allowed := observation.CoreMetrics
 	if in.Namespace == "plugin" {
 		allowed = nil
 		if d := h.i.pkg.Manifest.Observations; d != nil {

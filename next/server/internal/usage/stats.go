@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -35,18 +34,12 @@ const statsTimeout = "5s"
 // maxHourSpan caps group_by=hour: 31 days is 744 buckets.
 const maxHourSpan = 31 * 24 * time.Hour
 
-var tzName = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_+\-]*(/[A-Za-z0-9_+\-]+)*$`)
-
 // parseTZ reads tz=<IANA name> (default UTC). The same name goes to
-// PostgreSQL's AT TIME ZONE, so it is checked against Go's database and a
-// conservative pattern first.
+// PostgreSQL's AT TIME ZONE, which core.LoadTimeZone keeps safe.
 func parseTZ(c *gin.Context) (string, *time.Location, error) {
 	name := c.DefaultQuery("tz", "UTC")
-	if len(name) > 64 || name == "Local" || !tzName.MatchString(name) {
-		return "", nil, core.ErrInvalidArgument.WithMessage("invalid tz (IANA time zone name)")
-	}
-	loc, err := time.LoadLocation(name)
-	if err != nil {
+	loc, ok := core.LoadTimeZone(name)
+	if !ok {
 		return "", nil, core.ErrInvalidArgument.WithMessage("invalid tz (IANA time zone name)")
 	}
 	return name, loc, nil

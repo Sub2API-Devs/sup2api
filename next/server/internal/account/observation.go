@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"net/http"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/observation"
@@ -52,7 +53,7 @@ func failedAttempt(event *pluginv1.RequestObservation) bool {
 	if status == 0 {
 		status = event.GetStatusCode()
 	}
-	return status != 400 && event.GetErrorType() != "rate_limited"
+	return status != http.StatusBadRequest && event.GetErrorType() != core.ErrRateLimited.Code
 }
 
 // outcomesWindowSeconds is the window of the success-rate column: one minute,

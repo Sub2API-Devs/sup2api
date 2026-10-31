@@ -143,7 +143,9 @@ func CanAny(c *gin.Context, authz core.Authorizer, keys ...string) bool {
 	return true
 }
 
-// RequestContext assigns X-Request-Id and locale (Accept-Language zh*/en).
+// RequestContext assigns X-Request-Id, locale (Accept-Language zh*/en) and
+// the time zone of calendar figures (tz=<IANA name>; an invalid name is
+// ignored here, endpoints that require one validate it themselves).
 func RequestContext() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		rid := c.GetHeader("X-Request-Id")
@@ -154,6 +156,9 @@ func RequestContext() gin.HandlerFunc {
 		ctx := core.WithRequestID(c.Request.Context(), rid)
 		if strings.HasPrefix(strings.ToLower(c.GetHeader("Accept-Language")), "zh") {
 			ctx = core.WithLocale(ctx, "zh")
+		}
+		if loc, ok := core.LoadTimeZone(c.Query("tz")); ok {
+			ctx = core.WithTimeZone(ctx, loc)
 		}
 		c.Request = c.Request.WithContext(ctx)
 		start := time.Now()

@@ -1,8 +1,10 @@
 package account
 
 import (
+	"cmp"
 	"context"
 	"log/slog"
+	"maps"
 	"time"
 	"unicode/utf8"
 
@@ -98,7 +100,9 @@ func (s *Service) applyAutomaticState(ctx context.Context, owner string, id int6
 		previous := out.Status
 		next, reason := "auto_disabled", state.GetReason()
 		if state.GetAction() == pluginv1.AccountAutomaticState_ACTION_CLEAR {
-			if out.Status != "auto_disabled" {
+			// The usage limit's own disable is lifted by the limit or an
+			// administrator only (CONTRACTS §73.4).
+			if out.Status != "auto_disabled" || isUsageLimitReason(out.Reason) {
 				return nil
 			}
 			next, reason = "active", ""
@@ -121,32 +125,84 @@ func (s *Service) applyAutomaticState(ctx context.Context, owner string, id int6
 		if out.Status == next && out.Reason == reason && sameRelease {
 			return nil
 		}
-		if _, err := tx.Exec(ctx, `UPDATE accounts SET status=$2,status_reason=$3,auto_disabled_until=$4,updated_at=clock_timestamp() WHERE id=$1`, id, next, reason, release); err != nil {
-			return err
-		}
 		out.Changed, out.Status, out.Reason, out.UntilUnix = true, next, reason, 0
 		if release != nil {
 			out.UntilUnix = release.Unix()
 		}
-		if err := audit.Audit(ctx, tx, 0, "account.automatic_state", "account", itoa(id), map[string]any{
-			"plugin_key": pluginKey, "via_plugin": owner != "", "previous_status": previous, "status": next, "until": release,
-		}); err != nil {
-			return err
-		}
-		payload := statusPayload(id, pluginKey, typ, name, next, reason, nil)
-		if release != nil {
-			payload["auto_disabled_until"] = release.UTC().Format(time.RFC3339)
-		}
-		return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountStatusChanged, Payload: payload})
+		return s.writeAutomaticStatus(ctx, tx, "account.automatic_state", automaticChange{id: id, name: name, pluginKey: pluginKey, typ: typ,
+			from: previous, to: next, reason: reason, until: release, audit: map[string]any{"via_plugin": owner != ""}})
 	})
 	if err != nil {
 		return nil, err
 	}
 	if out.Changed {
-		s.changed(ctx, id)
-		s.kickCCGateway(id, pluginKey, typ)
+		s.afterStatusChange(ctx, id, pluginKey, typ)
 	}
 	return out, nil
+}
+
+// automaticChange is one automatic status change of an account.
+type automaticChange struct {
+	id                   int64
+	name, pluginKey, typ string
+	// from and fromReason are the status the change expects to find.
+	from, fromReason string
+	to, reason       string
+	until            *time.Time
+	// eventReason is the account.status_changed reason, reason by default.
+	eventReason string
+	// audit adds to the audit detail.
+	audit map[string]any
+}
+
+// writeAutomaticStatus writes an automatic change of an account the caller
+// locked in tx, with its audit row and account.status_changed event; the
+// caller runs afterStatusChange once tx commits.
+func (s *Service) writeAutomaticStatus(ctx context.Context, tx pgx.Tx, action string, ch automaticChange) error {
+	if _, err := tx.Exec(ctx, `UPDATE accounts SET status=$2,status_reason=$3,auto_disabled_until=$4,updated_at=clock_timestamp() WHERE id=$1`,
+		ch.id, ch.to, ch.reason, ch.until); err != nil {
+		return err
+	}
+	detail := map[string]any{"plugin_key": ch.pluginKey, "previous_status": ch.from, "status": ch.to, "until": ch.until}
+	maps.Copy(detail, ch.audit)
+	if err := audit.Audit(ctx, tx, 0, action, "account", itoa(ch.id), detail); err != nil {
+		return err
+	}
+	payload := statusPayload(ch.id, ch.pluginKey, ch.typ, ch.name, ch.to, cmp.Or(ch.eventReason, ch.reason), nil)
+	if ch.until != nil {
+		payload["auto_disabled_until"] = ch.until.UTC().Format(time.RFC3339)
+	}
+	return s.d.Events.Emit(ctx, tx, core.Event{Type: core.EventAccountStatusChanged, Payload: payload})
+}
+
+// setAutomaticStatus applies ch only if the account is still in the status
+// and reason ch expects (another node, an operator or a plugin may have
+// changed it since).
+func (s *Service) setAutomaticStatus(ctx context.Context, action string, ch automaticChange) error {
+	changed := false
+	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
+		var status, reason string
+		err := tx.QueryRow(ctx, `SELECT status,status_reason FROM accounts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, ch.id).Scan(&status, &reason)
+		if store.IsNoRows(err) || err == nil && (status != ch.from || reason != ch.fromReason) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		changed = true
+		return s.writeAutomaticStatus(ctx, tx, action, ch)
+	})
+	if err == nil && changed {
+		s.afterStatusChange(ctx, ch.id, ch.pluginKey, ch.typ)
+	}
+	return err
+}
+
+// afterStatusChange tells the routing cache and the CCGateway runtime of a
+// committed status change.
+func (s *Service) afterStatusChange(ctx context.Context, id int64, pluginKey, typ string) {
+	s.changed(ctx, id)
+	s.kickCCGateway(id, pluginKey, typ)
 }
 
 func (s *Service) runAutomaticStateSweep(ctx context.Context) {
@@ -164,7 +220,7 @@ func (s *Service) runAutomaticStateSweep(ctx context.Context) {
 		if _, err := s.SweepAutomaticState(ctx); err != nil && ctx.Err() == nil {
 			slog.WarnContext(ctx, "account: automatic state recovery", "err", err)
 		}
-		if err := s.EnforceUsageLimits(ctx, nil); err != nil && ctx.Err() == nil {
+		if err := s.runUsageLimits(ctx); err != nil && ctx.Err() == nil {
 			slog.WarnContext(ctx, "account: usage limits", "err", err)
 		}
 	}
