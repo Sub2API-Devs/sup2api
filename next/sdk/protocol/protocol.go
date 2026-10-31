@@ -14,8 +14,14 @@ import (
 const ProtocolVersion = 1
 
 // HostAPIVersion is sent in InitHostRequest.host_api_version. Version 6 adds
-// automatic account state changes and timed recovery; the wire protocol stays at 1.
-const HostAPIVersion = 7
+// automatic account state changes and timed recovery; version 8 adds sticky
+// binding clearing, notifications and environment variables (CONTRACTS §73);
+// the wire protocol stays at 1.
+const HostAPIVersion = 8
+
+const StickyClearHostAPIVersion = 8
+const NotificationHostAPIVersion = 8
+const EnvironmentHostAPIVersion = 8
 
 const ModelAvailabilityHostAPIVersion = 7
 const AccountAutomaticStateHostAPIVersion = 6

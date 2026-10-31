@@ -34,6 +34,17 @@ message RequestObservation {
   ObservationTokens tokens = 23;
   int64 response_started_at_unix_ms = 24;
   int64 first_stream_event_at_unix_ms = 25;
+  // API key group the request was scheduled in (CONTRACTS §73.1).
+  int64 group_id = 26;
+  // The attempt failed for a local reason the account is not to blame for:
+  // the platform plugin's ClassifyError said local_failure, the core failed
+  // locally while relaying the response, or the error type is not
+  // upstream_error (CONTRACTS §73.1).
+  bool local_failure = 27;
+  // HTTP status the upstream answered this attempt with; 0 when it sent no
+  // response (connection failure, timeout before the headers). status_code
+  // is what the client got, which a plugin may have mapped (CONTRACTS §73.1).
+  int32 upstream_status_code = 28;
 }
 
 message ObservationTokens {

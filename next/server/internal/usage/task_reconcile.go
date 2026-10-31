@@ -18,6 +18,7 @@ type taskClaim struct {
 	snapshot                   []byte
 	paths                      []string
 	failureCode, failureReason string
+	groupID                    int64
 }
 
 var errTaskDeferred = errors.New("original task account is unavailable or busy")
@@ -29,7 +30,7 @@ func (s *Service) claimTasks(ctx context.Context, limit int) ([]*settleEntry, er
 			AND (lease_until IS NULL OR lease_until<=now()) ORDER BY next_check_at,public_id FOR UPDATE SKIP LOCKED LIMIT $1) due
 		WHERE t.public_id=due.public_id RETURNING t.*)
 		SELECT t.public_id,t.claim_token,t.kind,t.state,t.plugin_key,t.upstream_ref_id,t.usage_log_id,t.account_id,
-			t.attempts,t.poll_failures,t.created_at,t.deadline_at,COALESCE(p.id,0)
+			t.attempts,t.poll_failures,t.created_at,t.deadline_at,COALESCE(p.id,0),t.group_id
 		FROM claimed t LEFT JOIN pending_settlements p ON p.task_public_id=t.public_id`, limit, int(reconcileLease/time.Second), uuid.NewString())
 	if err != nil {
 		return nil, err
@@ -39,7 +40,7 @@ func (s *Service) claimTasks(ctx context.Context, limit int) ([]*settleEntry, er
 	for rows.Next() {
 		e := &settleEntry{task: &taskClaim{}}
 		if err := rows.Scan(&e.task.id, &e.task.token, &e.task.kind, &e.task.state, &e.pluginKey, &e.refID, &e.usageLogID, &e.accountID,
-			&e.attempts, &e.pollFailures, &e.createdAt, &e.deadlineAt, &e.id); err != nil {
+			&e.attempts, &e.pollFailures, &e.createdAt, &e.deadlineAt, &e.id, &e.task.groupID); err != nil {
 			return nil, err
 		}
 		out = append(out, e)

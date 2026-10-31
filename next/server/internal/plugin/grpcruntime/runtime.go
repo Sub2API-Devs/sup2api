@@ -58,6 +58,15 @@ type Options struct {
 	// LockRenew / LockRelease). Nil makes the three calls fail with
 	// UNAVAILABLE.
 	Locker core.TokenLocker
+	// Sticky serves HostService.ClearStickyBindings; nil makes it fail with
+	// UNAVAILABLE.
+	Sticky core.StickyBindingClearer
+	// Environment serves HostService.GetEnvironment; nil makes it fail with
+	// UNAVAILABLE.
+	Environment core.EnvironmentResolver
+	// Notifier serves HostService.ListNotificationChannels and Notify; nil
+	// makes them fail with UNAVAILABLE.
+	Notifier core.Notifier
 
 	HostVersion   string
 	DataDir       string // plugin work directories live under DataDir/<key>/work

@@ -24,6 +24,20 @@ const _ = grpc.SupportPackageIsVersion7
 type HostServiceClient interface {
 	SetAccountAutomaticState(ctx context.Context, in *SetAccountAutomaticStateRequest, opts ...grpc.CallOption) (*SetAccountAutomaticStateResponse, error)
 	ReadObservationMetrics(ctx context.Context, in *ReadObservationMetricsRequest, opts ...grpc.CallOption) (*ReadObservationMetricsResponse, error)
+	// sticky.clear (grant "sticky.clear"): delete a share of the sticky session
+	// bindings that point at an account and could serve (group_id, model), so
+	// those sessions pick an account again on their next request (CONTRACTS
+	// §73.2).
+	ClearStickyBindings(ctx context.Context, in *ClearStickyBindingsRequest, opts ...grpc.CallOption) (*ClearStickyBindingsResponse, error)
+	// environment (always granted): the resolved environment variables of a
+	// group and optionally an account, for work outside a gateway request
+	// (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
+	GetEnvironment(ctx context.Context, in *GetEnvironmentRequest, opts ...grpc.CallOption) (*GetEnvironmentResponse, error)
+	// notify.send (grant "notify.send"): the notification channels of the
+	// enabled plugins, and sending through one by its id; the core queues,
+	// deduplicates, rate limits and retries (CONTRACTS §73.4).
+	ListNotificationChannels(ctx context.Context, in *ListNotificationChannelsRequest, opts ...grpc.CallOption) (*ListNotificationChannelsResponse, error)
+	Notify(ctx context.Context, in *NotifyRequest, opts ...grpc.CallOption) (*NotifyResponse, error)
 	// Pure local tokenization. No upstream traffic and no billing side effects.
 	CountTokens(ctx context.Context, in *CountTokensRequest, opts ...grpc.CallOption) (*CountTokensResponse, error)
 	// These callbacks are authorized only by an active Execute/Monitor scope,
@@ -152,6 +166,42 @@ func (c *hostServiceClient) SetAccountAutomaticState(ctx context.Context, in *Se
 func (c *hostServiceClient) ReadObservationMetrics(ctx context.Context, in *ReadObservationMetricsRequest, opts ...grpc.CallOption) (*ReadObservationMetricsResponse, error) {
 	out := new(ReadObservationMetricsResponse)
 	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/ReadObservationMetrics", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) ClearStickyBindings(ctx context.Context, in *ClearStickyBindingsRequest, opts ...grpc.CallOption) (*ClearStickyBindingsResponse, error) {
+	out := new(ClearStickyBindingsResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/ClearStickyBindings", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) GetEnvironment(ctx context.Context, in *GetEnvironmentRequest, opts ...grpc.CallOption) (*GetEnvironmentResponse, error) {
+	out := new(GetEnvironmentResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/GetEnvironment", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) ListNotificationChannels(ctx context.Context, in *ListNotificationChannelsRequest, opts ...grpc.CallOption) (*ListNotificationChannelsResponse, error) {
+	out := new(ListNotificationChannelsResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/ListNotificationChannels", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) Notify(ctx context.Context, in *NotifyRequest, opts ...grpc.CallOption) (*NotifyResponse, error) {
+	out := new(NotifyResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/Notify", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -380,6 +430,20 @@ func (c *hostServiceClient) ExecuteHTTP(ctx context.Context, in *ExecutionHTTPRe
 type HostServiceServer interface {
 	SetAccountAutomaticState(context.Context, *SetAccountAutomaticStateRequest) (*SetAccountAutomaticStateResponse, error)
 	ReadObservationMetrics(context.Context, *ReadObservationMetricsRequest) (*ReadObservationMetricsResponse, error)
+	// sticky.clear (grant "sticky.clear"): delete a share of the sticky session
+	// bindings that point at an account and could serve (group_id, model), so
+	// those sessions pick an account again on their next request (CONTRACTS
+	// §73.2).
+	ClearStickyBindings(context.Context, *ClearStickyBindingsRequest) (*ClearStickyBindingsResponse, error)
+	// environment (always granted): the resolved environment variables of a
+	// group and optionally an account, for work outside a gateway request
+	// (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
+	GetEnvironment(context.Context, *GetEnvironmentRequest) (*GetEnvironmentResponse, error)
+	// notify.send (grant "notify.send"): the notification channels of the
+	// enabled plugins, and sending through one by its id; the core queues,
+	// deduplicates, rate limits and retries (CONTRACTS §73.4).
+	ListNotificationChannels(context.Context, *ListNotificationChannelsRequest) (*ListNotificationChannelsResponse, error)
+	Notify(context.Context, *NotifyRequest) (*NotifyResponse, error)
 	// Pure local tokenization. No upstream traffic and no billing side effects.
 	CountTokens(context.Context, *CountTokensRequest) (*CountTokensResponse, error)
 	// These callbacks are authorized only by an active Execute/Monitor scope,
@@ -499,6 +563,18 @@ func (UnimplementedHostServiceServer) SetAccountAutomaticState(context.Context, 
 func (UnimplementedHostServiceServer) ReadObservationMetrics(context.Context, *ReadObservationMetricsRequest) (*ReadObservationMetricsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadObservationMetrics not implemented")
 }
+func (UnimplementedHostServiceServer) ClearStickyBindings(context.Context, *ClearStickyBindingsRequest) (*ClearStickyBindingsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ClearStickyBindings not implemented")
+}
+func (UnimplementedHostServiceServer) GetEnvironment(context.Context, *GetEnvironmentRequest) (*GetEnvironmentResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetEnvironment not implemented")
+}
+func (UnimplementedHostServiceServer) ListNotificationChannels(context.Context, *ListNotificationChannelsRequest) (*ListNotificationChannelsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListNotificationChannels not implemented")
+}
+func (UnimplementedHostServiceServer) Notify(context.Context, *NotifyRequest) (*NotifyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Notify not implemented")
+}
 func (UnimplementedHostServiceServer) CountTokens(context.Context, *CountTokensRequest) (*CountTokensResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CountTokens not implemented")
 }
@@ -616,6 +692,78 @@ func _HostService_ReadObservationMetrics_Handler(srv interface{}, ctx context.Co
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(HostServiceServer).ReadObservationMetrics(ctx, req.(*ReadObservationMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_ClearStickyBindings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClearStickyBindingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).ClearStickyBindings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/ClearStickyBindings",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).ClearStickyBindings(ctx, req.(*ClearStickyBindingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_GetEnvironment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEnvironmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).GetEnvironment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/GetEnvironment",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).GetEnvironment(ctx, req.(*GetEnvironmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_ListNotificationChannels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNotificationChannelsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).ListNotificationChannels(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/ListNotificationChannels",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).ListNotificationChannels(ctx, req.(*ListNotificationChannelsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_Notify_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NotifyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).Notify(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/Notify",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).Notify(ctx, req.(*NotifyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1066,6 +1214,22 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReadObservationMetrics",
 			Handler:    _HostService_ReadObservationMetrics_Handler,
+		},
+		{
+			MethodName: "ClearStickyBindings",
+			Handler:    _HostService_ClearStickyBindings_Handler,
+		},
+		{
+			MethodName: "GetEnvironment",
+			Handler:    _HostService_GetEnvironment_Handler,
+		},
+		{
+			MethodName: "ListNotificationChannels",
+			Handler:    _HostService_ListNotificationChannels_Handler,
+		},
+		{
+			MethodName: "Notify",
+			Handler:    _HostService_Notify_Handler,
 		},
 		{
 			MethodName: "CountTokens",

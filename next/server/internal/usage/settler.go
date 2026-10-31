@@ -63,7 +63,10 @@ type TxLedger interface {
 // Options tune the settler; zero values take defaults.
 type Options struct {
 	// CanRetry gates new background retry batches; queued request usage still flushes.
-	CanRetry      func() bool
+	CanRetry func() bool
+	// Environment overrides the task timeout and the poll failure limit per
+	// group and account (CONTRACTS §73.3); nil keeps the reconcile settings.
+	Environment   core.EnvironmentResolver
 	QueueSize     int           // default 10000
 	Workers       int           // default 4
 	BatchSize     int           // default 200

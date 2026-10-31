@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package sub2api.plugin.v1;
+
+option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;pluginv1";
+
+// NotificationService is served by a plugin declaring notification channels
+// ("notify.channel.v1", CONTRACTS §73.4). The core calls it from its delivery
+// worker, at least once per notification: a provider that must not send twice
+// keys on DeliverNotificationRequest.id.
+service NotificationService {
+  rpc DeliverNotification(DeliverNotificationRequest) returns (DeliverNotificationResponse);
+}
+
+message DeliverNotificationRequest {
+  int64 id = 1;
+  // A channel the plugin declares.
+  string channel = 2;
+  repeated string recipients = 3;
+  string subject = 4;
+  // Plain text.
+  string body = 5;
+  // info | warning | critical
+  string severity = 6;
+  // The plugin key that sent it, or "core".
+  string source = 7;
+  // 1 on the first try.
+  int32 attempt = 8;
+}
+
+// An error status is retried with backoff; a response is final.
+message DeliverNotificationResponse {
+  // Non-empty: the provider will never deliver it (a refused address, for
+  // example); the core records the reason and does not retry.
+  string rejected = 1;
+}

@@ -5185,3 +5185,151 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 先发核心（72.2），再发插件 0.2.0（用 `sup2api-plugins-2026` 签名）。
   - 内置插件随核心的 builtin 目录重签，两个节点都要更新。
   - 迁移脚本在插件的 `migrations/`（`0003_*` 起），必须幂等，只加有默认值的列。
+
+## 73. 动态权重 dynweight 与它需要的核心能力（2026-10-31，用户要求参照 new-api codingplus 的动态权重迁移）
+
+new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_weight*.go`）。sup2api 把它拆成两部分：
+
+- **核心**提供通用能力：观测字段、粘性会话清理、环境变量、通知。任何插件都能用，与动态权重无关。
+- **插件 `dynweight`** 负责计数、判定、调权、通知内容和界面。
+
+用户确定的取舍：
+
+- 做成插件。
+- 模型维度用映射前的客户端模型。
+- `affinity_clear` 一期就做。
+- 通知走核心通知架构，邮件是一个插件。
+- new-api 里和动态权重混在一起的"变量"拆出来，由核心提供，叫**环境变量**。
+
+### 73.1 请求观测的新字段（`RequestObservation`）
+
+- `group_id`（26）：请求所在分组。
+- `local_failure`（27）：这次失败不怪账号。来源是平台插件的 `ClassifyError` 判为 local_failure，核心在本地转交响应时出错（例如缓冲响应的临时文件写失败），或者失败不是上游失败（错误类型不是 `upstream_error`，例如账号不可用、资源准备失败）。上游的错误响应读不完整（连接被重置、卡住）仍算上游失败。WebSocket 会话的每一轮同样按这三条判断。健康统计应把它排除。
+- `upstream_status_code`（28）：上游对这次尝试回的状态码。上游没有响应时为 0。客户端看到的 `status_code` 可能经过映射，也可能是合成的 502，所以健康统计按这个字段算。流式响应开始时就记下，上游回 200 以外的状态也照记。
+
+### 73.2 清理粘性会话（`HostService.ClearStickyBindings`，Host API 8，授权 `sticky.clear`）
+
+- **请求**：`{account_id, group_id, model, percent 1..100, salt}`。删除指向该账号、且可能服务这个（分组、客户端模型）的粘性绑定，删其中 `percent` 的比例。
+  - 键里没有分组或模型维度的绑定，按两者都匹配处理。
+  - 同一个 `salt` 选中的是同一批绑定，换一个 `salt` 选中另一批。
+- **回答**：`{matched, cleared}`。
+- **用途**：降权后把一部分会话放到别的账号上，避免被粘性会话绑死。
+
+### 73.3 环境变量
+
+转发用到的通用运行参数由核心声明，插件不能自己声明。
+
+- **值的来源**：按 账号 → 分组 → 全局设置 → 进程环境变量 的顺序取，0 或没设置就看下一层。
+- **已声明的变量**（定义见 `core/environment.go`）：
+  - `relay_timeout_seconds`、`response_header_timeout_seconds`、`streaming_idle_timeout_seconds`
+  - `max_request_body_mb`：没有账号层，因为选账号之前就要用到。
+  - `task_timeout_minutes`、`task_poll_max_failures`：只有分组层和账号层，全局层就是对账设置（§8 的 `max_reconcile_age_sec`、`max_poll_failures`），没有进程环境变量。只作用于异步任务；普通预扣条目只按对账设置。
+  - 三个超时只作用于 HTTP 转发；WebSocket 会话是长连接，只用请求体上限（作为单条消息的上限）。
+  - 进程环境变量（`SUB2API_RELAY_TIMEOUT_SECONDS` 等，见声明的 `process_env`）由 `config.Load` 解析，作为全局层的回退；非法（非数字或超出范围）时启动失败。
+- **核心接口**：
+  - `GET /environment/variables`：声明和进程层。
+  - `GET|PUT /settings/environment`：全局层。
+  - 分组层和账号层是 `groups.environment` 和 `accounts.environment` 两列，随分组和账号一起编辑。
+- **插件**：
+  - 网关请求的解析结果在 `RequestMeta.environment`。
+  - 后台任务调用 `HostService.GetEnvironment(group_id, account_id)`，总是授权。
+  - 变量名常量在 SDK 的 `protocol` 包（`protocol.EnvRelayTimeoutSeconds` 等），核心复用同一组常量。
+- **读声明的接口** `GET /environment/variables` 需要 `settings:read`、`group:read` 或 `account:read` 之一（三层编辑器都要用）。
+
+### 73.4 通知
+
+- **渠道由插件提供**：插件声明 `notify.channel.v1`，在 manifest 的 `notifications.channels` 里写 `[{id, label, description, recipient: email|text}]`，并实现 `NotificationChannel.DeliverNotification`。
+  - 渠道 id 全局唯一，冲突时先声明的插件生效。
+  - 内置的 `mailer` 插件提供 `email`，经它设置里的 SMTP 服务器发送。
+  - 渠道 id 和平台 id 一样保留给第一方插件（`email` 只能由 `mailer` 声明），因为渠道的提供方能读到发往该渠道的每条通知。
+  - `mailer` 一封邮件发给全部接收人：任一接收人被 SMTP 以 5xx 拒绝，整条通知按最终失败处理。超时上限 25 秒，低于核心投递调用的 30 秒期限。
+- **发送方只认渠道 id**：持有 `notify.send` 授权的插件调用 `ListNotificationChannels` 和 `Notify{channel, recipients 1..20, subject, body 纯文本, severity info|warning|critical, dedupe_key, dedupe_seconds}`，核心自己发通知也走同一条路。
+  - 业务插件不需要了解是哪个插件在投递。
+- **核心的处理**：
+  - 校验，然后按来源去重：同一个 `dedupe_key` 在窗口内只发一次，默认窗口 600 秒，最长 86400 秒。
+  - 限速：每个来源每 5 分钟最多 20 条。超过返回 `rate_limited`。
+  - 写入 `notifications` 表排队，worker 每次领取一条投递，避免慢的 SMTP 让同批其他行的租约过期而被别的节点重复发送。失败退避重试，从 30 秒到 1 小时，最多 8 次；节点关闭打断的投递不计次数。记录保留 30 天。
+  - 控制台的测试通知以 `core:test` 为来源，不占核心通知的限速额度。
+- **控制台**：`GET /notifications/channels`、`GET /notifications`，以及 `POST /notifications/test`（需要 `settings:manage`）。
+
+### 73.5 dynweight 插件
+
+#### 能力与授权
+
+- **能力**：`gateway.observe.v1`（`attempt_finished`，`{"types":"all"}`）、`scheduler.rank.v1`（order 100，50 ms）、`app.jobs.v1`、`app.broadcast.v1`、`http.routes.v1`。
+- **授权**：`sticky.clear`、`notify.send`（可选）、`db.schema`（`plg_dynweight`）、`jobs`、`broadcast`、`routes.admin`、`ui.menu`、`ui.native`。
+- **只安装不启用**（`BUILTIN_PLUGINS_INSTALL_ONLY`）：启用后每次调度都会调用它，所以要由管理员有意打开。
+
+#### 计数
+
+- **计数单位**是（账号、分组、客户端模型）三元组，下文叫"键"。
+- **窗口**：每个账号的窗口相位不同，`WindowStart` 用账号 id 乘 7919 错开。这样各账号的评估不会挤在同一时刻。
+- **什么算一个样本**：
+  - 只统计 `attempt_finished`，且分组大于 0、模型非空。
+  - 客户端取消和 `local_failure` 不算。
+  - 失败按 `upstream_status_code` 分桶。传输失败落在 0 桶，任何豁免都不覆盖它。
+  - 只有成功的尝试有耗时（与 new-api 一致，失败只计入错误率）：成功流式请求的首字耗时 = 首个流事件 − 尝试开始，成功请求的整次耗时 = 结束 − 开始。
+- **汇总**：各节点先在内存里聚合，每秒按键排序批量 upsert 到 `obs`（排序避免多节点互相死锁）。写失败的计数放回内存，下次再写。内存中待写的键最多 50000 个，超出的样本丢弃并计数。
+
+#### 判定与调权（`internal/rules`，从 new-api 内核忠实移植）
+
+- **规则**：
+  - 条件形如"指标 运算 值"。指标有 `error_rate`、`ttfb` Pp、`latency` Pp、`weight`。
+  - 条件之间用 and/or 连接，and 先结合。
+  - 一个窗口里任一 and 组全部为真即算命中。最近 N 个窗口命中 M 次即触发，触发后清空历史。
+  - 样本不足 `min_samples` 时，向前累积更早的窗口。
+- **策略**：按规则名引用规则，可以是一条规则，也可以是 `{all|any}`，最多嵌套一层。
+  - 动作有 `weight_degrade`、`weight_climb`（`base_percent` / `current_percent` / `fixed`）和 `affinity_clear`（percent）。
+  - 可以设冷却时间。
+- **配置分层**：
+  - 全局层。
+  - 分组层整体替换全局层，但总开关仍以全局为准。分组层与 new-api 一样叠在出厂默认层上：没写的字段取默认值，`enabled` 不写即为开启。
+  - 账号覆盖可以改开关、豁免状态码和权重下限。
+  - 和 new-api 的差别：豁免状态码只在层上配置，规则上不能单独配；保存时除了"有降权没有回升"，还多一条警告：没有引用权重条件的回升策略且下限为 0 时，降到 0 的权重不会自己恢复。
+- **评估任务**：`evaluate` 每 10 秒跑一次。每个调度槽只有一个节点执行，但任务锁按槽加，超时（60 秒）长于间隔，相邻两次运行可能重叠。
+  - 先 flush，再逐键运行 `rules.Evaluate`。
+  - 状态写回时用 `gen` 做 CAS：重叠的运行或并发的重置只有一方写入，输掉的一方不记事件、不通知、不清理粘性会话，所以每个（键、窗口）恰好生效一次。正确性靠 CAS，不靠任务锁。
+  - 全局关闭时照常运行：已降权的键按"不调整"钉回基准（规则历史清空，消费截止保留），重新开启后从基准开始，已评估过的窗口不再消费。
+  - 记录事件，发送通知，按动作清理粘性会话。某个键失败不影响其他键，已写入状态的键的事件照常记录，任务最后报告失败数。
+  - 有效权重有变化时广播 `dynweight.weights`，各节点重新加载快照。快照里只有不在基准上的键。
+- **基准权重**：从 `RankCandidate` 学到（账号、分组）的权重，写入 `bases`。
+  - 账号权重被修改后，键的历史重置，事件原因记为 `base_mismatch`。
+  - 规则修改后清空历史、保留当前权重，事件原因记为 `rules_change`。
+- **规模**：评估任务每次读入全部状态和保留期内的计数，`/status` 在内存中分页；适合数万个键以内。
+- **基准取自排在前面的排序器之后**：dynweight 记录的是它收到的候选权重。若以后有 order 更小的排序器改权重，dynweight 会把改后的值当基准，键会因 `base_mismatch` 反复重置；这类排序器应排在 dynweight 之后。
+- **调度**：`RankAccounts` 只在快照里的基准等于候选的当前权重时，才把权重换成有效权重。有效权重四舍五入后限制在 0..1000，0 表示排除这个账号；优先级原样返回。
+  - 插件出错或超时时放行（fail-open），按原权重调度。
+- **清理任务**：`cleanup` 每小时跑一次，删除以下数据：
+  - 过期的 `obs`；
+  - 30 天前的 `events`；
+  - 闲置的状态；
+  - 7 天没见过的（账号、分组）及其状态。
+
+#### 通知
+
+- **何时发送**：降权、开始回升、恢复到基准、从 0 复活。
+- **配置**：在 dynweight 的配置里选渠道和接收人，语言可选 zh 或 en。保存时会校验渠道确实存在。
+- **级别**：降到 0 为 critical，其他降权为 warning，其余为 info。
+- **去重**：去重键是 sha1(账号|分组|模型|类型|窗口起点)，窗口 3600 秒。
+- **失败处理**：发送失败只写日志，不影响评估。
+
+#### 接口（`/api/v1/p/dynweight/*`，读需要 `dynweight:read`，写需要 `dynweight:manage`）
+
+| 接口 | 说明 |
+| --- | --- |
+| `GET /config` | 从数据库读，返回 `{config, version}` |
+| `PUT /config` | 提交 `{config, version}`。校验失败返回 400，渠道不存在返回 400，版本冲突返回 409。成功时回 `warnings`，例如有降权却没有回升策略 |
+| `GET /defaults` | 默认的层，包括默认规则和策略 |
+| `GET /channels` | 可选的通知渠道 |
+| `GET /status?account_id&group_id&model&degraded=1` | 各键状态，按 有效/基准 比值升序，分页 |
+| `GET /events?account_id&group_id&model&kind` | 权重事件，分页 |
+| `POST /reset {account_id?, group_id?, model?}` | 至少指定账号或分组。匹配的键按最近一个已结束窗口写入重置标记，并记录 `reset` 事件 |
+| `GET /weights?account_ids=1,2` | 账号列表的权重组件用，最多 500 个 id。回答本节点快照中各账号已降权键的数量、最低有效权重和基准 |
+
+#### 界面（`ui/native`，只用 `@sub2api/ui` 和 `@sub2api/host`）
+
+- **菜单**：网关分组下的"动态权重"，有三个标签页：
+  - 有效权重：筛选、单键重置、按筛选结果批量重置、跳转到该键的事件。
+  - 权重事件。
+  - 配置：全局层、分组层、账号覆盖、通知，规则和策略都可以可视化编辑。
+- **账号列表**：`account.list.weight` 插槽在权重下方显示"动态 N"。同一帧内所有行的请求合并成一次 `/weights`。

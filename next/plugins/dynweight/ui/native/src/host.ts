@@ -1,0 +1,268 @@
+import type { PluginHost, UseListResult } from '@sub2api/host'
+import type { SelectOption, Tone } from '@sub2api/ui'
+
+// Plugin-scoped host handed to register(); shared by all dynweight components.
+// All API shapes (CONTRACTS §73.5) live in this file.
+let host: PluginHost | null = null
+
+export function setHost(h: PluginHost | null) {
+  host = h
+}
+
+export function useDwHost(): PluginHost {
+  if (!host) throw new Error('dynweight UI used before register(host)')
+  return host
+}
+
+/** Manifest userPermission (host.can prefixes it with plugin.dynweight:). */
+export function canManage(): boolean {
+  return useDwHost().can('dynweight:manage')
+}
+
+const api = () => useDwHost().pluginApi
+
+// ------------------------------------------------------------------ config
+
+export type Metric = 'error_rate' | 'ttfb' | 'latency' | 'weight'
+export type Op = 'gt' | 'gte' | 'lt' | 'lte'
+export type WeightMode = 'base_percent' | 'current_percent' | 'fixed'
+export type ActionType = 'weight_degrade' | 'weight_climb' | 'affinity_clear'
+
+export interface Condition {
+  join?: 'and' | 'or'
+  metric: Metric
+  p?: number
+  op: Op
+  value: number
+}
+
+export interface Rule {
+  name: string
+  scope?: '' | 'all' | 'stream' | 'non_stream'
+  enabled?: boolean
+  conditions: Condition[]
+  periods: number
+  hit_periods: number
+}
+
+/** A rule name, or {all: [...]} / {any: [...]} (one level of nesting). */
+export type When = string | { all: When[] } | { any: When[] }
+
+export interface Action {
+  type: ActionType
+  mode?: WeightMode
+  value?: number
+  percent?: number
+}
+
+export interface Strategy {
+  name: string
+  enabled?: boolean
+  when: When | null
+  actions: Action[]
+  cooldown_seconds?: number
+}
+
+export interface Layer {
+  enabled: boolean
+  window_seconds: number
+  min_samples: number
+  exempt_status_codes: string
+  min_weight_mode: 'base_percent' | 'fixed'
+  min_weight: number
+  rules: Rule[]
+  strategies: Strategy[]
+}
+
+export interface AccountOverride {
+  enabled?: boolean
+  exempt_status_codes?: string
+  min_weight_mode?: 'base_percent' | 'fixed'
+  min_weight?: number
+}
+
+export interface Notify {
+  enabled: boolean
+  channel: string
+  recipients: string[]
+  language: 'zh' | 'en'
+}
+
+export interface Config extends Layer {
+  groups: Record<string, Layer> | null
+  accounts: Record<string, AccountOverride> | null
+  notify: Notify
+}
+
+export interface ConfigBody {
+  config: Config
+  version: number
+  warnings?: string[]
+}
+
+export interface Channel {
+  id: string
+  plugin: string
+  label: Record<string, string>
+  description?: Record<string, string>
+  recipient: string
+}
+
+export const fetchConfig = () => api().get<ConfigBody>('/config')
+export const fetchDefaults = () => api().get<Layer>('/defaults')
+export const saveConfig = (body: { config: Config; version: number }) => api().put<ConfigBody>('/config', body)
+
+export async function fetchChannels(): Promise<Channel[]> {
+  const r = await api().get<Channel[] | null>('/channels')
+  return Array.isArray(r) ? r : []
+}
+
+// ------------------------------------------------------------------ status / events
+
+/** Key filter of the status and events tabs, as typed in the form. */
+export interface Filter {
+  account_id: string
+  group_id: string
+  model: string
+}
+
+export const emptyFilter = (): Filter => ({ account_id: '', group_id: '', model: '' })
+
+/** Applies a query to a useList; the same query reloads instead. */
+export function applyQuery(list: UseListResult<unknown>, next: Record<string, string>) {
+  if (Object.entries(next).every(([k, v]) => list.filters[k] === v)) list.reload()
+  else Object.assign(list.filters, next)
+}
+
+/** Query of a filter, trimmed. */
+export const filterQuery = (f: Filter): Filter => ({ account_id: f.account_id.trim(), group_id: f.group_id.trim(), model: f.model.trim() })
+
+export interface RuleResult {
+  name: string
+  hit: boolean
+  fired: boolean
+  samples: number
+  lookback: number
+}
+
+/** A (account, group, model) key; 0 / '' widen a reset to every value. */
+export interface Key {
+  account_id: number
+  group_id: number
+  model: string
+}
+
+export interface KeyStatus extends Key {
+  account_name: string
+  base: number
+  effective: number
+  adjusting: boolean
+  reset: boolean
+  verdict: '' | 'bad' | 'good' | 'neutral'
+  last_change: string
+  changed_at: number
+  eval_window: number
+  total: number
+  fail: number
+  lookback: number
+  recent: { windows: number; total: number; fail: number }
+  rules: RuleResult[]
+}
+
+export interface WeightEvent {
+  id: number
+  created_at: string
+  account_id: number
+  group_id: number
+  model: string
+  kind: string
+  reason: string
+  from: number
+  to: number
+  rules: string[] | null
+  detail: Record<string, unknown> | null
+}
+
+/** Puts the keys of an account and/or group (and model) back to their base. */
+export const resetWeights = ({ account_id, group_id, model }: Key) => api().post<{ reset: number }>('/reset', { account_id, group_id, model })
+
+// ------------------------------------------------------------------ account list slot
+
+export interface AccountWeight {
+  degraded: number
+  lowest: number
+  base: number
+}
+
+// The account list renders the slot once per row: ids asked for in the same
+// tick are fetched in one GET /weights.
+type Waiters = Map<number, Array<(w: AccountWeight | null) => void>>
+let pending: Waiters | null = null
+
+export function loadAccountWeight(accountId: number): Promise<AccountWeight | null> {
+  return new Promise((resolve) => {
+    if (!pending) {
+      pending = new Map()
+      queueMicrotask(flushWeights)
+    }
+    pending.set(accountId, [...(pending.get(accountId) ?? []), resolve])
+  })
+}
+
+async function flushWeights() {
+  const batch: Waiters = pending ?? new Map()
+  pending = null
+  let weights: Record<string, AccountWeight> = {}
+  try {
+    weights = (await api().get<Record<string, AccountWeight> | null>('/weights', { account_ids: [...batch.keys()].join(',') })) ?? {}
+  } catch {
+    /* the slot is optional */
+  }
+  for (const [id, waiters] of batch) waiters.forEach((resolve) => resolve(weights[id] ?? null))
+}
+
+// ------------------------------------------------------------------ helpers
+
+/** Human-readable message of a failed call (ApiError is an Error), else `fallback`. */
+export function errorMessage(e: unknown, fallback: string): string {
+  return e instanceof Error && e.message ? e.message : fallback
+}
+
+/** Integer effective weight, as the scheduler uses it. */
+export const weightOf = (w: number) => Math.min(1000, Math.max(0, Math.floor(w + 0.5)))
+
+/** Tone of an effective weight against its base. */
+export function weightTone(eff: number, base: number): Tone {
+  const w = weightOf(eff)
+  if (w >= base) return 'success'
+  return w === 0 ? 'danger' : 'warning'
+}
+
+export function eventTone(kind: string): Tone {
+  switch (kind) {
+    case 'weight_down':
+      return 'warning'
+    case 'weight_up_start':
+    case 'weight_revived':
+      return 'info'
+    case 'weight_restored':
+      return 'success'
+    case 'affinity_cleared':
+      return 'accent'
+  }
+  return 'gray'
+}
+
+/** Options of an enum whose labels are messages under `group`. */
+export function enumOptions(group: string, values: readonly string[]): SelectOption[] {
+  const t = useDwHost().t
+  return values.map((v) => ({ value: v, label: t(`${group}.${v}`) }))
+}
+
+export const metrics: readonly Metric[] = ['error_rate', 'ttfb', 'latency', 'weight']
+export const percentileMetric = (m: Metric) => m === 'ttfb' || m === 'latency'
+export const opsOf = (m: Metric): Op[] => (percentileMetric(m) ? ['gte', 'lt'] : ['gt', 'gte', 'lt', 'lte'])
+export const eventKinds = ['weight_down', 'weight_up_start', 'weight_restored', 'weight_revived', 'affinity_cleared', 'reset'] as const
+
+/** Deep copy of a JSON value. */
+export const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T

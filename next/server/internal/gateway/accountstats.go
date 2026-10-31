@@ -10,6 +10,10 @@ import (
 )
 
 func (c *call) observeRequest(phase string, rec *core.UsageRecord) {
+	c.publishObservation(phase, rec, false)
+}
+
+func (c *call) publishObservation(phase string, rec *core.UsageRecord, localFailure bool) {
 	if c.g.d.Observations == nil || rec == nil || rec.AccountID == nil || c.ep.TaskSubmit() || c.ep.TaskQuery() {
 		return
 	}
@@ -19,13 +23,13 @@ func (c *call) observeRequest(phase string, rec *core.UsageRecord) {
 		id = rec.RequestID + ":" + phase
 	}
 	if phase == observation.ResponseStarted && c.observationResponseAt.IsZero() {
-		c.observationResponseAt = c.g.now()
+		c.observationResponseAt, c.observationUpstreamCode = c.g.now(), rec.StatusCode
 	}
 	v := &pluginv1.RequestObservation{Id: id, RequestId: rec.RequestID, AttemptId: attempt, Phase: phase, AccountId: *rec.AccountID,
 		AccountPluginKey: rec.PluginKey, Model: truncateUTF8(rec.Model, 256), UpstreamModel: truncateUTF8(rec.UpstreamModel, 256), Protocol: rec.Protocol,
 		Stream: rec.Stream, OccurredAtUnixMs: c.g.now().UnixMilli(), StartedAtUnixMs: c.start.UnixMilli(), Revision: 1,
-		Success: rec.Success && !c.statsCanceled, Canceled: c.statsCanceled, StatusCode: int32(rec.StatusCode), ErrorType: truncateUTF8(rec.ErrorType, 128), NodeId: rec.NodeID,
-		UsagePending: rec.Reservation != nil || rec.ReservationDropped != "" || (phase != observation.UsageFinalized && c.usage != nil)}
+		LocalFailure: localFailure, Success: rec.Success && !c.statsCanceled, Canceled: c.statsCanceled, StatusCode: int32(rec.StatusCode), ErrorType: truncateUTF8(rec.ErrorType, 128), NodeId: rec.NodeID,
+		UsagePending: rec.Reservation != nil || rec.ReservationDropped != "" || (phase != observation.UsageFinalized && c.usage != nil), GroupId: rec.GroupID}
 	if !c.statsCompletedAt.IsZero() {
 		v.CompletedAtUnixMs = c.statsCompletedAt.UnixMilli()
 	}
@@ -34,6 +38,7 @@ func (c *call) observeRequest(phase string, rec *core.UsageRecord) {
 	}
 	if !c.observationResponseAt.IsZero() {
 		v.ResponseStartedAtUnixMs = c.observationResponseAt.UnixMilli()
+		v.UpstreamStatusCode = int32(c.observationUpstreamCode)
 	}
 	if phase == observation.FirstStreamEvent && c.observationFirstStreamAt.IsZero() {
 		c.observationFirstStreamAt = c.g.now()
@@ -70,7 +75,7 @@ func (c *call) startObservationAttempt(ref *core.AccountRef) {
 		return
 	}
 	c.observationAttemptAt = c.g.now()
-	c.observationResponseAt, c.observationFirstStreamAt = time.Time{}, time.Time{}
+	c.observationResponseAt, c.observationFirstStreamAt, c.observationUpstreamCode = time.Time{}, time.Time{}, 0
 	rec := *c.rec
 	rec.AccountID, rec.PluginKey, rec.UpstreamModel = &ref.ID, ref.PluginKey, ref.MapModel(c.model)
 	c.observeRequest(observation.AttemptStarted, &rec)
@@ -82,10 +87,19 @@ func (c *call) observeAttemptResult(ref *core.AccountRef, result attemptResult) 
 	}
 	rec := *c.rec
 	rec.AccountID, rec.PluginKey = &ref.ID, ref.PluginKey
+	local := false
 	if result.err != nil {
 		rec.Success, rec.StatusCode, rec.ErrorType = false, result.err.Status, result.err.RecordType
+		local = isLocalFailure(result.err.LocalFailure, result.err.RecordType)
 	}
-	c.observeRequest(observation.AttemptFinished, &rec)
+	c.publishObservation(observation.AttemptFinished, &rec, local)
+}
+
+// isLocalFailure tells whether a failed attempt is not the account's fault
+// (CONTRACTS §73.1): it was flagged so, or it is not an upstream failure -
+// the others happen before or beside the upstream call.
+func isLocalFailure(flagged bool, errType string) bool {
+	return flagged || errType != errTypeUpstream
 }
 
 func addObservationTokens(event *pluginv1.RequestObservation, tokens core.UsageTokens) bool {

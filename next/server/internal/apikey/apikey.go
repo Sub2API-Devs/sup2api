@@ -177,10 +177,12 @@ type cached struct {
 	RateMultiplier  string     `json:"rate_multiplier,omitempty"`
 	ModelAllowlist  []string   `json:"model_allowlist,omitempty"`
 	ModelFilterMode string     `json:"model_filter_mode,omitempty"`
-	GroupAvailable  bool       `json:"group_available,omitempty"`
-	AllowedIPs      []string   `json:"allowed_ips"`
-	KeyLimits       core.KeyLimits
-	KeyQuota        core.KeyQuota
+	// GroupEnvironment is the group layer of the environment (§73.3).
+	GroupEnvironment core.EnvironmentValues `json:"group_environment,omitempty"`
+	GroupAvailable   bool                   `json:"group_available,omitempty"`
+	AllowedIPs       []string               `json:"allowed_ips"`
+	KeyLimits        core.KeyLimits
+	KeyQuota         core.KeyQuota
 }
 
 // Authenticate resolves a raw client key into a principal.
@@ -237,6 +239,7 @@ func (s *Service) Authenticate(ctx context.Context, rawKey string) (*core.APIKey
 			RateMultiplier:  rate,
 			ModelAllowlist:  allow,
 			ModelFilterMode: e.ModelFilterMode,
+			Environment:     e.GroupEnvironment,
 		},
 	}, nil
 }
@@ -246,7 +249,7 @@ func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 	var rate string
 	err := s.db.Pool.QueryRow(ctx, `SELECT k.id, k.user_id, k.status, k.expires_at,
 			(u.status = 'active' AND u.deleted_at IS NULL),
-			g.id, g.name, g.status, g.rate_multiplier::text, g.model_allowlist, g.model_filter_mode,
+			g.id, g.name, g.status, g.rate_multiplier::text, g.model_allowlist, g.model_filter_mode, g.environment,
 			(g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id)), k.allowed_ips,
 			k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used
 		FROM api_keys k
@@ -254,7 +257,7 @@ func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 		JOIN groups g ON g.id = k.group_id
 		WHERE k.key_hash = $1 AND k.deleted_at IS NULL`, hash).Scan(
 		&e.KeyID, &e.UserID, &e.KeyStatus, &e.ExpiresAt, &e.UserActive,
-		&e.GroupID, &e.GroupName, &e.GroupStatus, &rate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupAvailable, &e.AllowedIPs,
+		&e.GroupID, &e.GroupName, &e.GroupStatus, &rate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupEnvironment, &e.GroupAvailable, &e.AllowedIPs,
 		&e.KeyLimits.RPM, &e.KeyLimits.TPM, &e.KeyLimits.Concurrency, &e.KeyQuota.Limit, &e.KeyQuota.Used)
 	switch {
 	case store.IsNoRows(err):

@@ -97,11 +97,7 @@ func (g *Gateway) serveWebSocket(ctx context.Context, cl *call) {
 		slog.InfoContext(ctx, "gateway: websocket upgrade failed", "request_id", cl.rid, "err", err)
 		return
 	}
-	limit := cl.ep.Request.MaxBodyBytes
-	if limit <= 0 {
-		limit = defaultMaxBodyBytes
-	}
-	conn.SetReadLimit(limit)
+	conn.SetReadLimit(cl.bodyLimit())
 	s := &wsSession{g: g, base: cl, client: conn, id: cl.rid}
 	s.run(ctx)
 }
@@ -531,6 +527,7 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 			fields[p] = r
 		}
 	}
+	cl.env = cl.environment(&acc.AccountRef)
 	meta := cl.metaFor(rt)
 	meta.Model = upModel
 	bctx, cancel := context.WithTimeout(ctx, cl.gw.platformTimeout())
@@ -592,6 +589,11 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 			return attemptResult{kind: attemptCanceled, err: canceledErr()}
 		}
 		if resp != nil && resp.StatusCode != http.StatusSwitchingProtocols {
+			// The rejection is the upstream's answer; an accepted
+			// handshake leaves it to the turn's first message.
+			started := *cl.rec
+			started.StatusCode = resp.StatusCode
+			cl.observeRequest(observation.ResponseStarted, &started)
 			var raw []byte
 			if resp.Body != nil {
 				raw, _ = io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
@@ -637,6 +639,7 @@ func (s *wsSession) reuse(ctx context.Context, cl *call) (func(), *gwError) {
 	cl.routes = s.routes
 	cl.session = s.session
 	cl.rec.Attempts = 1
+	cl.env = cl.environment(s.ref)
 	s.recordAccount(cl, s.ref.ID, s.rt)
 	if s.rt.binding.Type.ModelAvailability {
 		refs, err := s.g.d.Accounts.Candidates(ctx, cl.principal.Group.ID, []core.AccountTypeKey{{PluginKey: s.ref.PluginKey, Type: s.ref.Type}})
@@ -715,13 +718,26 @@ func (s *wsSession) recordAccount(cl *call, id int64, rt *typeRoute) {
 // the turn.
 func (s *wsSession) observe(ctx context.Context, t *wsTurn, data []byte) (bool, wsOutcome) {
 	cl := t.cl
+	name := gjson.GetBytes(data, "type").String()
+	// An error event's HTTP status (rate limit, quota, auth) says something
+	// about the account.
+	var status int
+	if name == "error" {
+		status = int(gjson.GetBytes(data, "status").Int())
+	}
 	if cl.rec.FirstTokenMs == 0 {
 		cl.rec.FirstTokenMs = max(1, int(s.g.now().Sub(cl.start)/time.Millisecond))
-		cl.observeRequest(observation.ResponseStarted, cl.rec)
+		// A turn has no status of its own: its first message is the
+		// upstream's answer.
+		started := *cl.rec
+		started.StatusCode = http.StatusOK
+		if status >= 400 {
+			started.StatusCode = status
+		}
+		cl.observeRequest(observation.ResponseStarted, &started)
 		cl.observeRequest(observation.FirstStreamEvent, cl.rec)
 	}
 	t.usage.ApplySSE("", data)
-	name := gjson.GetBytes(data, "type").String()
 	if !terminalEvents[name] {
 		return false, wsOutcome{}
 	}
@@ -735,11 +751,11 @@ func (s *wsSession) observe(ctx context.Context, t *wsTurn, data []byte) (bool, 
 		}
 		return true, wsOutcome{status: http.StatusBadGateway, errType: errTypeUpstream, msg: "upstream response failed: " + msg}
 	}
-	// An error event. One with an HTTP status (rate limit, quota, auth) says
-	// something about the account; the plugin decides what.
-	status := int(gjson.GetBytes(data, "status").Int())
+	// An error event; the plugin decides what its status means.
+	local := false
 	if status >= 400 {
-		cl.classify(ctx, s.rt, s.pacct, status, nil, data, "")
+		res := cl.classify(ctx, s.rt, s.pacct, status, nil, data, "")
+		local = res.err != nil && res.err.LocalFailure
 		if cl.failurePolicy != nil {
 			cl.finishFailureDecision(s.ref, cl.rec.Attempts, "response_committed")
 		}
@@ -751,13 +767,14 @@ func (s *wsSession) observe(ctx context.Context, t *wsTurn, data []byte) (bool, 
 	if msg == "" {
 		msg = "upstream error event"
 	}
-	return true, wsOutcome{status: status, errType: errTypeUpstream, msg: "upstream stream error: " + msg}
+	return true, wsOutcome{status: status, errType: errTypeUpstream, local: local, msg: "upstream stream error: " + msg}
 }
 
 type wsOutcome struct {
 	ok      bool
 	status  int
 	errType string
+	local   bool // ClassifyError's local_failure
 	msg     string
 }
 
@@ -782,7 +799,7 @@ func (s *wsSession) finish(ctx context.Context, t *wsTurn, out wsOutcome) {
 		}
 	}
 	t.release()
-	cl.observeRequest(observation.AttemptFinished, rec)
+	cl.publishObservation(observation.AttemptFinished, rec, !out.ok && isLocalFailure(out.local, out.errType))
 	if id := s.ref; id != nil {
 		cl.countTokens(ctx, id.ID)
 		if rec.Success {

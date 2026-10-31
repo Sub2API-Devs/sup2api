@@ -792,10 +792,16 @@ func TestManualRefundAndRetryOfAnAbandonedEntry(t *testing.T) {
 	rf.svc.ReconcileDue(ctx)
 	id := rf.scalar(`SELECT id::text FROM usage_logs WHERE request_id = 'req-man'`)
 
-	// Reconcile again: the row goes back to "reserved" and becomes due.
+	// Reconcile again: the row goes back to "reserved" and becomes due. A
+	// plain reservation (no async task) keeps the reconcile settings'
+	// deadline whatever the task timeout of its group and account.
+	rf.svc.opts.Environment = fakeEnvironment{}
 	rf.post(rf.user, "/usage/"+id+"/reconcile", 200)
 	if s := rf.scalar(`SELECT billing_status FROM usage_logs WHERE request_id = 'req-man'`); s != StatusReserved {
 		t.Fatalf("billing_status = %s", s)
+	}
+	if s := rf.scalar(`SELECT (deadline_at > now() + interval '6 days')::text FROM pending_settlements`); s != "true" {
+		t.Fatalf("deadline follows the task timeout: %s", s)
 	}
 	if s := rf.scalar(`SELECT state || ' ' || attempts::text FROM pending_settlements`); s != "pending 0" {
 		t.Fatalf("entry = %q", s)

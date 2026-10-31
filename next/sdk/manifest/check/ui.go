@@ -265,7 +265,7 @@ func (v *validator) uiSlots(u *manifest.UI) {
 	for i, s := range u.Slots {
 		f := fmt.Sprintf("ui.slots[%d]", i)
 		switch s.Slot {
-		case "dashboard.widgets", "account.detail.tabs", "account.form.widgets":
+		case "dashboard.widgets", "account.detail.tabs", "account.form.widgets", "account.list.weight":
 		default:
 			v.add(f+".slot", "invalid", "unknown slot %q", s.Slot)
 		}

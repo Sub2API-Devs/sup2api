@@ -28,7 +28,9 @@
 // Native account-form components (manifest form.mode = "native") receive props
 // {modelValue, mode: "create"|"edit", account?, errors} and emit
 // "update:modelValue"; they may expose validate(): boolean | Promise<boolean>.
-// account.detail.tabs / account.form.widgets slot components receive {account}.
+// account.detail.tabs / account.form.widgets / account.list.weight slot
+// components receive {account}; account.list.weight renders once per row of
+// the account list, so it should batch its own requests.
 
 export const BRIDGE_TAG = 1 as const
 

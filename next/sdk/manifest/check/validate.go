@@ -47,6 +47,7 @@ var KnownCapabilities = map[string]bool{
 	manifest.CapMigrationData:     true,
 	manifest.CapSchedulerRank:     true,
 	manifest.CapAppBroadcast:      true,
+	manifest.CapNotifyChannel:     true,
 }
 
 // Resource caps besides the configurable memory cap.
@@ -218,6 +219,7 @@ func Validate(m *manifest.Manifest, files map[string][]byte, opt ValidateOptions
 	v.hooks()
 	v.scheduler()
 	v.observations()
+	v.notifications()
 	v.events()
 	v.jobs()
 	v.database()

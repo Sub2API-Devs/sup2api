@@ -152,7 +152,7 @@ func (s *Service) refreshFromFacts(ctx context.Context, id int64, observed core.
 		return nil
 	}
 	snapshot := cur.lifecycleSnapshot()
-	facts := core.AccountPreparationFacts{SubscriptionType: valueOr(cur.SubscriptionType, ""), AccountEmail: observed.AccountEmail}
+	facts := core.AccountPreparationFacts{SubscriptionType: core.ValueOr(cur.SubscriptionType, ""), AccountEmail: observed.AccountEmail}
 	changedFields := []string{"resource_facts"}
 	if subscriptionChanged {
 		changedFields = []string{"subscription_type"}

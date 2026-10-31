@@ -6,7 +6,9 @@ import { SPageHeader, STabs } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import StickyView from '@/views/sticky/StickyView.vue'
 import BillingSettingsCard from './BillingSettingsCard.vue'
+import EnvironmentSettingsCard from './EnvironmentSettingsCard.vue'
 import GatewaySettingsCard from './GatewaySettingsCard.vue'
+import NotificationsSettingsCard from './NotificationsSettingsCard.vue'
 import FailurePolicySettings from './FailurePolicySettings.vue'
 import OffloadSettingsCard from './OffloadSettingsCard.vue'
 import UpdateSourceCard from './UpdateSourceCard.vue'
@@ -18,6 +20,8 @@ const route = useRoute()
 const TABS = [
   { key: 'billing', perm: 'settings:read', label: 'settings.tabs.billing' },
   { key: 'gateway', perm: 'settings:read', label: 'settings.tabs.gateway' },
+  { key: 'environment', perm: 'settings:read', label: 'settings.tabs.environment' },
+  { key: 'notifications', perm: 'settings:read', label: 'settings.tabs.notifications' },
   { key: 'failure', perm: 'settings:read', label: 'failurePolicy.title' },
   { key: 'sticky', perm: 'sticky:read', label: 'settings.tabs.sticky' },
   { key: 'offload', perm: 'settings:read', label: 'settings.tabs.offload' },
@@ -45,6 +49,8 @@ const active = computed(() => (tabs.value.some((x) => x.key === tab.value) ? tab
       <template v-else-if="active === 'gateway'">
         <GatewaySettingsCard />
       </template>
+      <EnvironmentSettingsCard v-else-if="active === 'environment'" />
+      <NotificationsSettingsCard v-else-if="active === 'notifications'" />
       <FailurePolicySettings v-else-if="active === 'failure'" />
       <StickyView v-else-if="active === 'sticky'" />
       <OffloadSettingsCard v-else-if="active === 'offload'" />

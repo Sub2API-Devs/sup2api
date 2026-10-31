@@ -81,6 +81,8 @@ type GroupInfo struct {
 	RateMultiplier  decimal.Decimal
 	ModelAllowlist  []string // globs; empty = all
 	ModelFilterMode string   // whitelist (default) or blacklist
+	// Environment is the group layer of the environment variables (§73.3).
+	Environment EnvironmentValues
 }
 
 // APIKeyPrincipal is the result of gateway authentication.
@@ -162,6 +164,8 @@ type AccountRef struct {
 	// ModelLimits cap lists of (client) models on top of the account's own
 	// limits (CONTRACTS §68); a model is in at most one list.
 	ModelLimits []ModelLimit
+	// Environment is the account layer of the environment variables (§73.3).
+	Environment EnvironmentValues
 }
 
 // ModelLimit caps the requests of a list of models on one account. The

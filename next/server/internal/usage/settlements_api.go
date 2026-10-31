@@ -79,9 +79,13 @@ func (s *Service) retryReconcile(c *gin.Context) {
 	if !ok {
 		return
 	}
-	cfg := s.reconcileSettings(ctx)
+	cfg, err := s.retryConfig(ctx, id)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	var out *Settlement
-	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
+	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
 		row, entry, err := lockSettlement(ctx, tx, id)
 		if err != nil {
 			return err
@@ -121,6 +125,24 @@ func (s *Service) retryReconcile(c *gin.Context) {
 		return
 	}
 	httpapi.OK(c, out)
+}
+
+// retryConfig is the reconcile config of a retried row, read before its locks
+// are taken: an async task honours the task timeout of its group and account
+// (as at registration); a plain reservation keeps the reconcile settings.
+func (s *Service) retryConfig(ctx context.Context, usageLogID int64) (resolved, error) {
+	cfg := s.reconcileSettings(ctx)
+	var groupID int64
+	var accountID *int64
+	err := s.db.Pool.QueryRow(ctx, `SELECT u.group_id, u.account_id FROM usage_logs u
+		WHERE u.id = $1 AND EXISTS (SELECT 1 FROM async_tasks t WHERE t.usage_log_id = u.id)`, usageLogID).Scan(&groupID, &accountID)
+	switch {
+	case store.IsNoRows(err):
+		return cfg, nil
+	case err != nil:
+		return cfg, err
+	}
+	return s.withEnvironment(ctx, cfg, groupID, accountID), nil
 }
 
 // POST /usage/:id/refund — give a kept reservation back.
@@ -207,8 +229,8 @@ func lockSettlement(ctx context.Context, tx pgx.Tx, usageLogID int64) (*reserved
 	p := &pending{}
 	st := &reservedRowState{p: p}
 	err := tx.QueryRow(ctx, `
-		SELECT request_id, user_id, billing_status, total_cost FROM usage_logs WHERE id = $1 FOR UPDATE`,
-		usageLogID).Scan(&p.RequestID, &p.UserID, &st.status, &st.totalCost)
+		SELECT request_id, user_id, group_id, account_id, billing_status, total_cost FROM usage_logs WHERE id = $1 FOR UPDATE`,
+		usageLogID).Scan(&p.RequestID, &p.UserID, &p.GroupID, &p.AccountID, &st.status, &st.totalCost)
 	if store.IsNoRows(err) {
 		return nil, nil, core.ErrNotFound.WithMessage("usage record not found")
 	}

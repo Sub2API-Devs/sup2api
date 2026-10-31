@@ -52,6 +52,8 @@ type Harness struct {
 	HTTP      pluginv1.HTTPServiceClient
 	Scheduler pluginv1.SchedulerServiceClient
 	Migration pluginv1.MigrationServiceClient
+	// Notification serves notify.channel.v1.
+	Notification pluginv1.NotificationServiceClient
 }
 
 // Start serves p and completes the host handshake. Everything is torn down
@@ -136,6 +138,8 @@ func startPlugin(t testing.TB, p any, opts Options, fh *FakeHost, dialHost func(
 		HTTP:      pluginv1.NewHTTPServiceClient(conn),
 		Scheduler: pluginv1.NewSchedulerServiceClient(conn),
 		Migration: pluginv1.NewMigrationServiceClient(conn),
+
+		Notification: pluginv1.NewNotificationServiceClient(conn),
 	}
 }
 

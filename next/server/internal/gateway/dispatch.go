@@ -401,6 +401,7 @@ func (c *call) attempt(ctx context.Context, ref *core.AccountRef, n int) attempt
 	if rt == nil || rt.binding.Client == nil {
 		return unavailable("account type not enabled", errors.New(ref.PluginKey+"/"+ref.Type))
 	}
+	c.env = c.environment(ref)
 	id := acc.ID
 	c.rec.AccountID = &id
 	c.rec.PluginKey, c.rec.PluginVersion = rt.binding.Plugin.Key, rt.binding.Plugin.Version
@@ -553,6 +554,14 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	// Send. Canceling ctx (client gone) cancels the upstream request.
 	uctx, ucancel := context.WithCancel(ctx)
 	defer ucancel()
+	var relayTimedOut atomic.Bool
+	if total := c.env.Duration(core.EnvRelayTimeoutSeconds); total > 0 {
+		relayTimer := time.AfterFunc(total, func() {
+			relayTimedOut.Store(true)
+			ucancel()
+		})
+		defer relayTimer.Stop()
+	}
 	method := strings.ToUpper(built.GetMethod())
 	if method == "" {
 		method = http.MethodPost
@@ -620,7 +629,11 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		}
 	}
 
-	timer := time.AfterFunc(c.g.headerWait(c.stream), ucancel)
+	headerWait := c.g.headerWait(c.stream)
+	if d := c.env.Duration(core.EnvResponseHeaderTimeoutSeconds); d > 0 {
+		headerWait = d
+	}
+	timer := time.AfterFunc(headerWait, ucancel)
 	if execution != nil {
 		execution.sent = true
 	}
@@ -644,13 +657,19 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			return attemptResult{kind: attemptCanceled, err: canceledErr()}
 		}
 		msg := err.Error()
-		if headerTimedOut {
+		switch {
+		case relayTimedOut.Load():
+			msg = "upstream request exceeded relay_timeout_seconds"
+		case headerTimedOut:
 			msg = "timeout waiting for upstream response headers"
 		}
 		if execution != nil {
 			return execution.classify(ctx, 0, nil, nil, msg)
 		}
 		return c.classify(ctx, rt, pacct, 0, nil, nil, msg)
+	}
+	if idle := c.env.Duration(core.EnvStreamingIdleTimeoutSeconds); idle > 0 && c.stream {
+		resp.Body = newIdleBody(resp.Body, idle, ucancel)
 	}
 	defer resp.Body.Close()
 	if c.g.d.Observations != nil {
@@ -671,7 +690,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 			}
 			e := &gwError{Status: http.StatusBadGateway, Code: "upstream_response_incomplete", RecordType: errTypeUpstream, Message: "Could not read the complete upstream error response"}
 			if execution != nil {
-				execution.localFailure = e
+				execution.unclassified = e
 			}
 			return attemptResult{kind: attemptReturn, err: e}
 		}
@@ -730,21 +749,16 @@ const (
 	defaultCooldown = 60 * time.Second
 )
 
-// classify asks the account type's plugin what an upstream failure means,
-// applies the account effect and decides between failover and returning the
-// error.
+// classify asks the account type's plugin what an upstream failure means
+// and applies the answer. Under a failure policy a transport error (no
+// status) is the policy's alone: there is no answer for the plugin to read.
 func (c *call) classify(ctx context.Context, rt *typeRoute, acct *pluginv1.Account,
 	status int, header http.Header, body []byte, transportErr string) attemptResult {
-	if c.failurePolicy != nil {
-		res := c.classifyFailure(ctx, acct.GetId(), status, header, body, transportErr, rt.conv != nil)
-		if status > 0 {
-			// The policy decides retries and the reply; the plugin still
-			// tells what the answer means for the account (CONTRACTS §69).
-			c.applyPluginAccountState(ctx, acct.GetId(), c.classifyWithPlugin(ctx, rt, acct, status, header, body, transportErr))
-		}
-		return res
+	var cls *pluginv1.ClassifyErrorResponse
+	if status > 0 || c.failurePolicy == nil {
+		cls = c.classifyWithPlugin(ctx, rt, acct, status, header, body, transportErr)
 	}
-	return c.applyClassification(ctx, rt, acct, status, body, transportErr, c.classifyWithPlugin(ctx, rt, acct, status, header, body, transportErr))
+	return c.applyClassification(ctx, rt, acct, status, header, body, transportErr, cls)
 }
 
 // classifyWithPlugin asks the account type's plugin what an upstream failure
@@ -773,9 +787,17 @@ func (c *call) classifyWithPlugin(ctx context.Context, rt *typeRoute, acct *plug
 	return cls
 }
 
-func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, status int, body []byte, transportErr string, cls *pluginv1.ClassifyErrorResponse) attemptResult {
+// applyClassification turns the plugin's classification of an upstream
+// failure into the attempt's result: under a failure policy the policy
+// decides retries and the reply, and the plugin still tells what the answer
+// means for the account (CONTRACTS §69); otherwise the plugin decides.
+func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, status int, header http.Header,
+	body []byte, transportErr string, cls *pluginv1.ClassifyErrorResponse) attemptResult {
 	if c.failurePolicy != nil {
-		res := c.classifyFailure(ctx, acct.GetId(), status, nil, body, transportErr, rt.conv != nil)
+		res := c.classifyFailure(ctx, acct.GetId(), status, header, body, transportErr, rt.conv != nil)
+		if res.err != nil {
+			res.err.LocalFailure = cls.GetLocalFailure()
+		}
 		if status > 0 {
 			c.applyPluginAccountState(ctx, acct.GetId(), cls)
 		}
@@ -791,7 +813,7 @@ func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *plu
 	if clientStatus < 400 || clientStatus > 599 {
 		clientStatus = http.StatusBadGateway
 	}
-	e := &gwError{Status: clientStatus, Type: cls.GetClientErrorType(), Message: cls.GetClientMessage(),
+	e := &gwError{Status: clientStatus, Type: cls.GetClientErrorType(), Message: cls.GetClientMessage(), LocalFailure: cls.GetLocalFailure(),
 		RecordType: errTypeUpstream, Code: clientErrorCode(ctx, cls.GetClientErrorCode(), rt.binding.Plugin.Key)}
 	if rt.conv != nil {
 		// The upstream speaks another protocol: its error body and error

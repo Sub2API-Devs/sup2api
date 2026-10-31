@@ -178,6 +178,14 @@ type AccountRanker interface {
 	RankAccounts(context.Context, *pluginv1.RankAccountsRequest) (*pluginv1.RankAccountsResponse, error)
 }
 
+// NotificationChannel mirrors pluginv1.NotificationServiceServer
+// ("notify.channel.v1", declared in manifest notifications): the plugin
+// delivers the notifications of the channels it declares. Delivery is at least
+// once; an error is retried, a response with `rejected` is final.
+type NotificationChannel interface {
+	DeliverNotification(context.Context, *pluginv1.DeliverNotificationRequest) (*pluginv1.DeliverNotificationResponse, error)
+}
+
 // Migration mirrors pluginv1.MigrationServiceServer ("migration.data.v1").
 // The host calls MigrateData once per rollout, on one node, and records it;
 // a record lost after a successful call makes it run again, so it MUST be

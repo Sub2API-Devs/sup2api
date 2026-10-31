@@ -124,7 +124,7 @@ export const usePluginStore = defineStore('plugins', () => {
     return components[key]?.[name]
   }
 
-  /** Components registered for a slot (dashboard.widgets, account.detail.tabs, account.form.widgets). */
+  /** Components registered for a slot (dashboard.widgets, account.detail.tabs, account.form.widgets, account.list.weight). */
   function slotEntries(slot: string): SlotEntry[] {
     const out: SlotEntry[] = []
     for (const p of uiPlugins.value) {

@@ -1,0 +1,151 @@
+{
+  "apiVersion": 1,
+  "key": "dynweight",
+  "name": { "en": "Dynamic Weight", "zh": "动态权重" },
+  "description": {
+    "en": "Lowers the scheduling weight of an account in a group and model while it fails or slows down, and brings it back once healthy. Each (account, group, client model) is counted per window and judged by configurable rules (error rate, first token and whole attempt percentiles, the weight itself) and strategies (degrade, climb, clear sticky sessions). Turning points can be notified through a core notification channel.",
+    "zh": "账号在某个分组和模型下出错或变慢时降低其调度权重，恢复健康后再逐步抬回。每个（账号、分组、客户端模型）按窗口计数，由可配置的规则（错误率、首字与整次耗时分位、权重本身）和策略（降权、回升、清理粘性会话）判定。权重拐点可经核心通知渠道发送通知。"
+  },
+  "version": "0.1.0",
+  "publisher": "sub2api",
+  "icon": "text:W",
+  "runtime": "grpc",
+  "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
+  "hostCompat": ">=0.1.0 <0.2.0",
+  "hostUICompat": "^3.0",
+
+  "capabilities": [
+    { "id": "gateway.observe.v1" },
+    { "id": "scheduler.rank.v1" },
+    { "id": "app.jobs.v1" },
+    { "id": "app.broadcast.v1" },
+    { "id": "http.routes.v1" }
+  ],
+
+  "observations": { "events": ["attempt_finished"] },
+
+  "scheduler": { "rank": { "order": 100, "timeoutMs": 50 } },
+
+  "jobs": [
+    { "id": "evaluate", "schedule": "@every 10s", "timeoutSec": 60 },
+    { "id": "cleanup", "schedule": "17 * * * *", "timeoutSec": 300 }
+  ],
+
+  "database": { "schema": "plg_dynweight", "migrations": "migrations/" },
+
+  "userPermissions": [
+    {
+      "key": "dynweight:read",
+      "label": { "en": "View dynamic weight", "zh": "查看动态权重" },
+      "description": { "en": "The configuration, the effective weights and the events", "zh": "查看配置、有效权重和事件" }
+    },
+    {
+      "key": "dynweight:manage",
+      "label": { "en": "Manage dynamic weight", "zh": "管理动态权重" },
+      "description": { "en": "Change the configuration and reset effective weights", "zh": "修改配置、重置有效权重" }
+    }
+  ],
+
+  "routes": [
+    { "method": "GET", "path": "/config", "scope": "admin", "permission": "dynweight:read" },
+    { "method": "PUT", "path": "/config", "scope": "admin", "permission": "dynweight:manage" },
+    { "method": "GET", "path": "/defaults", "scope": "admin", "permission": "dynweight:read" },
+    { "method": "GET", "path": "/channels", "scope": "admin", "permission": "dynweight:read" },
+    { "method": "GET", "path": "/status", "scope": "admin", "permission": "dynweight:read" },
+    { "method": "GET", "path": "/events", "scope": "admin", "permission": "dynweight:read" },
+    { "method": "POST", "path": "/reset", "scope": "admin", "permission": "dynweight:manage" },
+    { "method": "GET", "path": "/weights", "scope": "admin", "permission": "dynweight:read" }
+  ],
+
+  "ui": {
+    "menus": [
+      {
+        "id": "dynweight",
+        "section": "gateway",
+        "label": { "en": "Dynamic Weight", "zh": "动态权重" },
+        "icon": "chart",
+        "page": "dashboard",
+        "permission": "dynweight:read",
+        "order": 260
+      }
+    ],
+    "pages": {
+      "dashboard": { "type": "native", "title": { "en": "Dynamic Weight", "zh": "动态权重" }, "component": "DynweightDashboard" }
+    },
+    "slots": [
+      { "slot": "account.list.weight", "component": "DynweightAccountWeight", "permission": "dynweight:read" }
+    ],
+    "native": { "entry": "ui/native/entry.js" }
+  },
+
+  "resources": { "memoryMB": 256, "cpu": 0.25, "maxThreads": 64, "maxOpenFiles": 256 },
+
+  "hostPermissions": [
+    {
+      "id": "gateway.observe",
+      "scope": { "types": "all" },
+      "reason": {
+        "en": "Count the finished attempts of every account (status, first token and duration; no request content)",
+        "zh": "统计所有账号已结束的尝试（状态、首字与耗时，不含请求内容）"
+      }
+    },
+    {
+      "id": "scheduler.rank",
+      "reason": {
+        "en": "Replace the weight of degraded accounts with their effective weight when scheduling",
+        "zh": "调度时用有效权重替换被降权账号的权重"
+      }
+    },
+    {
+      "id": "sticky.clear",
+      "reason": {
+        "en": "Clear a share of the sticky sessions of a degraded account (affinity_clear strategies only)",
+        "zh": "清理被降权账号的一部分粘性会话（仅 affinity_clear 策略）"
+      }
+    },
+    {
+      "id": "notify.send",
+      "optional": true,
+      "reason": {
+        "en": "Notify weight turning points on the channel chosen in the configuration",
+        "zh": "在配置选定的通知渠道上发送权重拐点通知"
+      }
+    },
+    {
+      "id": "db.schema",
+      "reason": {
+        "en": "Store the configuration, the window counters, the states and the events",
+        "zh": "保存配置、窗口计数、状态和事件"
+      }
+    },
+    {
+      "id": "jobs",
+      "reason": {
+        "en": "Evaluate the closed windows every 10 seconds; delete old counters and events hourly",
+        "zh": "每 10 秒评估已关闭的窗口；每小时清理过期的计数和事件"
+      }
+    },
+    {
+      "id": "broadcast",
+      "reason": {
+        "en": "Tell the other nodes to reload the configuration and the effective weights at once",
+        "zh": "通知其他节点立即重新加载配置和有效权重"
+      }
+    },
+    {
+      "id": "routes.admin",
+      "reason": { "en": "Dynamic weight management APIs", "zh": "动态权重管理接口" }
+    },
+    {
+      "id": "ui.menu",
+      "reason": { "en": "Add the \"Dynamic Weight\" menu", "zh": "添加\"动态权重\"菜单" }
+    },
+    {
+      "id": "ui.native",
+      "reason": {
+        "en": "Provide the dynamic weight page and the effective weight in the account list",
+        "zh": "提供动态权重页面，并在账号列表中显示有效权重"
+      }
+    }
+  ]
+}

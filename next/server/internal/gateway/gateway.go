@@ -29,11 +29,15 @@ import (
 // tests: sticky sessions and hook breaker/stats
 // then degrade to no-ops.
 type Deps struct {
-	CCGateway     *ccgateway.Service
-	DB            *store.DB
-	Redis         redis.UniversalClient
-	Bus           core.Bus
-	Node          core.Node
+	CCGateway *ccgateway.Service
+	DB        *store.DB
+	Redis     redis.UniversalClient
+	Bus       core.Bus
+	Node      core.Node
+	// Environment supplies the global layer of the environment variables
+	// (CONTRACTS §73.3); nil leaves only the group, account and process
+	// layers.
+	Environment   core.EnvironmentResolver
 	Registry      core.PluginRegistry
 	Auth          core.APIKeyAuthenticator
 	Pricer        core.Pricer

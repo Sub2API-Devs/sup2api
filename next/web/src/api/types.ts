@@ -132,7 +132,62 @@ export interface Group {
    * accounts (sorted ids). API keys bound to the group can call their endpoints.
    */
   platforms?: string[]
+  /** The group layer of the environment variables (CONTRACTS §73.3). */
+  environment?: EnvironmentValues
   created_at?: string
+}
+
+// ------------------------------------------------------------------ environment variables (CONTRACTS §73.3)
+
+/** A layer an environment variable can be set on. */
+export type EnvironmentLayer = 'global' | 'group' | 'account'
+
+/** The values set on one layer; an absent key follows the next layer. */
+export type EnvironmentValues = Record<string, number>
+
+/** A variable the core declares (GET /environment/variables). */
+export interface EnvironmentVariable {
+  key: string
+  unit: 'seconds' | 'minutes' | 'mb' | 'count'
+  min: number
+  max: number
+  name: LText
+  help: LText
+  layers: EnvironmentLayer[]
+  /** The process environment variable the global layer falls back to; empty without a global layer. */
+  process_env: string
+}
+
+// ------------------------------------------------------------------ notifications (CONTRACTS §73.4)
+
+/** A channel a plugin delivers (GET /notifications/channels). */
+export interface NotificationChannel {
+  id: string
+  plugin_key: string
+  plugin_name: Record<string, string>
+  label: Record<string, string>
+  description: Record<string, string>
+  recipient: 'email' | 'text'
+}
+
+export type NotificationStatus = 'pending' | 'sending' | 'sent' | 'failed'
+
+/** One queued or delivered notification (GET /notifications). */
+export interface NotificationRecord {
+  id: number
+  /** Plugin key, or "core". */
+  source: string
+  channel: string
+  recipients: string[]
+  subject: string
+  body: string
+  severity: 'info' | 'warning' | 'critical'
+  status: NotificationStatus
+  attempts: number
+  last_error: string
+  next_attempt_at: string
+  created_at: string
+  sent_at: string | null
 }
 
 // ------------------------------------------------------------------ platforms (CONTRACTS §13)
@@ -382,6 +437,8 @@ export interface Account {
   spm_limit: number
   /** Limits of lists of client models on top of the account's own (CONTRACTS §68). */
   model_limits?: ModelLimit[]
+  /** The account layer of the environment variables (CONTRACTS §73.3). */
+  environment?: EnvironmentValues
   /** Read-only usage of the last 60 seconds (0 when Redis is unavailable), with one entry per model list. */
   rate_usage?: { rpm: number; tpm: number; sessions?: number; models?: ModelRateUsage[] }
   status: string

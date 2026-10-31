@@ -31,6 +31,9 @@ const (
 	// uses AccountsDefaultListLimit.
 	AccountsMaxListLimit     = 200
 	AccountsDefaultListLimit = 100
+	// ClearStickyBindings bounds its model and salt.
+	ClearStickyBindingsMaxModel = 256
+	ClearStickyBindingsMaxSalt  = 128
 )
 
 // hostServer serves HostService to exactly one plugin instance, so the
@@ -453,6 +456,42 @@ func (h *hostServer) SetAccountAutomaticState(ctx context.Context, in *pluginv1.
 		return nil, toStatus(err)
 	}
 	return out, nil
+}
+
+func (h *hostServer) ClearStickyBindings(ctx context.Context, in *pluginv1.ClearStickyBindingsRequest) (*pluginv1.ClearStickyBindingsResponse, error) {
+	if err := h.require(ctx, "sticky.clear"); err != nil {
+		return nil, err
+	}
+	if in.GetAccountId() <= 0 || in.GetGroupId() <= 0 || in.GetModel() == "" || len(in.GetModel()) > ClearStickyBindingsMaxModel ||
+		in.GetPercent() < 1 || in.GetPercent() > 100 || len(in.GetSalt()) > ClearStickyBindingsMaxSalt {
+		return nil, status.Errorf(codes.InvalidArgument, "account_id, group_id, model (1..%d bytes) and percent (1..100) are required; salt is at most %d bytes",
+			ClearStickyBindingsMaxModel, ClearStickyBindingsMaxSalt)
+	}
+	if h.i.rt.o.Sticky == nil {
+		return nil, status.Error(codes.Unavailable, "sticky bindings unavailable")
+	}
+	matched, cleared, err := h.i.rt.o.Sticky.ClearStickyBindings(ctx, core.StickyClearRequest{
+		AccountID: in.GetAccountId(), GroupID: in.GetGroupId(), Model: in.GetModel(), Percent: int(in.GetPercent()), Salt: in.GetSalt()})
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &pluginv1.ClearStickyBindingsResponse{Matched: matched, Cleared: cleared}, nil
+}
+
+// GetEnvironment needs no grant: the values are operating parameters every
+// plugin is expected to honour, not data (CONTRACTS §73.3).
+func (h *hostServer) GetEnvironment(ctx context.Context, in *pluginv1.GetEnvironmentRequest) (*pluginv1.GetEnvironmentResponse, error) {
+	if in.GetGroupId() < 0 || in.GetAccountId() < 0 {
+		return nil, status.Error(codes.InvalidArgument, "group_id and account_id must not be negative")
+	}
+	if h.i.rt.o.Environment == nil {
+		return nil, status.Error(codes.Unavailable, "environment unavailable")
+	}
+	env, err := h.i.rt.o.Environment.ResolveEnvironment(ctx, in.GetGroupId(), in.GetAccountId())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &pluginv1.GetEnvironmentResponse{Environment: env}, nil
 }
 
 func accountSummary(a core.PluginAccountSummary) *pluginv1.AccountSummary {

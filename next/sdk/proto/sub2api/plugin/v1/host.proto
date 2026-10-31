@@ -15,6 +15,20 @@ import "sub2api/plugin/v1/observation.proto";
 service HostService {
   rpc SetAccountAutomaticState(SetAccountAutomaticStateRequest) returns (SetAccountAutomaticStateResponse);
   rpc ReadObservationMetrics(ReadObservationMetricsRequest) returns (ReadObservationMetricsResponse);
+  // sticky.clear (grant "sticky.clear"): delete a share of the sticky session
+  // bindings that point at an account and could serve (group_id, model), so
+  // those sessions pick an account again on their next request (CONTRACTS
+  // §73.2).
+  rpc ClearStickyBindings(ClearStickyBindingsRequest) returns (ClearStickyBindingsResponse);
+  // environment (always granted): the resolved environment variables of a
+  // group and optionally an account, for work outside a gateway request
+  // (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
+  rpc GetEnvironment(GetEnvironmentRequest) returns (GetEnvironmentResponse);
+  // notify.send (grant "notify.send"): the notification channels of the
+  // enabled plugins, and sending through one by its id; the core queues,
+  // deduplicates, rate limits and retries (CONTRACTS §73.4).
+  rpc ListNotificationChannels(ListNotificationChannelsRequest) returns (ListNotificationChannelsResponse);
+  rpc Notify(NotifyRequest) returns (NotifyResponse);
   // Pure local tokenization. No upstream traffic and no billing side effects.
   rpc CountTokens(CountTokensRequest) returns (CountTokensResponse);
   // These callbacks are authorized only by an active Execute/Monitor scope,
@@ -166,6 +180,33 @@ message SetAccountAutomaticStateResponse {
   string status = 2;
   string reason = 3;
   int64 until_unix = 4;
+}
+
+message ClearStickyBindingsRequest {
+  int64 account_id = 1;
+  // Bindings whose key does not include the group dimension match any group.
+  int64 group_id = 2;
+  // Client model (before account mapping); bindings whose key does not
+  // include the model dimension match any model.
+  string model = 3;
+  // 1..100: share of the matching bindings to delete.
+  int32 percent = 4;
+  // Picks which bindings fall into the share; a different salt picks others.
+  string salt = 5;
+}
+
+message ClearStickyBindingsResponse {
+  int64 matched = 1;
+  int64 cleared = 2;
+}
+
+message GetEnvironmentRequest {
+  int64 group_id = 1;
+  int64 account_id = 2; // 0 = the group alone
+}
+
+message GetEnvironmentResponse {
+  map<string, int64> environment = 1;
 }
 
 message CountTokensRequest {
@@ -484,4 +525,41 @@ message DialResult {
 
 message DialClose {
   string error = 1;          // empty = clean close
+}
+
+message ListNotificationChannelsRequest {}
+
+message NotificationChannel {
+  string id = 1;
+  // The plugin delivering it.
+  string plugin_key = 2;
+  map<string, string> label = 3;
+  map<string, string> description = 4;
+  // email | text
+  string recipient = 5;
+}
+
+message ListNotificationChannelsResponse {
+  repeated NotificationChannel channels = 1;
+}
+
+message NotifyRequest {
+  string channel = 1;
+  // 1..20 recipients in the channel's format.
+  repeated string recipients = 2;
+  string subject = 3;
+  // Plain text.
+  string body = 4;
+  // info (default) | warning | critical
+  string severity = 5;
+  // Optional: a second notification with the same key from the same plugin
+  // within dedupe_seconds is dropped (the first one's id is answered).
+  string dedupe_key = 6;
+  // 0 = 600 seconds; at most 86400.
+  int32 dedupe_seconds = 7;
+}
+
+message NotifyResponse {
+  int64 id = 1;
+  bool deduplicated = 2;
 }

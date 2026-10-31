@@ -3,6 +3,7 @@ package usage
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -114,6 +115,29 @@ func parseBackoff(spec string) []time.Duration {
 		out = append(out, d)
 	}
 	return out
+}
+
+// withEnvironment applies the async task timeout and poll failure limit the
+// environment variables set for the task's group and account (CONTRACTS
+// §73.3) over the reconcile settings, their global layer. A task without an
+// account resolves its group alone. A failed lookup keeps the settings.
+func (s *Service) withEnvironment(ctx context.Context, cfg resolved, groupID int64, accountID *int64) resolved {
+	if s.opts.Environment == nil {
+		return cfg
+	}
+	account := core.ValueOr(accountID, 0)
+	env, err := s.opts.Environment.ResolveEnvironment(ctx, groupID, account)
+	if err != nil {
+		slog.WarnContext(ctx, "usage: resolve environment", "group", groupID, "account", account, "err", err)
+		return cfg
+	}
+	if d := env.Duration(core.EnvTaskTimeoutMinutes); d > 0 {
+		cfg.maxAge = d
+	}
+	if n := env[core.EnvTaskPollMaxFailures]; n > 0 {
+		cfg.maxPollFailures = int(n)
+	}
+	return cfg
 }
 
 // clampDeadline turns the plugin's stated deadline into one this deployment

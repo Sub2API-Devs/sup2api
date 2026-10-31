@@ -59,6 +59,12 @@ type FakeHost struct {
 	// PriceUsageFunc answers PriceUsage; nil answers every model as not
 	// priced ("no_price"). Set it before Start.
 	PriceUsageFunc func(context.Context, *pluginv1.PriceUsageRequest) (*pluginv1.PriceUsageResponse, error)
+	// ClearStickyBindingsFunc, ListNotificationChannelsFunc and NotifyFunc
+	// answer the core calls of the same name; nil returns UNIMPLEMENTED. Set
+	// them before Start.
+	ClearStickyBindingsFunc      func(context.Context, *pluginv1.ClearStickyBindingsRequest) (*pluginv1.ClearStickyBindingsResponse, error)
+	ListNotificationChannelsFunc func(context.Context, *pluginv1.ListNotificationChannelsRequest) (*pluginv1.ListNotificationChannelsResponse, error)
+	NotifyFunc                   func(context.Context, *pluginv1.NotifyRequest) (*pluginv1.NotifyResponse, error)
 	// OnPublish, when set, is called (outside the lock) for every accepted
 	// Publish, e.g. to relay it to another Harness with Harness.Deliver and
 	// simulate a second node. PublishErr, when set, fails every Publish.

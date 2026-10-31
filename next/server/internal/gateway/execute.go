@@ -33,7 +33,7 @@ type gatewayExecution struct {
 	result                   attemptResult
 	raw                      []byte
 	errorBody                *upstreamErrorBody
-	localFailure             *gwError
+	unclassified             *gwError // a failure the core decided before ClassifyError
 	header                   http.Header
 	observed, recorded, sent bool
 	base                     *core.UsageRecord
@@ -81,23 +81,15 @@ func (c *call) executeAttempt(ctx context.Context, rt *typeRoute, acc *core.Acco
 	defer cancel()
 	callbacks := core.ExecutionCallbacks{PrepareTimeout: c.gw.platformTimeout(), FinishTimeout: 15 * time.Second, Forward: x.forwardCallback, Record: x.record, Watch: x.watch}
 	out, err := rt.binding.Client.(core.ExecutePlugin).Execute(ectx, &pluginv1.ExecuteRequest{Request: request}, callbacks)
-	if x.localFailure != nil {
-		return attemptResult{kind: attemptReturn, err: x.localFailure}
+	if x.unclassified != nil {
+		return attemptResult{kind: attemptReturn, err: x.unclassified}
 	}
 	if x.response != nil && x.response.Error != nil {
 		cls := out.GetClassification()
 		if cls == nil {
 			cls = defaultClassification(int(x.response.Error.Status))
 		}
-		var result attemptResult
-		if c.failurePolicy != nil {
-			result = c.classifyFailure(ctx, acct.GetId(), int(x.response.Error.Status), x.header, x.raw, x.response.Error.TransportError, rt.conv != nil)
-			if x.response.Error.Status > 0 {
-				c.applyPluginAccountState(ctx, acct.GetId(), cls)
-			}
-		} else {
-			result = c.applyClassification(ctx, rt, acct, int(x.response.Error.Status), x.raw, x.response.Error.TransportError, cls)
-		}
+		result := c.applyClassification(ctx, rt, acct, int(x.response.Error.Status), x.header, x.raw, x.response.Error.TransportError, cls)
 		if c.ep.TaskSubmit() {
 			result.kind = attemptReturn
 		}
@@ -136,7 +128,10 @@ func (c *call) executeAttempt(ctx context.Context, rt *typeRoute, acc *core.Acco
 				// buffered response cannot be delivered. This return path skips
 				// dispatch's ordinary successful-attempt token accounting.
 				c.countTokens(context.WithoutCancel(ctx), acc.ID)
-				return attemptResult{kind: attemptReturn, err: fromCore(core.ErrUnavailable.WithMessage("upstream response incomplete"), errTypeUpstream)}
+				e := fromCore(core.ErrUnavailable.WithMessage("upstream response incomplete"), errTypeUpstream)
+				// The spool (temp file, size limit) failed here, not the account.
+				e.LocalFailure = x.spool.err != nil
+				return attemptResult{kind: attemptReturn, err: e}
 			}
 			if err := x.spool.publish(); err != nil {
 				slog.WarnContext(ctx, "gateway: committed response delivery failed", "request_id", c.rid, "err", err)

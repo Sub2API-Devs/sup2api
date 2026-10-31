@@ -48,6 +48,9 @@ type call struct {
 	autoDisable   AutoDisableSettings
 	failurePolicy *FailurePolicy
 	failureState  failureState
+	// env is the environment resolved for the current attempt's account
+	// (CONTRACTS §73.3); metaFor hands it to the plugin.
+	env core.Environment
 
 	principal *core.APIKeyPrincipal
 	body      []byte
@@ -139,6 +142,7 @@ type call struct {
 	observationAttemptAt     time.Time
 	observationResponseAt    time.Time
 	observationFirstStreamAt time.Time
+	observationUpstreamCode  int  // status the upstream answered the attempt with, 0 = none yet
 	abortResponse            bool // A committed CCGateway response ended incompletely.
 	errorBodies              []*os.File
 }
@@ -315,13 +319,21 @@ func (c *call) newRecord() *core.UsageRecord {
 	}
 }
 
-func (c *call) readBody() *gwError {
-	limit := c.ep.Request.MaxBodyBytes
-	if limit <= 0 {
-		limit = defaultMaxBodyBytes
+// bodyLimit is the largest client request body (or WebSocket message):
+// max_request_body_mb, else what the endpoint declares, else the default.
+func (c *call) bodyLimit() int64 {
+	if env := c.environment(nil).Bytes(core.EnvMaxRequestBodyMB); env > 0 {
+		return env
 	}
+	if c.ep.Request.MaxBodyBytes > 0 {
+		return c.ep.Request.MaxBodyBytes
+	}
+	return defaultMaxBodyBytes
+}
+
+func (c *call) readBody() *gwError {
 	if c.c.Request.Body != nil {
-		body, err := io.ReadAll(http.MaxBytesReader(c.c.Writer, c.c.Request.Body, limit))
+		body, err := io.ReadAll(http.MaxBytesReader(c.c.Writer, c.c.Request.Body, c.bodyLimit()))
 		if err != nil {
 			var tooBig *http.MaxBytesError
 			if errors.As(err, &tooBig) {
@@ -674,7 +686,7 @@ func boundMeta(in map[string]string) map[string]string {
 // metaFor is meta for an upstream attempt on rt.
 func (c *call) metaFor(rt *typeRoute) *pluginv1.RequestMeta {
 	m := c.meta()
-	m.Protocol = rt.upstream
+	m.Protocol, m.Environment = rt.upstream, c.env
 	return m
 }
 

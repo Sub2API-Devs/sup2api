@@ -1,6 +1,8 @@
 export default {
   description: 'System-wide billing, gateway and scheduling settings.',
   tabs: {
+    notifications: 'Notifications',
+    environment: 'Environment variables',
     billing: 'Billing',
     gateway: 'Gateway',
     sticky: 'Sticky sessions',
@@ -27,6 +29,41 @@ export default {
       unavailable: 'Not ready',
       disabled: 'Disabled'
     }
+  },
+  notifications: {
+    channelsTitle: 'Notification channels',
+    channelsHint: 'Declared and delivered by plugins (the mailer plugin provides "Email", for example). Other plugins and the core send by channel and never need to know the provider.',
+    noChannels: 'No plugin provides a notification channel yet. Enable a notification plugin such as the mailer to see its channels here.',
+    channel: 'Channel',
+    provider: 'Provider',
+    recipientFormat: 'Recipient format',
+    recipient: { email: 'Email address', text: 'Text (interpreted by the plugin)' },
+    testTitle: 'Send a test notification',
+    testHint: 'The core sends a test notification to check a channel. See the delivery record below for the outcome.',
+    recipients: 'Recipients',
+    recipientsHint: 'Separate recipients with commas or spaces, at most 20.',
+    sendTest: 'Send test',
+    testQueued: 'Test notification queued',
+    recordsTitle: 'Delivery record',
+    recordsHint: 'Failed deliveries are retried with backoff, up to 8 times; records are kept for 30 days.',
+    allStatuses: 'All statuses',
+    source: 'Source',
+    subject: 'Subject',
+    attempts: 'try {n}',
+    status: { pending: 'Pending', sending: 'Sending', sent: 'Sent', failed: 'Failed' },
+    severity: { info: 'Info', warning: 'Warning', critical: 'Critical' }
+  },
+  environment: {
+    title: 'Environment variables',
+    subtitle: 'General runtime parameters of forwarding, declared by the core; plugins read the resolved values. Accounts and groups override these; empty follows the next layer (account → group → global → process environment variable). Changes apply to new requests on every node.',
+    groupHint: 'Overrides the global environment variables; empty follows the global value.',
+    accountHint: 'Overrides the group and global environment variables; empty follows the group.',
+    range: 'Range {min}–{max}.',
+    processSet: 'Process environment variable {name} = {value}.',
+    processUnset: 'The process environment variable {name} is the fallback.',
+    follow: 'Follow',
+    followValue: 'Follow ({value})',
+    units: { seconds: 's', minutes: 'min', mb: 'MB', count: 'times' }
   },
   gateway: {
     title: 'Gateway',

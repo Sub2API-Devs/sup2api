@@ -157,32 +157,25 @@ func deletedCleanupFailure(ctx context.Context, id int64, pluginKey string, err 
 	return state
 }
 
-func valueOr[T any](value *T, previous T) T {
-	if value != nil {
-		return *value
-	}
-	return previous
-}
-
 func (in *input) lifecycleSnapshot(current *row, settings *string) *pluginv1.Account {
 	account := current.lifecycleSnapshot()
-	account.Name = valueOr(in.Name, account.Name)
-	account.SettingsJson = valueOr(settings, account.SettingsJson)
+	account.Name = core.ValueOr(in.Name, account.Name)
+	account.SettingsJson = core.ValueOr(settings, account.SettingsJson)
 	properties := account.Properties
-	properties.Status = valueOr(in.Status, properties.Status)
-	properties.Schedulable = valueOr(in.Schedulable, properties.Schedulable)
-	properties.AutoDisable = valueOr(in.AutoDisable, properties.AutoDisable)
-	properties.Priority = int32(valueOr(in.Priority, current.Priority))
-	properties.Weight = int32(valueOr(in.Weight, current.Weight))
-	properties.MaxConcurrency = int32(valueOr(in.MaxConcurrency, current.MaxConcurrency))
-	properties.RpmLimit = int32(valueOr(in.RPMLimit, current.RPMLimit))
-	properties.TpmLimit = valueOr(in.TPMLimit, properties.TpmLimit)
-	properties.SpmLimit = int32(valueOr(in.SPMLimit, current.SPMLimit))
-	properties.Models = valueOr(in.Models, properties.Models)
+	properties.Status = core.ValueOr(in.Status, properties.Status)
+	properties.Schedulable = core.ValueOr(in.Schedulable, properties.Schedulable)
+	properties.AutoDisable = core.ValueOr(in.AutoDisable, properties.AutoDisable)
+	properties.Priority = int32(core.ValueOr(in.Priority, current.Priority))
+	properties.Weight = int32(core.ValueOr(in.Weight, current.Weight))
+	properties.MaxConcurrency = int32(core.ValueOr(in.MaxConcurrency, current.MaxConcurrency))
+	properties.RpmLimit = int32(core.ValueOr(in.RPMLimit, current.RPMLimit))
+	properties.TpmLimit = core.ValueOr(in.TPMLimit, properties.TpmLimit)
+	properties.SpmLimit = int32(core.ValueOr(in.SPMLimit, current.SPMLimit))
+	properties.Models = core.ValueOr(in.Models, properties.Models)
 	if in.AutoModels != nil {
 		properties.AutoModels = in.AutoModels
 	}
-	properties.ModelMapping = valueOr(in.ModelMapping, properties.ModelMapping)
+	properties.ModelMapping = core.ValueOr(in.ModelMapping, properties.ModelMapping)
 	if in.ModelLimits != nil {
 		properties.ModelLimits = core.PluginModelLimits(*in.ModelLimits)
 	}

@@ -58,8 +58,10 @@ type Group struct {
 	Visibility      string   `json:"visibility"`
 	ModelAllowlist  []string `json:"model_allowlist"`
 	ModelFilterMode string   `json:"model_filter_mode"`
-	AccountCount    int64    `json:"account_count"`
-	APIKeyCount     int64    `json:"api_key_count"`
+	// Environment is the group layer of the environment variables (§73.3).
+	Environment  core.EnvironmentValues `json:"environment"`
+	AccountCount int64                  `json:"account_count"`
+	APIKeyCount  int64                  `json:"api_key_count"`
 	// Platforms the group serves: those of its accounts' types (CONTRACTS §13).
 	Platforms []string  `json:"platforms"`
 	CreatedAt time.Time `json:"created_at"`
@@ -82,7 +84,7 @@ type MyGroup struct {
 // no filter).
 func selectGroup(keys string) string {
 	return `SELECT g.id, g.name, g.description, g.status, g.rate_multiplier::text, g.visibility,
-	g.model_allowlist, g.model_filter_mode, g.created_at, g.updated_at,
+	g.model_allowlist, g.model_filter_mode, g.environment, g.created_at, g.updated_at,
 	(SELECT count(*) FROM account_groups ag JOIN accounts a ON a.id = ag.account_id
 	  WHERE ag.group_id = g.id AND a.deleted_at IS NULL AND (` + keys + `::text[] IS NULL OR a.plugin_key = ANY(` + keys + `))),
 	(SELECT count(*) FROM api_keys k WHERE k.group_id = g.id AND k.deleted_at IS NULL)
@@ -93,7 +95,7 @@ func scanGroup(row pgx.Row) (*Group, error) {
 	var g Group
 	var rate string
 	if err := row.Scan(&g.ID, &g.Name, &g.Description, &g.Status, &rate, &g.Visibility,
-		&g.ModelAllowlist, &g.ModelFilterMode, &g.CreatedAt, &g.UpdatedAt, &g.AccountCount, &g.APIKeyCount); err != nil {
+		&g.ModelAllowlist, &g.ModelFilterMode, &g.Environment, &g.CreatedAt, &g.UpdatedAt, &g.AccountCount, &g.APIKeyCount); err != nil {
 		return nil, err
 	}
 	g.RateMultiplier = normRate(rate)
@@ -202,6 +204,8 @@ type groupInput struct {
 	Visibility      *string   `json:"visibility"`
 	ModelAllowlist  *[]string `json:"model_allowlist"`
 	ModelFilterMode *string   `json:"model_filter_mode"`
+	// Environment replaces the group layer as a whole.
+	Environment *core.EnvironmentValues `json:"environment"`
 }
 
 // validate checks the provided fields; create requires name.
@@ -253,6 +257,11 @@ func (in *groupInput) validate(ctx context.Context, create bool) error {
 		}
 		in.ModelAllowlist = &clean
 	}
+	if in.Environment != nil {
+		values, errs := core.ValidateEnvironmentValues(ctx, core.EnvLayerGroup, "environment", *in.Environment)
+		fe = append(fe, errs...)
+		in.Environment = &values
+	}
 	if len(fe) > 0 {
 		return core.InvalidFields(fe...)
 	}
@@ -294,11 +303,12 @@ func (s *Service) create(c *gin.Context) {
 	if in.ModelFilterMode != nil {
 		mode = *in.ModelFilterMode
 	}
+	env := core.ValueOr(in.Environment, core.EnvironmentValues{})
 	allowJSON, _ := json.Marshal(allow)
 	var id int64
-	err := s.db.Pool.QueryRow(ctx, `INSERT INTO groups (name, description, status, rate_multiplier, visibility, model_allowlist, model_filter_mode)
-		VALUES ($1, $2, $3, $4::numeric, $5, $6::jsonb, $7) RETURNING id`,
-		*in.Name, desc, status, rate, vis, string(allowJSON), mode).Scan(&id)
+	err := s.db.Pool.QueryRow(ctx, `INSERT INTO groups (name, description, status, rate_multiplier, visibility, model_allowlist, model_filter_mode, environment)
+		VALUES ($1, $2, $3, $4::numeric, $5, $6::jsonb, $7, $8) RETURNING id`,
+		*in.Name, desc, status, rate, vis, string(allowJSON), mode, env).Scan(&id)
 	if store.IsUniqueViolation(err, "") {
 		httpapi.Fail(c, dupName(ctx))
 		return
@@ -343,8 +353,9 @@ func (s *Service) update(c *gin.Context) {
 		visibility = COALESCE($6, visibility),
 		model_allowlist = COALESCE($7::jsonb, model_allowlist),
 		model_filter_mode = COALESCE($8, model_filter_mode),
+		environment = COALESCE($9, environment),
 		updated_at = now()
-		WHERE id = $1`, id, in.Name, in.Description, in.Status, in.RateMultiplier, in.Visibility, allowJSON, in.ModelFilterMode)
+		WHERE id = $1`, id, in.Name, in.Description, in.Status, in.RateMultiplier, in.Visibility, allowJSON, in.ModelFilterMode, in.Environment)
 	if store.IsUniqueViolation(err, "") {
 		httpapi.Fail(c, dupName(ctx))
 		return

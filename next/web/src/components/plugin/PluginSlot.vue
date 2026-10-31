@@ -3,7 +3,7 @@ import { computed, onErrorCaptured, ref } from 'vue'
 import { usePluginStore } from '@/stores/plugins'
 
 // Renders every native plugin component registered for `name`
-// (dashboard.widgets | account.detail.tabs | account.form.widgets).
+// (dashboard.widgets | account.detail.tabs | account.form.widgets | account.list.weight).
 // A failing plugin component is hidden instead of breaking the page.
 const props = defineProps<{ name: string; props?: Record<string, any>; itemClass?: string }>()
 const plugins = usePluginStore()

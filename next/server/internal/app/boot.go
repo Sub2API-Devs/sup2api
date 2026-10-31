@@ -18,6 +18,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ccgateway"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/cluster"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/environment"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/event/delivery"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/gateway"
@@ -26,6 +27,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/iam"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/job"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/notify"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/market"
@@ -67,6 +69,8 @@ type boot struct {
 	az      *authz.Service
 	idm     *iam.Service
 	grp     *group.Service
+	env     *environment.Service
+	ntf     *notify.Service
 	keys    *apikey.Service
 	prx     *proxy.Service
 	stats   *account.Stats

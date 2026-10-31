@@ -124,7 +124,7 @@ type PluginInfo struct {
 // ResourceConflict is one exclusive resource a plugin declares but does not
 // hold in a generation.
 type ResourceConflict struct {
-	Resource string `json:"resource"` // platform
+	Resource string `json:"resource"` // platform | notification_channel
 	ID       string `json:"id"`
 	Reason   string `json:"reason"`
 }
