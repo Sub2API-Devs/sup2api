@@ -65,6 +65,9 @@ type FakeHost struct {
 	ClearStickyBindingsFunc      func(context.Context, *pluginv1.ClearStickyBindingsRequest) (*pluginv1.ClearStickyBindingsResponse, error)
 	ListNotificationChannelsFunc func(context.Context, *pluginv1.ListNotificationChannelsRequest) (*pluginv1.ListNotificationChannelsResponse, error)
 	NotifyFunc                   func(context.Context, *pluginv1.NotifyRequest) (*pluginv1.NotifyResponse, error)
+	// Users answers GetUsers: the users among the requested ids, once each,
+	// in request order. Set it before Start.
+	Users map[int64]*pluginv1.UserInfo
 	// OnPublish, when set, is called (outside the lock) for every accepted
 	// Publish, e.g. to relay it to another Harness with Harness.Deliver and
 	// simulate a second node. PublishErr, when set, fails every Publish.

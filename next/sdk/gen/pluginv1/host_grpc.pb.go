@@ -33,6 +33,10 @@ type HostServiceClient interface {
 	// group and optionally an account, for work outside a gateway request
 	// (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
 	GetEnvironment(ctx context.Context, in *GetEnvironmentRequest, opts ...grpc.CallOption) (*GetEnvironmentResponse, error)
+	// users.read (grant "users.read"): basic facts of console users by id, to
+	// check that a user exists or to show who they are (CONTRACTS §74.3). At
+	// most 500 ids per call; unknown and deleted users are left out.
+	GetUsers(ctx context.Context, in *GetUsersRequest, opts ...grpc.CallOption) (*GetUsersResponse, error)
 	// notify.send (grant "notify.send"): the notification channels of the
 	// enabled plugins, and sending through one by its id; the core queues,
 	// deduplicates, rate limits and retries (CONTRACTS §73.4).
@@ -184,6 +188,15 @@ func (c *hostServiceClient) ClearStickyBindings(ctx context.Context, in *ClearSt
 func (c *hostServiceClient) GetEnvironment(ctx context.Context, in *GetEnvironmentRequest, opts ...grpc.CallOption) (*GetEnvironmentResponse, error) {
 	out := new(GetEnvironmentResponse)
 	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/GetEnvironment", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) GetUsers(ctx context.Context, in *GetUsersRequest, opts ...grpc.CallOption) (*GetUsersResponse, error) {
+	out := new(GetUsersResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/GetUsers", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -439,6 +452,10 @@ type HostServiceServer interface {
 	// group and optionally an account, for work outside a gateway request
 	// (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
 	GetEnvironment(context.Context, *GetEnvironmentRequest) (*GetEnvironmentResponse, error)
+	// users.read (grant "users.read"): basic facts of console users by id, to
+	// check that a user exists or to show who they are (CONTRACTS §74.3). At
+	// most 500 ids per call; unknown and deleted users are left out.
+	GetUsers(context.Context, *GetUsersRequest) (*GetUsersResponse, error)
 	// notify.send (grant "notify.send"): the notification channels of the
 	// enabled plugins, and sending through one by its id; the core queues,
 	// deduplicates, rate limits and retries (CONTRACTS §73.4).
@@ -568,6 +585,9 @@ func (UnimplementedHostServiceServer) ClearStickyBindings(context.Context, *Clea
 }
 func (UnimplementedHostServiceServer) GetEnvironment(context.Context, *GetEnvironmentRequest) (*GetEnvironmentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetEnvironment not implemented")
+}
+func (UnimplementedHostServiceServer) GetUsers(context.Context, *GetUsersRequest) (*GetUsersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetUsers not implemented")
 }
 func (UnimplementedHostServiceServer) ListNotificationChannels(context.Context, *ListNotificationChannelsRequest) (*ListNotificationChannelsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListNotificationChannels not implemented")
@@ -728,6 +748,24 @@ func _HostService_GetEnvironment_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(HostServiceServer).GetEnvironment(ctx, req.(*GetEnvironmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_GetUsers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUsersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).GetUsers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/GetUsers",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).GetUsers(ctx, req.(*GetUsersRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1222,6 +1260,10 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetEnvironment",
 			Handler:    _HostService_GetEnvironment_Handler,
+		},
+		{
+			MethodName: "GetUsers",
+			Handler:    _HostService_GetUsers_Handler,
 		},
 		{
 			MethodName: "ListNotificationChannels",

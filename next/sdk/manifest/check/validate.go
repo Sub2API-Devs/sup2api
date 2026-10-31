@@ -455,6 +455,11 @@ func sortedKeys[V any](m map[string]V) []string {
 
 // form validates a console form; settings=true for ui.settings.
 func (v *validator) form(field string, f manifest.Form, settings bool) {
+	if f.Permission != "" && !settings {
+		v.add(field+".permission", "unsupported", "only ui.settings takes a permission")
+	} else if f.Permission != "" && !v.userPerm(f.Permission) {
+		v.add(field+".permission", "unknown", "permission %q is not declared in userPermissions", f.Permission)
+	}
 	switch f.Mode {
 	case "schema":
 		v.needFile(field+".schema", f.Schema)

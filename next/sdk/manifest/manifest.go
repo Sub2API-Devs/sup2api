@@ -575,6 +575,10 @@ type Form struct {
 	UISchema  string `json:"uiSchema,omitempty"` // package path to UI hints (mode=schema)
 	Page      string `json:"page,omitempty"`     // ui/iframe/... entry (mode=iframe)
 	Component string `json:"component,omitempty"`
+	// Permission (ui.settings only) is one of the plugin's own
+	// userPermissions whose holders may read and edit the plugin settings
+	// through the core, besides plugin:read / plugin:manage (CONTRACTS §74.1).
+	Permission string `json:"permission,omitempty"`
 }
 
 // UsageRules tell the host how to read token usage from upstream responses.

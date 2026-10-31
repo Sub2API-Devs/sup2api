@@ -25,6 +25,7 @@ import EgressTab from './detail/EgressTab.vue'
 import ResourcesTab from './detail/ResourcesTab.vue'
 import SettingsTab from './detail/SettingsTab.vue'
 import UninstallModal from './detail/UninstallModal.vue'
+import AuditLogTable from '@/components/AuditLogTable.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -80,6 +81,7 @@ const tabs = computed<TabItem[]>(() => {
   if (auth.has(['plugin:egress:read', 'plugin:manage'])) list.push({ key: 'egress', label: t('plugins.detail.tabs.egress') })
   list.push({ key: 'resources', label: t('plugins.detail.tabs.resources') })
   if (settings.value?.schema || isCCGatewaySettings.value) list.push({ key: 'settings', label: t('plugins.detail.tabs.settings') })
+  if (auth.has('audit:read')) list.push({ key: 'audit', label: t('plugins.detail.tabs.audit') })
   return list
 })
 
@@ -289,6 +291,10 @@ onMounted(load)
         <ResourcesTab v-else-if="tab === 'resources'" :detail="detail" @changed="load" />
         <CCGatewaySettings v-else-if="tab === 'settings' && isCCGatewaySettings" embedded />
         <SettingsTab v-else-if="tab === 'settings' && settings" :plugin-key="detail.key" :settings="settings" @saved="loadSettings" />
+        <div v-else-if="tab === 'audit'" class="space-y-3">
+          <SHint>{{ t('plugins.detail.auditHint') }}</SHint>
+          <AuditLogTable :query="{ target_type: 'plugin', target_id: detail.key }" hide-target />
+        </div>
 
       </STabs>
 

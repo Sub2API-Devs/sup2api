@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationNormalized, type RouteRecordRaw } from 'vue-router'
 import { session } from '@sub2api/host'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_PAGE_PERMS, PROXY_PAGE_PERMS } from '@/composables/useOwnership'
@@ -11,6 +11,8 @@ declare module 'vue-router' {
     /** i18n key of the page title. */
     title?: string
     public?: boolean
+    /** Where a caller without `perm` goes instead of /forbidden, if anywhere. */
+    deniedRedirect?: (to: RouteLocationNormalized) => string | undefined
   }
 }
 
@@ -50,7 +52,18 @@ const children: RouteRecordRaw[] = [
     meta: { perm: 'plugin:install', title: 'nav.items.plugins' }
   },
   { path: 'plugins/:key/rollout', component: () => import('@/views/plugins/RolloutView.vue'), meta: { perm: 'plugin:read', title: 'nav.items.plugins' } },
-  { path: 'plugins/:key', component: () => import('@/views/plugins/PluginDetailView.vue'), meta: { perm: 'plugin:read', title: 'nav.items.plugins' } },
+  {
+    path: 'plugins/:key',
+    component: () => import('@/views/plugins/PluginDetailView.vue'),
+    meta: {
+      perm: 'plugin:read',
+      title: 'nav.items.plugins',
+      // Plugins link to ?tab=settings; holders of the plugin's settings permission get the settings page.
+      deniedRedirect: (to) => (to.query.tab === 'settings' ? `/plugins/${encodeURIComponent(String(to.params.key))}/settings` : undefined)
+    }
+  },
+  // Access is the plugin's settings permission or plugin:read, checked by the core.
+  { path: 'plugins/:key/settings', component: () => import('@/views/plugins/PluginSettingsView.vue'), meta: { title: 'nav.items.plugins' } },
   { path: 'market', component: () => import('@/views/plugins/MarketView.vue'), meta: { perm: 'plugin:market:read', title: 'nav.items.market' } },
   { path: 'publishers', component: () => import('@/views/plugins/PublishersView.vue'), meta: { perm: 'publisher:read', title: 'nav.items.publishers' } },
   { path: 'nodes', component: () => import('@/views/nodes/NodesView.vue'), meta: { perm: 'node:read', title: 'nav.items.nodes' } },
@@ -88,6 +101,8 @@ router.beforeEach(async (to) => {
     }
   }
   if (to.meta.perm && !auth.has(to.meta.perm)) {
+    const redirect = to.meta.deniedRedirect?.(to)
+    if (redirect) return redirect
     const perm = Array.isArray(to.meta.perm) ? to.meta.perm.join(' / ') : to.meta.perm
     return { path: '/forbidden', query: { perm } }
   }

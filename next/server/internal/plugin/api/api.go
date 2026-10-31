@@ -75,8 +75,9 @@ func (a *API) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodPost, "/plugins/:key/upgrade", PermManage, a.upgrade)
 	r.Perm(http.MethodGet, "/plugins/:key/rollouts/current", PermRead, a.currentRollout)
 	r.Perm(http.MethodPost, "/plugins/:key/rollouts/:id/cancel", PermManage, a.cancelRollout)
-	r.Perm(http.MethodGet, "/plugins/:key/settings", PermRead, a.getSettings)
-	r.Perm(http.MethodPut, "/plugins/:key/settings", PermManage, a.putSettings)
+	// plugin:read / plugin:manage, or the plugin's ui.settings.permission.
+	r.Authed(http.MethodGet, "/plugins/:key/settings", a.getSettings)
+	r.Authed(http.MethodPut, "/plugins/:key/settings", a.putSettings)
 	r.Perm(http.MethodGet, "/plugins/:key/grants", PermRead, a.listGrants)
 	r.Perm(http.MethodDelete, "/plugins/:key/grants/:permission", PermManage, a.revokeGrant)
 	r.Perm(http.MethodPut, "/plugins/:key/resources", PermManage, a.putResources)
@@ -107,6 +108,26 @@ func ctx(c *gin.Context) context.Context {
 func actor(c *gin.Context) int64 {
 	id, _ := core.UserID(c.Request.Context())
 	return id
+}
+
+// canAny renders permission_denied (details.permission = the first key)
+// unless the caller holds one of keys; empty keys are skipped.
+func (a *API) canAny(c *gin.Context, keys ...string) bool {
+	for _, k := range keys {
+		if k == "" {
+			continue
+		}
+		ok, err := a.d.Authz.Can(c.Request.Context(), actor(c), k)
+		if err != nil {
+			httpapi.Fail(c, err)
+			return false
+		}
+		if ok {
+			return true
+		}
+	}
+	httpapi.Fail(c, core.ErrPermissionDenied.WithDetails(map[string]any{"permission": keys[0]}))
+	return false
 }
 
 // audit writes an audit row outside a transaction (after controller calls).

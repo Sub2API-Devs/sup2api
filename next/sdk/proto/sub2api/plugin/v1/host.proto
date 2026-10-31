@@ -24,6 +24,10 @@ service HostService {
   // group and optionally an account, for work outside a gateway request
   // (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
   rpc GetEnvironment(GetEnvironmentRequest) returns (GetEnvironmentResponse);
+  // users.read (grant "users.read"): basic facts of console users by id, to
+  // check that a user exists or to show who they are (CONTRACTS §74.3). At
+  // most 500 ids per call; unknown and deleted users are left out.
+  rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
   // notify.send (grant "notify.send"): the notification channels of the
   // enabled plugins, and sending through one by its id; the core queues,
   // deduplicates, rate limits and retries (CONTRACTS §73.4).
@@ -207,6 +211,22 @@ message GetEnvironmentRequest {
 
 message GetEnvironmentResponse {
   map<string, int64> environment = 1;
+}
+
+message GetUsersRequest {
+  repeated int64 user_ids = 1;
+}
+
+message GetUsersResponse {
+  repeated UserInfo users = 1; // in user_ids order, without the missing ones
+}
+
+message UserInfo {
+  int64 id = 1;
+  string email = 2;
+  string display_name = 3;
+  string status = 4;         // active | disabled
+  repeated string roles = 5; // role keys, e.g. "admin", "user"
 }
 
 message CountTokensRequest {

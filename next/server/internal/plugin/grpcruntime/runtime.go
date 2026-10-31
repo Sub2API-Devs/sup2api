@@ -67,6 +67,8 @@ type Options struct {
 	// Notifier serves HostService.ListNotificationChannels and Notify; nil
 	// makes them fail with UNAVAILABLE.
 	Notifier core.Notifier
+	// Users serves HostService.GetUsers; nil makes it fail with UNAVAILABLE.
+	Users core.UserDirectory
 
 	HostVersion   string
 	DataDir       string // plugin work directories live under DataDir/<key>/work

@@ -56,6 +56,20 @@ func Notify(ctx context.Context, h Host, in *pluginv1.NotifyRequest) (*pluginv1.
 	return h.Client().Notify(ctx, in)
 }
 
+// GetUsers returns the users among ids that exist, once each, in the order
+// of ids: at most 500 ids per call. It needs the "users.read" grant
+// (CONTRACTS §74.3).
+func GetUsers(ctx context.Context, h Host, ids []int64) ([]*pluginv1.UserInfo, error) {
+	if err := requireHostAPI(h, protocol.UsersHostAPIVersion, "user lookup"); err != nil {
+		return nil, err
+	}
+	resp, err := h.Client().GetUsers(ctx, &pluginv1.GetUsersRequest{UserIds: ids})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetUsers(), nil
+}
+
 // requireHostAPI fails a host call the host cannot serve yet: no host, or
 // one older than the host API version that introduced `what`.
 func requireHostAPI(h Host, version int32, what string) error {

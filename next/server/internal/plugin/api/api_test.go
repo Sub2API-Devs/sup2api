@@ -36,21 +36,28 @@ func (tokens) VerifyAccessToken(_ context.Context, tok string) (int64, error) {
 		return 1, nil
 	case "viewer":
 		return 2, nil
+	case "nobody":
+		return 3, nil
 	}
 	return 0, errors.New("bad token")
 }
 
-// authz: user 1 is superuser; user 2 only has plugin.guard:stats:read.
+// authz: user 1 is superuser; user 2 only has plugin.guard:stats:read;
+// user 3 has nothing.
 type authz struct{}
 
-func (authz) Can(_ context.Context, uid int64, p string) (bool, error) {
-	return uid == 1, nil
+func (a authz) Can(ctx context.Context, uid int64, p string) (bool, error) {
+	ps, err := a.PermissionSet(ctx, uid)
+	return ps.Has(p), err
 }
 func (authz) PermissionSet(_ context.Context, uid int64) (core.PermissionSet, error) {
-	if uid == 1 {
+	switch uid {
+	case 1:
 		return core.PermissionSet{Superuser: true}, nil
+	case 2:
+		return core.PermissionSet{Keys: map[string]struct{}{"plugin.guard:stats:read": {}}}, nil
 	}
-	return core.PermissionSet{Keys: map[string]struct{}{"plugin.guard:stats:read": {}}}, nil
+	return core.PermissionSet{}, nil
 }
 func (authz) CanGrant(context.Context, int64, []string) error { return nil }
 func (authz) CanActOn(context.Context, int64, []string) error { return nil }
@@ -229,7 +236,9 @@ func data(out map[string]any) map[string]any {
 func TestAPIFlow(t *testing.T) {
 	h, root := newHarness(t)
 	ctx := context.Background()
-	pkgBytes := pkgtest.Build(pkgtest.Guard("guard", "0.1.0", "sub2api"), root)
+	guard := pkgtest.Guard("guard", "0.1.0", "sub2api")
+	guard.UI.Settings.Permission = "stats:read"
+	pkgBytes := pkgtest.Build(guard, root)
 
 	if code, _ := h.do("POST", "/plugins/upload", "viewer", fileBody(t, pkgBytes)); code != http.StatusForbidden {
 		t.Fatalf("viewer upload = %d", code)
@@ -282,8 +291,20 @@ func TestAPIFlow(t *testing.T) {
 	if vals["webhook_secret"] != Mask || vals["threshold"] != float64(3) || data(out)["mode"] != "schema" {
 		t.Fatalf("settings = %v", data(out))
 	}
-	if code, _ = h.do("PUT", "/plugins/guard/settings", "admin", map[string]any{"values": map[string]any{"threshold": 4, "webhook_secret": Mask}}); code != 200 {
+	// ui.settings.permission lets its holders read and edit the settings
+	// without plugin:read / plugin:manage (CONTRACTS §74.1).
+	if code, out = h.do("GET", "/plugins/guard/settings", "nobody", nil); code != http.StatusForbidden {
+		t.Fatalf("settings without permission = %d %v", code, out)
+	}
+	if code, out = h.do("GET", "/plugins/guard/settings", "viewer", nil); code != 200 || data(out)["permission"] != "plugin.guard:stats:read" {
+		t.Fatalf("settings through the plugin permission = %d %v", code, out)
+	}
+	if code, _ = h.do("PUT", "/plugins/guard/settings", "viewer", map[string]any{"values": map[string]any{"threshold": 4, "webhook_secret": Mask}}); code != 200 {
 		t.Fatalf("put masked = %d", code)
+	}
+	var who int64
+	if err := h.db.Pool.QueryRow(ctx, `SELECT user_id FROM audit_logs WHERE action = 'plugin.settings.update' ORDER BY id DESC LIMIT 1`).Scan(&who); err != nil || who != 2 {
+		t.Fatalf("settings audit by %d: %v", who, err)
 	}
 	var enc []byte
 	_ = h.db.Pool.QueryRow(ctx, `SELECT config_enc FROM plugins WHERE key = 'guard'`).Scan(&enc)

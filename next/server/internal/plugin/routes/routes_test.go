@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -14,6 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/registry"
@@ -71,8 +74,11 @@ func (authz) CanGrant(context.Context, int64, []string) error { return nil }
 func (authz) CanActOn(context.Context, int64, []string) error { return nil }
 
 func setup(t *testing.T, opts ...routes.Option) (*gin.Engine, *echo, *registry.Registry, *registry.Package) {
+	return setupManifest(t, registrytest.Manifest("demo", "1.0.0"), opts...)
+}
+
+func setupManifest(t *testing.T, m *manifest.Manifest, opts ...routes.Option) (*gin.Engine, *echo, *registry.Registry, *registry.Package) {
 	gin.SetMode(gin.TestMode)
-	m := registrytest.Manifest("demo", "1.0.0")
 	pkg, err := registry.LoadPackage(t.TempDir(), registrytest.Package(t, m, []byte("bin"), nil), "", "unsigned")
 	if err != nil {
 		t.Fatal(err)
@@ -185,6 +191,35 @@ func TestPluginAPIRoutes(t *testing.T) {
 	reg.Publish(nil)
 	if w := do(e, "GET", "/api/v1/p/demo/echo/1", "admin", ""); w.Code != 503 {
 		t.Fatalf("disabled plugin: %d", w.Code)
+	}
+}
+
+type auditor struct{ writes []audit.PluginWrite }
+
+func (a *auditor) AuditPluginWrite(_ context.Context, w audit.PluginWrite) {
+	a.writes = append(a.writes, w)
+}
+
+// Writes served by admin routes are audited with who, what and the answer;
+// reads and webhooks are not (CONTRACTS §74.2).
+func TestPluginAPIWritesAudited(t *testing.T) {
+	m := registrytest.Manifest("demo", "1.0.0")
+	m.Routes = append(m.Routes, manifest.Route{Method: "PUT", Path: "/rules/:id", Scope: "admin", Permission: "rules:read"})
+	a := &auditor{}
+	e, _, _, _ := setupManifest(t, m, routes.WithAudit(a))
+	do(e, "GET", "/api/v1/p/demo/echo/1", "admin", "")
+	do(e, "POST", "/api/v1/p/demo/hook", "", `{}`)
+	do(e, "PUT", "/api/v1/p/demo/rules/7", "nobody", `{}`)
+	if w := do(e, "PUT", "/api/v1/p/demo/rules/7?x=1", "admin", `{"name":"r"}`); w.Code != 201 {
+		t.Fatalf("put: %d %s", w.Code, w.Body)
+	}
+	want := audit.PluginWrite{UserID: 1, Plugin: "demo", Method: "PUT", Path: "/rules/7", Route: "/rules/:id", Status: 201, Body: []byte(`{"name":"r"}`)}
+	if len(a.writes) != 1 || a.writes[0].RequestID == "" {
+		t.Fatalf("writes %+v", a.writes)
+	}
+	want.RequestID = a.writes[0].RequestID
+	if !reflect.DeepEqual(a.writes[0], want) {
+		t.Fatalf("write %+v, want %+v", a.writes[0], want)
 	}
 }
 

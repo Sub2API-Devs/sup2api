@@ -253,8 +253,10 @@ export default {
       events: 'Events',
       egress: 'External access',
       resources: 'Resources',
-      settings: 'Settings'
+      settings: 'Settings',
+      audit: 'Audit'
     },
+    auditHint: 'Changes to this plugin: lifecycle, settings and the writes made through its admin pages (request bodies redacted).',
     overview: 'Summary',
     runtime: 'Runtime',
     capabilities: 'Capabilities',
@@ -374,7 +376,10 @@ export default {
   },
 
   settings: {
-    unsaved: 'You have unsaved changes'
+    unsaved: 'You have unsaved changes',
+    pageHint: 'Settings of this plugin. Your role may edit them through a permission the plugin declares.',
+    denied: 'You cannot open the settings of this plugin.',
+    none: 'This plugin has no settings.'
   },
 
   retired: {

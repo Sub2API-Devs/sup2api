@@ -15,7 +15,7 @@ const variables = [
     help: { en: 'Longest gap between two reads of a streamed response. Unset: no limit.', zh: '流式响应两次读到数据之间的最长间隔。未设置：不限。' } },
   { key: 'max_request_body_mb', unit: 'mb', min: 1, max: 1024, layers: ['global', 'group'], process_env: 'SUB2API_MAX_REQUEST_BODY_MB',
     name: { en: 'Request body limit', zh: '请求体上限' },
-    help: { en: 'Largest client request body. Unset: what the endpoint declares, else 32 MB.', zh: '客户端请求体的上限。未设置：端点声明的值，否则 32 MB。' } },
+    help: { en: "Largest client request body. It only raises the limit: the endpoint's own (else 32 MB) applies when larger. Unset: that limit.", zh: '客户端请求体的上限。只放宽不收紧：端点自身的上限（否则 32 MB）更大时以其为准。未设置：沿用该上限。' } },
   { key: 'task_timeout_minutes', unit: 'minutes', min: 1, max: 43200, layers: TASK, process_env: '',
     name: { en: 'Async task timeout', zh: '异步任务超时' },
     help: { en: 'How long the core keeps observing an async task (image, video). Unset: the reconcile settings.', zh: '核心观测一个异步任务（画图、视频）的最长时间。未设置：沿用对账设置。' } },

@@ -16,7 +16,7 @@ const props = defineProps<{ pluginKey: string; settings: PluginSettings }>()
 const emit = defineEmits<{ (e: 'saved'): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
-const canManage = computed(() => auth.has('plugin:manage'))
+const canManage = computed(() => auth.has(['plugin:manage', ...(props.settings.permission ? [props.settings.permission] : [])]))
 
 const values = ref<Record<string, any>>({})
 const loaded = ref('')

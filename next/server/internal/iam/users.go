@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 
+	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -68,6 +69,31 @@ func (s *Service) getUser(ctx context.Context, q store.Querier, id int64) (*User
 		return nil, core.ErrNotFound.WithMessage("user not found")
 	}
 	return u, err
+}
+
+// LookupUsers implements core.UserDirectory (HostService.GetUsers).
+func (s *Service) LookupUsers(ctx context.Context, ids []int64) ([]*pluginv1.UserInfo, error) {
+	rows, err := s.db.Pool.Query(ctx, `SELECT u.id, u.email, u.display_name, u.status,
+		COALESCE((SELECT array_agg(r.key ORDER BY r.key) FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = u.id), '{}')
+		FROM unnest($1::bigint[]) WITH ORDINALITY AS q(id, n) JOIN users u ON u.id = q.id AND u.deleted_at IS NULL
+		ORDER BY q.n`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []*pluginv1.UserInfo{}
+	seen := map[int64]bool{}
+	for rows.Next() {
+		u := &pluginv1.UserInfo{}
+		if err := rows.Scan(&u.Id, &u.Email, &u.DisplayName, &u.Status, &u.Roles); err != nil {
+			return nil, err
+		}
+		if !seen[u.Id] {
+			seen[u.Id] = true
+			out = append(out, u)
+		}
+	}
+	return out, rows.Err()
 }
 
 // ListUsersFilter filters GET /users.

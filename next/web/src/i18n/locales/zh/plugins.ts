@@ -253,8 +253,10 @@ export default {
       events: '事件',
       egress: '外部访问',
       resources: '资源',
-      settings: '设置'
+      settings: '设置',
+      audit: '审计'
     },
+    auditHint: '本插件的变更：生命周期、设置，以及通过它的管理页面做的写操作（请求体已脱敏）。',
     overview: '摘要',
     runtime: '运行情况',
     capabilities: '能力',
@@ -374,7 +376,10 @@ export default {
   },
 
   settings: {
-    unsaved: '有未保存的修改'
+    unsaved: '有未保存的修改',
+    pageHint: '本插件的设置。插件声明的权限允许你的角色编辑这些设置。',
+    denied: '你无权打开本插件的设置。',
+    none: '本插件没有设置。'
   },
 
   retired: {

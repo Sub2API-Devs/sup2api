@@ -255,6 +255,26 @@ func TestFormPageNeedsSubmit(t *testing.T) {
 	}
 }
 
+// ui.settings.permission names one of the plugin's own permissions; other
+// forms cannot take one (the core only checks it on the settings endpoints).
+func TestSettingsPermission(t *testing.T) {
+	m := uiManifest()
+	files := map[string][]byte{"settings.schema.json": []byte("{}")}
+	m.UI.Settings = &manifest.Form{Mode: "schema", Schema: "settings.schema.json", Permission: "assets:read"}
+	if c := codes(Validate(m, files, ValidateOptions{Tooling: true})); len(c) > 0 {
+		t.Fatalf("a declared permission is valid: %v", c)
+	}
+	m.UI.Settings.Permission = "assets:write"
+	if c := codes(Validate(m, files, ValidateOptions{Tooling: true})); c["ui.settings.permission"] != "unknown" {
+		t.Fatalf("an undeclared permission must be rejected: %v", c)
+	}
+	m.UI.Settings.Permission = ""
+	m.AccountTypes = []manifest.AccountType{{Form: manifest.Form{Permission: "assets:read"}}}
+	if c := codes(Validate(m, files, ValidateOptions{Tooling: true})); c["accountTypes[0].form.permission"] != "unsupported" {
+		t.Fatalf("only ui.settings takes a permission: %v", c)
+	}
+}
+
 // page.search is what makes the host render a search box at all.
 func TestPageSearchDeclaration(t *testing.T) {
 	set := func(m *manifest.Manifest, mutate func(*manifest.Page)) {

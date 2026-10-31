@@ -9,7 +9,12 @@ on('GET','/system/upgrades', () => ({ upgrades: [plan], primary_node: 'node-1', 
 on('GET','/system/upgrades/:id',()=>plan)
 on('GET','/system/upgrades/:id/events',()=>({ events: steps.filter(s=>s.status==='done').flatMap((s,i)=>[{id:i*2+1, kind:'step', message:`${s.node_id}: ${s.action}`,created_at:now(-90+i*8)},{id:i*2+2,kind:'done',message:`${s.node_id}: ${s.action} `,created_at:now(-87+i*8)}]) }))
 on('GET','/system/offload',()=>({enabled:true,cpu_threshold_percent:80}))
-on('GET','/audit-logs',req=>paginate([{id:1, user_id:null, action:'plugin.upgrade',target_type:'plugin',target_id:'anthropic', detail:{source:'builtin',version:'0.2.1'},ip:'',created_at:now(-20)}].filter(r=>!req.query.action||req.query.action===r.action),req.query))
+const auditLogs = [
+  {id:2, user_id:1, user_email:'admin@example.com', user_name:'Admin', action:'plugin.route.write',target_type:'plugin',target_id:'moderation', detail:{method:'PUT',path:'/flows/3',route:'/flows/:id',status:200,request_id:'req-demo',body:{name:'default',api_key:'[REDACTED]'}},ip:'203.0.113.9',created_at:now(-5)},
+  {id:1, user_id:null, user_email:null, user_name:null, action:'plugin.upgrade',target_type:'plugin',target_id:'anthropic', detail:{source:'builtin',version:'0.2.1'},ip:'',created_at:now(-20)},
+]
+const auditFilters = ['action','target_type','target_id','user_id'] as const
+on('GET','/audit-logs',req=>paginate(auditLogs.filter(r=>auditFilters.every(k=>!req.query[k]||String(r[k])===req.query[k])),req.query))
 
 // Registered before plugins/:key so the literal /plugins/rollouts wins.
 const history = [{ id: 52, plugin_key:'anthropic',action:'upgrade',from_version:'0.2.0',target_version:'0.2.1',phase:'active',coordinator:'node-1',error:'',created_at:now(-30),updated_at:now(-10),nodes:boot.map((boot_id,i)=>({node_id:`node-${i+1}`,boot_id,state:i===2?'failed':'active',error:i===2?'health check failed':''})) }]

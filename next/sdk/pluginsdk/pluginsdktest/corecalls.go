@@ -29,3 +29,18 @@ func (f *FakeHost) Notify(ctx context.Context, in *pluginv1.NotifyRequest) (*plu
 	}
 	return f.NotifyFunc(ctx, in)
 }
+
+func (f *FakeHost) GetUsers(_ context.Context, in *pluginv1.GetUsersRequest) (*pluginv1.GetUsersResponse, error) {
+	if len(in.GetUserIds()) > 500 {
+		return nil, status.Error(codes.InvalidArgument, "at most 500 user_ids")
+	}
+	out := &pluginv1.GetUsersResponse{}
+	seen := map[int64]bool{}
+	for _, id := range in.GetUserIds() {
+		if u, ok := f.Users[id]; ok && !seen[id] {
+			seen[id] = true
+			out.Users = append(out.Users, u)
+		}
+	}
+	return out, nil
+}

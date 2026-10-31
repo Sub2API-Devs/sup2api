@@ -34,6 +34,8 @@ const (
 	// ClearStickyBindings bounds its model and salt.
 	ClearStickyBindingsMaxModel = 256
 	ClearStickyBindingsMaxSalt  = 128
+	// GetUsersMaxIDs caps the ids of one GetUsers call.
+	GetUsersMaxIDs = 500
 )
 
 // hostServer serves HostService to exactly one plugin instance, so the
@@ -492,6 +494,23 @@ func (h *hostServer) GetEnvironment(ctx context.Context, in *pluginv1.GetEnviron
 		return nil, toStatus(err)
 	}
 	return &pluginv1.GetEnvironmentResponse{Environment: env}, nil
+}
+
+func (h *hostServer) GetUsers(ctx context.Context, in *pluginv1.GetUsersRequest) (*pluginv1.GetUsersResponse, error) {
+	if err := h.require(ctx, "users.read"); err != nil {
+		return nil, err
+	}
+	if len(in.GetUserIds()) > GetUsersMaxIDs {
+		return nil, status.Errorf(codes.InvalidArgument, "at most %d user_ids", GetUsersMaxIDs)
+	}
+	if h.i.rt.o.Users == nil {
+		return nil, status.Error(codes.Unavailable, "users unavailable")
+	}
+	users, err := h.i.rt.o.Users.LookupUsers(ctx, in.GetUserIds())
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &pluginv1.GetUsersResponse{Users: users}, nil
 }
 
 func accountSummary(a core.PluginAccountSummary) *pluginv1.AccountSummary {

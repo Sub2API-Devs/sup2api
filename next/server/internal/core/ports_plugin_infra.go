@@ -207,3 +207,10 @@ type StickyClearRequest struct {
 type StickyBindingClearer interface {
 	ClearStickyBindings(ctx context.Context, req StickyClearRequest) (matched, cleared int64, err error)
 }
+
+// UserDirectory (owner: iam) serves HostService.GetUsers (CONTRACTS §74.3).
+type UserDirectory interface {
+	// LookupUsers returns the users among ids that exist and are not
+	// deleted, once each, in the order of ids.
+	LookupUsers(ctx context.Context, ids []int64) ([]*pluginv1.UserInfo, error)
+}

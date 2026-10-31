@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -36,18 +37,32 @@ type SettingsView struct {
 	Component string          `json:"component,omitempty"`
 	Values    map[string]any  `json:"values"`
 	Secrets   []string        `json:"secret_fields"`
+	// Permission is the RBAC key of ui.settings.permission: its holders may
+	// read and edit these settings too (CONTRACTS §74.1).
+	Permission string `json:"permission,omitempty"`
 }
 
-func (a *API) settingsForm(c *gin.Context, key string) (*SettingsView, bool) {
+// settingsForm loads the settings form of the plugin after checking that the
+// caller holds corePerm or the permission the plugin names for its settings.
+func (a *API) settingsForm(c *gin.Context, key, corePerm string) (*SettingsView, bool) {
 	m, version, ok := a.currentManifest(c, key)
 	if !ok {
 		return nil, false
 	}
 	v := &SettingsView{Mode: "none", Schema: json.RawMessage("null"), UISchema: json.RawMessage("null"), Values: map[string]any{}, Secrets: []string{}}
-	if m.UI == nil || m.UI.Settings == nil {
+	var f *manifest.Form
+	if m.UI != nil {
+		f = m.UI.Settings
+	}
+	if f != nil && f.Permission != "" {
+		v.Permission = install.PermissionKey(key, f.Permission)
+	}
+	if !a.canAny(c, corePerm, v.Permission) {
+		return nil, false
+	}
+	if f == nil {
 		return v, true
 	}
-	f := m.UI.Settings
 	v.Mode, v.Page, v.Component = f.Mode, f.Page, f.Component
 	if f.Mode != "schema" {
 		return v, true
@@ -121,10 +136,15 @@ func (a *API) loadValues(c *gin.Context, q store.Querier, key string, forUpdate 
 
 func (a *API) getSettings(c *gin.Context) {
 	key := c.Param("key")
-	v, ok := a.settingsForm(c, key)
+	v, ok := a.settingsForm(c, key, PermRead)
 	if !ok {
 		return
 	}
+	a.renderSettings(c, key, v)
+}
+
+// renderSettings answers the form v with the stored values, secrets masked.
+func (a *API) renderSettings(c *gin.Context, key string, v *SettingsView) {
 	values, err := a.loadValues(c, a.d.DB.Pool, key, false)
 	if err != nil {
 		httpapi.Fail(c, err)
@@ -155,7 +175,7 @@ func (a *API) putSettings(c *gin.Context) {
 		httpapi.Fail(c, core.ErrUnavailable.WithMessage("settings encryption unavailable"))
 		return
 	}
-	form, ok := a.settingsForm(c, key)
+	form, ok := a.settingsForm(c, key, PermManage)
 	if !ok {
 		return
 	}
@@ -205,14 +225,14 @@ func (a *API) putSettings(c *gin.Context) {
 			return err
 		}
 		// Only key names are audited; values may be secret.
-		return audit.Audit(ctx(c), tx, actor(c), "plugin.settings.update", "plugin", key, map[string]any{"changed_keys": changed})
+		return audit.Audit(ctx(c), tx, actor(c), "plugin.settings.update", "plugin", key, map[string]any{"changed_keys": changed, "request_id": core.RequestID(c.Request.Context())})
 	})
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
 	install.Notify(c.Request.Context(), a.d.Bus, key)
-	a.getSettings(c)
+	a.renderSettings(c, key, form)
 }
 
 type denyLoader struct{}

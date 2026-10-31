@@ -257,3 +257,29 @@ func TestHostAccountsUnavailable(t *testing.T) {
 		t.Fatalf("read: %v", err)
 	}
 }
+
+type fakeUsers struct{ calls int }
+
+func (f *fakeUsers) LookupUsers(_ context.Context, ids []int64) ([]*pluginv1.UserInfo, error) {
+	f.calls++
+	return []*pluginv1.UserInfo{{Id: ids[0], Email: "a@x"}}, nil
+}
+
+// GetUsers needs users.read and at most GetUsersMaxIDs ids (CONTRACTS §74.3).
+func TestHostGetUsers(t *testing.T) {
+	ctx := context.Background()
+	h, _ := accountsEnv(t, registry.Grants{})
+	users := &fakeUsers{}
+	h.i.rt.o.Users = users
+	if _, err := h.GetUsers(ctx, &pluginv1.GetUsersRequest{UserIds: []int64{1}}); status.Code(err) != codes.PermissionDenied || users.calls != 0 {
+		t.Fatalf("without users.read: %v", err)
+	}
+	h, _ = accountsEnv(t, registry.Grants{"users.read": json.RawMessage(`{}`)})
+	h.i.rt.o.Users = users
+	if _, err := h.GetUsers(ctx, &pluginv1.GetUsersRequest{UserIds: make([]int64, GetUsersMaxIDs+1)}); status.Code(err) != codes.InvalidArgument || users.calls != 0 {
+		t.Fatalf("too many ids: %v", err)
+	}
+	if out, err := h.GetUsers(ctx, &pluginv1.GetUsersRequest{UserIds: []int64{7}}); err != nil || len(out.GetUsers()) != 1 || out.GetUsers()[0].GetId() != 7 {
+		t.Fatalf("lookup: %v %v", out, err)
+	}
+}

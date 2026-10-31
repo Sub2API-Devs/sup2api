@@ -384,6 +384,8 @@ export interface PluginSettings {
   schema: Record<string, any> | null
   ui_schema?: Record<string, any> | null
   values: Record<string, any> | null
+  /** RBAC key of manifest ui.settings.permission: its holders may edit these settings too. */
+  permission?: string
 }
 
 export const ROLLOUT_RUNNING = new Set(['preparing', 'activating'])
