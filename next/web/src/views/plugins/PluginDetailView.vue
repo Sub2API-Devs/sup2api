@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SChoiceCards, SDropdown, SEmpty, SHint, SIcon, SLink, SModal, SPageHeader, SSpinner, STabs, confirm, type ChoiceOption, type MenuAction, type TabItem } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SChoiceCards, SDropdown, SEmpty, SHint, SIcon, SLink, SFormModal, SPageHeader, SSpinner, STabs, confirm, type ChoiceOption, type MenuAction, type TabItem } from '@sub2api/ui'
 import type { Rollout } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
@@ -300,7 +300,7 @@ onMounted(load)
 
       <UninstallModal v-model:open="uninstallOpen" :plugin-key="detail.key" :name="name" @done="onUninstalled" />
 
-      <SModal v-model:open="upgradeOpen" :title="t('plugins.detail.upgradeTitle', { name })" width="sm">
+      <SFormModal v-model:open="upgradeOpen" :title="t('plugins.detail.upgradeTitle', { name })" width="sm" :loading="acting === 'upgrade'" :submit-disabled="!upgradeVersion" :submit-text="t('plugins.detail.upgrade')" @submit="startRollout('upgrade', upgradeVersion)">
         <SHint class="mb-3">{{ t('plugins.detail.upgradeHint', { version: detail.active_version || '—' }) }}</SHint>
         <SChoiceCards
           :model-value="upgradeVersion"
@@ -309,13 +309,7 @@ onMounted(load)
           :aria-label="t('plugins.detail.upgradeTitle', { name })"
           @update:model-value="(v) => (upgradeVersion = String(v))"
         />
-        <template #footer>
-          <SButton @click="upgradeOpen = false">{{ t('common.cancel') }}</SButton>
-          <SButton variant="primary" :disabled="!upgradeVersion" :loading="acting === 'upgrade'" @click="startRollout('upgrade', upgradeVersion)">
-            {{ t('plugins.detail.upgrade') }}
-          </SButton>
-        </template>
-      </SModal>
+      </SFormModal>
     </template>
   </div>
 </template>

@@ -9,8 +9,8 @@
 // the submit button spins. `submitText` defaults to "Save"; `submitVariant`
 // danger for destructive forms; `submitDisabled` blocks submitting.
 // `#footer` replaces the whole footer, `#footer-start` adds content on its
-// left (a hint, a secondary action). `#header` is SModal's.
-import { useId } from 'vue'
+// left (a hint, a secondary action). `#header` is SModal's. Other attributes
+// (data-testid, …) land on the <form>.
 import { useUiT } from './i18n'
 import SButton from './SButton.vue'
 import SModal from './SModal.vue'
@@ -27,14 +27,18 @@ const props = withDefaults(
     submitDisabled?: boolean
     /** Hide the submit button (read-only view of the same form). */
     readonly?: boolean
+    /** Extra attributes of the submit button (data-testid, …). */
+    submitAttrs?: Record<string, unknown>
+    /** Extra attributes of the cancel button. */
+    cancelAttrs?: Record<string, unknown>
     persistent?: boolean
     describedby?: string
   }>(),
   { width: 'md', submitVariant: 'primary', submitText: undefined, cancelText: undefined, title: undefined, describedby: undefined }
 )
+defineOptions({ inheritAttrs: false })
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'submit'): void; (e: 'close'): void }>()
 const t = useUiT()
-const formId = useId()
 
 function submit() {
   if (props.loading || props.submitDisabled || props.readonly) return
@@ -48,19 +52,22 @@ function submit() {
     :title="title"
     :width="width"
     :persistent="persistent || loading"
+    :closable="!loading"
     :describedby="describedby"
     @update:open="emit('update:open', $event)"
     @close="emit('close')"
   >
     <template v-if="$slots.header" #header><slot name="header" /></template>
-    <form :id="formId" class="space-y-4" novalidate @submit.prevent="submit">
+    <form class="space-y-4" novalidate v-bind="$attrs" @submit.prevent="submit">
       <slot />
+      <!-- Enter in a field submits through this (implicit submission needs a submit button inside the form). -->
+      <button type="submit" class="hidden" tabindex="-1" aria-hidden="true" />
     </form>
     <template #footer>
       <slot name="footer">
         <div v-if="$slots['footer-start']" class="mr-auto flex min-w-0 items-center gap-2"><slot name="footer-start" /></div>
-        <SButton :disabled="loading" @click="emit('update:open', false)">{{ cancelText || t(readonly ? 'ui.close' : 'ui.cancel') }}</SButton>
-        <SButton v-if="!readonly" type="submit" :form="formId" :variant="submitVariant" :loading="loading" :disabled="submitDisabled">
+        <SButton :disabled="loading" v-bind="cancelAttrs" @click="emit('update:open', false)">{{ cancelText || t(readonly ? 'ui.close' : 'ui.cancel') }}</SButton>
+        <SButton v-if="!readonly" :variant="submitVariant" :loading="loading" :disabled="submitDisabled" v-bind="submitAttrs" @click="submit">
           {{ submitText || t('ui.save') }}
         </SButton>
       </slot>

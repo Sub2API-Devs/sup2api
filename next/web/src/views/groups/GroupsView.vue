@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SStatusBadge, SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SModal, SPageHeader, SPagination, SSelect, SSettingsGroup, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
+import { SStatusBadge, SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SFormModal, SModal, SPageHeader, SPagination, SSelect, SSettingsGroup, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
 import type { EnvironmentValues, Group } from '@/api/types'
 import { deleteWithConfirm, toggleStatus, useStatusOptions } from '@/composables/crud'
 import { useList } from '@/composables/useList'
@@ -256,50 +256,44 @@ function onAction(g: Group, key: string) {
       </template>
     </STable>
 
-    <SModal v-model:open="open" :title="editing ? t('groups.editTitle', { name: editing.name }) : t('groups.create')" width="xl">
-      <form class="space-y-4" @submit.prevent="submit">
-        <SGrid>
-          <SField :label="t('common.name')" required :error="errors.name">
-            <SInput v-model="form.name" />
-          </SField>
-          <SField :label="t('common.status')" :error="errors.status">
-            <SSelect v-model="form.status" :options="statusOptions" />
-          </SField>
-        </SGrid>
-        <SField :label="t('common.description')" :error="errors.description">
-          <STextarea v-model="form.description" :rows="2" />
+    <SFormModal v-model:open="open" :title="editing ? t('groups.editTitle', { name: editing.name }) : t('groups.create')" width="xl" :loading="saving" :submit-text="editing ? t('common.save') : t('common.create')" @submit="submit">
+      <SGrid>
+        <SField :label="t('common.name')" required :error="errors.name">
+          <SInput v-model="form.name" />
         </SField>
-        <SGrid>
-          <SField :label="t('groups.rateMultiplier')" required :hint="t('groups.multiplierHint')" :error="errors.rate_multiplier">
-            <SInput v-model="form.rate_multiplier" mono inputmode="decimal" />
-          </SField>
-          <SField
-            :label="t('groups.visibility')"
-            :hint="form.visibility === 'restricted' ? t('groups.restrictedHint') : t('groups.publicHint')"
-            :error="errors.visibility"
-          >
-            <SSelect v-model="form.visibility" :options="visibilityOptions" />
-          </SField>
-        </SGrid>
-        <SField :label="t('groups.modelRules')" :hint="t('groups.allowlistHint')" :error="errors.model_allowlist || errors.model_filter_mode">
-          <GroupModelPolicyEditor v-if="open" :key="editing?.id ?? 'new'" ref="modelPolicyEditor" v-model="form.model_allowlist" v-model:mode="form.model_filter_mode" :options="currentModelSource.models" :loading="modelsLoading" :unrestricted-accounts="currentModelSource.unrestricted_accounts" />
-          <SHint v-if="modelLoadError" tone="danger" size="xs">{{ modelLoadError }}</SHint>
+        <SField :label="t('common.status')" :error="errors.status">
+          <SSelect v-model="form.status" :options="statusOptions" />
         </SField>
-        <SField v-if="editing" :label="t('platforms.served')">
-          <GroupPlatforms :group="editing" hint />
+      </SGrid>
+      <SField :label="t('common.description')" :error="errors.description">
+        <STextarea v-model="form.description" :rows="2" />
+      </SField>
+      <SGrid>
+        <SField :label="t('groups.rateMultiplier')" required :hint="t('groups.multiplierHint')" :error="errors.rate_multiplier">
+          <SInput v-model="form.rate_multiplier" mono inputmode="decimal" />
         </SField>
-        <SSettingsGroup :title="t('settings.environment.title')" :description="t('settings.environment.groupHint')" data-testid="group-environment">
-          <EnvironmentEditor v-model="form.environment" layer="group" field="environment" :errors="errors" :disabled="saving" />
-        </SSettingsGroup>
-        <SField v-if="canEditAccounts" :label="t('groups.accounts.title')" :hint="t('groups.accounts.hint')">
-          <GroupAccountsEditor v-if="open" ref="accountsEditor" :group-id="editing?.id ?? null" @models="selectedModelSource = $event" />
+        <SField
+          :label="t('groups.visibility')"
+          :hint="form.visibility === 'restricted' ? t('groups.restrictedHint') : t('groups.publicHint')"
+          :error="errors.visibility"
+        >
+          <SSelect v-model="form.visibility" :options="visibilityOptions" />
         </SField>
-      </form>
-      <template #footer>
-        <SButton @click="open = false">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" :loading="saving" @click="submit">{{ editing ? t('common.save') : t('common.create') }}</SButton>
-      </template>
-    </SModal>
+      </SGrid>
+      <SField :label="t('groups.modelRules')" :hint="t('groups.allowlistHint')" :error="errors.model_allowlist || errors.model_filter_mode">
+        <GroupModelPolicyEditor v-if="open" :key="editing?.id ?? 'new'" ref="modelPolicyEditor" v-model="form.model_allowlist" v-model:mode="form.model_filter_mode" :options="currentModelSource.models" :loading="modelsLoading" :unrestricted-accounts="currentModelSource.unrestricted_accounts" />
+        <SHint v-if="modelLoadError" tone="danger" size="xs">{{ modelLoadError }}</SHint>
+      </SField>
+      <SField v-if="editing" :label="t('platforms.served')">
+        <GroupPlatforms :group="editing" hint />
+      </SField>
+      <SSettingsGroup :title="t('settings.environment.title')" :description="t('settings.environment.groupHint')" data-testid="group-environment">
+        <EnvironmentEditor v-model="form.environment" layer="group" field="environment" :errors="errors" :disabled="saving" />
+      </SSettingsGroup>
+      <SField v-if="canEditAccounts" :label="t('groups.accounts.title')" :hint="t('groups.accounts.hint')">
+        <GroupAccountsEditor v-if="open" ref="accountsEditor" :group-id="editing?.id ?? null" @models="selectedModelSource = $event" />
+      </SField>
+    </SFormModal>
 
     <!-- detail -->
     <SModal v-model:open="detailOpen" :title="detail?.name || ''" width="lg">

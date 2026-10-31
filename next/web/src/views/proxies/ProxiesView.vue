@@ -15,7 +15,7 @@ import {
   SHint,
   SIcon,
   SInput,
-  SModal,
+  SFormModal,
   SPageHeader,
   SPagination,
   SSelect,
@@ -282,7 +282,7 @@ function onAction(p: Proxy, key: string) {
       <template #cell-real_ip="{ row }">
         <div v-if="row.real_ip" class="text-xs">
           <SCode inline :text="row.real_ip" />
-          <SDateTime muted v-if="row.real_ip_updated_at" :value="row.real_ip_updated_at" mode="relative" class="block" />
+          <SDateTime v-if="row.real_ip_updated_at" muted :value="row.real_ip_updated_at" mode="relative" class="block" />
         </div>
         <SHint v-else inline>—</SHint>
       </template>
@@ -331,74 +331,68 @@ function onAction(p: Proxy, key: string) {
       </template>
     </STable>
 
-    <SModal v-model:open="open" :title="editing ? t('proxies.editTitle', { name: editing.name }) : t('proxies.create')" width="lg">
-      <form class="space-y-4" @submit.prevent="submit">
-        <SField :label="t('proxies.pasteUrl')" :hint="pasteError ? '' : t('proxies.pasteUrlHint')" :error="pasteError">
-          <div class="flex gap-2">
-            <SInput
-              v-model="pasteUrl"
-              class="flex-1 text-sm"
-              mono
-              :error="!!pasteError"
-              autocomplete="off"
-              spellcheck="false"
-              data-testid="proxy-paste-url"
-              placeholder="socks5://user:pass@host:port"
-              @keydown.enter.prevent="probeProxy"
-            />
-            <SButton :disabled="!pasteUrl.trim() || probing" :loading="probing" data-testid="proxy-paste-probe" @click="probeProxy">{{ probing ? t('proxies.probing') : t('proxies.probeProxy') }}</SButton>
-            <SButton :disabled="!pasteUrl.trim()" variant="secondary" data-testid="proxy-paste-apply" @click="applyPastedUrl">{{ t('proxies.pasteFill') }}</SButton>
-          </div>
-          <div v-if="probeResult?.ok" class="mt-2 text-xs text-fg-muted">
-            <SIcon name="check" class="inline h-3.5 w-3.5 text-success-600 dark:text-success-400" />
-            {{ String(probeResult.protocol).toUpperCase() }}<span v-if="probeResult.latency_ms"> · {{ probeResult.latency_ms }} ms</span>
-            <span v-if="probeResult.location"> · {{ [probeResult.location.country_code, probeResult.location.timezone].filter(Boolean).join(' · ') }}</span>
-            <span v-if="probeResult.ip" class="ml-2">{{ t('proxies.exitIp') }}: <SCode inline :text="probeResult.ip" /></span>
-          </div>
+    <SFormModal v-model:open="open" :title="editing ? t('proxies.editTitle', { name: editing.name }) : t('proxies.create')" width="lg" :loading="saving" :submit-text="editing ? t('common.save') : t('common.create')" @submit="submit">
+      <SField :label="t('proxies.pasteUrl')" :hint="pasteError ? '' : t('proxies.pasteUrlHint')" :error="pasteError">
+        <div class="flex gap-2">
+          <SInput
+            v-model="pasteUrl"
+            class="flex-1 text-sm"
+            mono
+            :error="!!pasteError"
+            autocomplete="off"
+            spellcheck="false"
+            data-testid="proxy-paste-url"
+            placeholder="socks5://user:pass@host:port"
+            @keydown.enter.prevent="probeProxy"
+          />
+          <SButton :disabled="!pasteUrl.trim() || probing" :loading="probing" data-testid="proxy-paste-probe" @click="probeProxy">{{ probing ? t('proxies.probing') : t('proxies.probeProxy') }}</SButton>
+          <SButton :disabled="!pasteUrl.trim()" variant="secondary" data-testid="proxy-paste-apply" @click="applyPastedUrl">{{ t('proxies.pasteFill') }}</SButton>
+        </div>
+        <div v-if="probeResult?.ok" class="mt-2 text-xs text-fg-muted">
+          <SIcon name="check" class="inline h-3.5 w-3.5 text-success-600 dark:text-success-400" />
+          {{ String(probeResult.protocol).toUpperCase() }}<span v-if="probeResult.latency_ms"> · {{ probeResult.latency_ms }} ms</span>
+          <span v-if="probeResult.location"> · {{ [probeResult.location.country_code, probeResult.location.timezone].filter(Boolean).join(' · ') }}</span>
+          <span v-if="probeResult.ip" class="ml-2">{{ t('proxies.exitIp') }}: <SCode inline :text="probeResult.ip" /></span>
+        </div>
+      </SField>
+      <SGrid>
+        <SField :label="t('common.name')" required :error="errors.name">
+          <SInput v-model="form.name" />
         </SField>
-        <SGrid>
-          <SField :label="t('common.name')" required :error="errors.name">
-            <SInput v-model="form.name" />
-          </SField>
-          <SField :label="t('proxies.protocol')" required :error="errors.protocol">
-            <SSelect v-model="form.protocol" :options="protocolOptions" />
-          </SField>
-        </SGrid>
-        <SGrid sm-template="1fr 140px">
-          <SField :label="t('proxies.host')" required :error="errors.host">
-            <SInput v-model="form.host" mono placeholder="10.0.0.5" />
-          </SField>
-          <SField :label="t('proxies.port')" required :error="errors.port">
-            <SInput v-model.number="form.port" type="number" min="1" max="65535" mono />
-          </SField>
-        </SGrid>
-        <SGrid>
-          <SField :label="t('proxies.username')" :hint="t('common.optional')" :error="errors.username">
-            <SInput v-model="form.username" autocomplete="off" />
-          </SField>
-          <SField
-            :label="t('proxies.password')"
-            :hint="editing ? (hasStoredPassword ? t('proxies.passwordKeep') : t('proxies.passwordNone')) : t('common.optional')"
-            :error="errors.password"
-          >
-            <SInput
-              v-model="form.password"
-              type="password"
-              autocomplete="new-password"
-              :disabled="form.clearPassword"
-              :placeholder="editing && hasStoredPassword ? t('proxies.passwordStored') : ''"
-            />
-            <SCheckbox v-if="editing && hasStoredPassword" v-model="form.clearPassword" class="mt-1.5" :label="t('proxies.clearPassword')" data-testid="proxy-clear-password" />
-          </SField>
-        </SGrid>
-        <SField v-if="editing" :label="t('common.status')" :error="errors.status">
-          <SSelect v-model="form.status" :options="statusOptions" />
+        <SField :label="t('proxies.protocol')" required :error="errors.protocol">
+          <SSelect v-model="form.protocol" :options="protocolOptions" />
         </SField>
-      </form>
-      <template #footer>
-        <SButton @click="open = false">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" :loading="saving" @click="submit">{{ editing ? t('common.save') : t('common.create') }}</SButton>
-      </template>
-    </SModal>
+      </SGrid>
+      <SGrid sm-template="1fr 140px">
+        <SField :label="t('proxies.host')" required :error="errors.host">
+          <SInput v-model="form.host" mono placeholder="10.0.0.5" />
+        </SField>
+        <SField :label="t('proxies.port')" required :error="errors.port">
+          <SInput v-model.number="form.port" type="number" min="1" max="65535" mono />
+        </SField>
+      </SGrid>
+      <SGrid>
+        <SField :label="t('proxies.username')" :hint="t('common.optional')" :error="errors.username">
+          <SInput v-model="form.username" autocomplete="off" />
+        </SField>
+        <SField
+          :label="t('proxies.password')"
+          :hint="editing ? (hasStoredPassword ? t('proxies.passwordKeep') : t('proxies.passwordNone')) : t('common.optional')"
+          :error="errors.password"
+        >
+          <SInput
+            v-model="form.password"
+            type="password"
+            autocomplete="new-password"
+            :disabled="form.clearPassword"
+            :placeholder="editing && hasStoredPassword ? t('proxies.passwordStored') : ''"
+          />
+          <SCheckbox v-if="editing && hasStoredPassword" v-model="form.clearPassword" class="mt-1.5" :label="t('proxies.clearPassword')" data-testid="proxy-clear-password" />
+        </SField>
+      </SGrid>
+      <SField v-if="editing" :label="t('common.status')" :error="errors.status">
+        <SSelect v-model="form.status" :options="statusOptions" />
+      </SField>
+    </SFormModal>
   </div>
 </template>
