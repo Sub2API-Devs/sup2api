@@ -10,6 +10,11 @@ declare module 'vue-router' {
     perm?: string | string[]
     /** i18n key of the page title. */
     title?: string
+    /**
+     * Path of the page this one is reached from; the top bar shows it (and
+     * its own parent, and so on) as breadcrumbs before the title.
+     */
+    parent?: string
     public?: boolean
     /** Where a caller without `perm` goes instead of /forbidden, if anywhere. */
     deniedRedirect?: (to: RouteLocationNormalized) => string | undefined
@@ -30,10 +35,10 @@ const children: RouteRecordRaw[] = [
   { path: 'platforms', component: () => import('@/views/platforms/PlatformsView.vue'), meta: { perm: ACCOUNT_PAGE_PERMS, title: 'nav.items.platforms' } },
 
   { path: 'prices', component: () => import('@/views/prices/PricesView.vue'), meta: { perm: 'price:read', title: 'nav.items.prices' } },
-  { path: 'prices/new', component: () => import('@/views/prices/PriceEditView.vue'), meta: { perm: 'price:manage', title: 'nav.items.prices' } },
-  { path: 'prices/sources', component: () => import('@/views/prices/PriceSourcesView.vue'), meta: { perm: 'price:read', title: 'nav.items.prices' } },
-  { path: 'prices/sources/:id/sync', component: () => import('@/views/prices/PriceSyncView.vue'), meta: { perm: 'price:manage', title: 'nav.items.prices' } },
-  { path: 'prices/:id', component: () => import('@/views/prices/PriceEditView.vue'), meta: { perm: 'price:read', title: 'nav.items.prices' } },
+  { path: 'prices/new', component: () => import('@/views/prices/PriceEditView.vue'), meta: { perm: 'price:manage', title: 'prices.newTitle', parent: '/prices' } },
+  { path: 'prices/sources', component: () => import('@/views/prices/PriceSourcesView.vue'), meta: { perm: 'price:read', title: 'prices.sources.title', parent: '/prices' } },
+  { path: 'prices/sources/:id/sync', component: () => import('@/views/prices/PriceSyncView.vue'), meta: { perm: 'price:manage', title: 'prices.syncPrices', parent: '/prices/sources' } },
+  { path: 'prices/:id', component: () => import('@/views/prices/PriceEditView.vue'), meta: { perm: 'price:read', title: 'prices.editTitleShort', parent: '/prices' } },
   { path: 'usage', component: () => import('@/views/usage/UsageView.vue'), meta: { perm: 'usage:all:read', title: 'nav.items.usage' } },
   { path: 'me/usage', component: () => import('@/views/usage/MyUsageView.vue'), meta: { perm: 'usage:self:read', title: 'nav.items.myUsage' } },
   // Usage statistics are part of the usage records page now.
@@ -49,21 +54,22 @@ const children: RouteRecordRaw[] = [
   {
     path: 'plugins/:key/versions/:version/consent',
     component: () => import('@/views/plugins/ConsentView.vue'),
-    meta: { perm: 'plugin:install', title: 'nav.items.plugins' }
+    meta: { perm: 'plugin:install', title: 'nav.crumbs.pluginConsent', parent: '/plugins' }
   },
-  { path: 'plugins/:key/rollout', component: () => import('@/views/plugins/RolloutView.vue'), meta: { perm: 'plugin:read', title: 'nav.items.plugins' } },
+  { path: 'plugins/:key/rollout', component: () => import('@/views/plugins/RolloutView.vue'), meta: { perm: 'plugin:read', title: 'nav.crumbs.pluginRollout', parent: '/plugins' } },
   {
     path: 'plugins/:key',
     component: () => import('@/views/plugins/PluginDetailView.vue'),
     meta: {
       perm: 'plugin:read',
-      title: 'nav.items.plugins',
+      title: 'nav.crumbs.pluginDetail',
+      parent: '/plugins',
       // Plugins link to ?tab=settings; holders of the plugin's settings permission get the settings page.
       deniedRedirect: (to) => (to.query.tab === 'settings' ? `/plugins/${encodeURIComponent(String(to.params.key))}/settings` : undefined)
     }
   },
   // Access is the plugin's settings permission or plugin:read, checked by the core.
-  { path: 'plugins/:key/settings', component: () => import('@/views/plugins/PluginSettingsView.vue'), meta: { title: 'nav.items.plugins' } },
+  { path: 'plugins/:key/settings', component: () => import('@/views/plugins/PluginSettingsView.vue'), meta: { title: 'nav.crumbs.pluginSettings', parent: '/plugins' } },
   { path: 'market', component: () => import('@/views/plugins/MarketView.vue'), meta: { perm: 'plugin:market:read', title: 'nav.items.market' } },
   { path: 'publishers', component: () => import('@/views/plugins/PublishersView.vue'), meta: { perm: 'publisher:read', title: 'nav.items.publishers' } },
   { path: 'nodes', component: () => import('@/views/nodes/NodesView.vue'), meta: { perm: 'node:read', title: 'nav.items.nodes' } },

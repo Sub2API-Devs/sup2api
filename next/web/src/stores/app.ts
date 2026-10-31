@@ -2,9 +2,6 @@ import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
 import { api } from '@sub2api/host'
 import type { MenuSection } from '@/api/types'
-import { useAuthStore } from './auth'
-import { usePluginStore } from './plugins'
-import { ACCOUNT_PAGE_PERMS, PROXY_PAGE_PERMS } from '@/composables/useOwnership'
 
 export type Theme = 'light' | 'dark'
 
@@ -32,42 +29,13 @@ export interface NavSection {
   items: NavItem[]
 }
 
-// Client-side core menu, used when GET /me/menus is unavailable.
-const CORE_MENU: Array<{ key: string; items: Array<NavItem & { perm?: string | string[] }> }> = [
-  { key: 'overview', items: [{ id: 'dashboard', labelKey: 'nav.items.dashboard', icon: 'dashboard', path: '/dashboard' }] },
-  {
-    key: 'gateway',
-    items: [
-      { id: 'groups', labelKey: 'nav.items.groups', icon: 'group', path: '/groups', perm: 'group:read' },
-      { id: 'accounts', labelKey: 'nav.items.accounts', icon: 'account', path: '/accounts', perm: ACCOUNT_PAGE_PERMS },
-      { id: 'proxies', labelKey: 'nav.items.proxies', icon: 'proxy', path: '/proxies', perm: PROXY_PAGE_PERMS },
-      { id: 'prices', labelKey: 'nav.items.prices', icon: 'price', path: '/prices', perm: 'price:read' },
-      { id: 'usage', labelKey: 'nav.items.usage', icon: 'usage', path: '/usage', perm: 'usage:all:read' }
-    ]
-  },
-  {
-    key: 'system',
-    items: [
-      { id: 'users', labelKey: 'nav.items.users', icon: 'user', path: '/users', perm: 'user:read' },
-      { id: 'roles', labelKey: 'nav.items.roles', icon: 'role', path: '/roles', perm: 'role:read' },
-      { id: 'platforms', labelKey: 'nav.items.platforms', icon: 'globe', path: '/platforms', perm: ACCOUNT_PAGE_PERMS },
-      { id: 'plugins', labelKey: 'nav.items.plugins', icon: 'plugin', path: '/plugins', perm: 'plugin:read' },
-      { id: 'market', labelKey: 'nav.items.market', icon: 'market', path: '/market', perm: 'plugin:market:read' },
-      { id: 'publishers', labelKey: 'nav.items.publishers', icon: 'publisher', path: '/publishers', perm: 'publisher:read' },
-      { id: 'nodes', labelKey: 'nav.items.nodes', icon: 'node', path: '/nodes', perm: 'node:read' },
-      { id: 'settings', labelKey: 'nav.items.settings', icon: 'settings', path: '/settings', perm: ['settings:read', 'sticky:read'] }
-    ]
-  },
-  {
-    key: 'me',
-    items: [
-      { id: 'my-api-keys', labelKey: 'nav.items.myApiKeys', icon: 'key', path: '/me/api-keys', perm: 'apikey:self:manage' },
-      { id: 'my-usage', labelKey: 'nav.items.myUsage', icon: 'usage', path: '/me/usage', perm: 'usage:self:read' }
-    ]
-  }
-]
+// Core section keys, labelled by the client's i18n (nav.sections.*); a
+// plugin's own section ("<plugin>:<id>") carries its own label.
+const SECTION_KEYS = ['overview', 'gateway', 'security', 'finance', 'users', 'plugins', 'system', 'me']
 
-const SECTION_KEYS = ['overview', 'gateway', 'finance', 'system', 'me', 'plugins']
+// Shown when GET /me/menus fails: the sidebar has only one definition (the
+// server's), so the client does not guess the rest; it offers a retry.
+const FALLBACK_MENU: NavSection[] = [{ key: 'overview', items: [{ id: 'dashboard', labelKey: 'nav.items.dashboard', icon: 'dashboard', path: '/dashboard' }] }]
 
 export const useAppStore = defineStore('app', () => {
   const theme = ref<Theme>(initialTheme())
@@ -77,6 +45,8 @@ export const useAppStore = defineStore('app', () => {
   const pageDescription = ref('')
   const menus = ref<NavSection[]>([])
   const menusLoaded = ref(false)
+  /** GET /me/menus failed; the sidebar shows the dashboard and a retry. */
+  const menusError = ref(false)
 
   function applyTheme() {
     document.documentElement.classList.toggle('dark', theme.value === 'dark')
@@ -93,57 +63,20 @@ export const useAppStore = defineStore('app', () => {
   }
 
   async function loadMenus() {
-    const auth = useAuthStore()
-    const plugins = usePluginStore()
+    menusError.value = false
     try {
       const data = await api.get<MenuSection[]>('/me/menus')
-      menus.value = ensureClientItems((data || []).map(normalizeSection), (p) => auth.has(p)).filter((s) => s.items.length > 0)
+      menus.value = (data || []).map(normalizeSection).filter((s) => s.items.length > 0)
     } catch {
-      // Fallback: core menu filtered by permissions + plugin menus.
-      const sections: NavSection[] = CORE_MENU.map((s) => ({
-        key: s.key,
-        items: s.items.filter((i) => auth.has(i.perm)).map(({ perm: _p, ...rest }) => rest)
-      })).filter((s) => s.items.length > 0)
-      const pluginItems: NavItem[] = []
-      for (const p of plugins.uiPlugins) {
-        for (const m of p.menus || []) {
-          pluginItems.push({ id: `${p.key}.${m.id}`, label: m.label, icon: m.icon || 'puzzle', path: `/p/${p.key}/${m.page}`, pluginKey: p.key })
-        }
-      }
-      if (pluginItems.length) sections.push({ key: 'plugins', items: pluginItems })
-      menus.value = sections
+      menus.value = FALLBACK_MENU
+      menusError.value = true
     } finally {
       menusLoaded.value = true
     }
   }
 
-  return { theme, sidebarCollapsed, mobileNavOpen, pageDescription, menus, menusLoaded, toggleTheme, loadMenus }
+  return { theme, sidebarCollapsed, mobileNavOpen, pageDescription, menus, menusLoaded, menusError, toggleTheme, loadMenus }
 })
-
-/**
- * Core pages newer than the server menu: added client-side (per permission)
- * when GET /me/menus does not list them yet.
- */
-const CLIENT_ITEMS: Array<{ section: string; before?: string; item: NavItem & { perm: string | string[] } }> = [
-  { section: 'system', before: '/plugins', item: { id: 'platforms', labelKey: 'nav.items.platforms', icon: 'globe', path: '/platforms', perm: ACCOUNT_PAGE_PERMS } }
-]
-
-function ensureClientItems(sections: NavSection[], has: (perm: string | string[]) => boolean): NavSection[] {
-  for (const { section, before, item } of CLIENT_ITEMS) {
-    if (!has(item.perm)) continue
-    if (sections.some((s) => s.items.some((i) => i.path === item.path))) continue
-    const { perm: _p, ...nav } = item
-    let s = sections.find((x) => x.key === section)
-    if (!s) {
-      s = { key: section, items: [] }
-      const at = sections.findIndex((x) => x.key === 'me' || x.key === 'plugins')
-      sections.splice(at < 0 ? sections.length : at, 0, s)
-    }
-    const idx = before ? s.items.findIndex((i) => i.path === before) : -1
-    s.items.splice(idx < 0 ? s.items.length : idx, 0, nav)
-  }
-  return sections
-}
 
 function normalizeSection(s: MenuSection): NavSection {
   const raw = s.section

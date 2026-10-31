@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install"
 )
@@ -39,5 +40,47 @@ func TestResourcesMessage(t *testing.T) {
 	}
 	if m := resourcesMessage(false, install.StatusEnabled); !strings.Contains(m["en"], "next time") || m["zh"] == "" {
 		t.Fatalf("not notified = %v", m)
+	}
+}
+
+// A table's "New" link replaces a sidebar entry for its form page: callers
+// without the link's permission see neither the link nor the form, while a
+// visible menu to the form keeps it.
+func TestVisibleMenusAndPagesCreateLink(t *testing.T) {
+	ui := &manifest.UI{
+		Menus: []manifest.Menu{{ID: "assets", Page: "assets", Permission: "assets:read"}},
+		Pages: map[string]manifest.Page{
+			"assets":    {Type: "table", Create: &manifest.PageLink{Page: "new_asset", Permission: "assets:manage"}},
+			"new_asset": {Type: "form"},
+			"about":     {Type: "form"},
+		},
+	}
+	can := func(perms ...string) func(string) bool {
+		return func(p string) bool {
+			if p == "" {
+				return true
+			}
+			for _, x := range perms {
+				if x == p {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	menus, pages := visibleMenusAndPages(ui, can("assets:read", "assets:manage"))
+	if len(menus) != 1 || pages["assets"].Create == nil || pages["assets"].Create.Page != "new_asset" || len(pages) != 3 {
+		t.Fatalf("manager: menus=%v pages=%v", menus, pages)
+	}
+	_, pages = visibleMenusAndPages(ui, can("assets:read"))
+	if _, ok := pages["new_asset"]; ok || pages["assets"].Create != nil || len(pages) != 2 {
+		t.Fatalf("reader: pages=%v", pages)
+	}
+	if ui.Pages["assets"].Create == nil {
+		t.Fatal("filtering must not change the manifest")
+	}
+	ui.Menus = append(ui.Menus, manifest.Menu{ID: "new", Page: "new_asset"})
+	if _, pages = visibleMenusAndPages(ui, can("assets:read")); pages["new_asset"].Type != "form" || pages["assets"].Create != nil {
+		t.Fatalf("a visible menu keeps the form, not the link: %v", pages)
 	}
 }

@@ -50,6 +50,9 @@ export { useTableColumns, TABLE_COLUMN_SCOPE_KEY } from './tableColumns'
 export type { TableColumnState, TableColumnStorage, TableColumnPreferences } from './tableColumns'
 export { default as STabs } from './STabs.vue'
 export { default as STagInput } from './STagInput.vue'
+// A panel whose title is shown by its own navigation (a tab, a side menu):
+// headings in it that repeat the title are hidden, as inside STabs.
+export { default as STitleScope } from './STitleScope.vue'
 export { default as STextarea } from './STextarea.vue'
 export { default as STimeRange } from './STimeRange.vue'
 export { default as SDateRange } from './SDateRange.vue'
