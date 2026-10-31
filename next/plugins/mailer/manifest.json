@@ -1,0 +1,46 @@
+{
+  "apiVersion": 1,
+  "key": "mailer",
+  "name": { "en": "Mailer", "zh": "邮件" },
+  "description": {
+    "en": "Delivers the core's and other plugins' notifications by email over SMTP (notification channel \"email\").",
+    "zh": "通过 SMTP 以邮件发送核心和其他插件的通知（通知渠道「邮件」）。"
+  },
+  "version": "0.1.0",
+  "publisher": "sub2api",
+  "icon": "text:M",
+  "runtime": "grpc",
+  "entry": { "grpc": { "binaries": "runtimes/{os}-{arch}/plugin" } },
+  "hostCompat": ">=0.1.0 <0.2.0",
+
+  "capabilities": [
+    { "id": "notify.channel.v1" }
+  ],
+
+  "notifications": {
+    "channels": [
+      {
+        "id": "email",
+        "label": { "en": "Email", "zh": "邮件" },
+        "description": { "en": "Sent through the SMTP server set in the mailer's settings.", "zh": "经邮件插件设置中的 SMTP 服务器发送。" },
+        "recipient": "email"
+      }
+    ]
+  },
+
+  "ui": {
+    "settings": {
+      "mode": "schema",
+      "schema": "forms/settings.schema.json",
+      "uiSchema": "forms/settings.ui.json"
+    }
+  },
+
+  "resources": { "memoryMB": 64, "cpu": 0.1, "maxThreads": 32, "maxOpenFiles": 128 },
+
+  "hostPermissions": [
+    { "id": "net",
+      "scope": { "domains": ["*"] },
+      "reason": { "en": "Connect to the configured SMTP server (enforced when the egress policy is an allowlist)", "zh": "连接设置中的 SMTP 服务器（出口策略为白名单时生效）" } }
+  ]
+}

@@ -23,7 +23,7 @@ import (
 var (
 	reservedKeys = map[string]bool{
 		"anthropic": true, "ccgateway": true, "claude_oauth": true, "gemini": true, "growth": true,
-		"guard": true, "moderation": true, "openai": true, "payment": true, "relay": true, "volcengine": true,
+		"guard": true, "mailer": true, "moderation": true, "openai": true, "payment": true, "relay": true, "volcengine": true,
 	}
 	// reservedPlatforms maps a platform id to the plugin it belongs to.
 	reservedPlatforms = map[string]string{"volcengine": "volcengine"}
