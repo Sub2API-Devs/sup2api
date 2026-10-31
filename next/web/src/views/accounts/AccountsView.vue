@@ -20,6 +20,7 @@ import PlatformBadges from '@/views/platforms/PlatformBadges.vue'
 import AccountEditor from './AccountEditor.vue'
 import AccountNumberCell from './AccountNumberCell.vue'
 import AccountLimitsCell from './AccountLimitsCell.vue'
+import AccountSuccessRateCell from './AccountSuccessRateCell.vue'
 import AccountLimitsTable from './AccountLimitsTable.vue'
 import { accountControl, sameCreationGroup } from './accountTypeChoices'
 import AccountQuotaCell from './AccountQuotaCell.vue'
@@ -94,6 +95,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'priority', label: t('accounts.priority'), width: '84px' },
   { key: 'weight', label: t('accounts.weight'), width: '84px' },
   { key: 'limits', label: t('accounts.listUi.limitsColumn') },
+  { key: 'success_rate', label: t('accounts.successRate.column') },
   // Only when a row of this page has plan windows (subscription accounts).
   ...(list.items.value.some((a) => hasQuota(a.quota)) ? [{ key: 'quota', label: t('accounts.quota.column') }] : []),
   // Only when a row of this page has balance (balance-enabled account types).
@@ -615,6 +617,9 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
       </template>
       <template #cell-limits="{ row }">
         <AccountLimitsCell :account="row" />
+      </template>
+      <template #cell-success_rate="{ row }">
+        <AccountSuccessRateCell :outcomes="row.outcomes" />
       </template>
       <template #cell-quota="{ row }">
         <AccountQuotaCell v-if="hasQuota(row.quota)" :quota="row.quota" :refreshing="quotaRefresh.refreshing.has(row.id)" @refresh="quotaRefresh.refresh(row.id)" />

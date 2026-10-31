@@ -27,6 +27,9 @@ const (
 	statsSettingsKey = "account-stats"
 	statsMaxWindow   = observation.MaxWindow
 	statsMaxAccounts = 200
+	// statsMaxCells caps accounts × metrics of one read: every account of a
+	// full page with the core's four metrics (CONTRACTS §73).
+	statsMaxCells = statsMaxAccounts * 4
 )
 
 var applyStats = redis.NewScript(`
@@ -429,7 +432,7 @@ func (s *Stats) ReadObservationMetrics(ctx context.Context, namespace string, id
 // validateMetricsQuery enforces the combination limits of an observation
 // metrics read: window bounds, account and metric counts and their product.
 func validateMetricsQuery(ids []int64, names []string, seconds int) error {
-	if seconds < 5 || seconds > statsMaxWindow || len(ids) > statsMaxAccounts || len(names) == 0 || len(names) > observation.MaxMetrics || len(ids)*len(names) > 600 {
+	if seconds < 5 || seconds > statsMaxWindow || len(ids) > statsMaxAccounts || len(names) == 0 || len(names) > observation.MaxMetrics || len(ids)*len(names) > statsMaxCells {
 		return core.ErrInvalidArgument
 	}
 	seen := map[string]bool{}
@@ -504,7 +507,7 @@ func (s *Stats) readInternalCounters(ctx context.Context, namespace string, ids 
 }
 
 func (s *Stats) AccountStats(ctx context.Context, ids []int64, seconds int) (core.AccountStatsSnapshot, error) {
-	raw, err := s.ReadObservationMetrics(ctx, observation.CoreNamespace, ids, []string{observation.SuccessRequests, observation.SuccessTokens, observation.PendingUsage}, seconds)
+	raw, err := s.ReadObservationMetrics(ctx, observation.CoreNamespace, ids, []string{observation.SuccessRequests, observation.SuccessTokens, observation.PendingUsage, observation.FailedRequests}, seconds)
 	out := core.AccountStatsSnapshot{WindowSeconds: int(raw.WindowSeconds), AsOf: time.UnixMilli(raw.AsOfUnixMs).UTC(), Status: raw.Status, Accounts: make([]core.AccountStatsView, 0, len(raw.Accounts))}
 	if raw.ObservedSinceUnixMs > 0 {
 		at := time.UnixMilli(raw.ObservedSinceUnixMs).UTC()
@@ -516,10 +519,10 @@ func (s *Stats) AccountStats(ctx context.Context, ids []int64, seconds int) (cor
 			n := int(*row.InUse)
 			v.InUse = &n
 		}
-		if len(row.Metrics) == 3 {
-			r, t, p := row.Metrics[0].Sum, row.Metrics[1].Sum, row.Metrics[2].Sum
+		if len(row.Metrics) == 4 {
+			r, t, p, f := row.Metrics[0].Sum, row.Metrics[1].Sum, row.Metrics[2].Sum, row.Metrics[3].Sum
 			rpm, tpm := row.Metrics[0].PerMinute, row.Metrics[1].PerMinute
-			v.SuccessRequests, v.SuccessTokens, v.PendingUsage, v.RPM, v.TPM = &r, &t, &p, &rpm, &tpm
+			v.SuccessRequests, v.SuccessTokens, v.PendingUsage, v.FailedRequests, v.RPM, v.TPM = &r, &t, &p, &f, &rpm, &tpm
 		}
 		out.Accounts = append(out.Accounts, v)
 	}

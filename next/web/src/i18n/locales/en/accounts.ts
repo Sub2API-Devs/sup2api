@@ -17,6 +17,11 @@ export default {
     title: 'Concurrency / RPM / TPM / Sessions details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists', sessions: 'Sessions',
     windowHint: 'RPM, TPM and sessions are the usage of the last 60 seconds; tokens are counted when a response finishes, sessions are the sessions active in that time (by sticky session key; a request matching no sticky rule counts as one). Without a cap only the usage is shown. A request for a listed model counts on the account and on its list.'
   },
+  successRate: {
+    column: 'Success 1m', title: 'Success rate (last 60 seconds)', success: 'Successful requests', failed: 'Failed attempts',
+    requests: '{success} / {total}', idle: 'No requests in the last minute',
+    hint: 'Success rate = successes ÷ (successes + failures) over a rolling 60-second window. Every failed upstream attempt counts once; a 400 (the request itself is wrong), a client cancellation and the gateway\'s own rate limiting are not failures.'
+  },
   modelLimits: {
     title: 'Model limits',
     hint: 'Limit concurrency, RPM, TPM and sessions per minute of chosen models. A card holds one set of limits and one or more lists: the models of a list share one counter, each list counts on its own. They apply together with the account limits, and the account is skipped once any is reached; 0 means unlimited.',

@@ -15,6 +15,7 @@ const (
 	SuccessRequests        = "success_requests"
 	SuccessTokens          = "success_tokens"
 	PendingUsage           = "pending_usage"
+	FailedRequests         = "failed_requests"
 	MaxBatch               = 64
 	MaxMetrics             = 16
 	MaxValue         int64 = 1<<53 - 1

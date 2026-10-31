@@ -183,17 +183,21 @@ type View struct {
 	MaxConcurrency int  `json:"max_concurrency"`
 	// Models the account serves (empty = all) and the client → upstream
 	// model mapping (CONTRACTS §18).
-	Models         []string          `json:"models"`
-	AutoModels     *bool             `json:"auto_models"`
-	ModelMapping   map[string]string `json:"model_mapping"`
-	RPMLimit       int               `json:"rpm_limit"`
-	TPMLimit       int64             `json:"tpm_limit"`
-	SPMLimit       int               `json:"spm_limit"`
-	ModelLimits    []core.ModelLimit `json:"model_limits"`
-	RateUsage      core.RateUsage    `json:"rate_usage"`
-	InUse          int               `json:"in_use"`
-	CooldownUntil  *time.Time        `json:"cooldown_until"`
-	CooldownReason string            `json:"cooldown_reason,omitempty"`
+	Models       []string          `json:"models"`
+	AutoModels   *bool             `json:"auto_models"`
+	ModelMapping map[string]string `json:"model_mapping"`
+	RPMLimit     int               `json:"rpm_limit"`
+	TPMLimit     int64             `json:"tpm_limit"`
+	SPMLimit     int               `json:"spm_limit"`
+	ModelLimits  []core.ModelLimit `json:"model_limits"`
+	RateUsage    core.RateUsage    `json:"rate_usage"`
+	// Outcomes are the successful requests and failed attempts of the last 60
+	// seconds behind the success-rate column (CONTRACTS §73); null when the
+	// statistics are unavailable.
+	Outcomes       *Outcomes  `json:"outcomes"`
+	InUse          int        `json:"in_use"`
+	CooldownUntil  *time.Time `json:"cooldown_until"`
+	CooldownReason string     `json:"cooldown_reason,omitempty"`
 	// Quota is the subscription quota snapshot (CONTRACTS §44), read from
 	// the database only; null for account types without quota (API keys).
 	Quota *QuotaSnapshot `json:"quota"`
@@ -325,6 +329,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 		}
 	}
 	s.fillModelInUse(ctx, out)
+	s.fillOutcomes(ctx, out)
 	s.fillQuota(ctx, rows, out)
 	s.fillBalance(ctx, rows, out)
 	s.fillRefresh(ctx, rows, out)

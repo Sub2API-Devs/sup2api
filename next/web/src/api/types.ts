@@ -350,6 +350,12 @@ export interface AccountDefaultLimits {
   model_limits?: ModelLimit[]
 }
 
+/** Success-rate figure of an account (CONTRACTS §73): 400s, cancellations and gateway rate limiting are not failures. */
+export interface AccountOutcomes {
+  success: number
+  failed: number
+}
+
 export interface Account {
   cc_feature_policy?: AccountFeaturePolicy
   lifecycle_sync?: { status: 'pending' | 'applied' | 'failed'; code?: string }
@@ -384,6 +390,8 @@ export interface Account {
   model_limits?: ModelLimit[]
   /** Read-only usage of the last 60 seconds (0 when Redis is unavailable), with one entry per model list. */
   rate_usage?: { rpm: number; tpm: number; sessions?: number; models?: ModelRateUsage[] }
+  /** Successful requests and failed attempts of the last minute (CONTRACTS §73); null when unavailable. */
+  outcomes?: AccountOutcomes | null
   status: string
   status_reason?: string
   auto_disabled_until?: string | null
