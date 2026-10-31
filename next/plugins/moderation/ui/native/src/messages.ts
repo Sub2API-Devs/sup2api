@@ -329,7 +329,7 @@ export default {
       empty: '没有审核调用'
     },
     watch: {
-      hint: '观察级：请求照常放行，后台审核并计违规次数。拦截级：请求先审核，命中就拒绝。首次出现可疑记录的用户会自动以观察级加入（可在设置中关闭）。插件目前识别不了管理员，请把管理员加入设置里的免审用户。',
+      hint: '观察级：请求照常放行，后台审核并计违规次数。拦截级：请求先审核，命中就拒绝。首次出现可疑记录的用户会自动以观察级加入（可在设置中关闭）。有提示词审核查看权限的管理员照常审核和记录，但不会进入名单，也不会被封禁。',
       add: '加入名单',
       editTitle: '编辑用户 #{id}',
       levelHint: '拦截级的用户每个请求都先审核，命中即拒绝。',
@@ -870,7 +870,7 @@ export default {
       empty: 'No auditor calls'
     },
     watch: {
-      hint: 'Observe: requests pass and are moderated in the background, violations are counted. Enforce: requests are moderated first and refused on a hit. Users with a first suspicious record join at the observe level (configurable). The plugin cannot tell administrators apart yet: add them to the exempt users in the settings.',
+      hint: 'Observe: requests pass and are moderated in the background, violations are counted. Enforce: requests are moderated first and refused on a hit. Users with a first suspicious record join at the observe level (configurable). Moderators (users who may view prompt moderation) are moderated and recorded but never watched or banned.',
       add: 'Add user',
       editTitle: 'Edit user #{id}',
       levelHint: 'Every request of an enforce-level user is moderated first and refused on a hit.',

@@ -9,15 +9,17 @@ import FlowsTab from './FlowsTab.vue'
 import AuditorsTab from './AuditorsTab.vue'
 import ChannelsTab from './ChannelsTab.vue'
 import TestTab from './TestTab.vue'
-import { canManage, canManageSettings, fetchOverview, modeTone, settingsPath, useModHost, type Runtime } from './host'
+import SettingsTab from './settings/SettingsTab.vue'
+import { canReadSettings } from './settings/useSettings'
+import { canManage, fetchOverview, modeTone, useModHost, type Runtime } from './host'
 
 // Prompt moderation page (CONTRACTS §72.15): overview, records, watch list,
-// bans, flows, auditors, channels, playground. Settings stay on the plugin's
-// settings page.
+// bans, flows, auditors, channels, playground and settings (§72.14.7; the
+// settings tab reads and writes the plugin settings through the core).
 const host = useModHost()
 const t = host.t
 
-type TabKey = 'overview' | 'events' | 'watch' | 'blocks' | 'flows' | 'auditors' | 'channels' | 'test'
+type TabKey = 'overview' | 'events' | 'watch' | 'blocks' | 'flows' | 'auditors' | 'channels' | 'test' | 'settings'
 
 const manage = computed(() => canManage())
 const tabs = computed(() => {
@@ -31,6 +33,7 @@ const tabs = computed(() => {
     { key: 'channels', label: t('tabs.channels') }
   ]
   if (manage.value) list.push({ key: 'test', label: t('tabs.test') })
+  if (canReadSettings()) list.push({ key: 'settings', label: t('settings') })
   return list
 })
 
@@ -78,7 +81,7 @@ function goTab(k: string) {
 }
 
 function goSettings() {
-  host.router.push(settingsPath())
+  goTab('settings')
 }
 
 // "Show records of this user" from the overview and the watch list.
@@ -98,7 +101,6 @@ function showUser(userId: number) {
         <SBadge v-if="runtime && !runtime.configured" tone="warning">{{ t('notConfiguredBadge') }}</SBadge>
       </template>
       <template #actions>
-        <SButton v-if="canManageSettings()" icon="settings" @click="goSettings">{{ t('settings') }}</SButton>
         <SButton icon="refresh" icon-only :aria-label="t('refresh')" :title="t('refresh')" :loading="refreshing" @click="refresh" />
       </template>
     </SPageHeader>
@@ -108,6 +110,7 @@ function showUser(userId: number) {
         v-if="visited.has('overview')"
         v-show="tab === 'overview'"
         :ref="setRef('overview')"
+        :active="tab === 'overview'"
         @runtime="runtime = $event"
         @show-user="showUser"
         @go-tab="goTab"
@@ -120,6 +123,7 @@ function showUser(userId: number) {
       <AuditorsTab v-if="visited.has('auditors')" v-show="tab === 'auditors'" :ref="setRef('auditors')" />
       <ChannelsTab v-if="visited.has('channels')" v-show="tab === 'channels'" :ref="setRef('channels')" />
       <TestTab v-if="manage && visited.has('test')" v-show="tab === 'test'" @go-tab="goTab" />
+      <SettingsTab v-if="visited.has('settings')" v-show="tab === 'settings'" :ref="setRef('settings')" />
     </STabs>
   </div>
 </template>

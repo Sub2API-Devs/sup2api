@@ -599,7 +599,7 @@ export interface WatchChange {
 }
 export const createWatch = (body: WatchChange & { user_id: number }) => api().post<Watch>('/watchlist', body)
 export const updateWatch = (userId: number, body: WatchChange) => api().patch<Watch>(`/watchlist/${userId}`, body)
-export const deleteWatch = (userId: number) => api().del(`/watchlist/${userId}`)
+export const deleteWatch = (userId: number, reason?: string) => api().del(`/watchlist/${userId}`, reason ? { reason } : undefined)
 export const fetchWatchEvents = (userId: number) => api().get<WatchEvent[]>(`/watchlist/${userId}/events`)
 
 export const fetchChannels = () => api().get<Channel[]>('/channels')

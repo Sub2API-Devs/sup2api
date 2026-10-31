@@ -12,6 +12,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/textutil"
+
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 )
@@ -278,11 +280,13 @@ func (p *Plugin) deleteWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if bad != nil {
 		return bad, nil
 	}
+	// ?reason= goes into the history entry (DELETE has no body).
+	reason := textutil.TruncateRunes(strings.TrimSpace(pluginsdk.Query(req, "reason")), 500)
 	return p.writeWatch(ctx, req, uid, func(tx pgx.Tx, w Watch, found bool, _ time.Time) (Watch, error) {
 		if !found {
 			return w, errNotFound
 		}
-		return w, removeWatch(ctx, tx, w, "remove", "", callerID(req))
+		return w, removeWatch(ctx, tx, w, "remove", reason, callerID(req))
 	})
 }
 

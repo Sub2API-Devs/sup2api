@@ -189,6 +189,13 @@ func TestRecordAndWatchContext(t *testing.T) {
 		t.Fatalf("history = %+v", hist)
 	}
 
+	if r := h.Do("DELETE", "/watchlist/4", map[string]string{"reason": "cleared"}, nil); r.GetStatus() != 200 {
+		t.Fatalf("remove = %d", r.GetStatus())
+	}
+	if hist := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/4/events", nil, nil)); hist[0].Action != "remove" || hist[0].Reason != "cleared" {
+		t.Fatalf("remove history = %+v", hist[0])
+	}
+
 	fh.Authz = func(uid int64, _ string) bool { return uid == 77 }
 	if r := h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 77}); r.GetStatus() != 400 {
 		t.Fatalf("watching a moderator = %d", r.GetStatus())

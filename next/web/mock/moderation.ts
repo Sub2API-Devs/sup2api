@@ -202,7 +202,7 @@ function trace(hit: boolean, overturn = false) {
   const top = [{ category: 'sexual', score: hit || overturn ? 0.93 : 0.41, threshold: 0.5 }, { category: 'violence', score: 0.32, threshold: 0.95 }, { category: 'hate', score: 0.11, threshold: 0.65 }]
   const o1 = { auditor_id: 1, channel_id: 1, model: 'omni-moderation-latest', calls: 1, hit: hit || overturn, top_category: 'sexual', top_score: 0.93, hits: hit || overturn ? [{ category: 'sexual', score: 0.93, threshold: 0.5 }] : [], top, latency_ms: 412 }
   const o2 = { auditor_id: 2, channel_id: 2, model: 'jev-latest', rules_version: 'content-audit-v2-zh', calls: 1, hit, top_category: 'sexual', top_score: hit ? 0.97 : 0.12, hits: hit ? [{ category: 'sexual', score: 0.97, threshold: 0.9 }] : [], latency_ms: 2310, usage: { input_tokens: 812 } }
-  const stages = [{ outcomes: [o1], result: o1.hit ? 'hit' : 'pass' }]
+  const stages: any[] = [{ outcomes: [o1], result: o1.hit ? 'hit' : 'pass' }]
   if (o1.hit) stages.push({ outcomes: [o2], result: hit ? 'hit' : 'pass' })
   return { stages, final: hit ? 'hit' : 'pass', decider: hit ? 1 : -1, overturned: overturn, latency_ms: 2730 }
 }
@@ -327,7 +327,10 @@ on('GET', '/p/moderation/events/:id', (req) => {
 })
 on('GET', '/p/moderation/events/:id/input', (req) => {
   const e = events.find((x) => x.id === Number(req.params.id))
-  return e ? { id: e.id, format: 'messages', messages: [{ role: 'user', content: [{ type: 'text', text: e.text }] }] } : fail(404, 'not_found', 'event not found')
+  if (!e) return fail(404, 'not_found', 'event not found')
+  // Records with an image carry a small inline PNG block (Anthropic shape).
+  const image = e.image_count ? [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAKElEQVR4nGP8z8Dwn4ECwESJ5lEDRg0YNWDUgFEDRg0YNWDUAOoBAPU8Ah8Y3WqJAAAAAElFTkSuQmCC' } }] : []
+  return { id: e.id, format: 'messages', messages: [{ role: 'user', content: [{ type: 'text', text: e.text }, ...image] }] }
 })
 on('POST', '/p/moderation/events/review', (req) => {
   const ids: number[] = req.body?.ids || []
@@ -418,6 +421,7 @@ on('PATCH', '/p/moderation/watchlist/:id', (req) => {
 })
 on('DELETE', '/p/moderation/watchlist/:id', (req) => {
   const i = watch.findIndex((x) => x.user_id === Number(req.params.id))
+  if (i >= 0) watchEvents.unshift({ id: nextId(), user_id: watch[i].user_id, action: 'remove', from_level: watch[i].level, to_level: '', reason: req.query.reason || '', operator_id: 1, created_at: now() })
   if (i >= 0) watch.splice(i, 1)
   return { user_id: Number(req.params.id), removed: true }
 })

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SField, SHint, SInput, SModal, SSelect, SSwitch, STable, STextarea, type TableColumn } from '@sub2api/ui'
-import CategoryChips from './CategoryChips.vue'
-import CostBadge from './CostBadge.vue'
+import { SAlert, SBadge, SButton, SCard, SDisclosure, SField, SHint, SInput, SModal, SSelect, SSwitch, STable, STextarea, type TableColumn } from '@sub2api/ui'
+import AuditorTryPanel from './pages/AuditorTryPanel.vue'
+import CostSummaryText from './pages/CostSummaryText.vue'
+import ThresholdsEditor from './pages/ThresholdsEditor.vue'
+import { prime } from './pages/catalog'
+import { parseThresholds, thresholdPresetOf } from './pages/thresholds'
 import {
   canManage,
   categoryLabel,
@@ -14,22 +17,22 @@ import {
   fetchChannels,
   fetchDefaults,
   saveAuditor,
-  score,
-  tryAuditor,
   useModHost,
   type Auditor,
   type AuditorConfig,
+  type AuditorDraft,
   type AuditorType,
   type Channel,
   type Defaults,
-  type JevQuestion,
-  type TryResult
+  type JevQuestion
 } from './host'
 
-// Auditors (CONTRACTS §72.6): OpenAI moderation thresholds, Jev question
-// tables, LLM verdict prompts; each bound to one channel of its type.
+// Auditors (CONTRACTS §72.6, §72.14.3): OpenAI moderation thresholds (with
+// presets), Jev question tables, LLM verdict prompts; each bound to one
+// channel of its type. The editor tries the unsaved form.
 const host = useModHost()
 const t = host.t
+const n = (v: number | undefined | null) => host.i18n.formatNumber(v ?? 0)
 const manage = computed(() => canManage())
 
 const rows = ref<Auditor[]>([])
@@ -43,6 +46,8 @@ async function reload() {
   error.value = ''
   try {
     ;[rows.value, channels.value] = await Promise.all([fetchAuditors(), fetchChannels()])
+    prime('auditors', rows.value)
+    prime('channels', channels.value)
     defaults.value ??= await fetchDefaults()
   } catch (e) {
     error.value = errorMessage(e, t('auditors.loadFailed'))
@@ -53,7 +58,7 @@ async function reload() {
 onMounted(reload)
 defineExpose({ reload })
 
-const channelName = (id: number) => channels.value.find((c) => c.id === id)?.name || `#${id}`
+const channelOf = (id: number) => channels.value.find((c) => c.id === id)
 const channelTypeOf: Record<AuditorType, string> = { openai_moderation: 'openai_moderation', typesafe: 'typesafe', llm_verdict: 'llm' }
 
 const columns = computed<TableColumn[]>(() => {
@@ -62,17 +67,22 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'type', label: t('auditors.col.type'), nowrap: true },
     { key: 'channel', label: t('auditors.col.channel') },
     { key: 'summary', label: t('auditors.col.summary') },
+    { key: 'calls', label: t('pagesP3.auditors.calls'), align: 'right', nowrap: true },
+    { key: 'cost', label: t('pagesP3.auditors.cost'), align: 'right', nowrap: true },
     { key: 'usable', label: t('auditors.col.usable'), nowrap: true }
   ]
   if (manage.value) c.push({ key: 'actions', label: '', align: 'right' })
   return c
 })
 
+const openaiCats = computed(() => defaults.value?.openai_categories || [])
+const openaiDefaults = computed(() => defaults.value?.openai_thresholds || {})
+
 function summary(a: Auditor): string {
   const c = a.config || {}
   if (a.type === 'openai_moderation') {
-    const n = Object.keys(c.thresholds || {}).length
-    return n ? t('auditors.overrides', { n }) : t('auditors.defaultThresholds')
+    const p = thresholdPresetOf(c.thresholds || {}, openaiCats.value, openaiDefaults.value)
+    return t('pagesP3.auditors.thresholds', { n: openaiCats.value.length, preset: t(`pagesP3.preset.${p || 'custom'}`) })
   }
   if (a.type === 'typesafe') return `${a.rules_version || ''} · ${t('auditors.questions', { n: c.questions?.items?.length || defaults.value?.default.items.length || 0 })}`
   return c.flag_as_hit ? t('auditors.flagAsHit') : t('auditors.blockOnly')
@@ -145,16 +155,15 @@ function copyDefault() {
 }
 
 function config(): AuditorConfig {
-  if (form.type === 'openai_moderation') {
-    const th: Record<string, number> = {}
-    for (const [k, v] of Object.entries(form.thresholds)) if (String(v).trim() !== '') th[k] = Number(v)
-    return { thresholds: th }
-  }
+  if (form.type === 'openai_moderation') return { thresholds: parseThresholds(form.thresholds) }
   if (form.type === 'typesafe') {
-    return {
-      review_images: form.review_images,
-      questions: form.ownQuestions ? { preamble: form.preamble, items: form.questions.map((q) => ({ ...q, threshold: Number(q.threshold) })) } : null
-    }
+    const items = form.questions.map((q) => {
+      const out: JevQuestion = { ...q, threshold: Number(q.threshold) }
+      if (!out.answer_yes?.trim()) delete out.answer_yes
+      if (!out.answer_no?.trim()) delete out.answer_no
+      return out
+    })
+    return { review_images: form.review_images, questions: form.ownQuestions ? { preamble: form.preamble, items } : null }
   }
   const cats = form.categories
     .split('\n')
@@ -204,37 +213,20 @@ async function remove(a: Auditor) {
   }
 }
 
-// ---- try
+// ---- try: saved auditors from the list; the unsaved form inside the editor
+// (§72.14.3: id 0 = a whole draft, otherwise the draft overrides the stored fields).
 const tryOpen = ref(false)
 const tryTarget = ref<Auditor | null>(null)
-const tryText = ref('')
-const tryImages = ref('')
-const tryResult = ref<TryResult | null>(null)
-const trying = ref(false)
 function openTry(a: Auditor) {
   tryTarget.value = a
-  tryResult.value = null
   tryOpen.value = true
 }
-async function runTry() {
-  const a = tryTarget.value
-  if (!a) return
-  trying.value = true
-  tryResult.value = null
-  try {
-    const images = tryImages.value.split('\n').map((s) => s.trim()).filter(Boolean)
-    tryResult.value = await tryAuditor(a.id, tryText.value, images)
-  } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
-  } finally {
-    trying.value = false
-  }
-}
-const tryScores = computed(() =>
-  Object.entries(tryResult.value?.scores || {})
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-)
+const draft = computed<AuditorDraft>(() => {
+  const d: AuditorDraft = { channel_id: Number(form.channel_id), config: config() }
+  return editing.value ? d : { name: form.name || t('auditors.add'), type: form.type, ...d }
+})
+const tryBlocked = computed(() => (form.channel_id ? '' : t('pagesP3.try.needChannel')))
+const tryKey = ref(0)
 </script>
 
 <template>
@@ -249,8 +241,19 @@ const tryScores = computed(() =>
       <STable :columns="columns" :rows="rows" :loading="loading" :empty-text="t('auditors.empty')" dense>
         <template #cell-name="{ row }">{{ row.name }} <span class="mod-sub mod-num">#{{ row.id }}</span></template>
         <template #cell-type="{ row }">{{ enumLabel('auditorType', row.type) }}</template>
-        <template #cell-channel="{ row }">{{ channelName(row.channel_id) }}</template>
+        <template #cell-channel="{ row }">
+          <template v-if="channelOf(row.channel_id)">
+            <span>{{ channelOf(row.channel_id)!.name }}</span>
+            <span class="mod-sub mod-num"> #{{ row.channel_id }}</span>
+            <SBadge size="xs" :tone="channelOf(row.channel_id)!.enabled ? 'success' : 'gray'" class="mod-ml">{{ channelOf(row.channel_id)!.enabled ? t('enabled') : t('disabled') }}</SBadge>
+            <div v-if="!channelOf(row.channel_id)!.enabled" class="mod-sub mod-danger">{{ t('pagesP3.auditors.callsFail') }}</div>
+            <div v-else-if="channelOf(row.channel_id)!.model" class="mod-sub">{{ channelOf(row.channel_id)!.model }}</div>
+          </template>
+          <SBadge v-else tone="danger" :title="t('pagesP3.auditors.channelMissingHint')">{{ t('pagesP3.auditors.channelMissing') }}</SBadge>
+        </template>
         <template #cell-summary="{ row }">{{ summary(row) }}</template>
+        <template #cell-calls="{ row }"><span class="mod-num">{{ n(row.today?.calls) }}</span></template>
+        <template #cell-cost="{ row }"><CostSummaryText :summary="row.today?.cost" /></template>
         <template #cell-usable="{ row }">
           <SBadge :tone="row.usable ? 'success' : 'warning'" dot>{{ row.usable ? t('auditors.ready') : t('auditors.notReady') }}</SBadge>
         </template>
@@ -262,7 +265,7 @@ const tryScores = computed(() =>
       </STable>
     </SCard>
 
-    <SModal v-model:open="editOpen" :title="editing ? t('auditors.editTitle', { name: editing.name }) : t('auditors.add')" width="2xl">
+    <SModal v-model:open="editOpen" :title="editing ? t('auditors.editTitle', { name: editing.name }) : t('auditors.add')" width="2xl" @update:open="$event && tryKey++">
       <form class="mod-form" @submit.prevent="save">
         <div class="mod-form-row">
           <SField :label="t('auditors.col.name')" required :error="formErr.name">
@@ -279,11 +282,7 @@ const tryScores = computed(() =>
 
         <template v-if="form.type === 'openai_moderation'">
           <SHint size="xs">{{ t('auditors.thresholdsHint') }}</SHint>
-          <div class="mod-threshold-grid">
-            <SField v-for="c in defaults?.openai_categories || []" :key="c" :label="categoryLabel(c)" size="sm">
-              <SInput v-model="form.thresholds[c]" type="number" min="0.01" max="1" step="0.01" size="sm" :placeholder="String(defaults?.openai_thresholds[c] ?? '')" />
-            </SField>
-          </div>
+          <ThresholdsEditor v-model="form.thresholds" :categories="openaiCats" :defaults="openaiDefaults" />
         </template>
 
         <template v-else-if="form.type === 'typesafe'">
@@ -293,10 +292,20 @@ const tryScores = computed(() =>
           <SField :label="t('auditors.ownQuestions')" :hint="form.ownQuestions ? '' : t('auditors.useDefault', { v: defaults?.default_version || '' })">
             <SSwitch v-model="form.ownQuestions" />
           </SField>
+          <SDisclosure v-if="!form.ownQuestions && defaults" :label="t('pagesP3.jev.defaultTable', { n: defaults.default.items.length })">
+            <ol class="mod-pg-jev-list">
+              <li v-for="q in defaults.default.items" :key="q.category">
+                <div><b>{{ categoryLabel(q.category, q.label) }}</b> <code class="mod-code">{{ q.category }}</code> <span class="mod-sub mod-num">{{ t('auditors.threshold') }} {{ q.threshold }}</span></div>
+                <div class="mod-sub mod-prewrap">{{ q.question }}</div>
+                <div v-if="q.answer_yes" class="mod-sub">{{ t('pagesP3.jev.yes') }}：{{ q.answer_yes }}</div>
+                <div v-if="q.answer_no" class="mod-sub">{{ t('pagesP3.jev.no') }}：{{ q.answer_no }}</div>
+              </li>
+            </ol>
+          </SDisclosure>
           <template v-if="form.ownQuestions">
             <div class="mod-toolbar">
               <SButton size="sm" @click="copyDefault">{{ t('auditors.copyDefault') }}</SButton>
-              <SButton size="sm" icon="plus" @click="form.questions.push({ category: 'custom/', label: '', question: '', threshold: 0.85 })">{{ t('auditors.addQuestion') }}</SButton>
+              <SButton size="sm" icon="plus" @click="form.questions.push({ category: 'custom/', label: '', question: '', answer_yes: '', answer_no: '', threshold: 0.85 })">{{ t('auditors.addQuestion') }}</SButton>
             </div>
             <SField :label="t('auditors.preamble')">
               <STextarea v-model="form.preamble" :rows="3" />
@@ -309,6 +318,12 @@ const tryScores = computed(() =>
                 <SButton size="sm" variant="ghost" icon="trash" :aria-label="t('delete')" @click="form.questions.splice(i, 1)" />
               </div>
               <STextarea v-model="q.question" :rows="2" :placeholder="t('auditors.question')" />
+              <SDisclosure :label="t('pagesP3.jev.criteria')" :default-open="!!(q.answer_yes || q.answer_no)">
+                <div class="mod-form-row">
+                  <SField :label="t('pagesP3.jev.yes')" size="sm"><SInput v-model="q.answer_yes" size="sm" :placeholder="t('pagesP3.jev.yesPh')" /></SField>
+                  <SField :label="t('pagesP3.jev.no')" size="sm"><SInput v-model="q.answer_no" size="sm" :placeholder="t('pagesP3.jev.noPh')" /></SField>
+                </div>
+              </SDisclosure>
             </div>
           </template>
         </template>
@@ -332,40 +347,33 @@ const tryScores = computed(() =>
             <SSwitch v-model="form.flag_as_hit" />
           </SField>
         </template>
+
+        <SDisclosure v-if="manage" :label="t('pagesP3.try.draft')" variant="section">
+          <AuditorTryPanel :key="tryKey" :auditor-id="editing?.id ?? 0" :draft="draft" :blocked="tryBlocked" />
+        </SDisclosure>
       </form>
       <template #footer>
         <SButton @click="editOpen = false">{{ host.i18n.t('ui.cancel') }}</SButton>
-        <SButton variant="primary" :loading="saving" @click="save">{{ t('save') }}</SButton>
+        <SButton v-if="manage" variant="primary" :loading="saving" @click="save">{{ t('save') }}</SButton>
       </template>
     </SModal>
 
     <SModal v-model:open="tryOpen" :title="t('auditors.tryTitle', { name: tryTarget?.name || '' })" width="lg">
-      <div class="mod-form">
-        <SHint size="xs">{{ t('auditors.tryHint') }}</SHint>
-        <STextarea v-model="tryText" :rows="5" :placeholder="t('test.placeholder')" />
-        <SField :label="t('test.images')" :hint="t('test.imagesHint')">
-          <STextarea v-model="tryImages" :rows="2" />
-        </SField>
-        <div v-if="tryResult" class="mod-verdict">
-          <div class="mod-verdict-head">
-            <SBadge v-if="tryResult.error" tone="warning">{{ enumLabel('err', tryResult.err) }} {{ tryResult.status || '' }}</SBadge>
-            <SBadge v-else-if="tryResult.skipped" tone="gray">{{ t('trace.skipped') }}</SBadge>
-            <SBadge v-else :tone="tryResult.hit ? 'danger' : 'success'">{{ tryResult.hit ? t('trace.hit') : t('trace.pass') }}</SBadge>
-            <SHint inline size="xs">{{ t('ms', { n: tryResult.latency_ms }) }} · {{ tryResult.model || '' }}</SHint>
-            <CostBadge :cost="tryResult.cost" class="mod-ml-auto" />
-          </div>
-          <SAlert v-if="tryResult.error" tone="danger" dense>{{ tryResult.error }}</SAlert>
-          <CategoryChips v-if="tryResult.hits?.length" :categories="tryResult.hits" wrap />
-          <div v-if="tryResult.reason" class="mod-sub">{{ tryResult.reason }}</div>
-          <ul v-if="tryScores.length" class="mod-scores">
-            <li v-for="[c, s] in tryScores" :key="c"><span>{{ categoryLabel(c) }}</span><span class="mod-num">{{ score(s) }}</span></li>
-          </ul>
-        </div>
-      </div>
+      <AuditorTryPanel v-if="tryTarget && tryOpen" :auditor-id="tryTarget.id" />
       <template #footer>
         <SButton @click="tryOpen = false">{{ host.i18n.t('ui.close') }}</SButton>
-        <SButton variant="primary" icon="play" :loading="trying" :disabled="!tryText.trim() && !tryImages.trim()" @click="runTry">{{ t('test.run') }}</SButton>
       </template>
     </SModal>
   </div>
 </template>
+
+<style scoped>
+.mod-pg-jev-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.8125rem;
+}
+</style>
