@@ -74,6 +74,8 @@ type channelInput struct {
 	BillingModel string `json:"billing_model"`
 	TimeoutMs    int    `json:"timeout_ms"`
 	Enabled      *bool  `json:"enabled"`
+	// Proxy: http(s):// or socks5:// URL; "" removes it, absent keeps it.
+	Proxy *string `json:"proxy"`
 }
 
 func (in *channelInput) normalize() pluginsdk.FieldErrors {
@@ -104,6 +106,11 @@ func (in *channelInput) normalize() pluginsdk.FieldErrors {
 	}
 	if in.Model == "" || utf8.RuneCountInString(in.Model) > 200 {
 		errs = errs.Add("model", "invalid", "model is required, at most 200 characters / 模型必填，最多 200 字")
+	}
+	if in.Proxy != nil {
+		if v := strings.TrimSpace(*in.Proxy); v != "" && (!validProxy(v) || len(v) > 500) {
+			errs = errs.Add("proxy", "invalid", "proxy must be an http(s):// or socks5:// URL / 代理必须是 http(s):// 或 socks5:// 地址")
+		}
 	}
 	if utf8.RuneCountInString(in.BillingModel) > 200 {
 		errs = errs.Add("billing_model", "too_long", "billing_model is at most 200 characters / 计价模型最多 200 字")
@@ -247,6 +254,9 @@ func (p *Plugin) createChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 		if err := p.storeKey(ctx, tx, id, in.APIKey); err != nil {
 			return err
 		}
+		if err := p.storeProxy(ctx, tx, id, in.Proxy); err != nil {
+			return err
+		}
 		var err error
 		out, err = scanChannel(tx.QueryRow(ctx, `SELECT `+channelColumns+` FROM channels WHERE id = $1`, id))
 		return err
@@ -303,6 +313,16 @@ func (p *Plugin) updateChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 			// new-api channel.go: a key must not follow the channel to another host.
 			errs = errs.Add("api_key", "required", "changing the base_url host needs the key again / 修改 base_url 的地址需要重新填写 key")
 		}
+		if !newKey && cur.HasKey && in.Proxy != nil && len(errs) == 0 {
+			// Like a new host: the key must not leave through a new proxy.
+			changed, err := p.proxyChanged(ctx, tx, id, strings.TrimSpace(*in.Proxy))
+			if err != nil {
+				return err
+			}
+			if changed {
+				errs = errs.Add("api_key", "required", "changing the proxy needs the key again / 修改代理需要重新填写 key")
+			}
+		}
 		if len(errs) > 0 {
 			resp = pluginsdk.FieldErrorResponse("invalid channel / 渠道参数无效", errs)
 			return errRollback
@@ -316,6 +336,9 @@ func (p *Plugin) updateChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 			return err
 		}
 		if err := p.storeKey(ctx, tx, id, in.APIKey); err != nil {
+			return err
+		}
+		if err := p.storeProxy(ctx, tx, id, in.Proxy); err != nil {
 			return err
 		}
 		out, err = scanChannel(tx.QueryRow(ctx, `SELECT `+channelColumns+` FROM channels WHERE id = $1`, id))
@@ -458,11 +481,11 @@ func (p *Plugin) loadChannel(ctx context.Context, id int64) (*liveChannel, error
 	if err != nil {
 		return nil, err
 	}
-	ch := &liveChannel{ID: id, client: p.httpClient}
-	var keyEnc []byte
+	ch := &liveChannel{ID: id}
+	var keyEnc, proxyEnc []byte
 	var timeout int
-	err = db.QueryRow(ctx, `SELECT type, protocol, base_url, api_key_enc, model, billing_model, timeout_ms FROM channels WHERE id = $1 AND deleted_at IS NULL`, id).
-		Scan(&ch.Type, &ch.Protocol, &ch.BaseURL, &keyEnc, &ch.Model, &ch.BillingModel, &timeout)
+	err = db.QueryRow(ctx, `SELECT type, protocol, base_url, api_key_enc, proxy_enc, model, billing_model, timeout_ms FROM channels WHERE id = $1 AND deleted_at IS NULL`, id).
+		Scan(&ch.Type, &ch.Protocol, &ch.BaseURL, &keyEnc, &proxyEnc, &ch.Model, &ch.BillingModel, &timeout)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errNotFound
 	}
@@ -476,6 +499,11 @@ func (p *Plugin) loadChannel(ctx context.Context, id int64) (*liveChannel, error
 		}
 		ch.Key = string(k)
 	}
+	proxy, err := p.openProxy(ctx, id, proxyEnc)
+	if err != nil {
+		return nil, err
+	}
+	ch.client = p.clientFor(proxy)
 	ch.Timeout = time.Duration(timeout) * time.Millisecond
 	if ch.Timeout <= 0 {
 		ch.Timeout = time.Duration(defaultChannelTimeoutMs[ch.Type]) * time.Millisecond

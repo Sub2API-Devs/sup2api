@@ -124,8 +124,9 @@ func TestManifest(t *testing.T) {
 			t.Errorf("scope.fields[%d] = %v, want %s", i, f, wantNeeds[i])
 		}
 	}
-	if len(m.Jobs) != 2 || m.Jobs[0].ID != moderation.JobCleanup || m.Jobs[0].Schedule != "0 4 * * *" ||
-		m.Jobs[1].ID != moderation.JobAnalysis || m.Jobs[1].Schedule != "@every 1m" {
+	if len(m.Jobs) != 3 || m.Jobs[0].ID != moderation.JobCleanup || m.Jobs[0].Schedule != "0 4 * * *" ||
+		m.Jobs[1].ID != moderation.JobAnalysis || m.Jobs[1].Schedule != "@every 1m" ||
+		m.Jobs[2].ID != moderation.JobAlerts || m.Jobs[2].Schedule != "@every 1m" {
 		t.Fatalf("jobs = %+v", m.Jobs)
 	}
 	caps := map[string]bool{}

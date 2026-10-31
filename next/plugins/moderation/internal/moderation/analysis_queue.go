@@ -277,8 +277,9 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 	c := p.cfg.Load()
 	now := p.now().UTC()
 	changed := false
+	var notice func()
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		changed = false
+		changed, notice = false, nil
 		if err := lockBlockSubject(ctx, tx, job.UserID); err != nil {
 			return err
 		}
@@ -360,12 +361,15 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 			return err
 		}
 		if changed {
+			from := w.Level
+			notice = func() { p.notifyAutoChange(job.UserID, action, from, to, a, id) }
 			return bumpWatch(ctx, tx)
 		}
 		return nil
 	})
 	if err == nil && changed {
 		p.watchChanged(ctx)
+		notice()
 	}
 	return err
 }

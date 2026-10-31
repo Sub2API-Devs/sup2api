@@ -69,6 +69,11 @@
       "id": "analysis",
       "schedule": "@every 1m",
       "timeoutSec": 60
+    },
+    {
+      "id": "alerts",
+      "schedule": "@every 1m",
+      "timeoutSec": 30
     }
   ],
   "database": {
