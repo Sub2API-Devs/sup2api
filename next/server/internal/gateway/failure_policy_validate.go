@@ -91,8 +91,11 @@ func (v *policyValidation) match(base string, m *FailureMatch) {
 	if !slices.Contains([]string{"upstream", "transport", "core"}, m.Source) {
 		v.add(base+".source", "select an error source", "请选择错误来源")
 	}
-	if v.regex {
-		m.Mode = "any"
+	if v.simple {
+		// Status codes and keywords are both conditions: a rule with both
+		// matches only when the status and a keyword match; a rule with one of
+		// them matches on that one (2026-11-01, was OR in Schema 4).
+		m.Mode = "all"
 	} else if m.Mode == "" {
 		m.Mode = "all"
 	}

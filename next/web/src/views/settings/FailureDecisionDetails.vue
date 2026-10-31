@@ -43,6 +43,12 @@ function ruleName(id?: string) {
     <SDescItem :label="t('failurePolicy.account_rules')">
       {{ ruleName(decision.account_rule) }}
     </SDescItem>
+    <SDescItem
+      v-if="decision.account_keyword"
+      :label="t('failurePolicy.accountKeyword')"
+    >
+      <span class="font-mono">{{ decision.account_keyword }}</span>
+    </SDescItem>
     <SDescItem :label="t('failurePolicy.accountAction')">
       {{ label('actions', decision.account_action) }}
     </SDescItem>

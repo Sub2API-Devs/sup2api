@@ -169,7 +169,7 @@ describe('rule interaction', () => {
     expect(table.text()).not.toContain('条件关系')
     await wrapper.get('[data-testid="retry-save"]').trigger('click')
     expect(api.put.mock.calls[0]![1].policy.retry_rules[0].match).toMatchObject({
-      keyword_regex: true, keywords: ['^QUOTA\\D+$', '', '(?i)denied'], mode: 'any'
+      keyword_regex: true, keywords: ['^QUOTA\\D+$', '', '(?i)denied'], mode: 'all'
     })
   })
   it('shows Go validation errors on the correct row after sorting and clears corrected row errors', async () => {
@@ -255,15 +255,15 @@ describe('rule interaction', () => {
     expect(table.findAllComponents(SSwitch)).toHaveLength(0)
     expect(wrapper.text()).not.toContain('高级匹配范围')
   })
-  it('preserves scope and fixes condition matching to OR when editing inline', async () => {
+  it('preserves scope and fixes condition matching to AND when editing inline', async () => {
     const policy = fixture()
-    Object.assign(policy.retry_rules[0]!.match, { source: 'core', groups: [1], models: ['limited-*'], protocols: ['anthropic'], keywords: ['quota'], mode: 'all' })
+    Object.assign(policy.retry_rules[0]!.match, { source: 'core', groups: [1], models: ['limited-*'], protocols: ['anthropic'], keywords: ['quota'], mode: 'any' })
     api.get.mockResolvedValue({ configured: true, policy })
     const wrapper = mount(FailurePolicySettings, { global })
     await flushPromises()
     await wrapper.get('[data-testid="rule-name"]').setValue('改名')
     await wrapper.get('[data-testid="retry-save"]').trigger('click')
-    expect(api.put.mock.calls[0]![1].policy.retry_rules[0].match).toEqual({ ...policy.retry_rules[0]!.match, mode: 'any' })
+    expect(api.put.mock.calls[0]![1].policy.retry_rules[0].match).toEqual({ ...policy.retry_rules[0]!.match, mode: 'all' })
     expect(normalizedPolicy(fixture()).retry_rules[0]!.match.keywords).toEqual([])
   })
 })

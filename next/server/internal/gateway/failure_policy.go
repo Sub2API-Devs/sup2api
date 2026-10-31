@@ -96,6 +96,7 @@ type FailureFacts struct {
 type FailureDecision struct {
 	RetryRule          string `json:"retry_rule,omitempty"`
 	AccountRule        string `json:"account_rule,omitempty"`
+	AccountKeyword     string `json:"account_keyword,omitempty"` // the account rule's matched keyword, "" when status alone matched
 	Action             string `json:"action"`
 	AccountAction      string `json:"account_action"`
 	SameAccountRetries int    `json:"same_account_retries,omitempty"`
@@ -121,15 +122,17 @@ func migrationDraft(gw GatewaySettings, ad AutoDisableSettings) FailurePolicy {
 		Action: failureRetry}}
 	if ad.StatusCodes != "" || len(ad.Keywords) > 0 {
 		p.AccountRules = []FailureRule{{ID: "migrated-disable", Name: "Existing automatic disable", Enabled: true,
-			Match: FailureMatch{Source: "upstream", StatusCodes: ad.StatusCodes, Keywords: ad.Keywords, Mode: "any"}, Action: "disable"}}
+			Match: FailureMatch{Source: "upstream", StatusCodes: ad.StatusCodes, Keywords: ad.Keywords, Mode: "all"}, Action: "disable"}}
 	}
 	return p
 }
 
-func (m FailureMatch) matches(f FailureFacts) bool {
+// matches reports whether the failure matches, and the keyword (the
+// expression, for regex keywords) that matched, "" when none did.
+func (m FailureMatch) matches(f FailureFacts) (bool, string) {
 	if m.Source != f.Source || len(m.Groups) > 0 && !slices.Contains(m.Groups, f.GroupID) ||
 		!anyGlob(m.Models, f.Model) || !matchList(m.Protocols, f.Protocol) {
-		return false
+		return false, ""
 	}
 	statusMatch := false
 	for _, r := range m.ranges {
@@ -142,39 +145,44 @@ func (m FailureMatch) matches(f FailureFacts) bool {
 	if len(text) > classifyPrefix {
 		text = text[:classifyPrefix]
 	}
-	keywordMatch := m.matchesText(text)
+	keyword := m.matchedKeyword(text)
+	keywordMatch := keyword != ""
 	if len(m.ranges) == 0 && len(m.Keywords) == 0 {
-		return m.Source == "transport"
+		return m.Source == "transport", ""
 	}
 	if m.Mode == "any" {
-		return statusMatch || keywordMatch
+		return statusMatch || keywordMatch, keyword
 	}
-	return (len(m.ranges) == 0 || statusMatch) && (len(m.Keywords) == 0 || keywordMatch)
+	return (len(m.ranges) == 0 || statusMatch) && (len(m.Keywords) == 0 || keywordMatch), keyword
 }
 
-func (m FailureMatch) matchesText(text []byte) bool {
+// matchedKeyword is the first keyword (expression) found in text.
+func (m FailureMatch) matchedKeyword(text []byte) string {
 	if m.KeywordRegex {
-		for _, pattern := range m.patterns {
+		for i, pattern := range m.patterns {
 			if pattern.Match(text) {
-				return true
+				return m.Keywords[i]
 			}
 		}
-		return false
+		return ""
 	}
 	text = bytes.ToLower(text)
 	for _, keyword := range m.Keywords {
 		if bytes.Contains(text, []byte(keyword)) {
-			return true
+			return keyword
 		}
 	}
-	return false
+	return ""
 }
 
 func (p *FailurePolicy) decide(f FailureFacts) FailureDecision {
 	d := FailureDecision{Action: failureReturn, AccountAction: "none"}
 	if p.RetryEnabled && p.MaxRetries > 0 {
 		for _, r := range p.RetryRules {
-			if r.Enabled && r.Match.matches(f) {
+			if !r.Enabled {
+				continue
+			}
+			if ok, _ := r.Match.matches(f); ok {
 				d = p.retryDecision(r)
 				break
 			}
@@ -182,8 +190,11 @@ func (p *FailurePolicy) decide(f FailureFacts) FailureDecision {
 	}
 	if p.AccountEnabled {
 		for _, r := range p.AccountRules {
-			if r.Enabled && r.Match.matches(f) {
-				d.AccountRule, d.AccountAction, d.CooldownSeconds = r.ID, r.Action, r.CooldownSeconds
+			if !r.Enabled {
+				continue
+			}
+			if ok, keyword := r.Match.matches(f); ok {
+				d.AccountRule, d.AccountKeyword, d.AccountAction, d.CooldownSeconds = r.ID, keyword, r.Action, r.CooldownSeconds
 				break
 			}
 		}
