@@ -14,6 +14,13 @@
 - **核心 0.1.224**（`6771d384d`，manifest `fe12b580…c530`，无 schema / Host API 变化，内置插件与 0.1.223 相同）：Worker 在身份校验中转出的 401/403（`AccountRefusalError`）按上游错误响应处理：切换账号、套用自动禁用规则，响应体原样返回给客户端。以前报 503 “account does not provide a verified resource issuer”，只切换账号，账号一直可调度。计划 51 秒完成，没有暂停。
 - 脚本 `stage/ccgateway-0.1.116`、`stage/ccgateway-0.1.117`、`stage/0.1.224`；备份在 `backups/ccgateway-0.1.116`、`ccgateway-0.1.117`、`core-0.1.224`。#23 的 paired 更新仍是 `not_found`（0.1.115 时就有）。
 
+2026-11-01 宿主服务 **ccgateway-bridge-guard** 更新（`5b1e63bff`，北京时间 05:43）：
+- 原来按账号状态的 `egress_backend` 选对端（`shared_xray` 用共享网关，否则用账号自己的 egress）；现在一律认 `<prefix>-shared-egress`，且要求网关带本控制器的归属标签 `io.sup2api.ccgateway.shared=<prefix>`。`egress_backend` 只剩插件回滚兼容一个用途。新增 `--chain`：隔离测试可单独起一份，不会清掉生产链 `CCG-PROXY-BRIDGE`。
+- 替换前对线上只计算不写入，新旧规则一致（22 条，11 个账号）。重启后规则不中断，21:40–21:47 UTC 的 ccgateway 请求 7 次全部 200；之后控制台测试 21、51–59 为 200。旧脚本备份 `backups/ccgateway-0.1.118/ccgateway-bridge-guard.py.before`。
+- 隔离真机验证（前缀 `ccg-np-test`，独立目录和 guard 链，跑完全部删除）：用插件包的 Xray 镜像 0.1.118 从零建网关，3.3 秒就绪；同 revision 改网络池 3.1 秒完成，网关先离开旧网络再接入新网络、网关不重启，app 重建、数据卷保留，DNS 指向新网关，旧网络删除；改回默认池也正常。
+- 另删 2.1.302 测试遗留（用户确认）：4 个容器、3 个数据卷、3 个镜像，记录 `backups/ccgateway-0.1.118/cleanup-302.log`。`ccg-302-testpg`（测试 Postgres）未删。
+- 核心默认镜像（无插件包时才用）的 controller/egress digest 换成 CI 构建的 0.1.118（`fe94a8369`），随下次核心发布生效。app 镜像 CI 一直构建失败（`cli-mods/release` 不在 Git），仍是旧 digest。
+
 2026-11-01 核心 **0.1.226**（`a4f711c65`，manifest `a41f8457…d8e1`，计划 `a7097a74309551142c32c84b3c43df34` completed/13，51 秒，北京时间 05:28，无迁移、schema 不变）：
 - 控制台出口文案改为"共享出口网关（Xray）"（运行时镜像角色、上传确认、代理切换提示、`egress_not_ready`）。
 - 内置插件里的 ccgateway 从 0.1.111 换成 0.1.118 包（同一签名密钥；两节点已是 0.1.118，只影响新装机器）。payload 附带的 `sub2api-plugin` 是从 0.1.224 复制来的旧版，`verify` 不认识新清单字段 `deletion`；包本身已在构建时用新工具验签。
