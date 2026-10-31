@@ -27,6 +27,9 @@
     "overturned_retention_days",
     "error_retention_days",
     "pass_retention_days",
+    "stats_retention_days",
+    "error_rate_alert_percent",
+    "notify_webhook_url",
     "max_concurrency",
     "queue_size",
     "cache_ttl_seconds",
@@ -312,6 +315,44 @@
         "en": "days",
         "zh": "天"
       }
+    }
+  },
+  "stats_retention_days": {
+    "ui:title": {
+      "en": "Keep statistics",
+      "zh": "统计保留"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "days",
+        "zh": "天"
+      }
+    }
+  },
+  "error_rate_alert_percent": {
+    "ui:title": {
+      "en": "Error rate alert",
+      "zh": "异常率告警阈值"
+    },
+    "ui:description": {
+      "en": "Auditors, channels and flows above this error rate in the last hour (at least 20 samples) are flagged; flows send one webhook alert when they cross it. 0 = off.",
+      "zh": "近 1 小时错误率超过它（样本至少 20）时标红；流程越过阈值时发一次 webhook 告警。0 为不告警。"
+    },
+    "ui:options": {
+      "unit": {
+        "en": "%",
+        "zh": "%"
+      }
+    }
+  },
+  "notify_webhook_url": {
+    "ui:title": {
+      "en": "Notification webhook",
+      "zh": "通知 webhook"
+    },
+    "ui:description": {
+      "en": "POSTs JSON on flow error-rate alerts and on watch list changes made by the AI analysis. Never includes user text. Empty = off.",
+      "zh": "流程异常率告警、AI 自动调整名单时 POST JSON；不含用户原文。留空不发。"
     }
   },
   "max_concurrency": {

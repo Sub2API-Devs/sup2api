@@ -5093,12 +5093,163 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - new-api 的分组 `cc-max` 在 sup2api 里没有同名分组，所以流程的分组绑定不迁移，迁移后告诉用户。
   - new-api 渠道上的代理不迁移（P1 起就不支持代理）。
 
-### 72.14 P3：统计、告警、用户信息
+### 72.14 P3：统计、告警、渠道代理、界面对齐（2026-10-31，用户要求，插件 0.4.0，核心不改）
 
-- 小时统计表：维度为小时、分组、流程、级、审核器、渠道、时机；累加审核数、命中、推翻、错误、缓存跳过、调用数、延迟分桶、token。概览页加漏斗、审核器健康度和延迟分位数。
-- 异常率告警：近 1 小时异常率超过 `error_rate_alert_percent` 时，照 `guard` 插件的写法发 webhook，只在越过阈值的那一刻发一次。
-- 核心实现 `users.read`：按 id 批量取用户名、邮箱、角色。用户名显示和搜索、管理员自动豁免都依赖它。
-- 可选：核心把粘性会话指纹加进 `RequestMeta`，记录可以按会话关联。
+用户要求「将内容审核功能完整迁移过来」，并且要把拖拽画布也迁过来。差异清单见 `docs/HANDOFF-2026-10-31-MODERATION-GAPS.md`，本节只写定下来的做法和接口。
+
+#### 72.14.1 统计表（迁移 0005）
+
+- **`stats_hourly`**：主键为（hour, group_id, flow_id, stage, auditor_id, timing）。按 flow_id、stage、auditor_id 是否为 0 区分四种行：
+
+  | 行 | 条件 | 含义 |
+  |---|---|---|
+  | request | flow_id = 0 | 前置审核给请求增加的延迟、被拒绝的请求数 |
+  | flow | stage = 0 | 一次流程运行 |
+  | stage | auditor_id = 0 | 某一级 |
+  | auditor | 其余 | 某个审核器 |
+
+  - 每行有 9 档延迟桶（≤50、100、200、500、1000、2000、5000、10000 ms，以及更多）和费用。
+  - 时间一律按 UTC 整点。
+  - 只记录钩子来源的运行；测试、试跑、模拟不进统计，它们的费用只进 `costs`。
+- **`costs`**：按小时、渠道、来源各一行，增加调用的错误数和延迟，作为渠道健康度。
+  - 来源有 audit、analysis、test、try、simulate 五种；健康度只统计 audit 和 analysis。
+- **`user_daily`**：按 UTC 日期和用户各一行，不计管理员。
+  - 管理员指有 `moderation:read` 权限的用户（含超级用户），用宿主调用 `AuthzCheck` 判断，结果缓存 5 分钟。
+  - 与 new-api 一样，管理员照常审核和记录，但不进观察名单、不会被封禁。
+- **`watchlist.hits_since_seen`**：每条新的可疑记录加 1；手动或 AI 改级别时清零。对应 new-api 的 hits_since_mark。
+- **写入方式**：每个节点先在内存累加，每 10 秒 upsert 一次；写失败的计数留到下一次。计价在后台排队完成。
+- **清理**：`cleanup` 任务按 `stats_retention_days`（默认 90）删除这三张表里的旧行。
+- **AI 分析**：`get_user_summary` 改读 `user_daily`，关掉 `record_pass` 后审核数依然准确。
+
+#### 72.14.2 统计接口（`moderation:read`）
+
+**通用参数**：
+- `tz`：浏览器时区，单位为分钟，东区为正（北京时间为 480），默认 0。「今天」和按天分桶都按这个时区计算。
+- `from`、`to`：RFC3339 格式。
+- 返回的时间一律是 RFC3339 格式的 UTC 时刻。
+
+**`GET /status`**：概览，字段与 new-api 的 Status 对齐。
+
+| 字段 | 内容 |
+|---|---|
+| `mode`、`enabled`、`error_rate_alert_percent` | 运行模式和告警阈值 |
+| `runtime` | 原有的 Runtime，本节点数据 |
+| `status_line` | `enabled_flows`、`bound_groups[]`、`stale_groups[]`、`disabled_channels`、`analysis_channel` |
+| `today` | `audited`、`suspicious`、`blocked`、`overturned`、`errors`、`cache_skipped`、`auditor_calls`、`tokens_in`、`tokens_out`、`analyses`、`analyses_failed`、`analysis_tokens_in`、`analysis_tokens_out` |
+| `ai_review` | 今天成功的分析里各类结论的条数：`reviewed`、`violation`、`false_positive`、`unsure` |
+| `watch` | `watching`、`watching_with_new`、`blocking`、`analysis_every_violations` |
+| `attention[]` | 最需关注的用户，按 hits_since_seen、最后命中时间排序，最多 6 人；每项为 `user_id`、`level`、`hits_since_seen`、`hit_count`、`last_hit_at`、`latest_trend` |
+| `auditors[]`、`channels[]` | 近 1 小时的健康度 HealthRow，见下 |
+| `funnels[]` | 今天的漏斗：`flow_id`、`name`、`stages[{stage, received, hit, passed}]`、`suspicious`、`blocked` |
+| `queue` | 本节点队列：`post_queue`、`post_queue_cap`、`dropped_post_full`、`price_queue`、`price_queue_cap`、`dropped_costs`、`analysis_pending`、`analysis_running`、`analysis_concurrency` |
+| `costs` | 今天的费用。`total`、`audit`、`analysis`、`manual` 为 CostSummary；`channels[]`、`auditors[]` 为 `{id, cost}`，其中 cost 也是 CostSummary |
+
+说明：
+- **`status_line`**：
+  - `bound_groups` 是已绑定流程的分组；
+  - `stale_groups` 是绑定的流程已停用或未发布的分组；
+  - 界面用核心 `/groups` 的结果减去 `bound_groups`，得到未审核的分组。
+- **HealthRow**：字段为 `id`、`audited`、`calls`、`hits`、`errors`、`error_rate`、`hit_rate`、`flagged`、`skipped_no_text`。
+  - 「近 1 小时」指上一个整点到现在。
+  - 样本 ≥20 且错误率超过阈值时，`flagged` 为 true；阈值为 0 时不标记。
+  - 渠道行只有调用数和错误数。
+
+**`GET /stats/trend?granularity=hour|day&from&to&flow_id&group_id&tz`**：
+- **默认范围**：按小时是今天 0 点到现在，按天是 13 天前的 0 点到现在。范围最长 93 天。
+- **`flows[]`**：每项为 `{flow_id, name, points[]}`。
+  - point 字段：`ts`、`audited`、`cache_skipped`、`hit`、`blocked`、`overturned`、`errors`、`suspicious_rate`、`pre_avg_ms`、`pre_p95_ms`、`post_avg_ms`、`post_p95_ms`。
+  - `suspicious_rate` = hit / (audited + cache_skipped)。
+- **`auditors[]`**：每项为 `{flow_id, stage, auditor_id, points[]}`，point 字段为 `ts`、`audited`、`hit`、`errors`、`hit_rate`、`error_rate`。
+- 每个桶都有数据点，没有数据的桶补零。
+
+**`GET /stats/performance`**：参数同 trend，默认按小时。
+- 返回 `{granularity, from, to, summary, points[{ts, ...}], auditors[{auditor_id, ...}]}`。
+- 每项都是 LatencySummary：`count`、`avg_ms`、`p50_ms`、`p95_ms`、`p99_ms`、`buckets[9]`。
+- 不选流程时用 request 行；选了流程时用这条流程 timing=pre 的 flow 行。分位数按延迟桶插值估算。
+
+**`GET /stats/categories?tz`**：今天可疑请求的类别分布。
+- 返回 `{suspicious_requests, category_hits, truncated, items[{category, count}]}`。
+- 同一个 request_id 的同一类别只计一次。
+- 最多扫描 5 万条，超过时 `truncated` 为 true。
+- 结果按「今天」的起点缓存 60 秒。
+
+#### 72.14.3 列表和详情补充的字段
+
+- **`GET /flows`**：每项加 `stats_24h {audited, suspicious_rate, pre_latency_avg_ms}`。
+- **`GET /flows/:id`**：加 `stage_timeout_sum_ms`，即按草稿算出的自动总超时。
+  - 总超时为 0 表示自动，发布后也保持 0；每次加载配置时按渠道超时现算。
+- **`GET /auditors`**：每项加 `today {calls, cost}`。
+- **`POST /auditors/:id/try`**：body 除测试输入外，可带 `name`、`type`、`channel_id`、`config`。
+  - id 为 0 时，body 里是完整的审核器草稿；
+  - id 大于 0 时，body 给出的字段覆盖已保存的配置。
+- **`GET /channels`**：每项加：
+  - `health {calls_1h, error_rate_1h, tokens_today, cost_1h, cost_today, cost_today_sources}`；
+  - `used_by[{id, name}]`；
+  - `is_analysis`。
+  - 已有的 `has_proxy` 表示配了代理。
+- **`POST /channels/:id/test`**：结果加 `url`，即实际请求的地址。
+- **`DELETE /channels/:id`**：
+  - 被审核器使用时返回 409 `channel_in_use`，details 带 `auditors[{id, name}]`；
+  - 是分析渠道时返回 409 `analysis_channel`。
+- **`GET /watchlist`**：
+  - 新增筛选：`with_new=1`、`trend`（四种趋势，或 `none` 表示未分析）、`category`、`q`（用户 id）。
+  - 新增排序 `sort`：`new`（默认）、`last_hit`、`severity`、`total`。
+  - 每项加：
+    - `hits_since_seen`；
+    - `suspicious_total`：近 30 天的可疑记录数；
+    - `severity {high, medium, low}`；
+    - `top_categories`：最多 3 个；
+    - `other_categories`：其余类别的数目；
+    - `groups[]`：近 30 天记录涉及的分组；
+    - `ai_counts`：最近一次成功分析的结论计数。
+- **`POST`、`PATCH /watchlist`**：接受 `reason`，写进名单历史，不填时用 note。手动加入管理员时返回 400。
+- **`GET /events`**：
+  - 新增 `group_id` 筛选；
+  - 列表项带 `trace`，界面据此画各级路径和接近阈值的分数；
+  - Outcome 加 `top[]`：每个审核器按 score/threshold 排前 3 的类别，命中与否都列出。
+- **`GET /events/:id`**：加三个字段：
+  - `related[]`：同一 request_id 的其他记录；
+  - `flow_snapshot {flow_id, name, version, current_version, published_at, spec, auditors[{id, name, type, channel_id, channel_name, config, rules_version, deleted}]}`；
+  - `user {watch, exempt, staff, blocked}`。
+
+#### 72.14.4 设置（新增）
+
+| 键 | 默认值 | 范围 | 说明 |
+|---|---|---|---|
+| `error_rate_alert_percent` | 5 | 0–100 | 健康度标红和流程异常率告警的阈值；0 表示不告警 |
+| `stats_retention_days` | 90 | 7–3650 | 统计表的保留天数 |
+| `notify_webhook_url` | 空 | http(s) | 告警和名单自动变更的 webhook；留空不发 |
+
+#### 72.14.5 告警和通知
+
+照 guard 插件 `alertSender` 的写法：POST JSON，5 秒超时，失败只记日志。通知不包含用户原文。
+
+1. **流程异常率**：新任务 `alerts`，`@every 1m`，全集群只在一个节点执行。
+   - 判断条件：近 1 小时样本 ≥20，且 errors×100 > 阈值×样本数。
+   - 只在流程从未超过变为超过的那一刻发一次；上次的状态存在 KV 的 `alert:flow:<id>`。
+   - 内容：`{event:"moderation.flow_error_rate", flow_id, flow_name, errors, audited, error_rate, threshold_percent, note}`。
+2. **AI 自动调整名单**（auto_upgrade、auto_downgrade、auto_remove）：
+   - 内容：`{event:"moderation.watch_auto_change", user_id, action, from_level, to_level, trend, suggestion, analysis_id}`。
+   - 不带分析摘要，因为摘要可能引用用户原文。
+
+#### 72.14.6 渠道代理
+
+- 渠道新增 `proxy`，支持 `http://`、`https://`、`socks5://`。用 SecretSeal 加密存储，context 为 `channel:<id>:proxy`；读接口只返回 `has_proxy`。
+- 修改代理时必须重新填 key，与 new-api 相同；没带 key 时返回 400，错误放在 `api_key` 字段上。传空字符串表示清除代理，不传表示不改。
+- 代理请求的 Transport 从 `http.DefaultTransport` Clone 出来。SDK 在 Init 后已把它换成出口隧道，所以严格网络模式仍然生效。
+
+#### 72.14.7 界面
+
+- **流程**：用拖拽画布编辑器取代表单弹窗，规格见 GAPS 文档第 2 节。
+- **概览**：照 new-api 的 `components/overview/` 重做，每分钟自动刷新。
+- **设置**：新增「设置」标签页。
+  - 用 `host.api` 调核心的 `GET/PUT /plugins/moderation/settings`，只改本页涉及的键，其余原样合并回去。
+  - 需要 `plugin:manage` 权限，没有时只读。
+- **用户名和分组名**：用 `host.api` 调核心的 `/users/:id`、`/groups`，没有权限时只显示 id。
+- **记录、名单、审核器、渠道页**：按 72.14.3 的字段对齐 new-api。另外：
+  - OpenAI 阈值预设：宽松（×1.1）、默认、严格（×0.75）；
+  - 可以试跑未保存的审核器；
+  - 可以在记录详情里直接操作名单。
 
 ### 72.15 界面（插件 `ui/native`，只用 `@sub2api/ui` 和 `@sub2api/host`）
 

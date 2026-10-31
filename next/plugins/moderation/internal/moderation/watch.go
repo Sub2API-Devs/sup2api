@@ -24,6 +24,7 @@ type Watch struct {
 	SinceAt        time.Time  `json:"since_at"`
 	ExpiresAt      *time.Time `json:"expires_at"`
 	HitCount       int        `json:"hit_count"`
+	HitsSinceSeen  int        `json:"hits_since_seen"` // suspicious records since the last level change
 	ViolationCount int        `json:"violation_count"`
 	ViolationEpoch int64      `json:"-"`
 	LastHitAt      *time.Time `json:"last_hit_at"`
@@ -42,13 +43,13 @@ type Watch struct {
 	analysisToken        int64
 }
 
-const watchColumns = `user_id, level, source, since_at, expires_at, hit_count, violation_count, violation_epoch, last_hit_at, note, updated_at,
+const watchColumns = `user_id, level, source, since_at, expires_at, hit_count, hits_since_seen, violation_count, violation_epoch, last_hit_at, note, updated_at,
 	analysis_requested_at, analysis_source, analysis_claim_until, analysis_token, latest_analysis_id, latest_analysis_status,
 	latest_trend, latest_suggestion, analyzed_at`
 
 func scanWatch(r pgx.Row) (Watch, error) {
 	var w Watch
-	err := r.Scan(&w.UserID, &w.Level, &w.Source, &w.SinceAt, &w.ExpiresAt, &w.HitCount, &w.ViolationCount, &w.ViolationEpoch, &w.LastHitAt, &w.Note, &w.UpdatedAt,
+	err := r.Scan(&w.UserID, &w.Level, &w.Source, &w.SinceAt, &w.ExpiresAt, &w.HitCount, &w.HitsSinceSeen, &w.ViolationCount, &w.ViolationEpoch, &w.LastHitAt, &w.Note, &w.UpdatedAt,
 		&w.AnalysisRequestedAt, &w.AnalysisSource, &w.claimUntil, &w.analysisToken, &w.LatestAnalysisID, &w.LatestAnalysisStatus,
 		&w.LatestTrend, &w.LatestSuggestion, &w.AnalyzedAt)
 	w.SinceAt, w.UpdatedAt = w.SinceAt.UTC(), w.UpdatedAt.UTC()
@@ -278,7 +279,7 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			// A new level opens a new counting window (new-api
 			// moderation_watch.go): violations, epoch and since restart, and
 			// back at observe the entry expires after watch_days again.
-			w.ViolationEpoch, w.ViolationCount, w.SinceAt = newEpoch(), 0, now
+			w.ViolationEpoch, w.ViolationCount, w.HitsSinceSeen, w.SinceAt = newEpoch(), 0, 0, now
 			if w.Level == LevelObserve && in.Days == nil {
 				w.ExpiresAt = expiryOf(nil, c, now)
 			}
@@ -293,6 +294,7 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			source = CASE WHEN $5 THEN 'manual' ELSE source END,
 			since_at = CASE WHEN $5 THEN $6 ELSE since_at END,
 			violation_count = CASE WHEN $5 THEN 0 ELSE violation_count END,
+			hits_since_seen = CASE WHEN $5 THEN 0 ELSE hits_since_seen END,
 			violation_epoch = CASE WHEN $5 THEN $7 ELSE violation_epoch END
 			WHERE user_id = $1`, uid, w.Level, w.ExpiresAt, w.Note, changed, now, w.ViolationEpoch); err != nil {
 			return w, err

@@ -340,7 +340,7 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 				expires = &t
 			}
 			tag, err := tx.Exec(ctx, `UPDATE watchlist SET level = $3, source = 'analysis', since_at = $4, expires_at = $5,
-				hit_count = 0, violation_count = 0, violation_epoch = $6, updated_at = $4 WHERE user_id = $1 AND level = $2`,
+				hit_count = 0, hits_since_seen = 0, violation_count = 0, violation_epoch = $6, updated_at = $4 WHERE user_id = $1 AND level = $2`,
 				job.UserID, w.Level, to, now, expires, newEpoch())
 			if err != nil || tag.RowsAffected() != 1 {
 				return err

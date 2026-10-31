@@ -205,7 +205,7 @@ func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, even
 			changed = true
 		}
 		if w.Level != LevelObserve {
-			_, err := tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, last_hit_at = $2, updated_at = $2 WHERE user_id = $1`, e.UserID, now)
+			_, err := tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, hits_since_seen = hits_since_seen + 1, last_hit_at = $2, updated_at = $2 WHERE user_id = $1`, e.UserID, now)
 			return err
 		}
 		counted := false
@@ -232,7 +232,7 @@ func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, even
 				return err
 			}
 		}
-		_, err = tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, violation_count = violation_count + $2,
+		_, err = tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, hits_since_seen = hits_since_seen + 1, violation_count = violation_count + $2,
 			last_hit_at = $3, expires_at = $4, updated_at = $3 WHERE user_id = $1`, e.UserID, inc, now, expArg)
 		if err != nil {
 			return err

@@ -379,3 +379,16 @@ func TestParseVerdict(t *testing.T) {
 		t.Fatal("bad verdict accepted")
 	}
 }
+
+func TestDecodeAlertSettings(t *testing.T) {
+	s, err := DecodeSettings([]byte(`{"stats_retention_days": 1, "error_rate_alert_percent": 250, "notify_webhook_url": " https://hooks.example/x "}`))
+	if err != nil || s.StatsRetentionDays != 7 || s.ErrorRateAlertPercent != 100 || s.NotifyWebhookURL != "https://hooks.example/x" {
+		t.Fatalf("decoded = %d %d %q %v", s.StatsRetentionDays, s.ErrorRateAlertPercent, s.NotifyWebhookURL, err)
+	}
+	if s, _ := DecodeSettings([]byte(`{"notify_webhook_url": "ftp://x"}`)); s.NotifyWebhookURL != "" {
+		t.Fatalf("bad webhook kept: %q", s.NotifyWebhookURL)
+	}
+	if d := DefaultSettings(); d.StatsRetentionDays != 90 || d.ErrorRateAlertPercent != 5 {
+		t.Fatalf("defaults = %+v", d)
+	}
+}

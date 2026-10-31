@@ -108,6 +108,30 @@
     },
     {
       "method": "GET",
+      "path": "/status",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/stats/trend",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/stats/performance",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
+      "path": "/stats/categories",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
       "path": "/events",
       "scope": "admin",
       "permission": "moderation:read"

@@ -19,6 +19,10 @@ import (
 
 func (p *Plugin) routes() {
 	p.Handle("GET", "/overview", p.getOverview)
+	p.Handle("GET", "/status", p.getStatus)
+	p.Handle("GET", "/stats/trend", p.getTrend)
+	p.Handle("GET", "/stats/performance", p.getPerformance)
+	p.Handle("GET", "/stats/categories", p.getCategories)
 	p.Handle("GET", "/events", p.listEvents)
 	p.Handle("POST", "/events/review", p.reviewEvents)
 	p.Handle("GET", "/events/:id", p.getEvent)
