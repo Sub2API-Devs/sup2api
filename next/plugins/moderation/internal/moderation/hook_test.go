@@ -345,8 +345,16 @@ func TestObserveWatchListAndEnforceLevel(t *testing.T) {
 
 func TestTwoStageFlowCacheAndFailOpen(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "record_pass": true})
 	flow := setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI}, []string{AuditorTypeSafe})
+	// total_timeout_ms 0 stays automatic after publishing: 3 s + 8 s.
+	fv := decodeData[FlowView](t, h.Do("GET", fmt.Sprintf("/flows/%d", flow), nil, nil))
+	if pub, err := ParseSpec(fv.Published); err != nil || pub.TotalTimeoutMs != 0 || fv.StageTimeoutSumMs != 11000 {
+		t.Fatalf("published timeout = %v %v, sum %d", pub, err, fv.StageTimeoutSumMs)
+	}
+	if got := p.snap.Load().flows[flow].timeout; got != 11*time.Second {
+		t.Fatalf("live timeout = %v", got)
+	}
 	// hate is an OpenAI category only: the Jev stage overturns it.
 	if r := mustHook(t, h, hookReq("MOD-HIT-hate words")); denied(r) || !strings.Contains(r.GetNote(), "overturned") {
 		t.Fatalf("overturn = %+v", r)

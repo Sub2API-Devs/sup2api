@@ -28,8 +28,10 @@ type FlowView struct {
 	PublishedBy *int64          `json:"published_by"`
 	Groups      []int64         `json:"groups"`
 	Dirty       bool            `json:"dirty"` // draft differs from the published spec
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	// StageTimeoutSumMs is the automatic total timeout of the draft (detail only).
+	StageTimeoutSumMs int       `json:"stage_timeout_sum_ms,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 func (p *Plugin) flowViews(ctx context.Context, q interface {
@@ -82,6 +84,9 @@ func (p *Plugin) getFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*plugi
 	}
 	if len(list) == 0 {
 		return notFound("flow"), nil
+	}
+	if spec, err := ParseSpec(list[0].Draft); err == nil {
+		list[0].StageTimeoutSumMs = p.snap.Load().stageTimeoutSumMs(spec)
 	}
 	return pluginsdk.DataResponse(list[0]), nil
 }
@@ -288,7 +293,7 @@ func (p *Plugin) setFlowGroups(ctx context.Context, req *pluginv1.HTTPRequest) (
 }
 
 // publishFlow publishes the draft: {expected_version}. total_timeout_ms 0
-// is filled from the channel timeouts.
+// stays 0 (automatic: worked out from the channel timeouts on every load).
 func (p *Plugin) publishFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	id, bad := parseID(req, "id")
 	if bad != nil {
@@ -323,13 +328,6 @@ func (p *Plugin) publishFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			resp = pluginsdk.FieldErrorResponse("invalid flow / 流程参数无效", pluginsdk.FieldErrors{}.Add("draft", "invalid", err.Error()))
 			return errRollback
 		}
-		if spec.TotalTimeoutMs == 0 {
-			timeouts, err := auditorTimeouts(ctx, tx)
-			if err != nil {
-				return err
-			}
-			spec.TotalTimeoutMs = spec.DefaultTotalTimeoutMs(func(a int64) int { return timeouts[a] })
-		}
 		raw, _ := json.Marshal(spec)
 		now := p.now().UTC()
 		by := callerID(req)
@@ -347,26 +345,6 @@ func (p *Plugin) publishFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		return nil, err
 	}
 	return p.getFlow(ctx, req)
-}
-
-// auditorTimeouts maps live auditors to their channel timeout.
-func auditorTimeouts(ctx context.Context, tx pgx.Tx) (map[int64]int, error) {
-	rows, err := tx.Query(ctx, `SELECT a.id, c.type, c.timeout_ms FROM auditors a JOIN channels c ON c.id = a.channel_id WHERE a.deleted_at IS NULL`)
-	if err != nil {
-		return nil, err
-	}
-	out := map[int64]int{}
-	var id int64
-	var typ string
-	var ms int
-	_, err = pgx.ForEachRow(rows, []any{&id, &typ, &ms}, func() error {
-		if ms <= 0 {
-			ms = defaultChannelTimeoutMs[typ]
-		}
-		out[id] = ms
-		return nil
-	})
-	return out, err
 }
 
 func (p *Plugin) setFlowEnabled(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {

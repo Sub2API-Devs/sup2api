@@ -65,6 +65,26 @@ func (s *snapshot) flowFor(group int64) *liveFlow {
 // groupsOf lists the groups bound to a flow.
 func (s *snapshot) groupsOf(flowID int64) []int64 { return s.groups[flowID] }
 
+// stageTimeoutSumMs is the automatic total timeout of a spec: the sum per
+// stage of its largest channel timeout (CONTRACTS §72.6).
+func (s *snapshot) stageTimeoutSumMs(spec *Spec) int {
+	return spec.DefaultTotalTimeoutMs(func(id int64) int {
+		if a := s.auditors[id]; a != nil && a.channel != nil {
+			return int(a.channel.Timeout / time.Millisecond)
+		}
+		return 0
+	})
+}
+
+// flowTimeout is the total timeout of a run: the spec value, or the
+// automatic one when it is 0 (the spec keeps 0 so it follows channel edits).
+func (s *snapshot) flowTimeout(spec *Spec) time.Duration {
+	if spec.TotalTimeoutMs > 0 {
+		return time.Duration(spec.TotalTimeoutMs) * time.Millisecond
+	}
+	return time.Duration(s.stageTimeoutSumMs(spec)) * time.Millisecond
+}
+
 // sendsImages reports whether any auditor of the flow sends images; when
 // none does, the request images are not kept while the request waits.
 func (s *snapshot) sendsImages(f *liveFlow) bool {
@@ -202,11 +222,7 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 			p.log.Warn("moderation: published flow is invalid", "flow_id", fid, "error", err.Error())
 			return nil
 		}
-		f := &liveFlow{ID: fid, Name: fname, Version: version, Spec: spec}
-		f.timeout = time.Duration(spec.TotalTimeoutMs) * time.Millisecond
-		if f.timeout <= 0 {
-			f.timeout = maxTotalTimeoutMs * time.Millisecond
-		}
+		f := &liveFlow{ID: fid, Name: fname, Version: version, Spec: spec, timeout: s.flowTimeout(spec)}
 		s.flows[fid] = f
 		return nil
 	}); err != nil {
