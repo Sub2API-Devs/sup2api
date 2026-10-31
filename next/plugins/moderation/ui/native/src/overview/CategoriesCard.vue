@@ -4,8 +4,8 @@ import { SHint } from '@sub2api/ui'
 import AsyncCard from './AsyncCard.vue'
 import RankList from '../RankList.vue'
 import { onOverviewTick } from './tick'
-import { num } from '../format'
-import { categoryLabel, fetchCategoryStats, useModHost } from '../host'
+import { categoryLabel, num } from '../format'
+import { fetchCategoryStats, useModHost } from '../host'
 import { useAsync } from '../useAsync'
 
 // Today's suspicious requests by category (new-api categories-card), counted

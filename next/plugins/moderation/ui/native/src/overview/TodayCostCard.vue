@@ -2,8 +2,9 @@
 import { computed } from 'vue'
 import { SAlert, SCard, SEmpty, SGrid } from '@sub2api/ui'
 import { useCatalog } from '../catalog'
-import { num } from '../format'
-import { money, useModHost, type CostRef, type CostSummary, type Status } from '../host'
+import { money, num } from '../format'
+import { useModHost } from '../host'
+import type { CostRef, CostSummary, Status } from '../types'
 
 // Today's cost (new-api cost-card): total, by source (moderation / AI
 // analysis / tests, try-outs and simulations), top channels and auditors.

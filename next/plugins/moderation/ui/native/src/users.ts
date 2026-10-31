@@ -1,6 +1,7 @@
 import { reactive, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { fetchCoreUser, searchCoreUsers, useModHost, type CoreUser } from './host'
+import { fetchCoreUser, searchCoreUsers, useModHost } from './host'
+import type { CoreUser } from './types'
 
 // Users of the core (GET /users/:id, needs user:read), cached for the page:
 // name, status and roles. Without the permission every lookup stops after

@@ -9,14 +9,16 @@ import UserStateSection from './UserStateSection.vue'
 import UserTimeline from './UserTimeline.vue'
 import WatchHistory from './WatchHistory.vue'
 import WatchSummary from './WatchSummary.vue'
-import { dt, num } from './format'
-import { canManage, enumLabel, useModHost, type ReviewStatus, type SourceFilter, type Watch, type WatchItem } from './host'
+import { dt, enumLabel, num } from './format'
+import { canManage, useModHost } from './host'
+import type { ReviewStatus, SourceFilter, Watch, WatchItem } from './types'
 import { useUserDetail } from './useUserDetail'
 
 // User detail drawer (§72.13.6, new-api user-detail-drawer), for any user:
 // state and inline watch level, the entry, a summary with the last 30 days
 // and its sources, the analysis state, then the analyses, the suspicious
-// records (filterable by source, bulk review) and the watch history.
+// records (filterable by source, bulk review) and the watch history. The
+// record detail opened here links no user (this drawer is the user).
 const props = defineProps<{ open: boolean; userId: number | null; item?: WatchItem | null }>()
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void
@@ -36,6 +38,12 @@ const { detail, loading, error, entry, state, reload } = useUserDetail(toRef(pro
 function refreshWatch() {
   void reload()
   version.value++
+  emit('changed', null)
+}
+/** A review or delete changes the counts of the drawer and of the watch list row. */
+function refreshCounts() {
+  void reload()
+  emit('changed', null)
 }
 
 const section = ref('analyses')
@@ -46,6 +54,7 @@ watch(
   () => {
     section.value = 'analyses'
     source.value = null
+    totals.value = { analyses: 0, records: 0, history: 0 }
   }
 )
 function pickSource(s: SourceFilter) {
@@ -82,8 +91,14 @@ function openRecord(id: number) {
   recordId.value = id
   recordOpen.value = true
 }
-const onReviewed = (ids: number[], status: ReviewStatus) => timeline.value?.reviewed(ids, status)
-const onDeleted = (id: number) => timeline.value?.removed(id)
+function onReviewed(ids: number[], status: ReviewStatus) {
+  timeline.value?.reviewed(ids, status)
+  refreshCounts()
+}
+function onDeleted(id: number) {
+  timeline.value?.removed(id)
+  refreshCounts()
+}
 </script>
 
 <template>
@@ -117,11 +132,12 @@ const onDeleted = (id: number) => timeline.value?.removed(id)
           @open-record="openRecord"
           @total="totals.records = $event"
           @clear-source="source = null"
+          @reviewed="refreshCounts"
           @show-user="emit('show-user', $event)"
         />
         <WatchHistory v-show="section === 'history'" :user-id="userId" :version="version" @total="totals.history = $event" />
       </STabs>
     </div>
   </SDrawer>
-  <EventDetail v-model:open="recordOpen" :event-id="recordId" @reviewed="onReviewed" @deleted="onDeleted" @show-user="emit('show-user', $event)" />
+  <EventDetail v-model:open="recordOpen" :event-id="recordId" :user-link="false" @reviewed="onReviewed" @deleted="onDeleted" @show-user="emit('show-user', $event)" />
 </template>

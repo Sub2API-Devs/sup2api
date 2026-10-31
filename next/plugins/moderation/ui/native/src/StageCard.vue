@@ -2,7 +2,9 @@
 import { computed, ref } from 'vue'
 import { SBadge, SButton, SIcon, SInput, SSelect } from '@sub2api/ui'
 import AuditorPicker from './AuditorPicker.vue'
-import { enumLabel, useModHost, type Stage } from './host'
+import { enumLabel, enumOptions } from './format'
+import { useModHost } from './host'
+import type { Stage } from './types'
 import {
   COMBINES,
   acceptsCanvasDrag,
@@ -43,7 +45,7 @@ const over = ref(false)
 const last = computed(() => props.index === props.count - 1)
 const multi = computed(() => props.stage.auditors.length > 1)
 const neverHits = computed(() => props.stage.combine === 'all' && props.stage.auditors.some((id) => !props.byId.get(id)?.channelOk))
-const combineOptions = computed(() => COMBINES.map((c) => ({ value: c, label: t(`flows.combineOpt.${c}`) })))
+const combineOptions = computed(() => enumOptions('flows.combineOpt', COMBINES))
 const nameOf = (id: number) => props.byId.get(id)?.name ?? t('flows.auditorN', { id })
 
 function onOver(e: DragEvent) {

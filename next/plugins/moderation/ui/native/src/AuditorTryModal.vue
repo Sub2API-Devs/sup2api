@@ -3,8 +3,9 @@ import { computed, ref, watch } from 'vue'
 import { SAlert, SBadge, SButton, SField, SHint, SModal, STextarea } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import CostBadge from './CostBadge.vue'
-import { ms } from './format'
-import { categoryLabel, enumLabel, errorMessage, score, tryAuditor, useModHost, type AuditorTryTarget, type TryResult } from './host'
+import { categoryLabel, enumLabel, ms, score } from './format'
+import { toastError, tryAuditor, useModHost } from './host'
+import type { AuditorTryTarget, TryResult } from './types'
 
 // Tries an auditor on a text and images: a stored one from its row, or the
 // editor's unsaved edits (target.draft). The inputs are kept between tries.
@@ -17,20 +18,29 @@ const text = ref('')
 const images = ref('')
 const result = ref<TryResult | null>(null)
 const trying = ref(false)
-watch(open, (v) => v && (result.value = null))
+// Only the latest try writes the result; opening again drops a pending one.
+let seq = 0
+watch(open, (v) => {
+  if (!v) return
+  seq++
+  trying.value = false
+  result.value = null
+})
 
 async function run() {
   const a = props.target
   if (!a) return
+  const my = ++seq
   trying.value = true
   result.value = null
   try {
     const urls = images.value.split('\n').map((s) => s.trim()).filter(Boolean)
-    result.value = await tryAuditor(a.id, text.value, urls, a.draft)
+    const r = await tryAuditor(a.id, text.value, urls, a.draft)
+    if (my === seq) result.value = r
   } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
+    if (my === seq) toastError(e)
   } finally {
-    trying.value = false
+    if (my === seq) trying.value = false
   }
 }
 

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { SLink } from '@sub2api/ui'
-import { enumLabel, useModHost, type Spec } from './host'
+import { enumLabel } from './format'
+import { useModHost } from './host'
+import type { Spec } from './types'
 import { acceptsCanvasDrag, leavesInside, readCanvasDrag, startCanvasDrag, type CanvasAuditor, type CanvasDrag, type CanvasDropTarget } from './flowOps'
 
 // Auditor library of the canvas: drag a card onto a stage; dropping a placed

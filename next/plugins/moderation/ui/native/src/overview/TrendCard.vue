@@ -6,8 +6,9 @@ import RateCell from '../RateCell.vue'
 import { onOverviewTick } from './tick'
 import { useCatalog } from '../catalog'
 import { alignPoints, bucketLabel, lineChart } from '../charts'
-import { num, pct } from '../format'
-import { fetchTrend, useModHost, type Granularity, type StatsQuery } from '../host'
+import { enumOptions, num, pct } from '../format'
+import { fetchTrend, useModHost } from '../host'
+import type { Granularity, StatsQuery } from '../types'
 import { useAsync } from '../useAsync'
 
 // Trend (new-api trend-card): suspicious rate per flow; hit and error rate per
@@ -21,7 +22,7 @@ const trend = useAsync(() => fetchTrend(q), () => t('stats.loadFailed'))
 watch(q, trend.reload, { immediate: true })
 onOverviewTick(trend.reload)
 
-const granularityOptions = computed(() => (['hour', 'day'] as Granularity[]).map((v) => ({ value: v, label: t(`stats.granularity.${v}`) })))
+const granularityOptions = computed(() => enumOptions('stats.granularity', ['hour', 'day']))
 const flows = computed(() => trend.data.value?.flows || [])
 
 const chart = computed(() => {

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { watch } from 'vue'
 import { SAlert, SButton, SModal, SSpinner } from '@sub2api/ui'
 import AnalysisCard from './AnalysisCard.vue'
-import { errorMessage, fetchAnalysis, useModHost, type AnalysisDetail } from './host'
+import { fetchAnalysis, useModHost } from './host'
+import { useAsync } from './useAsync'
 
 // One analysis by id (GET /analyses/:id), opened from a record's AI verdict.
 const props = defineProps<{ open: boolean; analysisId: number | null }>()
@@ -10,24 +11,14 @@ const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'open-recor
 const host = useModHost()
 const t = host.t
 
-const data = ref<AnalysisDetail | null>(null)
-const loading = ref(false)
-const error = ref('')
+const { data, loading, error, reload } = useAsync(() => fetchAnalysis(props.analysisId!), () => t('analysis.loadFailed'))
 
 watch(
   () => [props.open, props.analysisId] as const,
-  async ([open, id]) => {
+  ([open, id]) => {
     if (!open || !id || data.value?.id === id) return
     data.value = null
-    loading.value = true
-    error.value = ''
-    try {
-      data.value = await fetchAnalysis(id)
-    } catch (e) {
-      error.value = errorMessage(e, t('analysis.loadFailed'))
-    } finally {
-      loading.value = false
-    }
+    void reload()
   },
   { immediate: true }
 )

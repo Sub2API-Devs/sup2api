@@ -3,9 +3,11 @@ import { computed } from 'vue'
 import { SBadge, SButton, SHint, SSectionTitle } from '@sub2api/ui'
 import UserRef from './UserRef.vue'
 import WatchActions from './WatchActions.vue'
-import { dt, num } from './format'
+import { dt, enumLabel, num } from './format'
+import { canManage, useModHost } from './host'
+import { levelTone } from './tones'
+import type { UserState, Watch } from './types'
 import { coreUser } from './users'
-import { canManage, enumLabel, levelTone, useModHost, type UserState, type Watch } from './host'
 
 // The record user's state now (new-api record-user-section): watch level,
 // exempt, moderator, banned; manage users change the watch level inline.

@@ -3,8 +3,9 @@ import { computed } from 'vue'
 import { SBadge, SHint, STable, type TableColumn } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import { useCatalog } from './catalog'
-import { ms } from './format'
-import { categoryLabel, enumLabel, score, useModHost, type Outcome, type Trace } from './host'
+import { categoryLabel, enumLabel, ms, score } from './format'
+import { useModHost } from './host'
+import type { Outcome, Trace } from './types'
 import { outcomeState, type OutcomeState } from './trace'
 
 // Per-stage trace of a run: one row per auditor call.

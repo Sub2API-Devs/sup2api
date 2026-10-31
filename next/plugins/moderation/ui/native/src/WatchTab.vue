@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useList } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SCheckbox, SField, SHint, SInput, SPagination, SSelect, STable, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SCheckbox, SField, SHint, SInput, SPagination, SSelect, STable, type TableColumn } from '@sub2api/ui'
 import WatchDetail from './WatchDetail.vue'
 import WatchEditModal from './WatchEditModal.vue'
 import WatchActions from './WatchActions.vue'
@@ -10,21 +9,12 @@ import CategoryChips from './CategoryChips.vue'
 import FlowRef from './FlowRef.vue'
 import UserRef from './UserRef.vue'
 import { useCatalog } from './catalog'
+import { useCategoryOptions } from './categories'
 import { applyFilters } from './forms'
-import { dt, num } from './format'
-import {
-  analysisState,
-  canManage,
-  enumLabel,
-  errorMessage,
-  levelTone,
-  trendTone,
-  useModHost,
-  watchListClient,
-  type Watch,
-  type WatchItem,
-  type WatchListMeta
-} from './host'
+import { dt, enumLabel, enumOptions, joinList, num, withAll } from './format'
+import { analysisState, canManage, errorMessage, useModHost, useWatchList } from './host'
+import { levelTone, trendTone } from './tones'
+import type { Watch, WatchListMeta } from './types'
 import { useUserFilter } from './users'
 
 // Watch list (new-api watchlist): observe = moderated in the background and
@@ -40,24 +30,23 @@ const catalog = useCatalog()
 const meta = ref<WatchListMeta | null>(null)
 const filter = reactive({ level: '', new_only: false, trend: '', category: '', sort: 'new', user: '' })
 const users = useUserFilter()
-const query = () => ({ level: filter.level, new_only: filter.new_only || '', trend: filter.trend, category: filter.category.trim(), sort: filter.sort, user_id: users.query.value.user_id ?? '', user_ids: users.query.value.user_ids ?? '' })
+const query = () => ({ level: filter.level, new_only: filter.new_only || '', trend: filter.trend, category: filter.category, sort: filter.sort, user_id: users.query.value.user_id ?? '', user_ids: users.query.value.user_ids ?? '' })
 
-const list = useList<WatchItem>(watchListClient((m) => (meta.value = m)), '/watchlist', query())
+const list = useWatchList(query(), (m) => (meta.value = m))
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('watch.loadFailed')) : ''))
 const apply = () => applyFilters(list.filters, query())
-watch(() => [filter.level, filter.new_only, filter.trend, filter.sort], apply)
+watch(() => [filter.level, filter.new_only, filter.trend, filter.category, filter.sort], apply)
 
 async function search() {
   if ((await users.resolve(filter.user)) && !apply()) list.reload()
 }
 defineExpose({ reload: list.reload })
 
-const all = (opts: SelectOption[]): SelectOption[] => [{ value: '', label: t('events.all') }, ...opts]
-const levelOptions = computed(() => all((['observe', 'enforce'] as const).map((v) => ({ value: v, label: t(`level.${v}`) }))))
-const trendOptions = computed(() =>
-  all([{ value: 'none', label: t('watchList.notAnalyzed') }, ...(['escalating', 'persistent', 'occasional', 'likely_false_positive'] as const).map((v) => ({ value: v, label: t(`trend.${v}`) }))])
-)
-const sortOptions = computed(() => (['new', 'last_hit', 'severity', 'total'] as const).map((v) => ({ value: v, label: t(`watchList.sort.${v}`) })))
+const levelOptions = computed(() => enumOptions('level', ['observe', 'enforce'], { all: true }))
+const trendOptions = computed(() => withAll([{ value: 'none', label: t('watchList.notAnalyzed') }, ...enumOptions('trend', ['escalating', 'persistent', 'occasional', 'likely_false_positive'])]))
+const sortOptions = computed(() => enumOptions('watchList.sort', ['new', 'last_hit', 'severity', 'total']))
+const categories = useCategoryOptions()
+const categoryOptions = computed(() => withAll(categories.value))
 
 const columns = computed<TableColumn[]>(() => [
   { key: 'user_id', label: t('watch.col.user') },
@@ -94,12 +83,19 @@ watch(
   { immediate: true }
 )
 
-/** Keeps a row in step with an inline change or the drawer (null = removed). */
+/**
+ * Keeps a row in step with the drawer: an entry patches its row; null (the
+ * user left the list, or records were reviewed) reloads the list.
+ */
 function patchRow(userId: number | null, w: Partial<Watch> | null) {
   const i = list.items.value.findIndex((x) => x.user_id === userId)
-  if (i < 0) return
-  if (w) list.items.value[i] = { ...list.items.value[i], ...w }
-  else list.reload()
+  if (w && i >= 0) list.items.value[i] = { ...list.items.value[i], ...w }
+  else if (!w) list.reload()
+}
+/** An inline level change or removal: patch the row at once, then reload for the header counts. */
+function onAction(userId: number, w: Watch | null) {
+  if (w) patchRow(userId, w)
+  void list.reload()
 }
 function showUser(id: number) {
   detailOpen.value = false
@@ -121,7 +117,7 @@ const promptOpen = ref(false)
           <SSelect v-model="filter.trend" :options="trendOptions" />
         </SField>
         <SField class="mod-filter" :label="t('watchList.category')">
-          <SInput v-model="filter.category" :placeholder="t('watchList.categoryPlaceholder')" />
+          <SSelect v-model="filter.category" :options="categoryOptions" searchable />
         </SField>
         <SField class="mod-filter" :label="t('events.user')" :error="users.error.value">
           <SInput v-model="filter.user" type="search" :placeholder="t('events.userPlaceholder')" />
@@ -154,13 +150,13 @@ const promptOpen = ref(false)
           <div v-if="row.hits_since_seen"><SBadge tone="warning" size="xs">{{ t('watchList.newHits', { n: row.hits_since_seen }) }}</SBadge></div>
         </template>
         <template #cell-level="{ row }">
-          <WatchActions v-if="manage" :user-id="row.user_id" :watch="row" @click.stop @changed="patchRow(row.user_id, $event)" />
+          <WatchActions v-if="manage" :user-id="row.user_id" :watch="row" @click.stop @changed="onAction(row.user_id, $event)" />
           <SBadge v-else :tone="levelTone(row.level)">{{ enumLabel('level', row.level) }}</SBadge>
         </template>
         <template #cell-group="{ row }">
           <span v-if="row.group_id || row.flow">{{ catalog.groupName(row.group_id) }}</span>
           <SHint v-else inline>—</SHint>
-          <div v-if="row.other_groups.length" class="mod-sub" :title="row.other_groups.map(catalog.groupName).join(', ')">{{ t('watchList.otherGroups', { n: row.other_groups.length }) }}</div>
+          <div v-if="row.other_groups.length" class="mod-sub" :title="joinList(row.other_groups.map(catalog.groupName))">{{ t('watchList.otherGroups', { n: row.other_groups.length }) }}</div>
         </template>
         <template #cell-flow="{ row }">
           <FlowRef v-if="row.flow" :flow-id="row.flow.flow_id" :version="row.flow.version" :name="row.flow.name" />

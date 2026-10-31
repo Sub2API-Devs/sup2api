@@ -1,4 +1,4 @@
-import type { Auditor, AuditorType, Channel, Flow, Spec, Stage } from './host'
+import type { Auditor, AuditorType, Channel, Flow, Spec, Stage } from './types'
 
 // Flow editing operations of the canvas editor (CONTRACTS §72.7), ported from
 // new-api web/shared/src/content-moderation/ops.ts + validate.ts. Every

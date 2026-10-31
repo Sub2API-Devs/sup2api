@@ -8,7 +8,9 @@ import FlowPublishDialog from './FlowPublishDialog.vue'
 import FlowSimulate from './FlowSimulate.vue'
 import FlowVersions from './FlowVersions.vue'
 import { useCatalog } from './catalog'
-import { canManage, errorMessage, fetchFlow, hasDraftChanges, publishFlow, saveFlow, setFlowEnabled, useModHost, type Flow, type Spec } from './host'
+import { joinList } from './format'
+import { canManage, errorMessage, fetchFlow, hasDraftChanges, publishFlow, saveFlow, setFlowEnabled, toastError, useModHost } from './host'
+import type { Flow, Spec } from './types'
 import { applyTemplate, autoTimeoutMs, canonicalSpec, canvasAuditors, isAuditorType, newSpec, sameSpec, validateSpec, type SpecIssue } from './flowOps'
 
 // Flow editor (new-api flow-editor-form.tsx): name + draft kept locally and
@@ -57,7 +59,7 @@ async function load() {
   loadError.value = ''
   try {
     const id = saved.value?.id ?? props.flowId
-    const [f] = await Promise.all([id ? fetchFlow(id) : Promise.resolve(null), catalog.state.loaded ? null : catalog.refresh()])
+    const [f] = await Promise.all([id ? fetchFlow(id) : Promise.resolve(null), catalog.ensure()])
     if (f) resetFrom(f)
     else {
       // A new flow starts from the recommended "first → behavior" template.
@@ -80,7 +82,7 @@ async function refresh() {
   try {
     resetFrom(await fetchFlow(saved.value.id))
   } catch (e) {
-    host.toast(errorMessage(e, t('flows.loadFailed')), 'error')
+    toastError(e, 'flows.loadFailed')
   }
   emit('changed')
 }
@@ -102,7 +104,8 @@ function issueText(i: SpecIssue): string {
 
 function fail(e: unknown) {
   const fields = isApiError(e) ? Object.values(e.fields) : []
-  host.toast(fields.length ? fields.join('；') : errorMessage(e, t('actionFailed')), 'error')
+  if (fields.length) host.toast(joinList(fields, 'clauseSep'), 'error')
+  else toastError(e)
 }
 
 /**
@@ -170,7 +173,11 @@ async function discard() {
   if (!ok) return
   busy.value = 'discard'
   try {
-    await saveFlow(f.id, { name: f.name, draft: canonicalSpec(f.published) })
+    // The published spec carries the resolved total timeout; the auto value
+    // goes back as 0 (auto) so the draft keeps following its auditors.
+    const spec = canonicalSpec(f.published)
+    if (spec.total_timeout_ms === autoTimeoutMs(spec, byId.value)) spec.total_timeout_ms = 0
+    await saveFlow(f.id, { name: f.name, draft: spec })
     host.toast(t('flows.discarded', { v: f.version }), 'success')
     await refresh()
   } catch (e) {

@@ -1,17 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { SAlert, SBadge, SButton, SCode, SCopyButton, SDisclosure, SField, SHint, SModal, SSectionTitle, SSegmented, SSelect, SSpinner, STable, type TableColumn } from '@sub2api/ui'
-import {
-  categoryLabel,
-  enumLabel,
-  errorMessage,
-  fetchAnalysisPrompt,
-  fetchAnalysisTools,
-  useModHost,
-  type AnalysisPrompt,
-  type AnalysisTool
-} from './host'
+import { categoryLabel, enumLabel } from './format'
+import { fetchAnalysisPrompt, fetchAnalysisTools, useModHost } from './host'
+import type { AnalysisTool } from './types'
 import { useCatalog } from './catalog'
+import { useAsync } from './useAsync'
 
 // Preview of the system prompt an AI analysis sends (GET /analysis/prompt,
 // by group or by flow) and the tool table (GET /analysis/tools).
@@ -26,30 +20,21 @@ const flowId = ref<number>(0)
 const catalog = useCatalog()
 const flows = computed(() => catalog.state.flows.filter((x) => x.version > 0))
 const tools = ref<AnalysisTool[]>([])
-const data = ref<AnalysisPrompt | null>(null)
-const loading = ref(false)
-const error = ref('')
-let loaded = false
+const prompt = useAsync(
+  () => fetchAnalysisPrompt(by.value === 'group' ? { group_id: groupId.value } : { flow_id: flowId.value }),
+  () => t('prompt.loadFailed')
+)
+const { data, loading, error } = prompt
+let toolsLoaded = false
 
+/** The tools once (kept on failure: the table is empty) and the flows of the catalog. */
 async function init() {
-  if (loaded) return
-  loaded = true
-  const [tl] = await Promise.all([fetchAnalysisTools().catch(() => [] as AnalysisTool[]), catalog.state.loaded ? null : catalog.refresh()])
-  tools.value = tl
-  if (!flowId.value && flows.value.length) flowId.value = flows.value[0].id
-}
-
-async function load() {
-  loading.value = true
-  error.value = ''
-  try {
-    data.value = await fetchAnalysisPrompt(by.value === 'group' ? { group_id: groupId.value } : { flow_id: flowId.value })
-  } catch (e) {
-    data.value = null
-    error.value = errorMessage(e, t('prompt.loadFailed'))
-  } finally {
-    loading.value = false
+  const [tl] = await Promise.all([toolsLoaded ? null : fetchAnalysisTools().catch(() => null), catalog.ensure()])
+  if (tl) {
+    tools.value = tl
+    toolsLoaded = true
   }
+  if (!flowId.value && flows.value.length) flowId.value = flows.value[0].id
 }
 
 watch(
@@ -57,11 +42,11 @@ watch(
   async (open) => {
     if (!open) return
     await init()
-    load()
+    void prompt.reload()
   },
   { immediate: true }
 )
-watch([by, groupId, flowId], () => props.open && load())
+watch([by, groupId, flowId], () => props.open && prompt.reload())
 
 const groupOptions = computed(() => [{ value: 0, label: t('flows.defaultGroup') }, ...catalog.state.groups.map((g) => ({ value: g.id, label: g.name }))])
 const flowOptions = computed(() => flows.value.map((f) => ({ value: f.id, label: `${f.name} v${f.version}` })))

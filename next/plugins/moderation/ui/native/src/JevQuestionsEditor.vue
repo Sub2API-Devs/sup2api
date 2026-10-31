@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { SButton, SField, SInput, STextarea } from '@sub2api/ui'
-import { categoryLabel, useModHost, type JevQuestions } from './host'
+import { categoryLabel } from './format'
+import { useModHost } from './host'
+import type { JevQuestions } from './types'
 
 // A Jev question table (new-api jev-questions-editor): the preamble and one
 // row per category with its label, threshold, question and the optional

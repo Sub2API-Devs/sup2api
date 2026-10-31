@@ -7,9 +7,12 @@ import CategoryChips from './CategoryChips.vue'
 import TraceView from './TraceView.vue'
 import CostBadge from './CostBadge.vue'
 import { useCatalog } from './catalog'
-import { enumLabel, errorMessage, runTest, severityTone, useModHost, type TestResult } from './host'
+import { enumLabel } from './format'
+import { errorMessage, runTest, useModHost } from './host'
+import { severityTone } from './tones'
+import type { TestResult, TabKey } from './types'
 
-const emit = defineEmits<{ (e: 'go-tab', tab: string): void }>()
+const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void }>()
 
 // Playground: POST /test {text, images, flow_id} -> result + per-stage trace.
 // Nothing is cached, recorded or counted.

@@ -1,13 +1,17 @@
 import { reactive } from 'vue'
-import { fetchAuditors, fetchChannels, fetchFlows, fetchGroups, useModHost, type Auditor, type Channel, type Flow, type Group } from './host'
+import { fetchAuditors, fetchChannels, fetchFlows, fetchGroups, useModHost } from './host'
+import type { Auditor, Channel, Flow, Group } from './types'
 
 // Flows, auditors, channels and groups, shared by every tab: the CRUD tabs
-// list them and call refresh() after a change, the other views take names
-// and filters from them. Loaded on first use; the header refresh and the
-// overview's auto refresh reload them. A list that fails to load keeps its
-// previous rows and records the error (errors.<list>) for its tab.
+// list them and refresh the lists a change touches, the other views take
+// names and filters from them. useCatalog() loads what is missing (ensure);
+// the header refresh and the overview's auto refresh reload them. A list
+// that fails to load keeps its previous rows and records the error
+// (errors.<list>) for its tab.
 
-type ListKey = 'flows' | 'auditors' | 'channels' | 'groups'
+export type ListKey = 'flows' | 'auditors' | 'channels' | 'groups'
+const ALL: readonly ListKey[] = ['flows', 'auditors', 'channels', 'groups']
+const FETCH: Record<ListKey, () => Promise<unknown>> = { flows: fetchFlows, auditors: fetchAuditors, channels: fetchChannels, groups: fetchGroups }
 
 const state = reactive({
   flows: [] as Flow[],
@@ -15,52 +19,63 @@ const state = reactive({
   channels: [] as Channel[],
   groups: [] as Group[],
   errors: { flows: null, auditors: null, channels: null, groups: null } as Record<ListKey, unknown>,
+  /** every list loaded once */
   loaded: false,
   loading: false
 })
+const loadedKeys = new Set<ListKey>()
+const queued = new Set<ListKey>()
+let inflight = new Set<ListKey>()
 let loading: Promise<void> | null = null
-let again = false
 
-async function load() {
-  const keys: ListKey[] = ['flows', 'auditors', 'channels', 'groups']
-  const results = await Promise.allSettled([fetchFlows(), fetchAuditors(), fetchChannels(), fetchGroups()])
+async function load(keys: ListKey[]) {
+  const results = await Promise.allSettled(keys.map((k) => FETCH[k]()))
   keys.forEach((k, i) => {
     const r = results[i]
     state.errors[k] = r.status === 'rejected' ? r.reason : null
     if (r.status === 'fulfilled') Object.assign(state, { [k]: Array.isArray(r.value) ? r.value : [] })
+    loadedKeys.add(k)
   })
-  state.loaded = true
+  state.loaded = ALL.every((k) => loadedKeys.has(k))
 }
 
 /**
- * Reloads the lists. Calls during a load merge into one more load after it,
- * so the state always ends with a load started after the latest call.
+ * Reloads the given lists (all by default). Calls during a load queue their
+ * lists for one more load after it, so each list ends with a load started
+ * after the latest call that named it.
  */
-function refresh(): Promise<void> {
-  if (loading) {
-    again = true
-    return loading
-  }
+function refresh(keys: readonly ListKey[] = ALL): Promise<void> {
+  for (const k of keys) queued.add(k)
+  if (loading) return loading
   state.loading = true
   loading = (async () => {
-    do {
-      again = false
-      await load()
-    } while (again)
+    while (queued.size) {
+      inflight = new Set(queued)
+      queued.clear()
+      await load([...inflight])
+    }
   })().finally(() => {
+    inflight = new Set()
     loading = null
     state.loading = false
   })
   return loading
 }
 
+/** Loads the lists neither loaded nor loading yet. */
+function ensure(): Promise<void> {
+  const missing = ALL.filter((k) => !loadedKeys.has(k) && !queued.has(k) && !inflight.has(k))
+  return missing.length ? refresh(missing) : (loading ?? Promise.resolve())
+}
+
 const byId = <T extends { id: number }>(list: T[], id: number | null | undefined) => (id ? list.find((x) => x.id === id) : undefined)
 
 export function useCatalog() {
-  if (!state.loaded && !loading) void refresh()
+  void ensure()
   return {
     state,
     refresh,
+    ensure,
     flow: (id: number | null | undefined) => byId(state.flows, id),
     auditor: (id: number | null | undefined) => byId(state.auditors, id),
     channel: (id: number | null | undefined) => byId(state.channels, id),

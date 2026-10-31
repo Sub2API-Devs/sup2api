@@ -1,4 +1,4 @@
-import type { Defaults } from './host'
+import type { Defaults } from './types'
 
 // OpenAI moderation threshold presets (new-api threshold-presets): the
 // default thresholds scaled. A higher threshold flags less.

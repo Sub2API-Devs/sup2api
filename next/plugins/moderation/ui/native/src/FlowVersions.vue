@@ -3,18 +3,10 @@ import { computed, ref, watch } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SDrawer, SEmpty, SHint, SSpinner } from '@sub2api/ui'
 import FlowStages from './FlowStages.vue'
-import { dt, specText } from './format'
+import { dt, joinList, specText } from './format'
+import { canManage, errorDetails, fetchFlowVersion, fetchFlowVersions, rollbackFlow, toastError, useModHost } from './host'
+import type { Flow, FlowVersionDetail } from './types'
 import { useAsync } from './useAsync'
-import {
-  canManage,
-  errorMessage,
-  fetchFlowVersion,
-  fetchFlowVersions,
-  rollbackFlow,
-  useModHost,
-  type Flow,
-  type FlowVersionDetail
-} from './host'
 
 // Version history of a flow (§72.13.5): every published version, its stages
 // with the current auditor names, and rollback (published again as a new version).
@@ -55,7 +47,7 @@ async function view(v: number) {
   try {
     details.value = { ...details.value, [v]: await fetchFlowVersion(f.id, v) }
   } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
+    toastError(e)
     expanded.value = null
   } finally {
     viewLoading.value = null
@@ -76,12 +68,12 @@ async function rollback(v: number) {
     await load()
   } catch (e) {
     if (isApiError(e) && e.code === 'missing_auditors') {
-      const ids = ((e.details?.auditor_ids || []) as number[]).map((x) => `#${x}`).join(', ')
+      const ids = joinList(errorDetails(e, 'auditor_ids').map((x) => `#${x}`))
       host.toast(t('flows.missingAuditors', { ids }), 'error')
     } else if (isApiError(e) && e.code === 'version_conflict') {
       host.toast(t('flows.versionConflict'), 'warning')
       void load()
-    } else host.toast(errorMessage(e, t('actionFailed')), 'error')
+    } else toastError(e)
   } finally {
     rolling.value = null
   }

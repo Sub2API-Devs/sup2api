@@ -1,4 +1,5 @@
 import { isApiError } from '@sub2api/host'
+import { toastError } from './host'
 
 // Form helpers shared by the editors and the filter bars.
 
@@ -16,6 +17,11 @@ export function clearErrors(errs: FieldErrors) {
 export function applyFieldErrors(errs: FieldErrors, e: unknown, shown?: readonly string[], key: (path: string) => string = (p) => p): boolean {
   for (const [path, msg] of Object.entries(isApiError(e) ? e.fields : {})) errs[key(path)] ||= msg
   return Object.keys(errs).some((k) => !shown || shown.includes(k))
+}
+
+/** applyFieldErrors, and a toast of the error when no field shown got a message. */
+export function applyErrorsOrToast(errs: FieldErrors, e: unknown, shown?: readonly string[], key?: (path: string) => string) {
+  if (!applyFieldErrors(errs, e, shown, key)) toastError(e)
 }
 
 /**

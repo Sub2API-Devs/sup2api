@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { SBadge } from '@sub2api/ui'
-import { enumLabel, useModHost, type FlowVersionAuditor, type FlowVersionStage } from './host'
+import { enumLabel } from './format'
+import { useModHost } from './host'
+import type { FlowVersionAuditor, FlowVersionStage } from './types'
 
 // Stages of a flow version: combine mode and auditors; `detailed` adds each
 // auditor's channel, model and parameters as they ran (flow snapshot).

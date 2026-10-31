@@ -1,9 +1,11 @@
 import { ref } from 'vue'
-import { errorMessage, reviewEvents, useModHost, type ReviewStatus } from './host'
+import { reviewEvents, toastError, useModHost } from './host'
+import type { ReviewStatus } from './types'
 
 /**
  * Bulk review of checked records (records list, user timeline): `checked`
- * binds to the table selection; `done` updates the caller's rows.
+ * binds to the table selection (suspicious records only, the backend
+ * updates no others); `done` updates the caller's rows.
  */
 export function useBulkReview(done: (ids: number[], status: ReviewStatus) => void) {
   const host = useModHost()
@@ -15,12 +17,12 @@ export function useBulkReview(done: (ids: number[], status: ReviewStatus) => voi
     if (!ids.length) return
     reviewing.value = true
     try {
-      await reviewEvents(ids, status)
+      const r = await reviewEvents(ids, status)
       done(ids, status)
       checked.value = []
-      host.toast(host.t('review.done', { n: ids.length }), 'success')
+      host.toast(host.t('review.done', { n: r?.updated ?? ids.length }), 'success')
     } catch (e) {
-      host.toast(errorMessage(e, host.t('actionFailed')), 'error')
+      toastError(e)
     } finally {
       reviewing.value = false
     }

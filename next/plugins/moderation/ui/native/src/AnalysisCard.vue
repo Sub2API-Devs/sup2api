@@ -1,23 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { SAlert, SBadge, SDisclosure, SHint, SLink, SSpinner, STable, type TableColumn } from '@sub2api/ui'
-import { dt, ms, num as n } from './format'
-import {
-  aiVerdictTone,
-  categoryLabel,
-  enumLabel,
-  errorMessage,
-  fetchAnalysis,
-  money,
-  severityTone,
-  suggestionTone,
-  trendTone,
-  useModHost,
-  type Analysis,
-  type AnalysisDetail,
-  type AnalysisStep,
-  type RecordVerdict
-} from './host'
+import { categoryLabel, dt, enumLabel, joinList, money, ms, num as n } from './format'
+import { errorMessage, fetchAnalysis, useModHost } from './host'
+import { aiVerdictTone, severityTone, suggestionTone, trendTone } from './tones'
+import type { Analysis, AnalysisDetail, AnalysisStep, RecordVerdict } from './types'
 
 // One AI analysis of a watched user (§72.13.4): conclusion, problems, verdict
 // counts and cost; the steps (trace) and per-record verdicts load on demand
@@ -90,7 +77,7 @@ const rank = (v: RecordVerdict) => (v.verdict === 'violation' ? (SEVERITY_RANK[v
 const records = computed(() => [...(full.value?.record_verdicts || [])].sort((x, y) => rank(x) - rank(y)))
 
 function notes(s: AnalysisStep): string {
-  return (s.notes || []).map((x) => enumLabel('noteKind', x.kind) + (x.record_id ? ` #${x.record_id}` : '')).join('；')
+  return joinList((s.notes || []).map((x) => enumLabel('noteKind', x.kind) + (x.record_id ? ` #${x.record_id}` : '')), 'clauseSep')
 }
 </script>
 

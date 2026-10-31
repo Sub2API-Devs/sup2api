@@ -3,7 +3,8 @@ import { computed } from 'vue'
 import { SChart } from '@sub2api/ui'
 import { lineChart } from './charts'
 import { num } from './format'
-import { useModHost, type UserDay } from './host'
+import { useModHost } from './host'
+import type { UserDay } from './types'
 
 // A user's last 30 UTC days (user_daily, summed over groups): audited,
 // suspicious and high-severity records, and failed checks.

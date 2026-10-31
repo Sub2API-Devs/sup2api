@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { SAlert, SBadge, SBulkBar, SButton, SCheckbox, SEmpty, SHint } from '@sub2api/ui'
+import { computed, watch } from 'vue'
+import { SAlert, SBadge, SBulkBar, SButton, SCheckbox, SEmpty, SHint, SSpinner } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import FlowRef from './FlowRef.vue'
 import ResultBadge from './ResultBadge.vue'
@@ -8,52 +8,54 @@ import ReviewActions from './ReviewActions.vue'
 import VerdictBadge from './VerdictBadge.vue'
 import { useCatalog } from './catalog'
 import { dt } from './format'
-import { canManage, errorMessage, fetchUserEvents, useModHost, type ModEvent, type ReviewStatus, type SourceFilter } from './host'
+import { canManage, fetchUserEvents, useModHost } from './host'
+import type { ReviewStatus, SourceFilter } from './types'
+import { useAsync } from './useAsync'
 import { useBulkReview } from './useBulkReview'
 
 // The suspicious records of a user (new-api user timeline), newest first,
 // optionally of one source (group → flow@version); manage users review
-// checked records in bulk. Reloads when `version` changes.
+// checked records in bulk. Reloads when `version` changes; a review here
+// emits `reviewed` so the drawer refreshes the counts.
 const props = defineProps<{ userId: number; version: number; source: SourceFilter | null }>()
 const emit = defineEmits<{
   (e: 'open-record', id: number): void
   (e: 'total', n: number): void
   (e: 'clear-source'): void
   (e: 'show-user', id: number): void
+  (e: 'reviewed'): void
 }>()
 const t = useModHost().t
 const catalog = useCatalog()
 const manage = computed(() => canManage())
 
-const records = ref<ModEvent[]>([])
-const total = ref(0)
-const error = ref('')
-let seq = 0
-async function load() {
-  const my = ++seq
-  error.value = ''
-  try {
-    const r = await fetchUserEvents(props.userId, props.source)
-    if (my !== seq) return
-    records.value = r.items
-    total.value = r.page.total ?? r.items.length
-    if (!props.source) emit('total', total.value)
-  } catch (e) {
-    if (my === seq) error.value = errorMessage(e, t('watch.loadFailed'))
-  }
-}
-watch(() => [props.userId, props.version, props.source], load, { immediate: true })
+const { data, loading, error, reload } = useAsync(async () => {
+  const source = props.source
+  const r = await fetchUserEvents(props.userId, source)
+  return { items: r.items, total: r.page.total ?? r.items.length, all: !source }
+}, () => t('watch.loadFailed'))
+const records = computed(() => data.value?.items ?? [])
+const total = computed(() => data.value?.total ?? 0)
+watch(() => [props.userId, props.version, props.source], reload, { immediate: true })
+// the tab count is of all sources
+watch(data, (d) => d?.all && emit('total', d.total))
 
 function reviewed(ids: number[], status: ReviewStatus) {
   for (const r of records.value) if (ids.includes(r.id)) r.review_status = status
 }
 function removed(id: number) {
-  records.value = records.value.filter((r) => r.id !== id)
-  total.value = Math.max(0, total.value - 1)
+  const d = data.value
+  if (!d) return
+  d.items = d.items.filter((r) => r.id !== id)
+  d.total = Math.max(0, d.total - 1)
+  if (d.all) emit('total', d.total)
 }
 defineExpose({ reviewed, removed })
 
-const { checked, reviewing, review } = useBulkReview(reviewed)
+const { checked, reviewing, review } = useBulkReview((ids, status) => {
+  reviewed(ids, status)
+  emit('reviewed')
+})
 watch(records, () => (checked.value = []))
 const toggle = (id: number, on: boolean) => (checked.value = on ? [...checked.value, id] : checked.value.filter((x) => x !== id))
 </script>
@@ -71,6 +73,7 @@ const toggle = (id: number, on: boolean) => (checked.value = on ? [...checked.va
       <ReviewActions :loading="reviewing" @review="review" />
     </SBulkBar>
     <SAlert v-if="error" tone="danger" dense>{{ error }}</SAlert>
+    <SSpinner v-else-if="loading && !data" block />
     <SEmpty v-else-if="!records.length" :text="t('watch.noSuspicious')" icon="eyeglass" />
     <ol v-else class="mod-timeline">
       <li v-for="r in records" :key="r.id" class="mod-timeline-row">

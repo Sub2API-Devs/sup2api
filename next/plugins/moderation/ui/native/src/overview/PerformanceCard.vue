@@ -5,8 +5,9 @@ import AsyncCard from './AsyncCard.vue'
 import { onOverviewTick } from './tick'
 import { useCatalog } from '../catalog'
 import { bucketLabel, lineChart } from '../charts'
-import { latency, num } from '../format'
-import { enumLabel, fetchPerformance, useModHost, type Granularity, type StatsQuery } from '../host'
+import { enumLabel, enumOptions, latency, num } from '../format'
+import { fetchPerformance, useModHost } from '../host'
+import type { StatsQuery } from '../types'
 import { useAsync } from '../useAsync'
 
 // Performance impact (new-api performance-section): only pre moderation
@@ -20,7 +21,7 @@ const perf = useAsync(() => fetchPerformance(q), () => t('stats.loadFailed'))
 watch(q, perf.reload, { immediate: true })
 onOverviewTick(perf.reload)
 
-const granularityOptions = computed(() => (['hour', 'day'] as Granularity[]).map((v) => ({ value: v, label: t(`stats.granularity.${v}`) })))
+const granularityOptions = computed(() => enumOptions('stats.granularity', ['hour', 'day']))
 const groupOptions = computed(() => [{ value: '', label: t('stats.allGroups') }, ...catalog.groupOptions()])
 const flowOptions = computed(() => [{ value: '', label: t('perf.byRequest') }, ...catalog.state.flows.map((f) => ({ value: f.id, label: t('perf.flowPre', { name: f.name }) }))])
 

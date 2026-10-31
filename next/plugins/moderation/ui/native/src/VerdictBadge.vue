@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SBadge, SHint } from '@sub2api/ui'
-import { finalVerdict, useModHost, type ModEvent } from './host'
+import { finalVerdict } from './format'
+import { useModHost } from './host'
+import type { ModEvent } from './types'
 
 // Final verdict of a record (§72.9): human review first, else the AI verdict;
 // the source (人工 / AI) is shown next to it.

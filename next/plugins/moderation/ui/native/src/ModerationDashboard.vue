@@ -11,15 +11,16 @@ import ChannelsTab from './ChannelsTab.vue'
 import TestTab from './TestTab.vue'
 import SettingsTab from './SettingsTab.vue'
 import { useCatalog } from './catalog'
-import { canManage, canManageSettings, fetchStatus, modeTone, settingsPath, useModHost, type Status } from './host'
+import { canManage, canManageSettings, settingsPath, useModHost } from './host'
+import { useStatus } from './status'
+import { modeTone } from './tones'
+import type { TabKey } from './types'
 
 // Prompt moderation page (CONTRACTS §72.15): overview, records, watch list,
 // bans, flows, auditors, channels, playground and, for plugin managers, the
 // moderation settings (the full schema form stays on the plugin page).
 const host = useModHost()
 const t = host.t
-
-type TabKey = 'overview' | 'events' | 'watch' | 'blocks' | 'flows' | 'auditors' | 'channels' | 'test' | 'settings'
 
 const manage = computed(() => canManage())
 const manageSettings = computed(() => canManageSettings())
@@ -37,12 +38,12 @@ const tabs = computed(() => {
   if (manageSettings.value) list.push({ key: 'settings', label: t('tabs.settings') })
   return list
 })
+const isTab = (v: unknown): v is TabKey => tabs.value.some((x) => x.key === v)
 
 /** ?tab=, else the records tab for a ?record= link, else the overview. */
 function initialTab(): TabKey {
   const { tab: q, record } = host.router.currentRoute.value.query
-  const v = typeof q === 'string' ? q : ''
-  if (tabs.value.some((x) => x.key === v)) return v as TabKey
+  if (isTab(q)) return q
   return record ? 'events' : 'overview'
 }
 
@@ -55,38 +56,32 @@ watch(tab, (v) => {
   if (route.query.tab !== v) host.router.replace({ query: { ...route.query, tab: v } })
 })
 
-// Mode badge and the error-rate alert threshold; the overview reports its own loads.
-// The latest status wins: a status the overview reports outdates a load in flight.
-const status = ref<Status | null>(null)
-const runtime = computed(() => status.value?.runtime ?? null)
-let statusSeq = 0
-async function loadStatus() {
-  const my = ++statusSeq
-  const s = await fetchStatus().catch(() => null)
-  if (s && my === statusSeq) status.value = s
-}
-function onStatus(s: Status) {
-  statusSeq++
-  status.value = s
-}
-onMounted(() => tab.value !== 'overview' && loadStatus())
+// Mode badge and the error-rate alert threshold, from the status the
+// overview shows too (the overview loads it itself).
+const status = useStatus()
+const runtime = computed(() => status.data.value?.runtime ?? null)
+onMounted(() => tab.value !== 'overview' && status.reload())
 
-// Tabs with reload(), refreshed by the header button (the overview reloads its runtime itself).
-const refs: Record<string, { reload?: () => unknown } | null> = {}
-const setRef = (k: TabKey) => (el: unknown) => (refs[k] = el as { reload?: () => unknown } | null)
+// Tabs with reload(), refreshed by the header button (the overview reloads the status itself).
+const refs: Partial<Record<TabKey, { reload(): unknown }>> = {}
+const setRef = (k: TabKey) => (el: unknown) => {
+  if (el) refs[k] = el as { reload(): unknown }
+  else delete refs[k]
+}
 const catalog = useCatalog()
 const refreshing = ref(false)
 async function refresh() {
   refreshing.value = true
   try {
-    await Promise.all([refs[tab.value]?.reload?.(), tab.value !== 'overview' && Promise.all([catalog.refresh(), loadStatus()])])
+    await Promise.all([refs[tab.value]?.reload(), tab.value !== 'overview' && Promise.all([catalog.refresh(), status.reload()])])
   } finally {
     refreshing.value = false
   }
 }
 
-function goTab(k: string) {
-  if (tabs.value.some((x) => x.key === k)) tab.value = k as TabKey
+/** A tab link; tabs the user cannot see (playground, settings) are ignored. */
+function goTab(k: TabKey) {
+  if (isTab(k)) tab.value = k
 }
 
 function goSettings() {
@@ -129,7 +124,6 @@ function openWatch(userId: number) {
         v-show="tab === 'overview'"
         :ref="setRef('overview')"
         :active="tab === 'overview'"
-        @status="onStatus"
         @open-watch="openWatch"
         @go-tab="goTab"
         @go-settings="goSettings"
@@ -139,7 +133,7 @@ function openWatch(userId: number) {
       <BlocksTab v-if="visited.has('blocks')" v-show="tab === 'blocks'" :ref="setRef('blocks')" />
       <FlowsTab v-if="visited.has('flows')" v-show="tab === 'flows'" :ref="setRef('flows')" @go-tab="goTab" />
       <AuditorsTab v-if="visited.has('auditors')" v-show="tab === 'auditors'" :ref="setRef('auditors')" />
-      <ChannelsTab v-if="visited.has('channels')" v-show="tab === 'channels'" :ref="setRef('channels')" :alert-percent="status?.error_rate_alert_percent ?? 0" />
+      <ChannelsTab v-if="visited.has('channels')" v-show="tab === 'channels'" :ref="setRef('channels')" :alert-percent="status.data.value?.error_rate_alert_percent ?? 0" />
       <TestTab v-if="manage && visited.has('test')" v-show="tab === 'test'" @go-tab="goTab" />
       <SettingsTab v-if="manageSettings && visited.has('settings')" v-show="tab === 'settings'" :ref="setRef('settings')" />
     </STabs>

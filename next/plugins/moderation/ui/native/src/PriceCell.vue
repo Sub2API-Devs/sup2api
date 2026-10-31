@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SBadge, SHint } from '@sub2api/ui'
-import { enumLabel, useModHost, type Channel } from './host'
+import { enumLabel } from './format'
+import { useModHost } from './host'
+import type { Channel } from './types'
 
 // Price column of a channel: priced (as its billing model), free, or not
 // priced with the reason as a tooltip and sub line.

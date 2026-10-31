@@ -2,7 +2,8 @@
 import { SBadge, SHint, SSectionTitle } from '@sub2api/ui'
 import FlowStages from './FlowStages.vue'
 import { dt, specText } from './format'
-import { useModHost, type FlowVersionDetail } from './host'
+import { useModHost } from './host'
+import type { FlowVersionDetail } from './types'
 
 // The flow version a record ran with (new-api flow-snapshot-card): name,
 // version against the current one, scope and each stage's auditors with the

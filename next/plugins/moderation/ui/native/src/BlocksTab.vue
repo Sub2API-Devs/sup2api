@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { SAlert, SBadge, SButton, SCard, SField, SHint, SInput, STable, type TableColumn } from '@sub2api/ui'
-import { dt } from './format'
-import { applyFieldErrors, clearErrors, type FieldErrors } from './forms'
+import { dt, enumLabel } from './format'
+import { canManage, createBlock, deleteBlock, fetchBlocks, toastError, useModHost } from './host'
+import type { Block } from './types'
+import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
 import { useAsync } from './useAsync'
-import { canManage, createBlock, deleteBlock, enumLabel, errorMessage, fetchBlocks, useModHost, type Block } from './host'
 
 // Blocked users: list (GET /blocks), unblock (DELETE /blocks/:user_id),
 // manual block (POST /blocks). Actions need the manage permission.
@@ -40,7 +41,7 @@ async function unblock(b: Block) {
     host.toast(t('blocks.unblocked', { id: b.user_id }), 'success')
     data.value = rows.value.filter((r) => r.user_id !== b.user_id)
   } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
+    toastError(e)
   } finally {
     busy.value = null
   }
@@ -71,7 +72,7 @@ async function submit() {
     form.reason = ''
     await reload()
   } catch (e) {
-    if (!applyFieldErrors(formErr, e, FIELDS)) host.toast(errorMessage(e, t('actionFailed')), 'error')
+    applyErrorsOrToast(formErr, e, FIELDS)
   } finally {
     saving.value = false
   }

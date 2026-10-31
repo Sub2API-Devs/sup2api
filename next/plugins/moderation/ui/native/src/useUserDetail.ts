@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, watch, type Ref } from 'vue'
-import { fetchUserDetail, markWatchSeen, useModHost, type UserDetail, type Watch } from './host'
+import { fetchUserDetail, markWatchSeen, useModHost } from './host'
+import type { UserDetail, Watch } from './types'
 import { useAsync } from './useAsync'
 
 const POLL_MS = 5000

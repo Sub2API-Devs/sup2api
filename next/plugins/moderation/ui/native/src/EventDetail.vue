@@ -12,30 +12,19 @@ import InputMessage from './InputMessage.vue'
 import UserRef from './UserRef.vue'
 import UserStateSection from './UserStateSection.vue'
 import { useCatalog } from './catalog'
-import { dt, idText, ms, num } from './format'
+import { categoryLabel, dt, enumLabel, idText, isSuspicious, ms, num } from './format'
+import { canManage, deleteEvent, fetchEvent, reviewEvents, toastError, useModHost } from './host'
+import { aiVerdictTone, modeTone, severityTone } from './tones'
+import type { ModEventDetail, ReviewStatus, Watch } from './types'
 import { useAsync } from './useAsync'
-import {
-  aiVerdictTone,
-  canManage,
-  categoryLabel,
-  deleteEvent,
-  enumLabel,
-  errorMessage,
-  fetchEvent,
-  modeTone,
-  reviewEvents,
-  severityTone,
-  useModHost,
-  type ModEventDetail,
-  type ReviewStatus,
-  type Watch
-} from './host'
 
 // Record detail (GET /events/:id, new-api record-detail-drawer): result, the
 // user's state with inline watch actions, AI review, per-stage trace, the
 // flow version it ran with, other records of the same request, text and the
-// structured input message; manage users review or delete it.
-const props = defineProps<{ open: boolean; eventId: number | null }>()
+// structured input message; manage users review a suspicious record (hit,
+// block) or delete any. userLink=false (the user drawer, already showing
+// the user) leaves the user as plain text.
+const props = withDefaults(defineProps<{ open: boolean; eventId: number | null; userLink?: boolean }>(), { userLink: true })
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void
   (e: 'deleted', id: number): void
@@ -82,7 +71,7 @@ async function review(status: ReviewStatus) {
     emit('reviewed', [e.id], status)
     host.toast(t('review.done', { n: 1 }), 'success')
   } catch (err) {
-    host.toast(errorMessage(err, t('actionFailed')), 'error')
+    toastError(err)
   } finally {
     busy.value = false
   }
@@ -101,7 +90,7 @@ async function remove() {
     ev.value = null
     close()
   } catch (err) {
-    host.toast(errorMessage(err, t('actionFailed')), 'error')
+    toastError(err)
   } finally {
     busy.value = false
   }
@@ -178,7 +167,7 @@ const fields = computed<DescItem[]>(() => {
       <SAlert v-if="ev.reason" tone="neutral" :icon="false" :title="t('detail.f.reason')">{{ ev.reason }}</SAlert>
       <SAlert v-if="ev.error" tone="danger" :title="t('detail.f.error')"><span class="mod-prewrap">{{ ev.error }}</span></SAlert>
 
-      <UserStateSection v-if="ev.user_id && ev.user_state" :user-id="ev.user_id" :state="ev.user_state" openable @watch-changed="onWatchChanged" @show-user="showUser" @open-user="openUser" />
+      <UserStateSection v-if="ev.user_id && ev.user_state" :user-id="ev.user_id" :state="ev.user_state" :openable="userLink" @watch-changed="onWatchChanged" @show-user="showUser" @open-user="openUser" />
 
       <div v-if="hasAI">
         <SSectionTitle tag="p">
@@ -234,16 +223,18 @@ const fields = computed<DescItem[]>(() => {
 
       <SDescriptions :items="fields" :columns="2" dense>
         <template #item-categories><CategoryChips :categories="ev.hit_categories" wrap /></template>
-        <template #item-user><UserRef :user-id="ev.user_id" link :title="t('events.openUser')" @click="openUser" /></template>
+        <template #item-user><UserRef :user-id="ev.user_id" :link="userLink" :title="userLink ? t('events.openUser') : undefined" @click="openUser" /></template>
         <template #item-flow><FlowRef :flow-id="ev.flow_id" :version="ev.flow_version" :name="ev.flow_name" :current="ev.flow_current_version" /></template>
       </SDescriptions>
     </div>
     <template #footer>
       <template v-if="manage && ev">
         <SButton variant="danger" icon="trash" class="mod-mr-auto" :loading="busy" @click="remove">{{ t('detail.delete') }}</SButton>
-        <SButton v-if="ev.review_status !== 'false_positive'" :loading="busy" @click="review('false_positive')">{{ t('review.falsePositive') }}</SButton>
-        <SButton v-if="ev.review_status !== 'confirmed'" variant="danger" :loading="busy" @click="review('confirmed')">{{ t('review.confirmed') }}</SButton>
-        <SButton v-if="ev.review_status !== 'pending'" variant="ghost" :loading="busy" @click="review('pending')">{{ t('review.reset') }}</SButton>
+        <template v-if="isSuspicious(ev)">
+          <SButton v-if="ev.review_status !== 'false_positive'" :loading="busy" @click="review('false_positive')">{{ t('review.falsePositive') }}</SButton>
+          <SButton v-if="ev.review_status !== 'confirmed'" variant="danger" :loading="busy" @click="review('confirmed')">{{ t('review.confirmed') }}</SButton>
+          <SButton v-if="ev.review_status !== 'pending'" variant="ghost" :loading="busy" @click="review('pending')">{{ t('review.reset') }}</SButton>
+        </template>
       </template>
       <SButton @click="close">{{ host.i18n.t('ui.close') }}</SButton>
     </template>

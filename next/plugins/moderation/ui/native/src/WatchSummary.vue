@@ -4,8 +4,9 @@ import { SBadge, SDescriptions, type DescItem } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import FlowRef from './FlowRef.vue'
 import { useCatalog } from './catalog'
-import { num } from './format'
-import { useModHost, type AIVerdictCounts, type SourceFilter, type UserDetail, type WatchItem } from './host'
+import { joinList, num } from './format'
+import { useModHost } from './host'
+import type { AIVerdictCounts, SourceFilter, UserDetail, WatchItem } from './types'
 
 // Summary of a user (new-api user-detail-summary and context bar): all
 // suspicious records by severity, handling status and AI verdict, the group
@@ -32,7 +33,7 @@ const fields = computed<DescItem[]>(() => {
     { key: 'review', label: t('watchSummary.review') },
     { key: 'ai', label: t('watchSummary.ai') },
     { key: 'categories', label: t('watchList.col.categories') },
-    { key: 'group', label: t('watchList.col.group'), value: groups.length ? groups.map(catalog.groupName).join(', ') : '—' },
+    { key: 'group', label: t('watchList.col.group'), value: groups.length ? joinList(groups.map(catalog.groupName)) : '—' },
     { key: 'flow', label: t('events.col.flow') }
   ]
   if (c.sources.length) items.push({ key: 'sources', label: t('watchSummary.sources'), full: true })

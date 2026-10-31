@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { SAlert, SGrid, SSpinner, SStatCard } from '@sub2api/ui'
 import StatusLine from './overview/StatusLine.vue'
 import AttentionUsers from './overview/AttentionUsers.vue'
@@ -11,28 +11,28 @@ import FunnelCard from './overview/FunnelCard.vue'
 import TrendCard from './overview/TrendCard.vue'
 import HealthCard from './overview/HealthCard.vue'
 import QueueCard from './overview/QueueCard.vue'
-import CostCard from './CostCard.vue'
+import CostCard from './overview/CostCard.vue'
 import { provideOverviewTick } from './overview/tick'
 import { useCatalog } from './catalog'
 import { num } from './format'
-import { fetchStatus, useModHost, type Status } from './host'
-import { useAsync } from './useAsync'
+import { useModHost } from './host'
+import { useStatus } from './status'
+import type { TabKey } from './types'
 
 // Overview (new-api content-moderation overview): running state, today's
 // KPIs, the users most in need of attention, AI review, cost, performance,
-// categories, funnel, trend, health and queues. GET /status feeds the page;
-// cards with their own query reload on the shared tick. Refreshes every
-// minute while the tab is shown.
+// categories, funnel, trend, health and queues. GET /status (shared with the
+// page header) feeds the page; cards with their own query reload on the
+// shared tick. Refreshes every minute while the tab is shown.
 const props = defineProps<{ active: boolean }>()
 const emit = defineEmits<{
-  (e: 'status', s: Status): void
   (e: 'open-watch', userId: number): void
-  (e: 'go-tab', tab: string): void
+  (e: 'go-tab', tab: TabKey): void
   (e: 'go-settings'): void
 }>()
 const t = useModHost().t
 const catalog = useCatalog()
-const status = useAsync(fetchStatus, () => t('overview.loadFailed'))
+const status = useStatus()
 const bump = provideOverviewTick()
 
 async function reload() {
@@ -41,7 +41,6 @@ async function reload() {
 }
 defineExpose({ reload })
 onMounted(status.reload)
-watch(status.data, (s) => s && emit('status', s))
 
 const REFRESH_MS = 60_000
 const timer = setInterval(() => props.active && document.visibilityState === 'visible' && reload(), REFRESH_MS)
@@ -58,7 +57,7 @@ const kpis = computed(() => {
     { key: 'blocked', icon: 'x', tone: 'danger' as const, value: s.today.blocked, sub: t('kpi.blockedSub') }
   ]
 })
-const goTab = (tab: string) => emit('go-tab', tab)
+const goTab = (tab: TabKey) => emit('go-tab', tab)
 </script>
 
 <template>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useList } from '@sub2api/host'
-import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SInput, SPagination, SSelect, STable, STimeRange, type RangeKey, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SInput, SPagination, SSelect, STable, STimeRange, type RangeKey, type TableColumn } from '@sub2api/ui'
 import ResultBadge from './ResultBadge.vue'
 import ReviewActions from './ReviewActions.vue'
 import WatchDetail from './WatchDetail.vue'
@@ -12,23 +11,42 @@ import FlowRef from './FlowRef.vue'
 import UserRef from './UserRef.vue'
 import VerdictBadge from './VerdictBadge.vue'
 import { useCatalog } from './catalog'
+import { useCategoryOptions } from './categories'
 import { applyFilters } from './forms'
-import { dt, ms, num } from './format'
-import { canManage, enumLabel, errorMessage, useModHost, type ModEvent, type ReviewStatus } from './host'
+import { dt, enumLabel, enumOptions, isSuspicious, ms, num, withAll } from './format'
+import { canManage, errorMessage, useEventList, useModHost } from './host'
+import type { ReviewStatus } from './types'
 import { useBulkReview } from './useBulkReview'
 import { useUserFilter } from './users'
 
 // Records (new-api records): filters + paginated table (useList); the user
 // filter takes a username (resolved to ids through the core) or an id. A row
 // opens the detail modal (?record=<id> opens one directly); a user opens the
-// user detail drawer; selected rows can be reviewed in bulk.
+// user detail drawer; selected suspicious rows (hit, block) can be reviewed
+// in bulk.
 const props = defineProps<{ preset?: { user_id: number; n: number } | null }>()
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
 const catalog = useCatalog()
 
-const emptyForm = () => ({ result: 'suspicious', timing: '', review_status: '', ai_verdict: '', verdict: '', severity: '', watch_level: '', flow_id: '' as number | '', group_id: '' as number | '', api_key_id: '', user: '', request_id: '', q: '' })
+const emptyForm = () => ({
+  result: 'suspicious',
+  timing: '',
+  review_status: '',
+  ai_verdict: '',
+  verdict: '',
+  severity: '',
+  watch_level: '',
+  category: '',
+  flow_id: '' as number | '',
+  flow_version: '' as number | '',
+  group_id: '' as number | '',
+  api_key_id: '',
+  user: '',
+  request_id: '',
+  q: ''
+})
 const form = reactive(emptyForm())
 if (props.preset) form.user = String(props.preset.user_id)
 const range = ref<RangeKey>('all')
@@ -48,7 +66,9 @@ function query() {
     verdict: form.verdict,
     severity: form.severity,
     watch_level: form.watch_level,
+    category: form.category,
     flow_id: form.flow_id,
+    flow_version: form.flow_id === '' ? '' : form.flow_version,
     group_id: form.group_id,
     api_key_id: form.api_key_id.trim(),
     user_id: users.query.value.user_id ?? '',
@@ -60,7 +80,7 @@ function query() {
   }
 }
 
-const list = useList<ModEvent>(host.pluginApi, '/events', query())
+const list = useEventList(query())
 const error = computed(() => (list.error.value ? errorMessage(list.error.value, t('events.loadFailed')) : ''))
 
 const apply = () => applyFilters(list.filters, query())
@@ -77,19 +97,32 @@ function reset(user = '') {
   search()
 }
 
-const withAll = (opts: SelectOption[]): SelectOption[] => [{ value: '', label: t('events.all') }, ...opts]
-const opts = (group: string, values: string[]) => values.map((v) => ({ value: v, label: t(`${group}.${v}`) }))
-const resultOptions = computed(() => withAll([{ value: 'suspicious', label: t('events.suspicious') }, ...opts('result', ['block', 'hit', 'overturned', 'error', 'pass'])]))
-const timingOptions = computed(() => withAll(opts('timing', ['pre', 'post'])))
-const reviewOptions = computed(() => withAll(opts('review', ['pending', 'false_positive', 'confirmed'])))
-const severityOptions = computed(() => withAll(opts('severity', ['high', 'medium', 'low'])))
-const watchOptions = computed(() => withAll([{ value: 'any', label: t('events.watched') }, ...opts('level', ['observe', 'enforce'])]))
-const aiVerdictOptions = computed(() => withAll(opts('aiVerdict', ['violation', 'false_positive', 'unsure', 'none'])))
+const all = { all: true }
+const resultOptions = computed(() => withAll([{ value: 'suspicious', label: t('events.suspicious') }, ...enumOptions('result', ['block', 'hit', 'overturned', 'error', 'pass'])]))
+const timingOptions = computed(() => enumOptions('timing', ['pre', 'post'], all))
+const reviewOptions = computed(() => enumOptions('review', ['pending', 'false_positive', 'confirmed'], all))
+const severityOptions = computed(() => enumOptions('severity', ['high', 'medium', 'low'], all))
+const watchOptions = computed(() => withAll([{ value: 'any', label: t('events.watched') }, ...enumOptions('level', ['observe', 'enforce'])]))
+const aiVerdictOptions = computed(() => enumOptions('aiVerdict', ['violation', 'false_positive', 'unsure', 'none'], all))
 const verdictOptions = computed(() => withAll([{ value: 'needs_review', label: t('events.needsReview') }, { value: 'disagree', label: t('events.disagree') }]))
+const categories = useCategoryOptions()
+const categoryOptions = computed(() => withAll(categories.value))
 const flowOptions = computed(() => withAll(catalog.state.flows.map((f) => ({ value: f.id, label: f.name }))))
+/** versions 1…current of the chosen flow, newest first */
+const versionOptions = computed(() => {
+  const n = form.flow_id === '' ? 0 : (catalog.flow(form.flow_id)?.version ?? 0)
+  return withAll(Array.from({ length: n }, (_, i) => ({ value: n - i, label: `v${n - i}` })))
+})
 const groupOptions = computed(() => withAll(catalog.groupOptions()))
 
-watch(() => [form.result, form.timing, form.review_status, form.ai_verdict, form.verdict, form.severity, form.watch_level, form.flow_id, form.group_id, from.value, to.value], apply)
+watch(
+  () => [form.result, form.timing, form.review_status, form.ai_verdict, form.verdict, form.severity, form.watch_level, form.category, form.flow_id, form.flow_version, form.group_id, from.value, to.value],
+  apply
+)
+watch(
+  () => form.flow_id,
+  () => (form.flow_version = '')
+)
 watch(
   () => props.preset,
   (p) => p && reset(String(p.user_id))
@@ -150,6 +183,8 @@ function openUser(id: number) {
 }
 
 const { checked, reviewing, review } = useBulkReview(onReviewed)
+/** rows of the page that can be reviewed (suspicious) */
+const reviewable = computed(() => list.items.value.filter(isSuspicious))
 watch(() => list.items.value, () => (checked.value = []))
 </script>
 
@@ -181,8 +216,14 @@ watch(() => list.items.value, () => (checked.value = []))
         <SField class="mod-filter" :label="t('events.user')" :error="users.error.value">
           <SInput v-model="form.user" type="search" :placeholder="t('events.userPlaceholder')" />
         </SField>
+        <SField class="mod-filter" :label="t('events.category')">
+          <SSelect v-model="form.category" :options="categoryOptions" searchable />
+        </SField>
         <SField class="mod-filter" :label="t('events.col.flow')">
           <SSelect v-model="form.flow_id" :options="flowOptions" searchable />
+        </SField>
+        <SField class="mod-filter" :label="t('events.flowVersion')">
+          <SSelect v-model="form.flow_version" :options="versionOptions" :disabled="form.flow_id === ''" />
         </SField>
         <SField class="mod-filter" :label="t('stats.group')">
           <SSelect v-if="groupOptions.length > 1" v-model="form.group_id" :options="groupOptions" searchable />
@@ -207,7 +248,15 @@ watch(() => list.items.value, () => (checked.value = []))
 
     <SAlert v-if="error" tone="danger" class="mod-section">{{ error }}</SAlert>
 
-    <SBulkBar v-if="manage" :count="checked.length" :total="list.total.value" :page-selected="checked.length === list.items.value.length" class="mod-section" @select-page="checked = list.items.value.map((r) => r.id)" @clear="checked = []">
+    <SBulkBar
+      v-if="manage"
+      :count="checked.length"
+      :total="list.total.value"
+      :page-selected="checked.length > 0 && checked.length === reviewable.length"
+      class="mod-section"
+      @select-page="checked = reviewable.map((r) => r.id)"
+      @clear="checked = []"
+    >
       <template #idle>{{ t('review.hint') }}</template>
       <ReviewActions :loading="reviewing" @review="review" />
     </SBulkBar>
@@ -220,6 +269,7 @@ watch(() => list.items.value, () => (checked.value = []))
         :loading="list.loading.value"
         :empty-text="t('events.empty')"
         :selectable="manage"
+        :row-selectable="isSuspicious"
         dense
         clickable
         @row-click="open($event.id)"

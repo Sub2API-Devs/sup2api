@@ -6,7 +6,10 @@ import CategoryChips from './CategoryChips.vue'
 import CostBadge from './CostBadge.vue'
 import ResultBadge from './ResultBadge.vue'
 import TraceView from './TraceView.vue'
-import { enumLabel, errorMessage, fetchFlowVersions, severityTone, simulateFlow, useModHost, type Flow, type SimUserState, type SimulateBody, type TestResult } from './host'
+import { enumLabel, enumOptions } from './format'
+import { errorMessage, fetchFlowVersions, simulateFlow, useModHost } from './host'
+import { severityTone } from './tones'
+import type { Flow, SimulateBody, SimUserState, TestResult } from './types'
 
 // Flow simulation (§72.13.5): runs the draft, the published version or an
 // older version with the current auditors on a text or a stored record.
@@ -30,17 +33,24 @@ const eventId = ref('')
 const running = ref(false)
 const result = ref<TestResult | null>(null)
 const failure = ref('')
+// Opening (another flow) drops the answers still pending for the previous one.
+let openSeq = 0
+let runSeq = 0
 
 watch(
   () => [props.open, props.flow?.id] as const,
   async ([open]) => {
     if (!open || !props.flow) return
+    const my = ++openSeq
+    runSeq++
+    running.value = false
     result.value = null
     failure.value = ''
     source.value = props.flow.dirty || !props.flow.version ? 'draft' : 'published'
     versions.value = []
     try {
       const r = await fetchFlowVersions(props.flow.id)
+      if (my !== openSeq) return
       versions.value = (r.items || []).map((x) => x.version)
       version.value = versions.value[0] || 0
     } catch {
@@ -56,7 +66,7 @@ const sourceOptions = computed(() => [
   { value: 'version', label: t('flows.simSourceVersion'), disabled: !versions.value.length }
 ])
 const versionOptions = computed(() => versions.value.map((v) => ({ value: v, label: `v${v}` })))
-const userStateOptions = computed(() => (['none', 'observe', 'enforce'] as const).map((v) => ({ value: v, label: t(`flows.simUser.${v}`) })))
+const userStateOptions = computed(() => enumOptions('flows.simUser', ['none', 'observe', 'enforce']))
 const inputOptions = computed(() => [
   { value: 'text', label: t('flows.simInputText') },
   { value: 'event', label: t('flows.simInputEvent') }
@@ -83,15 +93,17 @@ async function run() {
     body.text = text.value
     if (imgs.length) body.images = imgs
   }
+  const my = ++runSeq
   running.value = true
   failure.value = ''
   result.value = null
   try {
-    result.value = await simulateFlow(f.id, body)
+    const r = await simulateFlow(f.id, body)
+    if (my === runSeq) result.value = r
   } catch (e) {
-    failure.value = isApiError(e) && e.code === 'no_text' ? t('flows.noText') : errorMessage(e, t('test.failed'))
+    if (my === runSeq) failure.value = isApiError(e) && e.code === 'no_text' ? t('flows.noText') : errorMessage(e, t('test.failed'))
   } finally {
-    running.value = false
+    if (my === runSeq) running.value = false
   }
 }
 </script>

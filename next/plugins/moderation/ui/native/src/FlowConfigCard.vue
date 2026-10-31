@@ -2,7 +2,9 @@
 import { computed } from 'vue'
 import { SBadge, SCard, SField, SHint, SInput, SLink, SSelect, SSwitch, STagInput } from '@sub2api/ui'
 import FlowTimeoutField from './FlowTimeoutField.vue'
-import { useModHost, type Spec } from './host'
+import { enumOptions } from './format'
+import { useModHost } from './host'
+import type { Spec } from './types'
 import { NAME_MAX } from './flowOps'
 
 // Name, enabled switch, bound groups (read-only), sample rate, model scope
@@ -27,7 +29,7 @@ const emit = defineEmits<{
 }>()
 const t = useModHost().t
 
-const filterOptions = computed(() => ['all', 'only', 'exclude'].map((v) => ({ value: v, label: t(`modelFilter.${v}`) })))
+const filterOptions = computed(() => enumOptions('modelFilter', ['all', 'only', 'exclude']))
 const patch = (p: Partial<Spec>) => emit('update:draft', { ...props.draft, ...p })
 const setFilter = (p: Partial<Spec['model_filter']>) => patch({ model_filter: { ...props.draft.model_filter, ...p } })
 

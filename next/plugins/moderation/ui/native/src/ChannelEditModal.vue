@@ -2,13 +2,17 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { SButton, SField, SInput, SModal, SSelect, SSwitch } from '@sub2api/ui'
 import { DEFAULT_CHANNEL_TIMEOUT_MS } from './flowOps'
-import { applyFieldErrors, clearErrors, type FieldErrors } from './forms'
-import { channelBody, errorMessage, saveChannel, useModHost, type Channel, type ChannelType, type Protocol } from './host'
+import { enumOptions } from './format'
+import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
+import { channelBody, fetchChannel, saveChannel, useModHost } from './host'
+import type { Channel, ChannelType, Protocol } from './types'
 
 // Creates or edits a channel (channel null = new). The key is write-only and
 // kept when left empty; the proxy is shown without its password and sent
-// only when changed.
-const props = defineProps<{ channel: Channel | null }>()
+// only when changed. `readonly` shows the channel without saving (read
+// users). The list row is shown at once and replaced by GET /channels/:id
+// unless the form was edited meanwhile.
+const props = defineProps<{ channel: Channel | null; readonly?: boolean }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ (e: 'saved'): void }>()
 const host = useModHost()
@@ -16,8 +20,8 @@ const t = host.t
 
 const PROTOCOLS: Protocol[] = ['openai_chat', 'openai_responses', 'anthropic']
 const DEFAULT_MODEL: Record<ChannelType, string> = { openai_moderation: 'omni-moderation-latest', typesafe: 'jev-latest', llm: '' }
-const typeOptions = computed(() => (['openai_moderation', 'typesafe', 'llm'] as ChannelType[]).map((v) => ({ value: v, label: t(`channelType.${v}`) })))
-const protocolOptions = computed(() => PROTOCOLS.map((v) => ({ value: v, label: t(`protocol.${v}`) })))
+const typeOptions = computed(() => enumOptions('channelType', ['openai_moderation', 'typesafe', 'llm']))
+const protocolOptions = computed(() => enumOptions('protocol', PROTOCOLS))
 
 const form = reactive({
   type: 'openai_moderation' as ChannelType,
@@ -35,10 +39,7 @@ const errs = reactive<FieldErrors>({})
 const saving = ref(false)
 const defaultTimeout = computed(() => DEFAULT_CHANNEL_TIMEOUT_MS[form.type])
 
-watch(open, (v) => {
-  if (!v) return
-  const c = props.channel
-  clearErrors(errs)
+function fill(c: Channel | null) {
   Object.assign(form, {
     type: c?.type || 'openai_moderation',
     protocol: c && (PROTOCOLS as string[]).includes(c.protocol) ? c.protocol : 'openai_chat',
@@ -51,9 +52,28 @@ watch(open, (v) => {
     enabled: c?.enabled ?? true,
     proxy: c?.proxy || ''
   })
+}
+const snapshot = () => JSON.stringify(form)
+
+watch(open, async (v) => {
+  if (!v) return
+  const c = props.channel
+  clearErrors(errs)
+  fill(c)
+  if (!c) return
+  const shown = snapshot()
+  const fresh = await fetchChannel(c.id).catch(() => null)
+  if (fresh && open.value && props.channel?.id === c.id && snapshot() === shown) fill(fresh)
+})
+
+const title = computed(() => {
+  const c = props.channel
+  if (!c) return t('channels.add')
+  return t(props.readonly ? 'channels.viewTitle' : 'channels.editTitle', { name: c.name })
 })
 
 async function save() {
+  if (props.readonly) return
   clearErrors(errs)
   saving.value = true
   try {
@@ -66,7 +86,7 @@ async function save() {
     open.value = false
     emit('saved')
   } catch (e) {
-    if (!applyFieldErrors(errs, e)) host.toast(errorMessage(e, t('actionFailed')), 'error')
+    applyErrorsOrToast(errs, e)
   } finally {
     saving.value = false
   }
@@ -74,42 +94,44 @@ async function save() {
 </script>
 
 <template>
-  <SModal v-model:open="open" :title="channel ? t('channels.editTitle', { name: channel.name }) : t('channels.add')" width="lg">
+  <SModal v-model:open="open" :title="title" width="lg">
     <form class="mod-form" @submit.prevent="save">
-      <SField :label="t('channels.col.type')" :error="errs.type" :hint="channel ? t('channels.typeFixed') : t(`channelTypeHint.${form.type}`)">
-        <SSelect v-model="form.type" :options="typeOptions" :disabled="!!channel" />
-      </SField>
-      <SField v-if="form.type === 'llm'" :label="t('channels.protocol')" :error="errs.protocol" :hint="t('channels.protocolHint')">
-        <SSelect v-model="form.protocol" :options="protocolOptions" />
-      </SField>
-      <SField :label="t('channels.col.name')" required :error="errs.name">
-        <SInput v-model="form.name" :maxlength="64" />
-      </SField>
-      <SField :label="t('channels.col.baseUrl')" required :error="errs.base_url" :hint="t('channels.baseUrlHint')">
-        <SInput v-model="form.base_url" placeholder="https://api.openai.com" />
-      </SField>
-      <SField :label="t('channels.apiKey')" :error="errs.api_key" :hint="channel?.has_key ? t('channels.keepKey', { tail: channel.api_key_tail }) : ''">
-        <SInput v-model="form.api_key" type="password" autocomplete="off" />
-      </SField>
-      <SField :label="t('channels.col.model')" :error="errs.model" :required="form.type === 'llm'">
-        <SInput v-model="form.model" :placeholder="DEFAULT_MODEL[form.type] || 'gpt-4o-mini'" />
-      </SField>
-      <SField v-if="form.type !== 'openai_moderation'" :label="t('channels.billingModel')" :error="errs.billing_model" :hint="t('channels.billingModelHint')">
-        <SInput v-model="form.billing_model" :maxlength="128" :placeholder="form.model || DEFAULT_MODEL[form.type] || ''" />
-      </SField>
-      <SField :label="t('channels.col.timeout')" :error="errs.timeout_ms" :hint="t('channels.timeoutHint', { n: defaultTimeout })">
-        <SInput v-model="form.timeout_ms" type="number" min="500" max="60000" step="100" :placeholder="String(defaultTimeout)" />
-      </SField>
-      <SField :label="t('channels.proxy')" :error="errs.proxy" :hint="channel?.has_key ? t('channels.proxyKeyHint') : t('channels.proxyHint')">
-        <SInput v-model="form.proxy" autocomplete="off" placeholder="socks5://user:pass@host:1080" />
-      </SField>
-      <SField :label="t('channels.col.enabled')">
-        <SSwitch v-model="form.enabled" />
-      </SField>
+      <fieldset class="mod-fieldset" :disabled="readonly">
+        <SField :label="t('channels.col.type')" :error="errs.type" :hint="channel ? t('channels.typeFixed') : t(`channelTypeHint.${form.type}`)">
+          <SSelect v-model="form.type" :options="typeOptions" :disabled="!!channel" />
+        </SField>
+        <SField v-if="form.type === 'llm'" :label="t('channels.protocol')" :error="errs.protocol" :hint="t('channels.protocolHint')">
+          <SSelect v-model="form.protocol" :options="protocolOptions" />
+        </SField>
+        <SField :label="t('channels.col.name')" required :error="errs.name">
+          <SInput v-model="form.name" :maxlength="64" />
+        </SField>
+        <SField :label="t('channels.col.baseUrl')" required :error="errs.base_url" :hint="t('channels.baseUrlHint')">
+          <SInput v-model="form.base_url" placeholder="https://api.openai.com" />
+        </SField>
+        <SField :label="t('channels.apiKey')" :error="errs.api_key" :hint="channel?.has_key ? t('channels.keepKey', { tail: channel.api_key_tail }) : ''">
+          <SInput v-model="form.api_key" type="password" autocomplete="off" />
+        </SField>
+        <SField :label="t('channels.col.model')" :error="errs.model" :required="form.type === 'llm'">
+          <SInput v-model="form.model" :placeholder="DEFAULT_MODEL[form.type] || 'gpt-4o-mini'" />
+        </SField>
+        <SField v-if="form.type !== 'openai_moderation'" :label="t('channels.billingModel')" :error="errs.billing_model" :hint="t('channels.billingModelHint')">
+          <SInput v-model="form.billing_model" :maxlength="128" :placeholder="form.model || DEFAULT_MODEL[form.type] || ''" />
+        </SField>
+        <SField :label="t('channels.col.timeout')" :error="errs.timeout_ms" :hint="t('channels.timeoutHint', { n: defaultTimeout })">
+          <SInput v-model="form.timeout_ms" type="number" min="500" max="60000" step="100" :placeholder="String(defaultTimeout)" />
+        </SField>
+        <SField :label="t('channels.proxy')" :error="errs.proxy" :hint="channel?.has_key ? t('channels.proxyKeyHint') : t('channels.proxyHint')">
+          <SInput v-model="form.proxy" autocomplete="off" placeholder="socks5://user:pass@host:1080" />
+        </SField>
+        <SField :label="t('channels.col.enabled')">
+          <SSwitch v-model="form.enabled" />
+        </SField>
+      </fieldset>
     </form>
     <template #footer>
-      <SButton @click="open = false">{{ host.i18n.t('ui.cancel') }}</SButton>
-      <SButton variant="primary" :loading="saving" @click="save">{{ t('save') }}</SButton>
+      <SButton @click="open = false">{{ host.i18n.t(readonly ? 'ui.close' : 'ui.cancel') }}</SButton>
+      <SButton v-if="!readonly" variant="primary" :loading="saving" @click="save">{{ t('save') }}</SButton>
     </template>
   </SModal>
 </template>

@@ -302,6 +302,7 @@ function filterEvents(q: Record<string, string>) {
     for (const k of ['user_id', 'api_key_id', 'flow_id', 'flow_version', 'group_id']) if (q[k] && String(e[k]) !== q[k]) return false
     if (q.user_ids && !q.user_ids.split(',').includes(String(e.user_id))) return false
     if (q.request_id && e.request_id !== q.request_id) return false
+    if (q.category && !e.hit_categories.includes(q.category)) return false
     if (q.q && !(e.request_id + e.text).includes(q.q)) return false
     if (q.ai_verdict === 'none' && (e.ai_verdict || !['hit', 'block'].includes(e.result))) return false
     if (q.ai_verdict && q.ai_verdict !== 'none' && e.ai_verdict !== q.ai_verdict) return false
@@ -435,8 +436,11 @@ on('GET', '/p/moderation/stats/categories', () => ({
 
 // GET/PUT /plugins/moderation/settings: registered before the generic plugin
 // routes of plugins.ts; secrets come back masked, the mask keeps them.
+const SETTINGS_SCHEMA_FILE = fileURLToPath(new URL('../../plugins/moderation/forms/settings.schema.json', import.meta.url))
+const settingsSchema = existsSync(SETTINGS_SCHEMA_FILE) ? JSON.parse(readFileSync(SETTINGS_SCHEMA_FILE, 'utf8')) : null
 const settingsView = () => ({
   mode: 'schema',
+  schema: settingsSchema,
   values: Object.fromEntries(Object.entries(settings).map(([k, v]) => [k, SECRET_SETTINGS.includes(k) && v ? MASK : v])),
   secret_fields: SECRET_SETTINGS
 })
@@ -501,14 +505,16 @@ on('GET', '/p/moderation/events/:id/input', (req) => {
   const parts = [
     { role: 'system', type: 'text', text: '你是一个乐于助人的助手。' },
     { role: 'user', type: 'text', text: e.text },
-    ...(e.image_count ? [{ role: 'user', type: 'image', src: SAMPLE_IMAGE, kind: 'data', mime: 'image/svg+xml' }] : [])
+    ...(e.image_count ? [{ role: 'user', type: 'image', src: SAMPLE_IMAGE, kind: 'base64', mime: 'image/svg+xml' }] : [])
   ]
   return { id: e.id, format: 'messages', messages, parts }
 })
 on('POST', '/p/moderation/events/review', (req) => {
+  // only suspicious records (hit / block) are reviewed and counted
   const ids: number[] = req.body?.ids || []
-  for (const e of events) if (ids.includes(e.id)) Object.assign(e, { review_status: req.body.status, reviewed_by: 1, reviewed_at: now() })
-  return { updated: ids.length, status: req.body?.status }
+  const hits = events.filter((e) => ids.includes(e.id) && ['hit', 'block'].includes(e.result))
+  for (const e of hits) Object.assign(e, { review_status: req.body.status, reviewed_by: 1, reviewed_at: now() })
+  return { updated: hits.length, status: req.body?.status }
 })
 on('DELETE', '/p/moderation/events/:id', (req) => {
   const i = events.findIndex((e) => e.id === Number(req.params.id))
@@ -527,7 +533,8 @@ function watchItem(w: any) {
   const groups = [...new Set(recs.map((e) => e.group_id))]
   const group = recs[0]?.group_id ?? 0
   const f = flows.find((x) => x.enabled && x.groups.includes(group))
-  const cats = Object.entries(countBy(recs.flatMap((e) => e.hit_categories))).sort((a, b) => b[1] - a[1])
+  // records by their highest category; top_other = records outside the top 3
+  const cats = Object.entries(countBy(recs.map((e) => e.highest_category).filter(Boolean))).sort((a, b) => b[1] - a[1])
   const sev = countBy(recs.map((e) => e.severity))
   const a = analyses.find((x) => x.id === w.latest_analysis_id && x.status === 'ok')
   return {
@@ -538,7 +545,7 @@ function watchItem(w: any) {
     suspicious_total: recs.length,
     by_severity: Object.fromEntries(SEVERITY.map((k) => [k, sev[k] || 0])),
     top_categories: cats.slice(0, 3).map(([category, count]) => ({ category, count, ...(category === 'custom/jailbreak' ? { label: '越狱与恶意预填充' } : {}) })),
-    top_other: Math.max(0, cats.length - 3),
+    top_other: cats.slice(3).reduce((n, [, c]) => n + c, 0),
     ai_counts: a?.verdict_counts || null
   }
 }
@@ -557,7 +564,7 @@ on('GET', '/p/moderation/watchlist', (req) => {
     .filter((w) => !q.level || w.level === q.level)
     .filter((w) => q.new_only !== 'true' || w.hits_since_seen > 0)
     .filter((w) => !q.trend || (q.trend === 'none' ? !w.latest_trend : w.latest_trend === q.trend))
-    .filter((w) => !q.category || w.top_categories.some((c: any) => c.category.includes(q.category)))
+    .filter((w) => !q.category || suspiciousOf(w.user_id).some((e) => e.highest_category === q.category))
     .filter((w) => !ids.length || ids.includes(String(w.user_id)))
     .sort(WATCH_SORT[q.sort] || WATCH_SORT.new)
   const observe = watch.filter((w) => w.level === 'observe')
@@ -608,12 +615,6 @@ on('GET', '/p/moderation/users/:id', (req) => {
     analysis: { running: !!w?.analysis_running, queued: !!w?.analysis_requested_at, violations_since_analysis: w?.violation_count || 0, every: settings.analysis_every_violations }
   }
 })
-on('GET', '/p/moderation/watchlist/:id', (req) => {
-  const w = watch.find((x) => x.user_id === Number(req.params.id))
-  if (!w) return fail(404, 'not_found', 'not on the watch list / 该用户不在观察名单上')
-  tick(w)
-  return watchView(w)
-})
 on('POST', '/p/moderation/watchlist/:id/analyze', (req) => {
   const w = watch.find((x) => x.user_id === Number(req.params.id))
   if (!w) return fail(404, 'not_found', 'not on the watch list / 该用户不在观察名单上')
@@ -647,11 +648,13 @@ function logWatch(uid: number, action: string, from: string, to: string, body: a
 }
 /** expires_at of a create / patch body: RFC 3339, '' = never, or the legacy days. */
 const expiryOf = (b: any, old: string | null) => (b.expires_at !== undefined ? b.expires_at || null : b.days !== undefined ? (b.days ? now(b.days * 86400) : null) : old)
+/** Without days or expires_at: watch_days at observe, no expiry at enforce. */
+const levelExpiry = (level: string) => (level === 'observe' ? now(settings.watch_days * 86400) : null)
 on('POST', '/p/moderation/watchlist', (req) => {
   const uid = Number(req.body?.user_id)
   if (watch.some((w) => w.user_id === uid)) return fail(409, 'already_watched', 'user is already on the watch list / 该用户已在观察名单中')
   if (uid === 1) return fail(400, 'invalid_argument', 'staff cannot be watched', { fields: [{ field: 'user_id', code: 'staff', message: 'staff users cannot be watched / 管理员不能加入名单' }] })
-  const w = { user_id: uid, level: req.body.level || 'observe', source: req.body.analysis_id ? 'analysis' : 'manual', since_at: now(), expires_at: expiryOf(req.body, now(30 * 86400)), hit_count: 0, violation_count: 0, hits_since_seen: 0, last_hit_at: null, note: req.body.note || '', updated_at: now(), analysis_requested_at: null, analysis_source: '', analysis_running: false, latest_analysis_id: null, latest_analysis_status: '', latest_trend: '', latest_suggestion: '', analyzed_at: null }
+  const w = { user_id: uid, level: req.body.level || 'observe', source: req.body.analysis_id ? 'analysis' : 'manual', since_at: now(), expires_at: expiryOf(req.body, levelExpiry(req.body.level || 'observe')), hit_count: 0, violation_count: 0, hits_since_seen: 0, last_hit_at: null, note: req.body.note || '', updated_at: now(), analysis_requested_at: null, analysis_source: '', analysis_running: false, latest_analysis_id: null, latest_analysis_status: '', latest_trend: '', latest_suggestion: '', analyzed_at: null }
   watch.push(w)
   logWatch(uid, 'add', '', w.level, req.body)
   return w
@@ -660,7 +663,11 @@ on('PATCH', '/p/moderation/watchlist/:id', (req) => {
   const w = watch.find((x) => x.user_id === Number(req.params.id))
   if (!w) return fail(404, 'not_found', 'not on the watch list')
   const from = w.level
-  if (req.body.level && req.body.level !== w.level) Object.assign(w, { level: req.body.level, hits_since_seen: 0 })
+  // a new level opens a new window: manual source, new hits seen, default expiry of the level
+  if (req.body.level && req.body.level !== w.level) {
+    Object.assign(w, { level: req.body.level, source: 'manual', hits_since_seen: 0, violation_count: 0, since_at: now() })
+    w.expires_at = levelExpiry(w.level)
+  }
   if (req.body.note !== undefined) w.note = req.body.note
   w.expires_at = expiryOf(req.body, w.expires_at)
   w.updated_at = now()
@@ -668,6 +675,9 @@ on('PATCH', '/p/moderation/watchlist/:id', (req) => {
   return watchView(w)
 })
 on('DELETE', '/p/moderation/watchlist/:id', (req) => {
+  if (req.query.analysis_id !== undefined && !(Number(req.query.analysis_id) > 0)) {
+    return fail(400, 'invalid_argument', 'invalid analysis_id', { fields: [{ field: 'analysis_id', code: 'invalid', message: 'analysis_id must be a positive id / analysis_id 必须是正整数' }] })
+  }
   const i = watch.findIndex((x) => x.user_id === Number(req.params.id))
   // reason / analysis_id come as a query (DELETE has no body)
   if (i >= 0) logWatch(watch[i].user_id, 'remove', watch[i].level, '', { reason: req.query.reason, analysis_id: Number(req.query.analysis_id) || null })
@@ -731,6 +741,10 @@ on('POST', '/p/moderation/channels/:id/test', (req) => {
 })
 
 on('GET', '/p/moderation/auditors', () => auditors.map(auditorView))
+on('GET', '/p/moderation/auditors/:id', (req) => {
+  const a = auditors.find((x) => x.id === Number(req.params.id))
+  return a ? auditorView(a) : fail(404, 'not_found', 'auditor not found')
+})
 on('POST', '/p/moderation/auditors', (req) => {
   const a = { id: nextId(), ...req.body, usable: true, created_at: now(), updated_at: now() }
   auditors.push(a)
@@ -849,4 +863,23 @@ on('POST', '/p/moderation/test', (req) => {
   const hit = /MOD-HIT|露骨|越狱|指令/.test(req.body?.text || '')
   return { flow_id: req.body?.flow_id || 1, flow_version: 3, result: hit ? 'hit' : 'pass', severity: hit ? 'high' : '', categories: hit ? [{ category: 'sexual', score: 0.97, threshold: 0.9, stage: 2, auditor: 2 }] : [], trace: trace(hit), cost: runCost(hit) }
 })
-on('POST', '/p/moderation/import', (req) => ({ channels: req.body?.data?.channels?.length || 0, auditors: req.body?.data?.auditors?.length || 0, preview: !!req.body?.preview }))
+on('POST', '/p/moderation/import', (req) => {
+  const data = req.body?.data || {}
+  const chans: any[] = Array.isArray(data.channels) ? data.channels : []
+  const auds: any[] = Array.isArray(data.auditors) ? data.auditors : []
+  const fields = auds.flatMap((a, i) => (Number.isInteger(a?.channel_ref) && a.channel_ref >= 0 && a.channel_ref < chans.length ? [] : [{ field: `auditors[${i}].channel_ref`, code: 'invalid', message: 'channel_ref must name a channel of the same type / channel_ref 必须指向同类型的渠道' }]))
+  if (fields.length) return fail(400, 'invalid_argument', 'invalid import / 导入内容无效', { fields })
+  const out = { channels: chans.length, auditors: auds.length, keys: chans.filter((c) => String(c?.api_key || '').trim()).length, jev_default_set: data.jev_default_set ?? null, preview: !!req.body?.preview }
+  if (out.preview) return out
+  const channel_ids = chans.map((c) => {
+    const ch = { id: nextId(), type: c.type === 'openai' ? 'openai_moderation' : c.type, protocol: c.protocol || '', name: c.name, base_url: c.base_url, model: c.model || '', billing_model: c.billing_model || '', timeout_ms: c.timeout_ms || 3000, enabled: false, has_proxy: false, has_key: !!c.api_key, api_key_tail: c.api_key ? String(c.api_key).slice(-4) : '', created_at: now(), updated_at: now() }
+    channels.push(ch)
+    return ch.id
+  })
+  const auditor_ids = auds.map((a) => {
+    const au = { id: nextId(), name: a.name, type: a.type === 'openai' ? 'openai_moderation' : a.type, channel_id: channel_ids[a.channel_ref], config: { thresholds: a.thresholds, questions: a.questions, review_images: a.review_images }, usable: false, created_at: now(), updated_at: now() }
+    auditors.push(au)
+    return au.id
+  })
+  return { ...out, channel_ids, auditor_ids }
+})

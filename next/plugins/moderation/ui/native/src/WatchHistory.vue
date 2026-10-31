@@ -2,8 +2,8 @@
 import { watch } from 'vue'
 import { SAlert, SBadge, SEmpty, SHint } from '@sub2api/ui'
 import UserRef from './UserRef.vue'
-import { dt } from './format'
-import { enumLabel, fetchWatchEvents, useModHost, watchReason } from './host'
+import { dt, enumLabel, watchReason } from './format'
+import { fetchWatchEvents, useModHost } from './host'
 import { useAsync } from './useAsync'
 
 // The watch list history of a user, with who made each change. Reloads when

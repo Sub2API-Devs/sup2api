@@ -4,7 +4,8 @@ import { SButton } from '@sub2api/ui'
 import AuditorLibrary from './AuditorLibrary.vue'
 import AuditorPicker from './AuditorPicker.vue'
 import StageCard from './StageCard.vue'
-import { useModHost, type Spec } from './host'
+import { useModHost } from './host'
+import type { Spec } from './types'
 import {
   FLOW_TEMPLATES,
   MAX_STAGES,

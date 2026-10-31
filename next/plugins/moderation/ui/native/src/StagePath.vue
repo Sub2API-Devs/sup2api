@@ -2,7 +2,9 @@
 import { computed } from 'vue'
 import { SHint } from '@sub2api/ui'
 import { useCatalog } from './catalog'
-import { categoryLabel, enumLabel, score, useModHost, type Outcome, type Trace } from './host'
+import { categoryLabel, enumLabel, score } from './format'
+import { useModHost } from './host'
+import type { Outcome, Trace } from './types'
 import { outcomeState, type OutcomeState } from './trace'
 
 // Compact stage results of a record: "第 1 级 ✗ → 第 2 级 ✓ ∥ ✗". Hovering a

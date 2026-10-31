@@ -1,4 +1,4 @@
-import type { HitCategory, Outcome, Trace } from './host'
+import type { HitCategory, Outcome, Trace } from './types'
 
 // Pure helpers over a record's per-stage trace (stage path, score chips, trace table).
 

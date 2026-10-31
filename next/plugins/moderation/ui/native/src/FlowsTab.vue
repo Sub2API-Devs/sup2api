@@ -1,32 +1,34 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SHint, SInput, SLink, SSelect, SSwitch, STable, type TableColumn } from '@sub2api/ui'
 import FlowEditor from './FlowEditor.vue'
 import FlowGroupsCell from './FlowGroupsCell.vue'
 import FlowVersions from './FlowVersions.vue'
 import FlowSimulate from './FlowSimulate.vue'
+import ImportDialog from './ImportDialog.vue'
 import { useCatalog } from './catalog'
-import { dt, ms, num, pct } from './format'
+import { dt, enumLabel, joinList, ms, num, pct } from './format'
+import { canManage, deleteFlow, errorMessage, hasDraftChanges, setFlowEnabled, toastError, useModHost } from './host'
+import type { Flow, Group, Spec, TabKey } from './types'
 import { groupCoverage, type GroupOwner } from './flowOps'
-import { canManage, deleteFlow, enumLabel, errorMessage, hasDraftChanges, setFlowEnabled, useModHost, type Flow, type Group, type Spec } from './host'
 
 // Flows (CONTRACTS §72.7): the list (groups edited in place, 24 h stats) and
 // the full-width canvas editor of one flow (?flow=<id> or ?flow=new). Flows,
-// auditors and groups come from the shared catalog, refreshed after changes.
+// auditors and groups come from the shared catalog; flow changes refresh the
+// flows. Manage users import a configuration (channels, auditors) here.
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
-const emit = defineEmits<{ (e: 'go-tab', tab: string): void }>()
+const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void }>()
 
 const catalog = useCatalog()
 const rows = computed(() => catalog.state.flows)
 const groups = computed(() => catalog.state.groups)
 const loading = computed(() => catalog.state.loading)
 const error = computed(() => (catalog.state.errors.flows ? errorMessage(catalog.state.errors.flows, t('flows.loadFailed')) : ''))
-const reload = () => catalog.refresh()
-onMounted(reload)
-defineExpose({ reload })
+const refreshFlows = () => catalog.refresh(['flows'])
+defineExpose({ reload: () => catalog.refresh() })
 
 const groupLabel = (id: number) => (id === 0 ? t('flows.defaultGroup') : catalog.groupName(id))
 
@@ -78,12 +80,13 @@ const columns = computed<TableColumn[]>(() => {
 const coverage = computed(() => {
   if (!groups.value.length) return null
   const c = groupCoverage(groups.value.map((g) => g.id), rows.value)
-  const names = (ids: number[]) => ids.map(groupLabel).join('、')
+  const names = (ids: number[]) => joinList(ids.map(groupLabel))
   return { total: groups.value.length, bound: c.own.length, unbound: names(c.unbound), disabled: names(c.inactive), stale: names(c.stale) }
 })
 
 // ---- versions drawer, simulation
 const versionsOpen = ref(false)
+const importOpen = ref(false)
 const simulateOpen = ref(false)
 const target = ref<Flow | null>(null)
 function openVersions(f: Flow) {
@@ -95,12 +98,25 @@ function openSimulate(f: Flow) {
   simulateOpen.value = true
 }
 
+/** Groups this flow moderates now and would not once disabled (the default group's flow may take them over). */
+function lostGroups(f: Flow): number[] {
+  const ids = groups.value.length ? [0, ...groups.value.map((g) => g.id)] : f.groups
+  const before = new Set(groupCoverage(ids, rows.value).moderated)
+  const after = new Set(groupCoverage(ids, rows.value.map((x) => (x.id === f.id ? { ...x, enabled: false } : x))).moderated)
+  return [...before].filter((id) => !after.has(id))
+}
+
 async function toggle(f: Flow, on: boolean) {
+  if (!on) {
+    const lost = lostGroups(f)
+    const message = t('flows.disableConfirm', { name: f.name }) + (lost.length ? ' ' + t('flows.disableLoses', { groups: joinList(lost.map(groupLabel)) }) : '')
+    if (!(await host.confirm({ message, danger: lost.length > 0, confirmText: t('flows.disable') }))) return
+  }
   try {
     await setFlowEnabled(f.id, on)
-    await reload()
+    await refreshFlows()
   } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
+    toastError(e)
   }
 }
 
@@ -112,7 +128,7 @@ async function remove(f: Flow) {
   try {
     await deleteFlow(f.id)
     host.toast(t('deleted'), 'success')
-    reload()
+    void refreshFlows()
   } catch (e) {
     host.toast(isApiError(e) && e.code === 'flow_in_use' ? t('flows.deleteBlocked') : errorMessage(e, t('actionFailed')), 'error')
   }
@@ -148,7 +164,7 @@ function closeEditor() {
   editor.value = null
   const { flow: _drop, ...query } = route.value.query
   host.router.replace({ query })
-  reload()
+  void refreshFlows()
 }
 
 function onCreated(id: number) {
@@ -159,17 +175,17 @@ function onCreated(id: number) {
 
 <template>
   <div>
-    <FlowEditor v-if="editor" :key="editor.key" :flow-id="editor.id" :group-label="groupLabel" @close="closeEditor" @created="onCreated" @changed="reload" @manage="emit('go-tab', 'auditors')" />
+    <FlowEditor v-if="editor" :key="editor.key" :flow-id="editor.id" :group-label="groupLabel" @close="closeEditor" @created="onCreated" @changed="refreshFlows" @manage="emit('go-tab', 'auditors')" />
     <template v-else>
       <SHint class="mod-hint">{{ t('flows.hint') }}</SHint>
       <div class="mod-toolbar mod-flows-toolbar">
         <SInput v-model="nameQuery" type="search" icon="search" :placeholder="t('flows.searchName')" :aria-label="t('flows.searchName')" class="mod-flows-search" clearable />
         <SSelect :model-value="groupFilter" :options="groupOptions" :aria-label="t('flows.groupFilter')" class="mod-flows-group" @update:model-value="groupFilter = $event as number | null" />
+        <SButton v-if="manage" icon="upload" class="mod-ml-auto" @click="importOpen = true">{{ t('import.button') }}</SButton>
         <SButton
           v-if="manage"
           variant="primary"
           icon="plus"
-          class="mod-ml-auto"
           :disabled="!catalog.state.auditors.length"
           :title="catalog.state.auditors.length ? '' : t('flows.needAuditor')"
           @click="openEditor(null)"
@@ -191,7 +207,7 @@ function onCreated(id: number) {
             <SBadge v-if="row.version && hasDraftChanges(row)" tone="warning">{{ t('flows.badgeChanges') }}</SBadge>
           </template>
           <template #cell-groups="{ row }">
-            <FlowGroupsCell :flow="row" :all-groups="allGroups" :owners="owners" :can-write="manage" :group-label="groupLabel" @saved="reload" />
+            <FlowGroupsCell :flow="row" :all-groups="allGroups" :owners="owners" :can-write="manage" :group-label="groupLabel" @saved="refreshFlows" />
           </template>
           <template #cell-stages="{ row }"><span :title="stagesSummary(row.draft)">{{ stagesSummary(row.published || row.draft) }}</span></template>
           <template #cell-audited="{ row }"><span class="mod-num">{{ row.stats_24h ? num(row.stats_24h.audited) : '—' }}</span></template>
@@ -221,8 +237,9 @@ function onCreated(id: number) {
         · {{ t('flows.statsNote') }}
       </p>
 
-      <FlowVersions v-model:open="versionsOpen" :flow="target" @rolled-back="reload" />
+      <FlowVersions v-model:open="versionsOpen" :flow="target" @rolled-back="refreshFlows" />
       <FlowSimulate v-model:open="simulateOpen" :flow="target" />
+      <ImportDialog v-model:open="importOpen" />
     </template>
   </div>
 </template>

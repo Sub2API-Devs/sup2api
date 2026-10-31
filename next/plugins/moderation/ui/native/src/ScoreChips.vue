@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SChip, SHint, type StatusTone } from '@sub2api/ui'
-import { categoryLabel, score, useModHost, type Trace } from './host'
+import { categoryLabel, score } from './format'
+import { useModHost } from './host'
+import type { Trace } from './types'
 import { scoreLevel, traceScores, type ScoreLevel } from './trace'
 
 // Top category scores of a record: red above the threshold, amber near it

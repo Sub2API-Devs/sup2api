@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SBadge } from '@sub2api/ui'
-import { callCostText, useModHost, type CallCost } from './host'
+import { callCostText } from './format'
+import { useModHost } from './host'
+import type { CallCost } from './types'
 
 // Cost of one call or run (§72.13.3). undefined = the backend reported no cost
 // (0.2 plugin): nothing is shown.

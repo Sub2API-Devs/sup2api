@@ -3,13 +3,16 @@ import { computed } from 'vue'
 import { SAlert, SBadge, SButton, SLink } from '@sub2api/ui'
 import { useCatalog } from '../catalog'
 import { groupCoverage } from '../flowOps'
-import { canManage, canManageSettings, modeTone, useModHost, type Status } from '../host'
+import { joinList } from '../format'
+import { canManage, canManageSettings, useModHost } from '../host'
+import { modeTone } from '../tones'
+import type { Status, TabKey } from '../types'
 
 // One-line running state (new-api status-line): switch, enabled flows,
 // bound / unmoderated groups, disabled channels, analysis channel; plus the
 // setup hint when nothing is bound or moderation is off.
 const props = defineProps<{ status: Status }>()
-const emit = defineEmits<{ (e: 'go-tab', tab: string): void; (e: 'go-settings'): void }>()
+const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void; (e: 'go-settings'): void }>()
 const t = useModHost().t
 const catalog = useCatalog()
 
@@ -33,12 +36,12 @@ const analysisConfigured = computed(() => !!props.status.runtime.analysis?.chann
 
 // Settings links only for plugin managers (core plugin:manage).
 const settingsLink = computed(() => canManageSettings())
-const notice = computed(() => {
-  if (!props.status.runtime.configured) return { tone: 'warning' as const, text: t('overview.notConfigured'), action: canManage() ? 'flows' : '' }
-  if (props.status.mode === 'off') return { tone: 'info' as const, text: t('overview.offHint'), action: settingsLink.value ? 'settings' : '' }
+const notice = computed<{ tone: 'warning' | 'info'; text: string; action: 'flows' | 'settings' | '' } | null>(() => {
+  if (!props.status.runtime.configured) return { tone: 'warning', text: t('overview.notConfigured'), action: canManage() ? 'flows' : '' }
+  if (props.status.mode === 'off') return { tone: 'info', text: t('overview.offHint'), action: settingsLink.value ? 'settings' : '' }
   return null
 })
-const act = (action: string) => (action === 'settings' ? emit('go-settings') : emit('go-tab', action))
+const act = (action: 'flows' | 'settings') => (action === 'settings' ? emit('go-settings') : emit('go-tab', action))
 </script>
 
 <template>
@@ -51,8 +54,8 @@ const act = (action: string) => (action === 'settings' ? emit('go-settings') : e
     <template v-if="coverage">
       <span class="mod-sub">·</span>
       <span>{{ t('statusLine.bound', { n: coverage.moderated }) }}</span>
-      <span v-if="coverage.unmoderated.length" class="mod-text-warning" :title="coverage.unmoderated.join(', ')">
-        {{ t('statusLine.unbound', { n: coverage.unmoderated.length, groups: coverage.unmoderated.slice(0, 5).join(', ') }) }}
+      <span v-if="coverage.unmoderated.length" class="mod-text-warning" :title="joinList(coverage.unmoderated)">
+        {{ t('statusLine.unbound', { n: coverage.unmoderated.length, groups: joinList(coverage.unmoderated.slice(0, 5)) }) }}
       </span>
     </template>
     <span class="mod-sub">·</span>

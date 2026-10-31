@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 import { SCard, SDescriptions, SGrid, SProgress, type DescItem } from '@sub2api/ui'
 import { ms, num } from '../format'
-import { useModHost, type QueueStatus, type Runtime } from '../host'
+import { useModHost } from '../host'
+import type { QueueStatus, Runtime } from '../types'
 
 // Background queues and runtime counters of the node that answered (new-api
 // queue-status): the post queue, the pricing queue and the record writer.

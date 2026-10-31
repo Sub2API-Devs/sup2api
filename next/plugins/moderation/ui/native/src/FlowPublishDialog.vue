@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SBadge, SButton, SHint, SModal } from '@sub2api/ui'
-import { useModHost, type Spec } from './host'
+import { joinList } from './format'
+import { useModHost } from './host'
+import type { Spec } from './types'
 import { stageRole, type CanvasAuditor } from './flowOps'
 
 // Publish confirmation (new-api flow-publish-dialog.tsx): state, groups,
@@ -45,7 +47,7 @@ const lines = computed(() =>
         <SBadge :tone="enabled ? 'success' : 'gray'">{{ enabled ? t('enabled') : t('disabled') }}</SBadge>
       </div>
       <div>
-        {{ t('flows.pubGroups', { groups: groups.join('、') || t('flows.pubNoGroups') }) }}
+        {{ t('flows.pubGroups', { groups: joinList(groups) || t('flows.pubNoGroups') }) }}
         <SHint inline size="xs">{{ t('flows.pubGroupsNote') }}</SHint>
       </div>
       <div>{{ t('flows.pubTiming') }}</div>

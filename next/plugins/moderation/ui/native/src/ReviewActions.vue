@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { SButton } from '@sub2api/ui'
-import { useModHost, type ReviewStatus } from './host'
+import { useModHost } from './host'
+import type { ReviewStatus } from './types'
 
 // The bulk review buttons of a selection: false positive, confirmed, reset.
 defineProps<{ loading?: boolean }>()

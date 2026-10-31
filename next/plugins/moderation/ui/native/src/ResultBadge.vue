@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { SBadge } from '@sub2api/ui'
-import { enumLabel, resultTone } from './host'
+import { enumLabel } from './format'
+import { resultTone } from './tones'
 
 // Record result: pass green, hit amber, block red, overturned blue, error gray.
 defineProps<{ result?: string | null }>()

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { SChip, SHint } from '@sub2api/ui'
-import { categoryLabel, score, useModHost } from './host'
+import { categoryLabel, score } from './format'
+import { useModHost } from './host'
 
 // Hit categories of a record (codes), of a trace (with Jev labels and
-// scores) or of a user (with counts; `other` = count outside the shown ones).
+// scores) or of a user (records by highest category; `other` = the records
+// outside the shown ones).
 type Item = string | { category: string; label?: string; score?: number; count?: number }
 defineProps<{ categories?: Item[] | null; wrap?: boolean; other?: number }>()
 const t = useModHost().t

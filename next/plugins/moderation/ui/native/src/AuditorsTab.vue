@@ -5,15 +5,17 @@ import AuditorEditModal from './AuditorEditModal.vue'
 import AuditorTryModal from './AuditorTryModal.vue'
 import EnabledBadge from './EnabledBadge.vue'
 import { useCatalog } from './catalog'
-import { num } from './format'
+import { enumLabel, money, num } from './format'
+import { canManage, deleteAuditor, errorMessage, fetchDefaults, toastError, useModHost } from './host'
+import type { Auditor, AuditorTryTarget } from './types'
 import { thresholdPresetOf } from './thresholdPresets'
 import { useAsync } from './useAsync'
-import { canManage, deleteAuditor, enumLabel, errorMessage, fetchDefaults, money, useModHost, type Auditor, type AuditorTryTarget } from './host'
 
 // Auditors (CONTRACTS §72.6, new-api auditors): OpenAI moderation thresholds
 // (with presets), Jev question tables, LLM verdict prompts; each bound to one
 // channel of its type, with today's calls and cost. Auditors and channels come
-// from the shared catalog, refreshed after changes.
+// from the shared catalog; a change refreshes both (an auditor shows its
+// channel, a channel lists its auditors). Read users open an auditor read-only.
 const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
@@ -24,8 +26,9 @@ const channels = computed(() => catalog.state.channels)
 const defaults = useAsync(fetchDefaults, () => t('auditors.loadFailed'))
 const loading = computed(() => catalog.state.loading || defaults.loading.value)
 const error = computed(() => (catalog.state.errors.auditors ? errorMessage(catalog.state.errors.auditors, t('auditors.loadFailed')) : defaults.error.value))
-const reload = () => Promise.all([catalog.refresh(), !defaults.data.value && defaults.reload()])
-onMounted(reload)
+const refreshLists = () => catalog.refresh(['auditors', 'channels'])
+const reload = () => Promise.all([refreshLists(), defaults.reload()])
+onMounted(() => !defaults.data.value && defaults.reload())
 defineExpose({ reload })
 
 const columns = computed<TableColumn[]>(() => {
@@ -37,7 +40,7 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'today', label: t('auditors.col.today'), align: 'right', nowrap: true },
     { key: 'usable', label: t('auditors.col.usable'), nowrap: true }
   ]
-  if (manage.value) c.push({ key: 'actions', label: '', align: 'right' })
+  c.push({ key: 'actions', label: '', align: 'right' })
   return c
 })
 
@@ -72,9 +75,9 @@ async function remove(a: Auditor) {
   try {
     await deleteAuditor(a.id)
     host.toast(t('deleted'), 'success')
-    void catalog.refresh()
+    void refreshLists()
   } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
+    toastError(e)
   }
 }
 </script>
@@ -109,14 +112,17 @@ async function remove(a: Auditor) {
           <SBadge :tone="row.usable ? 'success' : 'warning'" dot>{{ row.usable ? t('auditors.ready') : t('auditors.notReady') }}</SBadge>
         </template>
         <template #cell-actions="{ row }">
-          <SButton size="sm" variant="ghost" @click="openTry({ id: row.id, name: row.name })">{{ t('auditors.try') }}</SButton>
-          <SButton size="sm" variant="ghost" @click="openEdit(row)">{{ t('edit') }}</SButton>
-          <SButton size="sm" variant="ghost" @click="remove(row)">{{ t('delete') }}</SButton>
+          <template v-if="manage">
+            <SButton size="sm" variant="ghost" @click="openTry({ id: row.id, name: row.name })">{{ t('auditors.try') }}</SButton>
+            <SButton size="sm" variant="ghost" @click="openEdit(row)">{{ t('edit') }}</SButton>
+            <SButton size="sm" variant="ghost" @click="remove(row)">{{ t('delete') }}</SButton>
+          </template>
+          <SButton v-else size="sm" variant="ghost" @click="openEdit(row)">{{ t('view') }}</SButton>
         </template>
       </STable>
     </SCard>
 
-    <AuditorEditModal v-model:open="editOpen" :auditor="editing" :defaults="defaults.data.value" @saved="catalog.refresh()" @try="openTry" />
+    <AuditorEditModal v-model:open="editOpen" :auditor="editing" :defaults="defaults.data.value" :readonly="!manage" @saved="refreshLists" @try="openTry" />
     <AuditorTryModal v-model:open="tryOpen" :target="tryTarget" />
   </div>
 </template>

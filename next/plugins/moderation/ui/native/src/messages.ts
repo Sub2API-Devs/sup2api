@@ -74,6 +74,9 @@ export default {
     actionFailed: '操作失败',
     retry: '重试',
     labelColon: '{label}：',
+    view: '查看',
+    listSep: '、',
+    clauseSep: '；',
     ms: '{n} 毫秒',
     mode: { off: '未启用', observe: '观察', enforce: '拦截' },
     tabs: { overview: '概览', events: '审核记录', watch: '观察名单', blocks: '封禁用户', flows: '流程', auditors: '审核器', channels: '渠道', test: '在线测试', settings: '设置' },
@@ -238,6 +241,8 @@ export default {
       },
     },
     events: {
+      category: '类别',
+      flowVersion: '流程版本',
       result: '结果',
       review: '处理状态',
       timing: '审核时机',
@@ -358,7 +363,6 @@ export default {
       loadFailed: '加载观察名单失败',
       saved: '已保存',
       remove: '移出',
-      removeConfirm: '确定把用户 #{id} 移出观察名单吗？',
       removed: '已移出用户 #{id}',
       history: '历史',
       historyTitle: '用户 #{id} 的名单历史',
@@ -474,6 +478,9 @@ export default {
       col: { user: '用户', reason: '原因', violations: '违规次数', source: '来源', created: '封禁时间', expires: '到期时间', actions: '操作' }
     },
     flows: {
+      disable: '停用',
+      disableConfirm: '确定停用流程 {name} 吗？',
+      disableLoses: '停用后这些分组将不再审核：{groups}。',
       hint: '流程由多级审核组成：同一级的审核器并发调用，按组合方式判定；某一级判通过就整体通过，每一级都命中才算命中。保存只改草稿，发布后才生效。',
       add: '新建流程',
       empty: '还没有流程',
@@ -678,6 +685,7 @@ export default {
       hint: '审核器 = 一个渠道 + 判定参数。OpenAI 按类别分数比阈值；Jev 按题集逐题打分；大模型判定沿用 0.1 的 submit_verdict 审核。',
       add: '新建审核器',
       editTitle: '编辑审核器 {name}',
+      viewTitle: '查看审核器 {name}',
       empty: '还没有审核器',
       loadFailed: '加载审核器失败',
       needChannel: '请先新建渠道',
@@ -733,6 +741,7 @@ export default {
       hint: '渠道是审核器调用的上游。API Key 用宿主密钥加密保存，保存后只显示最后 4 位。',
       add: '新建渠道',
       editTitle: '编辑渠道 {name}',
+      viewTitle: '查看渠道 {name}',
       empty: '还没有渠道',
       loadFailed: '加载渠道失败',
       deleteConfirm: '确定删除渠道 {name} 吗？',
@@ -804,7 +813,7 @@ export default {
       near: '接近阈值',
     },
     chips: {
-      other: '其他 {n}',
+      other: '其他 {n} 条',
     },
     stats: {
       over10s: '> 10 秒',
@@ -857,6 +866,18 @@ export default {
         observe: '加入观察',
         enforce: '加入拦截',
       },
+      title: {
+        add: '把用户 #{id} 加入观察名单（{level}）',
+        observe: '把用户 #{id} 改为观察级',
+        enforce: '把用户 #{id} 改为拦截级',
+        release: '把用户 #{id} 移出观察名单'
+      },
+      desc: {
+        observe: '观察级：请求照常放行，在后台审核并记录命中。',
+        enforce: '拦截级：请求先审后发，命中即拒绝。',
+        release: '移出后不再按名单处理，名单历史会保留。'
+      },
+      confirm: '确认',
     },
     watchEdit: {
       expiresAt: '到期时间',
@@ -865,6 +886,10 @@ export default {
       userHint: '用户名或用户 ID',
       reason: '变更原因',
       reasonHint: '记入名单历史，可不填',
+      defaultExpiry: {
+        observe: '不改则按设置里的观察天数到期',
+        enforce: '不改则不过期（拦截级默认不设到期时间）'
+      },
     },
     watchSummary: {
       title: '概况',
@@ -889,8 +914,7 @@ export default {
         categories: '主要类别',
       },
       trend: '趋势',
-      category: '类别',
-      categoryPlaceholder: '如 sexual',
+      category: '最高类别',
       newOnly: '只看有新记录的',
       counts: {
         watching: '观察中 {n}',
@@ -1045,6 +1069,19 @@ export default {
       },
       dropped: '丢弃 {n}',
     },
+    import: {
+      button: '导入配置',
+      title: '导入审核配置',
+      hint: '粘贴 new-api 导出的审核配置 JSON（channels、auditors、jev_default_set），先预览再导入。导入的渠道默认停用，填好密钥后再启用。',
+      data: '配置 JSON',
+      invalidJson: '不是合法的 JSON',
+      preview: '预览',
+      previewText: '将导入 {channels} 个渠道（其中 {keys} 个带密钥）和 {auditors} 个审核器。',
+      nothing: '没有可导入的渠道或审核器',
+      jevNote: '其中的 Jev 默认题集不会随导入保存，需要时请在设置页保存。',
+      confirm: '导入',
+      done: '已导入 {channels} 个渠道和 {auditors} 个审核器'
+    },
     settingsTab: {
       hint: '这里是常用的审核设置，其余设置见',
       loadFailed: '设置加载失败',
@@ -1099,6 +1136,9 @@ export default {
     actionFailed: 'Action failed',
     retry: 'Retry',
     labelColon: '{label}:',
+    view: 'View',
+    listSep: ', ',
+    clauseSep: '; ',
     ms: '{n} ms',
     mode: { off: 'Off', observe: 'Observe', enforce: 'Enforce' },
     tabs: { overview: 'Overview', events: 'Records', watch: 'Watch list', blocks: 'Banned users', flows: 'Flows', auditors: 'Auditors', channels: 'Channels', test: 'Playground', settings: 'Settings' },
@@ -1263,6 +1303,8 @@ export default {
       },
     },
     events: {
+      category: 'Category',
+      flowVersion: 'Flow version',
       result: 'Result',
       review: 'Review',
       timing: 'Timing',
@@ -1369,7 +1411,6 @@ export default {
       loadFailed: 'Failed to load the watch list',
       saved: 'Saved',
       remove: 'Remove',
-      removeConfirm: 'Remove user #{id} from the watch list?',
       removed: 'User #{id} removed',
       history: 'History',
       historyTitle: 'Watch history of user #{id}',
@@ -1465,6 +1506,9 @@ export default {
       col: { user: 'User', reason: 'Reason', violations: 'Violations', source: 'Source', created: 'Banned at', expires: 'Expires', actions: 'Actions' }
     },
     flows: {
+      disable: 'Disable',
+      disableConfirm: 'Disable flow {name}?',
+      disableLoses: 'These groups will no longer be moderated: {groups}.',
       hint: 'A flow is stages of auditors: the auditors of a stage run at once and decide by the combine rule; a passing stage passes the request, only a hit in every stage is a hit. Saving changes the draft; it takes effect when published.',
       add: 'New flow',
       empty: 'No flows yet',
@@ -1669,6 +1713,7 @@ export default {
       hint: 'An auditor is a channel plus judging parameters: OpenAI compares category scores with thresholds, Jev scores one question per row, LLM verdict is the 0.1 submit_verdict review.',
       add: 'New auditor',
       editTitle: 'Edit auditor {name}',
+      viewTitle: 'Auditor {name}',
       empty: 'No auditors yet',
       loadFailed: 'Failed to load the auditors',
       needChannel: 'Create a channel first',
@@ -1724,6 +1769,7 @@ export default {
       hint: 'Channels are the upstreams auditors call. API keys are sealed with the host key; only the last 4 characters are shown.',
       add: 'New channel',
       editTitle: 'Edit channel {name}',
+      viewTitle: 'Channel {name}',
       empty: 'No channels yet',
       loadFailed: 'Failed to load the channels',
       deleteConfirm: 'Delete channel {name}?',
@@ -1795,7 +1841,7 @@ export default {
       near: 'Near the threshold',
     },
     chips: {
-      other: '+{n} more',
+      other: '+{n} other records',
     },
     stats: {
       over10s: '> 10 s',
@@ -1848,6 +1894,18 @@ export default {
         observe: 'Observe',
         enforce: 'Enforce',
       },
+      title: {
+        add: 'Add user #{id} to the watch list ({level})',
+        observe: 'Set user #{id} to observe',
+        enforce: 'Set user #{id} to enforce',
+        release: 'Remove user #{id} from the watch list'
+      },
+      desc: {
+        observe: 'Observe: requests go through and are moderated in the background; hits are recorded.',
+        enforce: 'Enforce: requests are moderated before they are sent; a hit is refused.',
+        release: 'The user is no longer handled by the watch list; the history is kept.'
+      },
+      confirm: 'Confirm',
     },
     watchEdit: {
       expiresAt: 'Expires at',
@@ -1856,6 +1914,10 @@ export default {
       userHint: 'Username or user ID',
       reason: 'Reason',
       reasonHint: 'Kept in the watch history; optional',
+      defaultExpiry: {
+        observe: 'Left unchanged, the watch days setting applies',
+        enforce: 'Left unchanged, an enforce entry does not expire'
+      },
     },
     watchSummary: {
       title: 'Summary',
@@ -1880,8 +1942,7 @@ export default {
         categories: 'Main categories',
       },
       trend: 'Trend',
-      category: 'Category',
-      categoryPlaceholder: 'e.g. sexual',
+      category: 'Top category',
       newOnly: 'With new records only',
       counts: {
         watching: 'Observing {n}',
@@ -2035,6 +2096,19 @@ export default {
         records: 'Record writes',
       },
       dropped: 'Dropped {n}',
+    },
+    import: {
+      button: 'Import',
+      title: 'Import moderation configuration',
+      hint: 'Paste the moderation JSON exported from new-api (channels, auditors, jev_default_set), preview it, then import. Imported channels start disabled; add their keys before enabling them.',
+      data: 'Configuration JSON',
+      invalidJson: 'Not valid JSON',
+      preview: 'Preview',
+      previewText: '{channels} channels ({keys} with a key) and {auditors} auditors will be imported.',
+      nothing: 'Nothing to import: no channels or auditors',
+      jevNote: 'The Jev default question set is not saved by the import; save it on the settings page if needed.',
+      confirm: 'Import',
+      done: 'Imported {channels} channels and {auditors} auditors'
     },
     settingsTab: {
       hint: 'Common moderation settings; the others are in',

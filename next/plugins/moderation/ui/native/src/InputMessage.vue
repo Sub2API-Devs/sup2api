@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { SButton, SCode, SCopyButton, SHint, SSectionTitle, SSegmented } from '@sub2api/ui'
-import { num } from './format'
-import { enumLabel, errorMessage, fetchEventInput, useModHost, type EventInput } from './host'
+import { enumLabel, num } from './format'
+import { fetchEventInput, toastError, useModHost } from './host'
+import type { EventInput } from './types'
 
 // The saved input message of a record (new-api record-input-message-section):
 // loaded on demand; text segments with their role and image thumbnails, the
@@ -31,7 +32,7 @@ async function load() {
     input.value = await fetchEventInput(props.eventId)
     if (!input.value.parts?.length) view.value = props.inputText ? 'text' : 'raw'
   } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
+    toastError(e)
   } finally {
     loading.value = false
   }

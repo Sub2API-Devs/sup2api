@@ -6,11 +6,14 @@ import CategoryChips from '../CategoryChips.vue'
 import UserRef from '../UserRef.vue'
 import { onOverviewTick } from './tick'
 import { useAsync } from '../useAsync'
-import { enumLabel, fetchWatchList, levelTone, trendTone, useModHost } from '../host'
+import { enumLabel } from '../format'
+import { fetchWatchList, useModHost } from '../host'
+import type { TabKey } from '../types'
+import { levelTone, trendTone } from '../tones'
 
 // "最需关注的人": the first six of the watch list in its default order (new
 // records since last seen first). A row opens the user's watch detail.
-const emit = defineEmits<{ (e: 'open-watch', userId: number): void; (e: 'go-tab', tab: string): void }>()
+const emit = defineEmits<{ (e: 'open-watch', userId: number): void; (e: 'go-tab', tab: TabKey): void }>()
 const t = useModHost().t
 
 const list = useAsync(() => fetchWatchList({ page: 1, page_size: 6, sort: 'new' }), () => t('watch.loadFailed'))

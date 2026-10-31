@@ -2,22 +2,10 @@
 import { computed, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SBadge, SButton, SHint } from '@sub2api/ui'
-import { dt, num } from './format'
-import {
-  analyzeWatch,
-  canManage,
-  createWatch,
-  deleteWatch,
-  enumLabel,
-  errorMessage,
-  suggestionTone,
-  trendTone,
-  updateWatch,
-  useModHost,
-  type Suggestion,
-  type UserDetail,
-  type WatchLevel
-} from './host'
+import { dt, enumLabel, num } from './format'
+import { analyzeWatch, canManage, createWatch, deleteWatch, errorMessage, toastError, updateWatch, useModHost } from './host'
+import { suggestionTone, trendTone } from './tones'
+import type { Suggestion, UserDetail, WatchLevel } from './types'
 
 // The analysis state of a user: queued / running, progress towards the next
 // automatic analysis, the latest conclusion, "重新分析" and "按 AI 建议执行"
@@ -77,7 +65,7 @@ async function applySuggestion() {
     host.toast(t('watch.saved'), 'success')
     emit('changed')
   } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
+    toastError(e)
   } finally {
     applying.value = false
   }

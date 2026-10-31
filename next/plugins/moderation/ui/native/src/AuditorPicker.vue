@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SSelect } from '@sub2api/ui'
-import { enumLabel } from './host'
+import { enumLabel } from './format'
 import type { CanvasAuditor } from './flowOps'
 
 // Keyboard / pointer alternative to dragging: always shows its placeholder;

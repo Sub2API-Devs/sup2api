@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SHint, SSwitch, STable, type TableColumn } from '@sub2api/ui'
 import ChannelEditModal from './ChannelEditModal.vue'
@@ -7,14 +7,17 @@ import EnabledBadge from './EnabledBadge.vue'
 import PriceCell from './PriceCell.vue'
 import RateCell from './RateCell.vue'
 import { useCatalog } from './catalog'
-import { ms, num } from './format'
-import { callCostText, canManage, channelBody, deleteChannel, enumLabel, errorMessage, money, saveChannel, testChannel, useModHost, type Channel } from './host'
+import { callCostText, enumLabel, joinList, money, ms, num } from './format'
+import { canManage, channelBody, deleteChannel, errorDetails, errorMessage, saveChannel, testChannel, toastError, useModHost } from './host'
+import type { Channel } from './types'
 
 // Channels (CONTRACTS §72.6, new-api channels): the upstreams auditors call,
 // with the auditors using each one, last-hour health and today's cost. Keys
 // and proxies are sealed with the host key; only the key's last 4 characters
 // and the proxy without its password are shown. Rows come from the shared
-// catalog, refreshed after changes.
+// catalog; a change refreshes the lists it touches (enabling a channel
+// changes whether its auditors are usable). Read users open a channel
+// read-only.
 defineProps<{ alertPercent: number }>()
 const host = useModHost()
 const t = host.t
@@ -24,8 +27,7 @@ const catalog = useCatalog()
 const rows = computed(() => catalog.state.channels)
 const loading = computed(() => catalog.state.loading)
 const error = computed(() => (catalog.state.errors.channels ? errorMessage(catalog.state.errors.channels, t('channels.loadFailed')) : ''))
-const reload = () => catalog.refresh()
-onMounted(reload)
+const reload = () => catalog.refresh(['channels', 'auditors'])
 defineExpose({ reload })
 
 const columns = computed<TableColumn[]>(() => {
@@ -40,7 +42,7 @@ const columns = computed<TableColumn[]>(() => {
     { key: 'price', label: t('channels.col.price') },
     { key: 'enabled', label: t('channels.col.enabled'), nowrap: true }
   ]
-  if (manage.value) c.push({ key: 'actions', label: '', align: 'right' })
+  c.push({ key: 'actions', label: '', align: 'right' })
   return c
 })
 
@@ -69,9 +71,9 @@ async function setEnabled(c: Channel, enabled: boolean) {
     await saveChannel(c.id, channelBody({ ...c, enabled }))
     c.enabled = enabled
     host.toast(t('saved'), 'success')
-    void catalog.refresh()
+    void catalog.refresh(['channels', 'auditors'])
   } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
+    toastError(e)
   } finally {
     toggling.value = null
   }
@@ -81,8 +83,8 @@ async function setEnabled(c: Channel, enabled: boolean) {
 function deleteError(e: unknown): string {
   if (!isApiError(e) || e.status !== 409) return errorMessage(e, t('actionFailed'))
   if (e.code === 'analysis_channel') return t('channels.isAnalysis')
-  const names = ((e.details?.auditors || []) as Array<{ id: number; name: string }>).map((a) => a.name || `#${a.id}`)
-  return names.length ? t('channels.inUse', { names: names.join('、') }) : errorMessage(e, t('actionFailed'))
+  const names = errorDetails(e, 'auditors').map((a) => a.name || `#${a.id}`)
+  return names.length ? t('channels.inUse', { names: joinList(names) }) : errorMessage(e, t('actionFailed'))
 }
 
 async function remove(c: Channel) {
@@ -91,7 +93,7 @@ async function remove(c: Channel) {
   try {
     await deleteChannel(c.id)
     host.toast(t('deleted'), 'success')
-    void catalog.refresh()
+    void catalog.refresh(['channels'])
   } catch (e) {
     host.toast(deleteError(e), 'error')
   }
@@ -106,10 +108,10 @@ async function test(c: Channel) {
     if (r.ok) {
       const msg = t('channels.testOk', { ms: num(r.latency_ms), model: r.model || c.model })
       host.toast((r.cost !== undefined ? t('channels.testCost', { msg, cost: callCostText(r.cost).text }) : msg) + url, 'success')
-      if (r.cost?.mode === 'priced') void catalog.refresh()
+      if (r.cost?.mode === 'priced') void catalog.refresh(['channels'])
     } else host.toast(t('channels.testFailed', { err: [enumLabel('err', r.error), r.status, r.message].filter(Boolean).join(' ') }) + url, 'error')
   } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
+    toastError(e)
   } finally {
     testing.value = null
   }
@@ -175,13 +177,16 @@ async function test(c: Channel) {
           <EnabledBadge v-else :enabled="row.enabled" />
         </template>
         <template #cell-actions="{ row }">
-          <SButton size="sm" variant="ghost" :loading="testing === row.id" @click="test(row)">{{ t('channels.test') }}</SButton>
-          <SButton size="sm" variant="ghost" @click="openEdit(row)">{{ t('edit') }}</SButton>
-          <SButton size="sm" variant="ghost" @click="remove(row)">{{ t('delete') }}</SButton>
+          <template v-if="manage">
+            <SButton size="sm" variant="ghost" :loading="testing === row.id" @click="test(row)">{{ t('channels.test') }}</SButton>
+            <SButton size="sm" variant="ghost" @click="openEdit(row)">{{ t('edit') }}</SButton>
+            <SButton size="sm" variant="ghost" @click="remove(row)">{{ t('delete') }}</SButton>
+          </template>
+          <SButton v-else size="sm" variant="ghost" @click="openEdit(row)">{{ t('view') }}</SButton>
         </template>
       </STable>
     </SCard>
 
-    <ChannelEditModal v-model:open="editOpen" :channel="editing" @saved="catalog.refresh()" />
+    <ChannelEditModal v-model:open="editOpen" :channel="editing" :readonly="!manage" @saved="catalog.refresh(['channels', 'auditors'])" />
   </div>
 </template>
