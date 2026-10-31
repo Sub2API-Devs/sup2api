@@ -140,7 +140,7 @@ func (p *Plugin) claimAnalysis(ctx context.Context, uid int64) (analysisJob, boo
 		}
 		if w.ExpiresAt != nil && !now.Before(*w.ExpiresAt) {
 			removed = true
-			return removeWatch(ctx, tx, w, "expire", "expired", nil)
+			return expireEntry(ctx, tx, w)
 		}
 		job = analysisJob{UserID: uid, Token: newEpoch(), Source: w.AnalysisSource, Level: w.Level, SinceAt: w.SinceAt, Timeout: c.analysisTimeout}
 		_, err = tx.Exec(ctx, `UPDATE watchlist SET analysis_claim_until = $2, analysis_token = $3 WHERE user_id = $1`,
@@ -268,7 +268,7 @@ func decideEscalation(c *config, level, trend, suggestion string, violations int
 // latest analysis_keep_per_user, write the records' ai_* columns, release
 // the claim and the queue, record the latest conclusion and apply the AI
 // conclusion — unless the entry changed while it ran (stale): then only the
-// record verdicts are written.
+// record verdicts are written and the queue and claim released.
 func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis) error {
 	db, err := p.db(ctx)
 	if err != nil {
@@ -306,7 +306,7 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 		if ok {
 			for _, v := range a.RecordVerdicts {
 				if _, err := tx.Exec(ctx, `UPDATE events SET ai_verdict=$3, ai_severity=$4, ai_category=$5, ai_evidence=$6, ai_reason=$7, ai_analysis_id=$8
-					WHERE id = $1 AND user_id = $2 AND result IN ('hit', 'block')`,
+					WHERE id = $1 AND user_id = $2 AND `+suspiciousResult,
 					v.RecordID, job.UserID, v.Verdict, v.Severity, v.Category, v.Evidence, v.Reason, id); err != nil {
 					return err
 				}
@@ -315,21 +315,24 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 		if !owned {
 			return nil
 		}
-		latest := `latest_analysis_id = $2, latest_analysis_status = $3`
-		args := []any{job.UserID, id, a.Status}
-		if ok && !stale {
-			latest += `, latest_trend = $4, latest_suggestion = $5, analyzed_at = $6`
-			args = append(args, a.Trend, a.Suggestion, now)
+		// A stale analysis only releases the queue and the claim: the
+		// latest analysis of the entry stays the last one that applied to
+		// it (new-api moderation_watch.go).
+		release := `UPDATE watchlist SET analysis_requested_at = NULL, analysis_source = '', analysis_claim_until = NULL, analysis_token = 0`
+		switch {
+		case stale:
+			_, err = tx.Exec(ctx, release+` WHERE user_id = $1`, job.UserID)
+		case ok:
+			_, err = tx.Exec(ctx, release+`, latest_analysis_id = $2, latest_analysis_status = $3, latest_trend = $4, latest_suggestion = $5,
+				analyzed_at = $6 WHERE user_id = $1`, job.UserID, id, a.Status, a.Trend, a.Suggestion, now)
+		default:
+			_, err = tx.Exec(ctx, release+`, latest_analysis_id = $2, latest_analysis_status = $3 WHERE user_id = $1`, job.UserID, id, a.Status)
 		}
-		if _, err := tx.Exec(ctx, `UPDATE watchlist SET analysis_requested_at = NULL, analysis_source = '', analysis_claim_until = NULL,
-			analysis_token = 0, `+latest+` WHERE user_id = $1`, args...); err != nil {
+		if err != nil || !ok || stale {
 			return err
 		}
-		if !ok || stale {
-			return nil
-		}
 		var denied string
-		action, denied = decideEscalation(c, w.Level, a.Trend, a.Suggestion, a.VerdictCounts.Violation)
+		action, denied = decideEscalation(c, w.Level, a.Trend, a.Suggestion, int(a.VerdictCounts.Violation))
 		reason := "trend:" + a.Trend
 		from, to = w.Level, w.Level
 		switch action {
@@ -359,7 +362,7 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 		case ActionAutoNotAllowed:
 			reason = denied + ":" + a.Trend
 		}
-		if err := watchEventFor(ctx, tx, job.UserID, action, w.Level, to, reason, nil, &id); err != nil {
+		if err := watchEvent(ctx, tx, watchChange{uid: job.UserID, action: action, from: w.Level, to: to, reason: reason, analysis: &id}); err != nil {
 			return err
 		}
 		if changed {
@@ -405,26 +408,6 @@ func queueAnalysisLocked(ctx context.Context, tx pgx.Tx, uid int64, source strin
 }
 
 // ---------------------------------------------------------------- routes
-
-func (p *Plugin) getWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
-	uid, bad := parseID(req, "user_id")
-	if bad != nil {
-		return bad, nil
-	}
-	db, err := p.db(ctx)
-	if err != nil {
-		return pluginsdk.Unavailable(err.Error()), nil
-	}
-	w, err := scanWatch(db.QueryRow(ctx, `SELECT `+watchColumns+` FROM watchlist WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > $2)`, uid, p.now().UTC()))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return pluginsdk.ErrorResponse(http.StatusNotFound, "not_found", "user is not on the watch list / 该用户不在观察名单中"), nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	w.fillRunning(p.now())
-	return pluginsdk.DataResponse(w), nil
-}
 
 // analyzeWatch queues a manual analysis: 202 {queued}. A queued but not yet
 // running analysis is left as it is.

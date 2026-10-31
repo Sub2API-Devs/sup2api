@@ -21,10 +21,8 @@ import (
 // AIVerdictCounts counts suspicious records by AI verdict (none = not
 // analysed yet).
 type AIVerdictCounts struct {
-	Violation     int64 `json:"violation"`
-	FalsePositive int64 `json:"false_positive"`
-	Unsure        int64 `json:"unsure"`
-	None          int64 `json:"none"`
+	VerdictTally
+	None int64 `json:"none"`
 }
 
 // UserSummary counts all suspicious records of a user.
@@ -104,9 +102,8 @@ func (p *Plugin) getUserDetail(ctx context.Context, req *pluginv1.HTTPRequest) (
 	if w := d.Watch; w != nil {
 		d.Analysis.Running, d.Analysis.Queued, d.Analysis.ViolationsSinceAnalysis = w.AnalysisRunning, w.AnalysisRequestedAt != nil, w.ViolationCount
 	}
-	p.flushStats(ctx) // daily counts of this node
 	for _, load := range []func(context.Context, *pgxpool.Pool, *UserDetail, time.Time) error{
-		loadUserSummary, p.loadUserContext, loadUserDaily, loadLatestAnalysis,
+		loadUserSummary, p.loadUserContext, p.loadUserDaily, loadLatestAnalysis,
 	} {
 		if err := load(ctx, db, d, now); err != nil {
 			return nil, err
@@ -127,7 +124,7 @@ func loadUserSummary(ctx context.Context, db *pgxpool.Pool, d *UserDetail, _ tim
 	s := &d.Summary
 	return db.QueryRow(ctx, `SELECT `+severityCounts+`, count(*) FILTER (WHERE review_status = 'pending'),
 			count(*) FILTER (WHERE review_status = 'confirmed'), count(*) FILTER (WHERE review_status = 'false_positive'), `+aiVerdictSums+`
-		FROM events WHERE user_id = $1 AND `+severitySuspicious, d.UserID).
+		FROM events WHERE user_id = $1 AND `+suspiciousResult, d.UserID).
 		Scan(append([]any{&s.Total, &s.BySeverity.High, &s.BySeverity.Medium, &s.BySeverity.Low, &s.Pending, &s.Confirmed, &s.FalsePositive},
 			s.AIVerdicts.targets()...)...)
 }
@@ -155,7 +152,7 @@ func (p *Plugin) loadUserContext(ctx context.Context, db *pgxpool.Pool, d *UserD
 		return err
 	}
 	rows, err := db.Query(ctx, `SELECT group_id, flow_id, flow_version, count(*), `+aiVerdictSums+`
-		FROM events WHERE user_id = $1 AND created_at >= $2 AND `+severitySuspicious+`
+		FROM events WHERE user_id = $1 AND created_at >= $2 AND `+suspiciousResult+`
 		GROUP BY group_id, flow_id, flow_version ORDER BY max(created_at) DESC`, d.UserID, now.Add(-recentDays*24*time.Hour))
 	if err != nil {
 		return err
@@ -171,7 +168,10 @@ func (p *Plugin) loadUserContext(ctx context.Context, db *pgxpool.Pool, d *UserD
 	return err
 }
 
-func loadUserDaily(ctx context.Context, db *pgxpool.Pool, d *UserDetail, now time.Time) error {
+// loadUserDaily reads the user's user_daily rows, this node's pending
+// counts included.
+func (p *Plugin) loadUserDaily(ctx context.Context, db *pgxpool.Pool, d *UserDetail, now time.Time) error {
+	p.flushStats(ctx)
 	rows, err := db.Query(ctx, `SELECT day, group_id, audited, suspicious, high, errors, last_hit_at FROM user_daily
 		WHERE user_id = $1 AND day >= $2 ORDER BY day`, d.UserID, now.Add(-recentDays*24*time.Hour).Truncate(24*time.Hour))
 	if err != nil {

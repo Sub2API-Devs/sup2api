@@ -418,7 +418,7 @@ func toolListRecords(ctx context.Context, tc *toolCtx, args json.RawMessage) (an
 		before = 1 << 62
 	}
 	rows, err := db.Query(ctx, `SELECT `+excerptCols(toolListExcerptRunes)+` FROM events
-		WHERE user_id = $1 AND result IN ('hit', 'block') AND created_at >= $2 AND id < $3 ORDER BY id DESC LIMIT $4`,
+		WHERE user_id = $1 AND `+suspiciousResult+` AND created_at >= $2 AND id < $3 ORDER BY id DESC LIMIT $4`,
 		tc.userID, since, before, clampOr(a.Limit, 20, 1, 50))
 	if err != nil {
 		return nil, err
@@ -464,7 +464,7 @@ func toolGetRecord(ctx context.Context, tc *toolCtx, args json.RawMessage) (any,
 		return nil, err
 	}
 	row, err := scanToolRow(db.QueryRow(ctx, `SELECT `+excerptCols(recordExcerptRunes)+` FROM events
-		WHERE id = $1 AND user_id = $2 AND result IN ('hit', 'block')`, a.ID, tc.userID))
+		WHERE id = $1 AND user_id = $2 AND `+suspiciousResult, a.ID, tc.userID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, errToolMissing
 	}
@@ -521,7 +521,7 @@ func toolUserSummary(ctx context.Context, tc *toolCtx, _ json.RawMessage) (any, 
 	}
 	byCategory := map[string]int64{}
 	rows, err := db.Query(ctx, `SELECT c, count(*) FROM events, unnest(hit_categories) AS c
-		WHERE user_id = $1 AND created_at >= $2 AND result IN ('hit','block') GROUP BY c`, tc.userID, since)
+		WHERE user_id = $1 AND created_at >= $2 AND `+suspiciousResult+` GROUP BY c`, tc.userID, since)
 	if err != nil {
 		return nil, err
 	}
@@ -532,7 +532,7 @@ func toolUserSummary(ctx context.Context, tc *toolCtx, _ json.RawMessage) (any, 
 	}
 	bySeverity, byReview := map[string]int64{}, map[string]int64{}
 	rows, err = db.Query(ctx, `SELECT severity, review_status, count(*) FROM events
-		WHERE user_id = $1 AND created_at >= $2 AND result IN ('hit','block') GROUP BY 1, 2`, tc.userID, since)
+		WHERE user_id = $1 AND created_at >= $2 AND `+suspiciousResult+` GROUP BY 1, 2`, tc.userID, since)
 	if err != nil {
 		return nil, err
 	}
@@ -594,7 +594,7 @@ func toolUserSummary(ctx context.Context, tc *toolCtx, _ json.RawMessage) (any, 
 	rows, err = db.Query(ctx, `SELECT group_id, flow_id, flow_version, count(*),
 			count(*) FILTER (WHERE ai_verdict = 'violation'), count(*) FILTER (WHERE ai_verdict = 'false_positive'),
 			count(*) FILTER (WHERE ai_verdict = 'unsure'), count(*) FILTER (WHERE ai_verdict = '')
-		FROM events WHERE user_id = $1 AND created_at >= $2 AND result IN ('hit','block')
+		FROM events WHERE user_id = $1 AND created_at >= $2 AND `+suspiciousResult+`
 		GROUP BY 1, 2, 3 ORDER BY 4 DESC LIMIT 50`, tc.userID, since)
 	if err != nil {
 		return nil, err

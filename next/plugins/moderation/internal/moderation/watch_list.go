@@ -1,6 +1,7 @@
 package moderation
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -24,12 +25,13 @@ import (
 // recentDays is the window of a watch row's groups (new-api moderationRecentDays).
 const recentDays = 30
 
-// severityCounts selects total, high, medium and low of suspicious records
-// (with severitySuspicious in the WHERE clause).
+// suspiciousResult selects the suspicious records; severityCounts selects
+// total, high, medium and low of them (with suspiciousResult in the WHERE
+// clause).
 const (
-	severityCounts = `count(*) AS total, count(*) FILTER (WHERE severity = 'high') AS high,
+	suspiciousResult = `result IN ('hit', 'block')`
+	severityCounts   = `count(*) AS total, count(*) FILTER (WHERE severity = 'high') AS high,
 	count(*) FILTER (WHERE severity = 'medium') AS medium, count(*) FILTER (WHERE severity = 'low') AS low`
-	severitySuspicious = `result IN ('hit', 'block')`
 )
 
 // SeverityCounts counts suspicious records by severity.
@@ -82,7 +84,8 @@ func watchFilter(req *pluginv1.HTTPRequest, now time.Time) (string, []any, plugi
 		if !jevCategoryRe.MatchString(v) && !categoryIDRe.MatchString(v) {
 			f.errs = f.errs.Add("category", "invalid", "category is invalid / 分类格式无效")
 		} else {
-			f.conds = append(f.conds, "EXISTS (SELECT 1 FROM events e WHERE e.user_id = w.user_id AND e.result IN ('hit', 'block') AND "+f.arg(v)+" = ANY(e.hit_categories))")
+			// By the record's highest category, like the row's top categories.
+			f.conds = append(f.conds, "EXISTS (SELECT 1 FROM events e WHERE e.user_id = w.user_id AND e."+suspiciousResult+" AND e.highest_category = "+f.arg(v)+")")
 		}
 	}
 	if id, ok := f.queryID(req, "user_id"); ok {
@@ -105,7 +108,7 @@ func (p *Plugin) listWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 		order = "w.last_hit_at DESC NULLS LAST, w.user_id"
 	case "severity", "total":
 		join = ` LEFT JOIN (SELECT user_id, ` + severityCounts + ` FROM events
-			WHERE ` + severitySuspicious + ` AND user_id IN (SELECT w.user_id FROM watchlist w WHERE ` + where + `)
+			WHERE ` + suspiciousResult + ` AND user_id IN (SELECT w.user_id FROM watchlist w WHERE ` + where + `)
 			GROUP BY user_id) r ON r.user_id = w.user_id`
 		order = "coalesce(r.high, 0) DESC, coalesce(r.medium, 0) DESC, w.user_id"
 		if pluginsdk.Query(req, "sort") == "total" {
@@ -151,6 +154,19 @@ func (p *Plugin) listWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	}), nil
 }
 
+// watchRows is what watchItems reads about the listed entries before it
+// renders them.
+type watchRows struct {
+	ids  []int64
+	byID map[int64]*WatchItem
+	// categories counts each user's suspicious records by highest category.
+	categories map[int64]map[string]int64
+	// analyses are the latest successful analyses of the entries.
+	analyses []int64
+	// grouped: the user has records of the last recentDays (GroupID is set).
+	grouped map[int64]bool
+}
+
 // watchItems adds the aggregates of each entry's suspicious records, its
 // recent groups, the flow of its current group and the AI counts of its
 // latest successful analysis.
@@ -159,96 +175,127 @@ func (p *Plugin) watchItems(ctx context.Context, db *pgxpool.Pool, list []Watch,
 	if len(list) == 0 {
 		return items, nil
 	}
-	ids := make([]int64, len(list))
-	byID := map[int64]*WatchItem{}
-	var analyses []int64
+	r := &watchRows{byID: map[int64]*WatchItem{}, categories: map[int64]map[string]int64{}, grouped: map[int64]bool{}}
 	for i, w := range list {
 		w.fillRunning(now)
 		items[i] = WatchItem{Watch: w, OtherGroups: []int64{}, TopCategories: []CategoryCount{}}
-		ids[i] = w.UserID
-		byID[w.UserID] = &items[i]
+		r.ids = append(r.ids, w.UserID)
+		r.byID[w.UserID] = &items[i]
 		if w.LatestAnalysisStatus == AnalysisStatusOK && w.LatestAnalysisID > 0 {
-			analyses = append(analyses, w.LatestAnalysisID)
+			r.analyses = append(r.analyses, w.LatestAnalysisID)
 		}
 	}
-	rows, err := db.Query(ctx, `SELECT user_id, `+severityCounts+` FROM events WHERE `+severitySuspicious+` AND user_id = ANY($1) GROUP BY user_id`, ids)
+	for _, load := range []func(context.Context, *pgxpool.Pool, *watchRows, time.Time) error{
+		loadWatchRecords, loadWatchGroups, loadWatchAICounts,
+	} {
+		if err := load(ctx, db, r, now); err != nil {
+			return nil, err
+		}
+	}
+	snap := p.snap.Load()
+	labels := snap.categoryLabels()
+	for i := range items {
+		it := &items[i]
+		it.TopCategories, it.TopOther = topCategories(r.categories[it.UserID], it.SuspiciousTotal, labels)
+		if f := snap.flowFor(it.GroupID); r.grouped[it.UserID] && f != nil {
+			it.Flow = &FlowRef{FlowID: f.ID, Name: f.Name, Version: f.Version}
+		}
+	}
+	return items, nil
+}
+
+// topCategories ranks the highest categories of a user's suspicious records:
+// the top 3, and the records outside them (new-api ListModerationWatch:
+// records without a category count there too).
+func topCategories(counts map[string]int64, total int64, labels map[string]string) ([]CategoryCount, int64) {
+	top := make([]CategoryCount, 0, len(counts))
+	for c, n := range counts {
+		top = append(top, CategoryCount{Category: c, Label: labels[c], Count: n})
+	}
+	slices.SortFunc(top, func(a, b CategoryCount) int {
+		return cmp.Or(cmp.Compare(b.Count, a.Count), cmp.Compare(a.Category, b.Category))
+	})
+	top = top[:min(3, len(top))]
+	other := total
+	for _, c := range top {
+		other -= c.Count
+	}
+	return top, other
+}
+
+// loadWatchRecords counts the suspicious records by severity and highest
+// category.
+func loadWatchRecords(ctx context.Context, db *pgxpool.Pool, r *watchRows, _ time.Time) error {
+	rows, err := db.Query(ctx, `SELECT user_id, highest_category, severity, count(*) FROM events
+		WHERE `+suspiciousResult+` AND user_id = ANY($1) GROUP BY 1, 2, 3`, r.ids)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var uid, total, high, medium, low int64
-	if _, err := pgx.ForEachRow(rows, []any{&uid, &total, &high, &medium, &low}, func() error {
-		it := byID[uid]
-		it.SuspiciousTotal, it.BySeverity = total, SeverityCounts{High: high, Medium: medium, Low: low}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-	rows, err = db.Query(ctx, `SELECT user_id, c, count(*) FROM events, unnest(hit_categories) AS c
-		WHERE result IN ('hit', 'block') AND user_id = ANY($1) GROUP BY user_id, c ORDER BY user_id, count(*) DESC, c`, ids)
-	if err != nil {
-		return nil, err
-	}
-	labels := p.snap.Load().categoryLabels()
-	var cat string
-	var cnt int64
-	if _, err := pgx.ForEachRow(rows, []any{&uid, &cat, &cnt}, func() error {
-		it := byID[uid]
-		if len(it.TopCategories) < 3 {
-			it.TopCategories = append(it.TopCategories, CategoryCount{Category: cat, Label: labels[cat], Count: cnt})
-		} else {
-			it.TopOther += cnt
+	var uid, n int64
+	var cat, severity string
+	_, err = pgx.ForEachRow(rows, []any{&uid, &cat, &severity, &n}, func() error {
+		it := r.byID[uid]
+		it.SuspiciousTotal += n
+		switch severity {
+		case "high":
+			it.BySeverity.High += n
+		case "medium":
+			it.BySeverity.Medium += n
+		case "low":
+			it.BySeverity.Low += n
+		}
+		if cat != "" {
+			if r.categories[uid] == nil {
+				r.categories[uid] = map[string]int64{}
+			}
+			r.categories[uid][cat] += n
 		}
 		return nil
-	}); err != nil {
-		return nil, err
-	}
-	// Groups of the last recentDays, newest first: the first is the current one.
-	rows, err = db.Query(ctx, `SELECT user_id, group_id, max(created_at) FROM events WHERE user_id = ANY($1) AND created_at >= $2
-		GROUP BY user_id, group_id ORDER BY user_id, max(created_at) DESC`, ids, now.Add(-recentDays*24*time.Hour))
+	})
+	return err
+}
+
+// loadWatchGroups reads the groups of the last recentDays, newest first: the
+// first is the current one.
+func loadWatchGroups(ctx context.Context, db *pgxpool.Pool, r *watchRows, now time.Time) error {
+	rows, err := db.Query(ctx, `SELECT user_id, group_id, max(created_at) FROM events WHERE user_id = ANY($1) AND created_at >= $2
+		GROUP BY user_id, group_id ORDER BY user_id, max(created_at) DESC`, r.ids, now.Add(-recentDays*24*time.Hour))
 	if err != nil {
-		return nil, err
+		return err
 	}
-	seen := map[int64]bool{}
-	var group int64
+	var uid, group int64
 	var last time.Time
-	if _, err := pgx.ForEachRow(rows, []any{&uid, &group, &last}, func() error {
-		it := byID[uid]
-		if !seen[uid] {
-			seen[uid], it.GroupID = true, group
+	_, err = pgx.ForEachRow(rows, []any{&uid, &group, &last}, func() error {
+		it := r.byID[uid]
+		if !r.grouped[uid] {
+			r.grouped[uid], it.GroupID = true, group
 		} else {
 			it.OtherGroups = append(it.OtherGroups, group)
 		}
 		return nil
-	}); err != nil {
-		return nil, err
+	})
+	return err
+}
+
+// loadWatchAICounts reads the verdict counts of the latest analyses.
+func loadWatchAICounts(ctx context.Context, db *pgxpool.Pool, r *watchRows, _ time.Time) error {
+	if len(r.analyses) == 0 {
+		return nil
 	}
-	snap := p.snap.Load()
-	for i := range items {
-		if !seen[items[i].UserID] {
-			continue
-		}
-		if f := snap.flowFor(items[i].GroupID); f != nil {
-			items[i].Flow = &FlowRef{FlowID: f.ID, Name: f.Name, Version: f.Version}
-		}
+	rows, err := db.Query(ctx, `SELECT id, user_id, verdict_counts FROM user_analyses WHERE id = ANY($1)`, r.analyses)
+	if err != nil {
+		return err
 	}
-	if len(analyses) > 0 {
-		rows, err = db.Query(ctx, `SELECT id, user_id, verdict_counts FROM user_analyses WHERE id = ANY($1)`, analyses)
-		if err != nil {
-			return nil, err
+	var id, uid int64
+	var raw []byte
+	_, err = pgx.ForEachRow(rows, []any{&id, &uid, &raw}, func() error {
+		var vc VerdictCounts
+		if it := r.byID[uid]; it != nil && it.LatestAnalysisID == id && json.Unmarshal(raw, &vc) == nil {
+			it.AICounts = &vc
 		}
-		var id int64
-		var raw []byte
-		if _, err := pgx.ForEachRow(rows, []any{&id, &uid, &raw}, func() error {
-			var vc VerdictCounts
-			if it := byID[uid]; it != nil && it.LatestAnalysisID == id && json.Unmarshal(raw, &vc) == nil {
-				it.AICounts = &vc
-			}
-			return nil
-		}); err != nil {
-			return nil, err
-		}
-	}
-	return items, nil
+		return nil
+	})
+	return err
 }
 
 // markWatchSeen resets hits_since_seen of an active entry (new-api "mark as seen").

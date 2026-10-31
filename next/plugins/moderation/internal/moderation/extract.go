@@ -90,10 +90,10 @@ func (in *Input) Empty() bool { return in == nil || (in.Text == "" && len(in.Ima
 // normalized text.
 func extractInput(fields map[string]string, maxChars int) *Input {
 	if raw := fields[FieldMessages]; isArray(raw) {
-		return buildInput(FormatMessages, raw, maxChars, roleOf, messageParts)
+		return buildInput(FormatMessages, raw, maxChars)
 	}
 	if raw := fields[FieldInput]; isArray(raw) {
-		return buildInput(FormatResponses, raw, maxChars, responsesRole, messageParts)
+		return buildInput(FormatResponses, raw, maxChars)
 	}
 	if raw := fields[FieldInputString]; strings.HasPrefix(raw, `"`) {
 		var s string
@@ -105,7 +105,7 @@ func extractInput(fields map[string]string, maxChars int) *Input {
 		}
 	}
 	if raw := fields[FieldGeminiContent]; isArray(raw) {
-		return buildInput(FormatGemini, raw, maxChars, geminiRole, geminiParts)
+		return buildInput(FormatGemini, raw, maxChars)
 	}
 	return &Input{}
 }
@@ -119,14 +119,14 @@ func isArray(raw string) bool {
 
 // buildInput takes the newest-first items, finds the trailing user run and
 // reads its parts.
-func buildInput(format, raw string, maxChars int, role func(json.RawMessage) string, parts func(*inputBuilder, json.RawMessage)) *Input {
+func buildInput(format, raw string, maxChars int) *Input {
 	var items []json.RawMessage
 	if json.Unmarshal([]byte(raw), &items) != nil || len(items) == 0 {
 		return &Input{}
 	}
 	// items[0] is the newest; the run ends at the first non-user item.
 	n := 0
-	for n < len(items) && role(items[n]) == "user" {
+	for n < len(items) && itemRole(format, items[n]) == "user" {
 		n++
 	}
 	if n == 0 {
@@ -138,7 +138,7 @@ func buildInput(format, raw string, maxChars int, role func(json.RawMessage) str
 	}
 	var b inputBuilder
 	for _, it := range run {
-		parts(&b, it)
+		walkParts(format, it, func(_ string, p msgPart) { b.add(p) })
 	}
 	msgs, _ := json.Marshal(run)
 	in := b.build(format, msgs, maxChars)
@@ -146,44 +146,47 @@ func buildInput(format, raw string, maxChars int, role func(json.RawMessage) str
 	return in
 }
 
-// roleOf reads "role" (Anthropic messages, OpenAI chat).
-func roleOf(item json.RawMessage) string {
-	var m struct {
-		Role string `json:"role"`
-	}
-	_ = json.Unmarshal(item, &m)
-	return m.Role
-}
-
-// responsesRole: an item with a type other than "message" is a tool turn.
-func responsesRole(item json.RawMessage) string {
+// itemRole is the role of a message item: "role" (Anthropic messages,
+// OpenAI chat); a Responses item with a type other than "message" is a tool
+// turn; an empty Gemini role is the user.
+func itemRole(format string, item json.RawMessage) string {
 	var m struct {
 		Role string `json:"role"`
 		Type string `json:"type"`
 	}
 	_ = json.Unmarshal(item, &m)
-	if m.Type != "" && m.Type != "message" {
+	switch {
+	case format == FormatResponses && m.Type != "" && m.Type != "message":
 		return "tool"
-	}
-	return m.Role
-}
-
-// geminiRole: an empty role is the user.
-func geminiRole(item json.RawMessage) string {
-	var m struct {
-		Role string `json:"role"`
-	}
-	_ = json.Unmarshal(item, &m)
-	if m.Role == "" {
+	case format == FormatGemini && m.Role == "":
 		return "user"
 	}
 	return m.Role
 }
 
-// messageParts reads {content: string | [blocks]} of Anthropic, OpenAI chat
-// and Responses messages. Text blocks and images are kept; tool_result,
-// documents and other blocks are not user input.
-func messageParts(b *inputBuilder, item json.RawMessage) {
+// msgPart is one piece of user input in a message: text, or an image.
+type msgPart struct {
+	text string
+	img  Image
+}
+
+// walkParts calls fn with the item's role and each text and image of one
+// message item of format: {content: string | [blocks]} of Anthropic,
+// OpenAI chat and Responses, {parts} of Gemini. Tool results, documents,
+// non-image files and other blocks are not user input. The hook
+// (inputBuilder) and the record detail (MessageParts) read messages
+// through it.
+func walkParts(format string, item json.RawMessage, fn func(role string, p msgPart)) {
+	role := itemRole(format, item)
+	emit := func(p msgPart) { fn(role, p) }
+	if format == FormatGemini {
+		geminiParts(item, emit)
+		return
+	}
+	messageParts(item, emit)
+}
+
+func messageParts(item json.RawMessage, emit func(msgPart)) {
 	var m struct {
 		Content json.RawMessage `json:"content"`
 	}
@@ -197,7 +200,7 @@ func messageParts(b *inputBuilder, item json.RawMessage) {
 	if c[0] == '"' {
 		var s string
 		_ = json.Unmarshal(c, &s)
-		b.addText(s)
+		emit(msgPart{text: s})
 		return
 	}
 	var blocks []struct {
@@ -212,7 +215,7 @@ func messageParts(b *inputBuilder, item json.RawMessage) {
 	for _, bl := range blocks {
 		switch bl.Type {
 		case "text", "input_text":
-			b.addText(bl.Text)
+			emit(msgPart{text: bl.Text})
 		case "image":
 			var src struct {
 				Type      string `json:"type"`
@@ -222,9 +225,9 @@ func messageParts(b *inputBuilder, item json.RawMessage) {
 			}
 			if json.Unmarshal(bl.Source, &src) == nil {
 				if src.Type == "url" {
-					b.addImage(Image{URL: src.URL})
+					emit(msgPart{img: Image{URL: src.URL}})
 				} else {
-					b.addImage(Image{MediaType: src.MediaType, Data: src.Data})
+					emit(msgPart{img: Image{MediaType: src.MediaType, Data: src.Data}})
 				}
 			}
 		case "image_url", "input_image":
@@ -237,14 +240,14 @@ func messageParts(b *inputBuilder, item json.RawMessage) {
 				_ = json.Unmarshal(bl.ImageURL, &o)
 				url = o.URL
 			}
-			b.addImage(imageFromURL(url))
+			emit(msgPart{img: imageFromURL(url)})
 		}
 	}
 }
 
-// geminiParts reads {parts:[{text}|{inlineData}|{fileData}]}; function
-// responses are not user input.
-func geminiParts(b *inputBuilder, item json.RawMessage) {
+// geminiParts reads {parts:[{text}|{inlineData}|{fileData}]}; only image
+// data and files are images, function responses are not user input.
+func geminiParts(item json.RawMessage, emit func(msgPart)) {
 	type blob struct {
 		MimeType string `json:"mimeType"`
 		Mime2    string `json:"mime_type"`
@@ -271,17 +274,17 @@ func geminiParts(b *inputBuilder, item json.RawMessage) {
 		return b
 	}
 	for _, p := range m.Parts {
-		b.addText(p.Text)
+		emit(msgPart{text: p.Text})
 		if d := pick(p.InlineData, p.InlineData2); d != nil {
 			mt := d.MimeType + d.Mime2
 			if strings.HasPrefix(mt, "image/") {
-				b.addImage(Image{MediaType: mt, Data: d.Data})
+				emit(msgPart{img: Image{MediaType: mt, Data: d.Data}})
 			}
 		}
 		if f := pick(p.FileData, p.FileData2); f != nil {
 			mt, uri := f.MimeType+f.Mime2, f.FileURI+f.FileURI2
 			if strings.HasPrefix(mt, "image/") && uri != "" {
-				b.addImage(Image{MediaType: mt, URL: uri})
+				emit(msgPart{img: Image{MediaType: mt, URL: uri}})
 			}
 		}
 	}
@@ -304,6 +307,15 @@ type inputBuilder struct {
 	parts  []string
 	images []Image
 	seen   map[[32]byte]bool
+}
+
+// add adds a text or an image part.
+func (b *inputBuilder) add(p msgPart) {
+	if p.img.raw() != "" {
+		b.addImage(p.img)
+		return
+	}
+	b.addText(p.text)
 }
 
 func (b *inputBuilder) addText(s string) {

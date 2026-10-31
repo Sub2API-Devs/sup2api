@@ -175,14 +175,18 @@ func (p *llmProtocol) call(ctx context.Context, ch *liveChannel, req llmRequest)
 	if client == nil {
 		client = http.DefaultClient
 	}
-	ctx, fb, release := withFirstByte(ctx, ch)
-	defer release()
+	// A non-streaming answer arrives whole, so its first byte comes as late
+	// as the last one: only the channel timeout (ctx) bounds it. A stream
+	// must show its first model output within ttft_timeout_ms.
+	var fb *firstByte
+	if req.Stream {
+		var release func()
+		ctx, fb, release = withFirstByte(ctx, ch)
+		defer release()
+	}
 	resp, err := client.Do(hreq.WithContext(ctx))
 	if err != nil {
 		return llmTurn{}, ctxErr(ctx, &networkError{err})
-	}
-	if !req.Stream {
-		fb.arrived()
 	}
 	return p.read(ctx, ch, req, resp, fb)
 }
@@ -283,10 +287,17 @@ func sseRead(body io.Reader, p *llmProtocol, st *llmStream) error {
 			st.done = true
 			return nil
 		}
-		if h := p.events[p.kindOf(ev.name, ev.data)]; h != nil {
-			return h(st, ev.data)
+		h := p.events[p.kindOf(ev.name, ev.data)]
+		if h == nil {
+			return nil
 		}
-		return nil
+		// The first event that adds model output stops the first byte timer.
+		before := st.progress()
+		err := h(st, ev.data)
+		if st.progress() > before {
+			st.fb.arrived()
+		}
+		return err
 	}
 	for sc.Scan() {
 		line := sc.Bytes()
@@ -334,14 +345,24 @@ type llmStream struct {
 	text  strings.Builder
 	calls map[int]*toolCallBuf
 	order []int
-	usage llmUsage
-	model string
-	done  bool
-	fb    *firstByte
+	// unkept is the size of the model output the turn does not keep
+	// (reasoning, thinking, other output items and deltas).
+	unkept int
+	usage  llmUsage
+	model  string
+	done   bool
+	fb     *firstByte
 }
 
-// output marks the first model output (text, reasoning or a tool call).
-func (s *llmStream) output() { s.fb.arrived() }
+// progress grows with every piece of model output: text, tool calls and
+// their arguments, and the output the turn does not keep.
+func (s *llmStream) progress() int {
+	n := s.text.Len() + s.unkept + len(s.order)
+	for _, b := range s.calls {
+		n += b.args.Len()
+	}
+	return n
+}
 
 type toolCallBuf struct {
 	id, name string
@@ -444,7 +465,6 @@ func anthropicMessageStart(s *llmStream, data []byte) error {
 }
 
 func anthropicBlockStart(s *llmStream, data []byte) error {
-	s.output()
 	block := gjson.GetBytes(data, "content_block")
 	switch block.Get("type").String() {
 	case "tool_use":
@@ -452,18 +472,21 @@ func anthropicBlockStart(s *llmStream, data []byte) error {
 		b.id, b.name = block.Get("id").String(), block.Get("name").String()
 	case "text":
 		s.text.WriteString(block.Get("text").String())
+	default: // thinking, redacted_thinking
+		s.unkept += len(block.Raw)
 	}
 	return nil
 }
 
 func anthropicBlockDelta(s *llmStream, data []byte) error {
-	s.output()
 	delta := gjson.GetBytes(data, "delta")
 	switch delta.Get("type").String() {
 	case "input_json_delta":
 		s.call(int(gjson.GetBytes(data, "index").Int())).args.WriteString(delta.Get("partial_json").String())
 	case "text_delta":
 		s.text.WriteString(delta.Get("text").String())
+	default: // thinking_delta, signature_delta
+		s.unkept += len(delta.Raw)
 	}
 	return nil
 }
@@ -585,11 +608,9 @@ func chatChunk(s *llmStream, data []byte) error {
 		s.done = true
 	}
 	delta := chunk.Get("choices.0.delta")
-	calls := delta.Get("tool_calls").Array()
-	if delta.Get("content").String() != "" || delta.Get("reasoning_content").String() != "" || delta.Get("reasoning").String() != "" || len(calls) > 0 {
-		s.output()
-	}
 	s.text.WriteString(delta.Get("content").String())
+	s.unkept += len(delta.Get("reasoning_content").String()) + len(delta.Get("reasoning").String())
+	calls := delta.Get("tool_calls").Array()
 	for _, c := range calls {
 		b := s.call(int(c.Get("index").Int()))
 		if id := c.Get("id").String(); id != "" {
@@ -599,6 +620,7 @@ func chatChunk(s *llmStream, data []byte) error {
 			b.name = name
 		}
 		b.args.WriteString(c.Get("function.arguments").String())
+		s.unkept++ // a fragment without arguments is output too
 	}
 	return nil
 }
@@ -678,10 +700,18 @@ func responsesBody(model string, req llmRequest) map[string]any {
 	return body
 }
 
-// responsesKind folds the *.delta events without a handler into one kind.
+// responsesOtherDelta is the kind of every *.delta event without a handler
+// of its own (reasoning summaries, audio, refusals ...).
+const responsesOtherDelta = "response.*.delta"
+
+// responsesKind folds the *.delta events without a handler into one kind,
+// so they still count as model output (new-api llm_client.go).
 func responsesKind(name string, data []byte) string {
 	if name == "" {
 		name = gjson.GetBytes(data, "type").String()
+	}
+	if _, ok := responsesEvents[name]; !ok && strings.HasSuffix(name, ".delta") {
+		return responsesOtherDelta
 	}
 	return name
 }
@@ -689,6 +719,7 @@ func responsesKind(name string, data []byte) string {
 var responsesEvents = map[string]eventHandler{
 	"response.output_item.added":             responsesItemAdded,
 	"response.output_text.delta":             responsesTextDelta,
+	responsesOtherDelta:                      responsesUnkeptDelta,
 	"response.function_call_arguments.delta": responsesArgsDelta,
 	"response.function_call_arguments.done":  responsesArgsDone,
 	"response.completed":                     responsesCompleted,
@@ -702,25 +733,31 @@ func responsesUsage(u gjson.Result) llmUsage {
 		CacheRead: u.Get("input_tokens_details.cached_tokens").Int(), Semantics: SemanticsInclusive}
 }
 
+// responsesItemAdded: any output item (message, reasoning, function call)
+// is model output.
 func responsesItemAdded(s *llmStream, data []byte) error {
-	s.output()
 	item := gjson.GetBytes(data, "item")
-	if item.Get("type").String() == "function_call" {
-		b := s.call(int(gjson.GetBytes(data, "output_index").Int()))
-		b.id, b.name = item.Get("call_id").String(), item.Get("name").String()
-		b.args.WriteString(item.Get("arguments").String())
+	if item.Get("type").String() != "function_call" {
+		s.unkept += len(item.Raw)
+		return nil
 	}
+	b := s.call(int(gjson.GetBytes(data, "output_index").Int()))
+	b.id, b.name = item.Get("call_id").String(), item.Get("name").String()
+	b.args.WriteString(item.Get("arguments").String())
 	return nil
 }
 
 func responsesTextDelta(s *llmStream, data []byte) error {
-	s.output()
 	s.text.WriteString(gjson.GetBytes(data, "delta").String())
 	return nil
 }
 
+func responsesUnkeptDelta(s *llmStream, data []byte) error {
+	s.unkept += len(data)
+	return nil
+}
+
 func responsesArgsDelta(s *llmStream, data []byte) error {
-	s.output()
 	s.call(int(gjson.GetBytes(data, "output_index").Int())).args.WriteString(gjson.GetBytes(data, "delta").String())
 	return nil
 }

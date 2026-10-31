@@ -19,7 +19,6 @@ import (
 )
 
 func (p *Plugin) routes() {
-	p.Handle("GET", "/overview", p.getOverview)
 	p.Handle("GET", "/events", p.listEvents)
 	p.Handle("POST", "/events/review", p.reviewEvents)
 	p.Handle("GET", "/events/:id", p.getEvent)
@@ -33,7 +32,6 @@ func (p *Plugin) routes() {
 	p.Handle("PATCH", "/watchlist/:user_id", p.updateWatch)
 	p.Handle("DELETE", "/watchlist/:user_id", p.deleteWatch)
 	p.Handle("GET", "/watchlist/:user_id/events", p.listWatchEvents)
-	p.Handle("GET", "/watchlist/:user_id", p.getWatch)
 	p.Handle("GET", "/users/:user_id", p.getUserDetail)
 	p.Handle("POST", "/watchlist/:user_id/seen", p.markWatchSeen)
 	p.Handle("POST", "/watchlist/:user_id/analyze", p.analyzeWatch)
@@ -74,7 +72,6 @@ func (p *Plugin) routes() {
 	p.Handle("POST", "/flows/:id/simulate", p.simulateFlow)
 	p.Handle("POST", "/import", p.importConfig)
 	p.Handle("POST", "/test", p.testModeration)
-	p.Handle("GET", "/defaults", p.getJevDefaults)
 }
 
 func parseID(req *pluginv1.HTTPRequest, name string) (int64, *pluginv1.HTTPResponse) {
@@ -86,41 +83,7 @@ func parseID(req *pluginv1.HTTPRequest, name string) (int64, *pluginv1.HTTPRespo
 	return id, nil
 }
 
-// ---------------------------------------------------------------- overview
-
-// Totals counts records by result; Denied counts refused requests.
-type Totals struct {
-	Total      int64 `json:"total"`
-	Pass       int64 `json:"pass"`
-	Hit        int64 `json:"hit"`
-	Block      int64 `json:"block"`
-	Overturned int64 `json:"overturned"`
-	Error      int64 `json:"error"`
-	Denied     int64 `json:"denied"`
-}
-
-// TrendPoint is one bucket (UTC hour for 24h, UTC day otherwise).
-type TrendPoint struct {
-	Bucket     time.Time `json:"bucket"`
-	Pass       int64     `json:"pass"`
-	Hit        int64     `json:"hit"`
-	Block      int64     `json:"block"`
-	Overturned int64     `json:"overturned"`
-	Error      int64     `json:"error"`
-}
-
-// CategoryCount is one row of the category ranking.
-type CategoryCount struct {
-	Category string `json:"category"`
-	Label    string `json:"label,omitempty"`
-	Count    int64  `json:"count"`
-}
-
-// UserCount is one row of the suspicious user ranking.
-type UserCount struct {
-	UserID int64 `json:"user_id"`
-	Count  int64 `json:"count"`
-}
+// ---------------------------------------------------------------- runtime
 
 // Runtime is this node's live state.
 type Runtime struct {
@@ -145,19 +108,6 @@ type Runtime struct {
 	DroppedCosts  int64         `json:"dropped_costs"`
 }
 
-// Overview is the GET /overview response data.
-type Overview struct {
-	Range         string          `json:"range"`
-	From          time.Time       `json:"from"`
-	To            time.Time       `json:"to"`
-	Bucket        string          `json:"bucket"` // hour | day
-	Totals        Totals          `json:"totals"`
-	Trend         []TrendPoint    `json:"trend"`
-	TopCategories []CategoryCount `json:"top_categories"`
-	TopUsers      []UserCount     `json:"top_users"`
-	Runtime       Runtime         `json:"runtime"`
-}
-
 func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 	c := p.cfg.Load()
 	s := p.snap.Load()
@@ -175,102 +125,6 @@ func (p *Plugin) runtimeState(ctx context.Context) Runtime {
 		AvgLatencyMs: avg, BlockedUsers: p.blockedCount(), WatchedUsers: len(*p.watch.Load()),
 		Analysis: p.analysisRuntime(ctx), DroppedCosts: p.hourly.dropped.Load(),
 	}
-}
-
-func (p *Plugin) getOverview(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
-	now := p.now().UTC()
-	o := Overview{Range: pluginsdk.Query(req, "range"), To: now, Bucket: "day",
-		Trend: []TrendPoint{}, TopCategories: []CategoryCount{}, TopUsers: []UserCount{}}
-	switch o.Range {
-	case "", "24h":
-		o.Range, o.Bucket, o.From = "24h", "hour", now.Add(-24*time.Hour)
-	case "7d":
-		o.From = now.Add(-7 * 24 * time.Hour)
-	case "30d":
-		o.From = now.Add(-30 * 24 * time.Hour)
-	default:
-		return pluginsdk.FieldErrorResponse("invalid query / 查询参数无效",
-			pluginsdk.FieldErrors{}.Add("range", "enum", "range must be 24h, 7d or 30d / range 取值为 24h、7d、30d")), nil
-	}
-	o.Runtime = p.runtimeState(ctx)
-	db, err := p.db(ctx)
-	if err != nil {
-		return pluginsdk.Unavailable(err.Error()), nil
-	}
-	for _, q := range []func(context.Context, *pgxpool.Pool, *Overview, time.Time) error{queryTotals, queryTrend, queryTopCategories, queryTopUsers} {
-		if err := q(ctx, db, &o, now); err != nil {
-			return nil, err
-		}
-	}
-	return pluginsdk.DataResponse(o), nil
-}
-
-const resultCounts = `count(*) FILTER (WHERE result = 'pass'), count(*) FILTER (WHERE result = 'hit'),
-	count(*) FILTER (WHERE result = 'block'), count(*) FILTER (WHERE result = 'overturned'), count(*) FILTER (WHERE result = 'error')`
-
-func queryTotals(ctx context.Context, db *pgxpool.Pool, o *Overview, _ time.Time) error {
-	t := &o.Totals
-	return db.QueryRow(ctx, `SELECT count(*), `+resultCounts+`, count(*) FILTER (WHERE action = 'deny')
-		FROM events WHERE created_at >= $1`, o.From).Scan(&t.Total, &t.Pass, &t.Hit, &t.Block, &t.Overturned, &t.Error, &t.Denied)
-}
-
-// queryTrend fills one point per bucket, including empty buckets.
-func queryTrend(ctx context.Context, db *pgxpool.Pool, o *Overview, now time.Time) error {
-	rows, err := db.Query(ctx, `SELECT date_trunc($2, created_at, 'UTC') AS b, `+resultCounts+`
-		FROM events WHERE created_at >= $1 GROUP BY 1 ORDER BY 1`, o.From, o.Bucket)
-	if err != nil {
-		return err
-	}
-	points, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (TrendPoint, error) {
-		var tp TrendPoint
-		err := r.Scan(&tp.Bucket, &tp.Pass, &tp.Hit, &tp.Block, &tp.Overturned, &tp.Error)
-		return tp, err
-	})
-	if err != nil {
-		return err
-	}
-	byBucket := make(map[int64]TrendPoint, len(points))
-	for _, tp := range points {
-		byBucket[tp.Bucket.Unix()] = tp
-	}
-	step := 24 * time.Hour
-	b := time.Date(o.From.Year(), o.From.Month(), o.From.Day(), 0, 0, 0, 0, time.UTC)
-	if o.Bucket == "hour" {
-		step, b = time.Hour, o.From.Truncate(time.Hour)
-	}
-	for ; !b.After(now); b = b.Add(step) {
-		tp := byBucket[b.Unix()]
-		tp.Bucket = b
-		o.Trend = append(o.Trend, tp)
-	}
-	return nil
-}
-
-func queryTopCategories(ctx context.Context, db *pgxpool.Pool, o *Overview, _ time.Time) error {
-	rows, err := db.Query(ctx, `SELECT c, count(*) FROM events, unnest(hit_categories) AS c
-		WHERE created_at >= $1 AND result IN ('hit', 'block') GROUP BY c ORDER BY count(*) DESC, c LIMIT 10`, o.From)
-	if err != nil {
-		return err
-	}
-	o.TopCategories, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (CategoryCount, error) {
-		var cc CategoryCount
-		return cc, r.Scan(&cc.Category, &cc.Count)
-	})
-	return err
-}
-
-func queryTopUsers(ctx context.Context, db *pgxpool.Pool, o *Overview, _ time.Time) error {
-	rows, err := db.Query(ctx, `SELECT user_id, count(*) FROM events
-		WHERE created_at >= $1 AND result IN ('hit', 'block') AND user_id > 0
-		GROUP BY user_id ORDER BY count(*) DESC, user_id LIMIT 10`, o.From)
-	if err != nil {
-		return err
-	}
-	o.TopUsers, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (UserCount, error) {
-		var uc UserCount
-		return uc, r.Scan(&uc.UserID, &uc.Count)
-	})
-	return err
 }
 
 // ---------------------------------------------------------------- events
@@ -391,7 +245,7 @@ func (e *Event) normalize() {
 func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs pluginsdk.FieldErrors) {
 	f := &sqlFilter{conds: []string{"TRUE"}}
 	if v := pluginsdk.Query(req, "result"); v == "suspicious" {
-		f.conds = append(f.conds, "result IN ('hit', 'block')")
+		f.conds = append(f.conds, suspiciousResult)
 	} else {
 		f.enum(req, "result", ResultBlock, ResultHit, ResultOverturned, ResultError, ResultPass)
 	}
@@ -409,7 +263,7 @@ func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs plug
 		f.enum(req, "verdict", VerdictPass, VerdictFlag, VerdictBlock, VerdictError)
 	}
 	if v := pluginsdk.Query(req, "ai_verdict"); v == "none" {
-		f.conds = append(f.conds, "ai_verdict = '' AND result IN ('hit', 'block')")
+		f.conds = append(f.conds, "ai_verdict = '' AND "+suspiciousResult)
 	} else {
 		f.enum(req, "ai_verdict", AIViolation, AIFalsePositive, AIUnsure)
 	}
@@ -488,28 +342,6 @@ func (f *sqlFilter) search(req *pluginv1.HTTPRequest) {
 	like := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(v) + "%"
 	a := f.arg(like)
 	f.conds = append(f.conds, "(request_id ILIKE "+a+" OR reason ILIKE "+a+" OR text ILIKE "+a+")")
-}
-
-func (f *sqlFilter) times(req *pluginv1.HTTPRequest) (from, to time.Time) {
-	for _, name := range []string{"from", "to"} {
-		v := pluginsdk.Query(req, name)
-		if v == "" {
-			continue
-		}
-		t, err := time.Parse(time.RFC3339, v)
-		if err != nil {
-			f.errs = f.errs.Add(name, "format", name+" must be RFC 3339 / "+name+" 必须是 RFC 3339 时间")
-			continue
-		}
-		if name == "from" {
-			from = t
-			f.conds = append(f.conds, "created_at >= "+f.arg(t))
-		} else {
-			to = t
-			f.conds = append(f.conds, "created_at < "+f.arg(t))
-		}
-	}
-	return from, to
 }
 
 // pagination reads page (>= 1, default 1) and page_size (1-100, default 20).
@@ -760,9 +592,10 @@ func (p *Plugin) deleteEvent(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	return pluginsdk.DataResponse(map[string]any{"id": id, "deleted": true}), nil
 }
 
-// reviewEvents sets the review status of records: {ids, status}. Marking a
-// counted record false_positive takes its violation back from the user's
-// current window; undoing it counts it again in the same window (§72.8).
+// reviewEvents sets the review status of suspicious records: {ids, status};
+// other records of ids are left alone. Marking a counted record
+// false_positive takes its violation back from the user's current window;
+// undoing it counts it again in the same window (§72.8).
 func (p *Plugin) reviewEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var in struct {
 		IDs    []int64 `json:"ids"`
@@ -785,7 +618,7 @@ func (p *Plugin) reviewEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	rows, err := db.Query(ctx, `SELECT DISTINCT user_id FROM events WHERE id = ANY($1) ORDER BY user_id`, in.IDs)
+	rows, err := db.Query(ctx, `SELECT DISTINCT user_id FROM events WHERE id = ANY($1) AND `+suspiciousResult+` ORDER BY user_id`, in.IDs)
 	if err != nil {
 		return nil, err
 	}
@@ -817,13 +650,13 @@ func (p *Plugin) reviewEvents(ctx context.Context, req *pluginv1.HTTPRequest) (*
 			// Count again: false positives of the current window turning back.
 			tag, err = tx.Exec(ctx, `UPDATE events SET counted = true
 				WHERE id = ANY($1) AND user_id = $2 AND NOT counted AND review_status = 'false_positive' AND $3 <> 'false_positive'
-				  AND violation_epoch = $4 AND $4 <> 0 AND result IN ('hit', 'block')`, in.IDs, uid, in.Status, epoch)
+				  AND violation_epoch = $4 AND $4 <> 0 AND `+suspiciousResult, in.IDs, uid, in.Status, epoch)
 			if err != nil {
 				return err
 			}
 			delta += int(tag.RowsAffected())
-			tag, err = tx.Exec(ctx, `UPDATE events SET review_status = $3, reviewed_by = $4, reviewed_at = $5 WHERE id = ANY($1) AND user_id = $2`,
-				in.IDs, uid, in.Status, by, now)
+			tag, err = tx.Exec(ctx, `UPDATE events SET review_status = $3, reviewed_by = $4, reviewed_at = $5
+				WHERE id = ANY($1) AND user_id = $2 AND `+suspiciousResult, in.IDs, uid, in.Status, by, now)
 			if err != nil {
 				return err
 			}

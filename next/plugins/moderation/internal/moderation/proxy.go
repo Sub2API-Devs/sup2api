@@ -2,6 +2,7 @@ package moderation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -28,7 +29,7 @@ func parseProxy(s string) (*url.URL, error) {
 	}
 	u, err := url.Parse(s)
 	if err != nil || !proxySchemes[u.Scheme] || u.Host == "" || len(s) > 1000 {
-		return nil, fmt.Errorf("proxy must be an http, https, socks5 or socks5h URL")
+		return nil, errors.New("proxy must be an http, https, socks5 or socks5h URL")
 	}
 	return u, nil
 }
@@ -49,18 +50,17 @@ type proxyClients struct {
 	m  map[string]*http.Client
 }
 
-// clientFor returns the client of a channel: the shared default client, or
-// one going through the proxy. A stored proxy that no longer parses is an
-// error: the channel must not silently go direct.
-func (p *Plugin) clientFor(proxy string) (*http.Client, error) {
+// get returns the client of a channel: def without a proxy, or one going
+// through the proxy. A stored proxy that no longer parses is an error: the
+// channel must not silently go direct.
+func (pc *proxyClients) get(proxy string, def *http.Client) (*http.Client, error) {
 	u, err := parseProxy(proxy)
 	if err != nil {
 		return nil, err
 	}
 	if u == nil {
-		return p.httpClient, nil
+		return def, nil
 	}
-	pc := &p.proxies
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 	if c := pc.m[proxy]; c != nil {
@@ -100,7 +100,7 @@ func (p *Plugin) channelClient(ctx context.Context, id int64, enc []byte) (*http
 	if err != nil {
 		return nil, "", err
 	}
-	c, err := p.clientFor(proxy)
+	c, err := p.proxies.get(proxy, p.httpClient)
 	return c, proxy, err
 }
 

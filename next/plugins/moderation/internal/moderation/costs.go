@@ -222,7 +222,11 @@ func (s *CostSummary) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	*s = CostSummary(v.costSummaryFields)
-	s.units, _ = parseCost(v.Cost)
+	units, ok := parseCost(v.Cost)
+	if !ok && strings.TrimSpace(v.Cost) != "" {
+		return fmt.Errorf("invalid cost %q", v.Cost)
+	}
+	s.units = units
 	return nil
 }
 
@@ -299,18 +303,19 @@ func (p *Plugin) getCosts(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	// Sums not yet written are included, so a test shows up at once.
-	p.flushStats(ctx)
-	if err := db.QueryRow(ctx, `SELECT `+costSums+` FROM costs WHERE hour >= $1`, r.From).Scan(r.Totals.targets()...); err != nil {
-		return nil, err
-	}
-	if err := queryCostRows(ctx, db, &r); err != nil {
+	if err := p.loadCostReport(ctx, db, &r); err != nil {
 		return nil, err
 	}
 	return pluginsdk.DataResponse(r), nil
 }
 
-func queryCostRows(ctx context.Context, db *pgxpool.Pool, r *CostReport) error {
+// loadCostReport reads the costs rows since r.From, this node's pending sums
+// included (a test shows up at once).
+func (p *Plugin) loadCostReport(ctx context.Context, db *pgxpool.Pool, r *CostReport) error {
+	p.flushStats(ctx)
+	if err := db.QueryRow(ctx, `SELECT `+costSums+` FROM costs WHERE hour >= $1`, r.From).Scan(r.Totals.targets()...); err != nil {
+		return err
+	}
 	rows, err := db.Query(ctx, `SELECT k.channel_id, coalesce(c.name, ''), coalesce(c.type, ''), coalesce(c.model, ''), coalesce(c.billing_model, ''),
 			c.id IS NULL OR c.deleted_at IS NOT NULL, `+costSums+`
 		FROM costs k LEFT JOIN channels c ON c.id = k.channel_id WHERE k.hour >= $1
@@ -373,9 +378,11 @@ func queryCostRows(ctx context.Context, db *pgxpool.Pool, r *CostReport) error {
 	return nil
 }
 
-// channelCosts30d sums the last 30 days per channel (channel list).
-func channelCosts30d(ctx context.Context, db *pgxpool.Pool, since time.Time) (map[int64]CostSummary, error) {
-	rows, err := db.Query(ctx, `SELECT channel_id, `+costSums+` FROM costs WHERE hour >= $1 GROUP BY channel_id`, since)
+// channelCosts30d sums the last 30 days of each channel, this node's pending
+// sums included.
+func (p *Plugin) channelCosts30d(ctx context.Context, db *pgxpool.Pool, since time.Time, channels []int64) (map[int64]CostSummary, error) {
+	p.flushStats(ctx)
+	rows, err := db.Query(ctx, `SELECT channel_id, `+costSums+` FROM costs WHERE hour >= $1 AND channel_id = ANY($2) GROUP BY channel_id`, since, channels)
 	if err != nil {
 		return nil, err
 	}

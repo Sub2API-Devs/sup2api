@@ -106,6 +106,43 @@ func dropInputMessages(evs []eventRec, reason string) bool {
 
 func (r *eventRec) suspicious() bool { return r.Result == ResultHit || r.Result == ResultBlock }
 
+// storeEvents writes records and applies them to the watch list and the
+// bans. When the write fails the records are written again without their
+// input messages: those are the largest and least checked part of a record
+// (new-api worker.go).
+func (p *Plugin) storeEvents(ctx context.Context, evs []eventRec) error {
+	ids, err := p.writeEvents(ctx, evs)
+	if err != nil && ctx.Err() == nil && dropInputMessages(evs, "save_failed") {
+		ids, err = p.writeEvents(ctx, evs)
+	}
+	if err != nil {
+		return err
+	}
+	p.afterWrite(ctx, evs, ids)
+	return nil
+}
+
+// retrySuspicious writes the suspicious records of a failed batch once more,
+// one by one so a single bad record cannot take the others with it: they
+// drive the watch list, the violation counts and the bans. It returns how
+// many were stored.
+func (p *Plugin) retrySuspicious(ctx context.Context, evs []eventRec) int {
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	kept := 0
+	for _, e := range evs {
+		if !e.suspicious() {
+			continue
+		}
+		if err := p.storeEvents(rctx, []eventRec{e}); err != nil {
+			p.log.Warn("moderation: suspicious record lost", "user_id", e.UserID, "request_id", e.RequestID, "error", err.Error())
+			continue
+		}
+		kept++
+	}
+	return kept
+}
+
 // writeEvents persists a batch, then updates the watch list and the bans of
 // the users with suspicious records.
 func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) ([]int64, error) {
@@ -200,7 +237,7 @@ func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, even
 			return err
 		}
 		if found && w.ExpiresAt != nil && !now.Before(*w.ExpiresAt) {
-			if err := removeWatch(ctx, tx, w, "expire", "expired", nil); err != nil {
+			if err := expireEntry(ctx, tx, w); err != nil {
 				return err
 			}
 			found, changed = false, true
@@ -218,7 +255,7 @@ func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, even
 				VALUES ($1, $2, $3, $4, $5, $6, $4)`, w.UserID, w.Level, w.Source, now, exp, w.ViolationEpoch); err != nil {
 				return err
 			}
-			if err := watchEvent(ctx, tx, e.UserID, "auto_add", "", LevelObserve, "首次可疑记录 / first suspicious record", nil); err != nil {
+			if err := watchEvent(ctx, tx, watchChange{uid: e.UserID, action: "auto_add", to: LevelObserve, reason: "首次可疑记录 / first suspicious record"}); err != nil {
 				return err
 			}
 			changed = true
@@ -349,7 +386,7 @@ func countViolations(ctx context.Context, q interface {
 }, uid int64, since time.Time) (int64, error) {
 	var n int64
 	err := q.QueryRow(ctx, `SELECT count(DISTINCT CASE WHEN request_id = '' THEN id::text ELSE request_id END) FROM events
-		WHERE user_id = $1 AND result IN ('hit', 'block') AND review_status <> 'false_positive' AND created_at >= $2
+		WHERE user_id = $1 AND `+suspiciousResult+` AND review_status <> 'false_positive' AND created_at >= $2
 		  AND NOT (verdict = 'flag' AND flow_id = 0)
 		  AND created_at > coalesce((SELECT at FROM unblocks WHERE user_id = $1), '-infinity'::timestamptz)
 		  AND created_at > coalesce((SELECT created_at FROM blocks WHERE user_id = $1), '-infinity'::timestamptz)`,

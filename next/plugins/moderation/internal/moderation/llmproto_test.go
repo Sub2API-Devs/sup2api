@@ -405,4 +405,28 @@ func TestFirstByteTimeout(t *testing.T) {
 	if turn, err := protocolOf(ch).call(ctx, ch, req); err != nil || turn.Text != "ok" {
 		t.Fatalf("slow after first output = %+v %v", turn, err)
 	}
+	// A non-streaming answer comes whole: only the channel timeout applies.
+	slowAnswer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+		_, _ = io.WriteString(w, `{"model":"m","choices":[{"message":{"role":"assistant","content":"done"}}]}`)
+	}))
+	t.Cleanup(slowAnswer.Close)
+	ch.BaseURL = slowAnswer.URL
+	if turn, err := protocolOf(ch).call(ctx, ch, llmRequest{Messages: []any{llmUserMessage("ping")}}); err != nil || turn.Text != "done" {
+		t.Fatalf("slow non-streaming answer = %+v %v", turn, err)
+	}
+	// Any *.delta of a Responses stream is model output (reasoning first).
+	reasoning := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "event: response.reasoning_summary_text.delta\ndata: {\"delta\":\"hm\"}\n\n")
+		w.(http.Flusher).Flush()
+		time.Sleep(300 * time.Millisecond)
+		_, _ = io.WriteString(w, "event: response.output_text.delta\ndata: {\"delta\":\"ok\"}\n\n"+
+			"event: response.completed\ndata: {\"response\":{\"model\":\"m\",\"output\":[]}}\n\n")
+	}))
+	t.Cleanup(reasoning.Close)
+	ch = &liveChannel{Type: ChannelLLM, Protocol: ProtocolOpenAIResponses, BaseURL: reasoning.URL, ttft: ttft}
+	if turn, err := protocolOf(ch).call(ctx, ch, req); err != nil || turn.Text != "ok" {
+		t.Fatalf("reasoning delta first = %+v %v", turn, err)
+	}
 }

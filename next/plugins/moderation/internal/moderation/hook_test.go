@@ -378,9 +378,9 @@ func TestTwoStageFlowCacheAndFailOpen(t *testing.T) {
 		t.Fatalf("error = %+v", r)
 	}
 	waitEvents(t, h, map[string]string{"result": "error"}, 1)
-	o := decodeData[Overview](t, h.Do("GET", "/overview", nil, nil))
-	if o.Totals.Block != 1 || o.Totals.Overturned != 1 || o.Totals.Error != 1 || !o.Runtime.Configured {
-		t.Fatalf("overview = %+v", o.Totals)
+	st := decodeData[Status](t, h.Do("GET", "/status", nil, nil))
+	if st.Today.Blocked != 1 || st.Today.Overturned != 1 || st.Today.Errors != 1 || !st.Runtime.Configured {
+		t.Fatalf("status = %+v", st.Today)
 	}
 	res := decodeData[TestResult](t, h.Do("POST", "/test", nil, map[string]any{"text": "MOD-HIT-sexual", "flow_id": flow}))
 	if res.Result != ResultHit || len(res.Categories) == 0 {
@@ -567,12 +567,17 @@ func TestPreCanceledClient(t *testing.T) {
 			t.Fatalf("%s: canceled request = %+v %v", tc.id, r, err)
 		}
 	}
-	waitEvents(t, h, map[string]string{"request_id": "cancel-hit", "result": "hit"}, 1)
+	// The late hit is a refusal like any other pre hit (new-api gate.go).
+	waitEvents(t, h, map[string]string{"request_id": "cancel-hit", "result": "block"}, 1)
 	time.Sleep(1500 * time.Millisecond)
 	if n := len(decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"request_id": "cancel-pass"}, nil))); n != 0 {
 		t.Fatalf("canceled pass recorded %d times", n)
 	}
 	if n := len(decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"request_id": "cancel-hit"}, nil))); n != 1 {
 		t.Fatalf("canceled hit recorded %d times", n)
+	}
+	// Only the hit counts: one run, one refused request.
+	if st := decodeData[Status](t, h.Do("GET", "/status", nil, nil)); st.Today.Audited != 1 || st.Today.Blocked != 1 {
+		t.Fatalf("counted after the client left = %+v", st.Today)
 	}
 }

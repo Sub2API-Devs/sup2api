@@ -4866,7 +4866,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **管理员**：插件现在识别不了管理员，P3 有了 `users.read` 再补。在那之前，需要把管理员的 user_id 加进 `exempt_user_ids`，页面上提示这一点。
 
-**手动操作**：加入、改级别、改有效期、写备注、移出。每次操作都写 `watch_events`。改级别时开新的计数窗口（照 new-api）：新 `violation_epoch`、计数清零、`since_at` 重设；改回 observe 且没指定天数时，有效期重设为 `watch_days`。
+**手动操作**：加入、改级别、改有效期、写备注、移出。每次操作都写 `watch_events`。没指定天数或 `expires_at` 时，observe 级的有效期是 `watch_days`，enforce 级不过期（加入和改级别都一样，照 new-api）。改级别时开新的计数窗口（照 new-api）：新 `violation_epoch`、计数和新命中清零、`since_at` 重设、`source` 改为 manual，返回的条目就是存下的值。
 
 **封禁**（`blocks`、`unblocks`、`block_subjects` 不变）：
 - `ban_threshold` 等设置保留，默认关。
@@ -4940,11 +4940,13 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | GET/POST `/flows`，GET/PUT/DELETE `/flows/:id`，PUT `/flows/:id/groups`，POST `/flows/:id/publish`，PUT `/flows/:id/enabled` | read / manage | 一个分组被另一个流程占用时返回 409 `group_conflict` |
 | GET `/events`（扩展） | read | 新增过滤条件：`result`（含 suspicious）、`severity`、`review_status`、`timing`、`flow_id`、`watch_level`、`category`、`request_id`；P2 加 `ai_verdict` 和 `verdict=needs_review\|disagree`；0.4 加 `user_ids`、`api_key_id`、`group_id`、`flow_version` |
 | GET `/events/:id/input` | read | 原文，按需加载 |
-| POST `/events/review` | manage | 请求体 `{ids, status}`；改为误报或从误报改回时，按 72.8 调整违规计数 |
-| GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events`，POST `/watchlist/:user_id/seen` | read / manage | 列表支持筛选、排序和行聚合，返回头部计数（72.14）。新增、修改时可带 `reason`、`analysis_id`、绝对时间 `expires_at`；DELETE 通过查询参数带 `reason`、`analysis_id`，用于应用 AI 的"移出"建议。`seen` 把新命中清零 |
+| POST `/events/review` | manage | 请求体 `{ids, status}`；只处理结果为 hit 或 block 的记录，其他记录不变。改为误报或从误报改回时，按 72.8 调整违规计数 |
+| GET/POST `/watchlist`，PATCH/DELETE `/watchlist/:user_id`，GET `/watchlist/:user_id/events`，POST `/watchlist/:user_id/seen` | read / manage | 单个条目没有单独的 GET，用 `GET /users/:user_id`（72.14）。列表支持筛选、排序和行聚合，返回头部计数（72.14）；分类筛选和每行的前 3 个分类都按记录的 `highest_category` 计，`top_other` 是其余的可疑记录数（照 new-api）。新增、修改时可带 `reason`、`analysis_id`、绝对时间 `expires_at`；DELETE 通过查询参数带 `reason`、`analysis_id`，用于应用 AI 的"移出"建议。`seen` 把新命中清零 |
 | POST `/flows/:id/simulate` | manage | 请求体可带 `user_state`：`none` 或 `observe` 按 post 执行，`enforce` 按 pre 执行，返回时机和"是否会被拒绝" |
 | POST `/import` | manage | 导入 new-api 导出的 JSON（72.12）；先预览再确认 |
 | POST `/test`（改） | manage | 请求体 `{text, images?, flow_id?}`：不带 flow_id 时按默认流程执行，返回每级的 trace |
+
+0.4 删掉了三个旧接口：`GET /overview`（改用 `GET /status`）、`GET /defaults`（同 `GET /jev/default-questions`）、`GET /watchlist/:user_id`（改用 `GET /users/:user_id`）。
 
 所有修改接口都广播相应的变更事件。插件目前没有操作审计：名单的操作记在 `watch_events` 里；渠道、审核器和流程改动的审计放到 P3，届时看核心有没有可供插件写入的审计接口。
 
@@ -5017,7 +5019,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 认领时先锁 `block_subjects`（与名单写入同一把锁），认领期 = 2 × `analysis_timeout_ms`。
   - 节点关闭时，正在跑的分析只释放认领、保留排队，留给其他节点；不记为失败。
   - 分析结束，不论成功还是失败，都写一行 `user_analyses`、清掉排队和认领，然后按认领令牌应用结论。
-  - 分析期间名单的级别或 `since_at` 变了、条目被移出或已过期时，结论记为 `stale`（`status=ok`、`error=stale`）：逐条结论照样写进记录，名单不变。
+  - 分析期间名单的级别或 `since_at` 变了、条目被移出或已过期时，结论记为 `stale`（`status=ok`、`error=stale`）：逐条结论照样写进记录，名单只清掉排队和认领，级别和 `latest_*` 不变。
   - 名单条目对外给 `analysis_requested_at`、`analysis_source`、`analysis_running`（布尔，由认领是否未过期得出；认领列和令牌不对外）、`latest_analysis_id`（0 = 从没分析过）、`latest_analysis_status`、`latest_trend`、`latest_suggestion`、`analyzed_at`。
 - **agent**：
   - 照 new-api 的工具集：`get_user_summary`、`list_suspicious_records`、`get_record`、`get_flow`、`submit_analysis`。工具说明的中文原文照抄；不支持的字段（会话指纹）去掉。
@@ -5048,7 +5050,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | `analysis_allow_upgrade`、`analysis_allow_downgrade`、`analysis_allow_remove` | 都为 true |
 
 - **接口**：
-  - `GET /watchlist/:user_id`（read）：单个条目，含排队和最近一次分析的字段。
+  - 单个条目（含排队和最近一次分析的字段）在 `GET /users/:user_id` 的 `watch` 里（0.4 起；原来的 `GET /watchlist/:user_id` 已删除）。
   - `GET /watchlist/:user_id/analyses`（read，分页，不带 trace 和逐条结论）；`GET /analyses/:id`（read，带全部字段）。
   - `GET /analysis/prompt?group_id=|flow_id=`（read）：分析会发送的系统提示词，以及流程视图和字典。
   - `GET /analysis/tools`（read）：工具表。
@@ -5127,10 +5129,12 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 名单的"新命中"（`hits_since_seen`）在以下情况清零：手动标记已读、手动改级别、AI 改级别（与 new-api 的 `hits_since_mark` 一致）。
 
 **其他与 new-api 对齐的点**：
-- `ttft_timeout_ms`（默认 10000，范围 1000–60000）：所有上游调用的首字超时。非流式调用以收到响应头为准，流式调用以第一个模型输出为准。超时的错误类型是 `ttft_timeout`。
+- `ttft_timeout_ms`（默认 10000，范围 1000–60000）：上游调用的首字超时。JSON 引擎调用（OpenAI 审核、Jev）以收到响应头为准，流式调用以第一个模型输出为准（Responses 流里任何 `*.delta` 事件都算输出）。非流式的 LLM 调用（LLM 判定审核器）一次收到全部回答，不设首字超时，只受渠道超时限制。超时的错误类型是 `ttft_timeout`。
 - mode 切到 off 后，post 队列里剩下的任务直接丢弃，不再调用上游。
 - 被推翻的放行也进放行缓存。
-- 记录批量写入失败时，去掉其中的原始消息再写一次，并在 trace 中标 `input_message_dropped: save_failed`。
+- 记录批量写入失败时，去掉其中的原始消息再写一次，并在 trace 中标 `input_message_dropped: save_failed`。仍然失败时，其中的可疑记录（hit、block）再逐条写一次，其余丢弃；写入队列满时，可疑记录当场写入（照 new-api `worker.go`），其余丢弃。可疑记录决定名单、违规计数和封禁，不能丢。
+- pre 审核时客户端已离开且没有命中：请求、流程运行和记录都不计。命中时照常计数，并按拒绝记录（`result=block`），离开也躲不过名单（照 new-api `gate.go`）。
+- `user_daily` 不计审核管理员；查询某个用户是否是管理员失败时，这个用户的计数留到下次写入再判断。
 - 清理任务按 `analysis_keep_per_user` 删除每个用户多出来的分析。
 
 **与 new-api 不同**（有意为之）：

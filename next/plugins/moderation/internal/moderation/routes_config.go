@@ -153,22 +153,25 @@ func (p *Plugin) listChannels(ctx context.Context, req *pluginv1.HTTPRequest) (*
 }
 
 // decorateChannels adds the price state, the 30-day cost, the health and
-// cost columns and the auditors using each channel.
+// cost columns and the auditors using each channel of list.
 func (p *Plugin) decorateChannels(ctx context.Context, req *pluginv1.HTTPRequest, db *pgxpool.Pool, list []ChannelView) error {
-	costs, err := channelCosts30d(ctx, db, p.now().UTC().Add(-30*24*time.Hour))
+	ids := make([]int64, len(list))
+	for i, c := range list {
+		ids[i] = c.ID
+	}
+	costs, err := p.channelCosts30d(ctx, db, p.now().UTC().Add(-30*24*time.Hour), ids)
 	if err != nil {
 		return err
 	}
-	p.flushStats(ctx)
-	stats, err := p.channelStats(ctx, db, p.clockOf(req))
+	stats, err := p.channelStats(ctx, db, p.clockOf(req), ids)
 	if err != nil {
 		return err
 	}
-	proxies, err := p.redactedProxies(ctx, db)
+	proxies, err := p.redactedProxies(ctx, db, ids)
 	if err != nil {
 		return err
 	}
-	rows, err := db.Query(ctx, `SELECT channel_id, id, name FROM auditors WHERE deleted_at IS NULL ORDER BY id`)
+	rows, err := db.Query(ctx, `SELECT channel_id, id, name FROM auditors WHERE deleted_at IS NULL AND channel_id = ANY($1) ORDER BY id`, ids)
 	if err != nil {
 		return err
 	}
@@ -191,10 +194,10 @@ func (p *Plugin) decorateChannels(ctx context.Context, req *pluginv1.HTTPRequest
 	return nil
 }
 
-// redactedProxies maps the channels with a proxy to its redacted URL (empty
-// when it does not open).
-func (p *Plugin) redactedProxies(ctx context.Context, db *pgxpool.Pool) (map[int64]string, error) {
-	rows, err := db.Query(ctx, `SELECT id, proxy_enc FROM channels WHERE proxy_enc IS NOT NULL AND deleted_at IS NULL`)
+// redactedProxies maps the channels of ids that have a proxy to its
+// redacted URL (empty when it does not open).
+func (p *Plugin) redactedProxies(ctx context.Context, db *pgxpool.Pool, ids []int64) (map[int64]string, error) {
+	rows, err := db.Query(ctx, `SELECT id, proxy_enc FROM channels WHERE proxy_enc IS NOT NULL AND deleted_at IS NULL AND id = ANY($1)`, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -202,9 +205,12 @@ func (p *Plugin) redactedProxies(ctx context.Context, db *pgxpool.Pool) (map[int
 	var id int64
 	var enc []byte
 	_, err = pgx.ForEachRow(rows, []any{&id, &enc}, func() error {
-		if proxy, err := p.openProxy(ctx, id, enc); err == nil {
-			out[id] = redactProxy(proxy)
+		proxy, err := p.openProxy(ctx, id, enc)
+		if err != nil {
+			p.log.Warn("moderation: channel proxy does not open", "channel_id", id, "error", err.Error())
+			return nil
 		}
+		out[id] = redactProxy(proxy)
 		return nil
 	})
 	return out, err
@@ -330,19 +336,9 @@ func (p *Plugin) updateChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 			errs = errs.Add("type", "immutable", "type cannot change / 渠道类型不能修改")
 		}
 		newKey := in.APIKey != nil && strings.TrimSpace(*in.APIKey) != ""
-		proxyChanged := false
-		if in.Proxy != nil {
-			var enc []byte
-			if err := tx.QueryRow(ctx, `SELECT proxy_enc FROM channels WHERE id = $1`, id).Scan(&enc); err != nil {
-				return err
-			}
-			curProxy, err := p.openProxy(ctx, id, enc)
-			switch v := strings.TrimSpace(*in.Proxy); {
-			case err == nil && v == redactProxy(curProxy):
-				in.Proxy = nil // the console sent back what it was shown
-			default:
-				proxyChanged = err != nil || curProxy != v
-			}
+		var proxyChanged bool
+		if in.Proxy, proxyChanged, err = p.proxyChange(ctx, tx, id, in.Proxy); err != nil {
+			return err
 		}
 		if !newKey && cur.HasKey && (hostChanged(cur.BaseURL, in.BaseURL) || proxyChanged) {
 			// new-api channel.go: a key must not follow the channel to another
@@ -377,6 +373,25 @@ func (p *Plugin) updateChannel(ctx context.Context, req *pluginv1.HTTPRequest) (
 		return nil, err
 	}
 	return p.getChannel(ctx, withParam(req, "id", out.ID))
+}
+
+// proxyChange reads what a PUT does to the stored proxy: sent comes back nil
+// when it is the redacted proxy the console was shown (the stored one is
+// kept); changed = the calls (and the key) would go through another proxy.
+func (p *Plugin) proxyChange(ctx context.Context, tx pgx.Tx, id int64, sent *string) (_ *string, changed bool, _ error) {
+	if sent == nil {
+		return nil, false, nil
+	}
+	var enc []byte
+	if err := tx.QueryRow(ctx, `SELECT proxy_enc FROM channels WHERE id = $1`, id).Scan(&enc); err != nil {
+		return nil, false, err
+	}
+	cur, err := p.openProxy(ctx, id, enc)
+	v := strings.TrimSpace(*sent)
+	if err == nil && v == redactProxy(cur) {
+		return nil, false, nil
+	}
+	return sent, err != nil || cur != v, nil
 }
 
 // hostChanged compares scheme and host of two URLs.
@@ -580,11 +595,7 @@ type auditorInput struct {
 	Config    AuditorConfig `json:"config"`
 }
 
-func (p *Plugin) auditorViews(ctx context.Context, where string, args ...any) ([]AuditorView, error) {
-	db, err := p.db(ctx)
-	if err != nil {
-		return nil, err
-	}
+func (p *Plugin) auditorViews(ctx context.Context, db *pgxpool.Pool, where string, args ...any) ([]AuditorView, error) {
 	rows, err := db.Query(ctx, `SELECT a.id, a.name, a.type, a.channel_id, a.config, coalesce(c.name, ''), coalesce(c.type, ''),
 			coalesce(c.enabled, false), coalesce(c.timeout_ms, 0), a.created_at, a.updated_at
 		FROM auditors a LEFT JOIN channels c ON c.id = a.channel_id AND c.deleted_at IS NULL
@@ -618,15 +629,14 @@ func (p *Plugin) auditorViews(ctx context.Context, where string, args ...any) ([
 }
 
 func (p *Plugin) listAuditors(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
-	list, err := p.auditorViews(ctx, "")
-	if err != nil {
-		return nil, err
-	}
 	db, err := p.db(ctx)
 	if err != nil {
+		return pluginsdk.Unavailable(err.Error()), nil
+	}
+	list, err := p.auditorViews(ctx, db, "")
+	if err != nil {
 		return nil, err
 	}
-	p.flushStats(ctx)
 	today, err := p.auditorsToday(ctx, db, p.clockOf(req))
 	if err != nil {
 		return nil, err
@@ -643,7 +653,11 @@ func (p *Plugin) getAuditor(ctx context.Context, req *pluginv1.HTTPRequest) (*pl
 	if bad != nil {
 		return bad, nil
 	}
-	list, err := p.auditorViews(ctx, "AND a.id = $1", id)
+	db, err := p.db(ctx)
+	if err != nil {
+		return pluginsdk.Unavailable(err.Error()), nil
+	}
+	list, err := p.auditorViews(ctx, db, "AND a.id = $1", id)
 	if err != nil {
 		return nil, err
 	}
@@ -842,24 +856,32 @@ func (d *auditorDraft) apply(src *auditorSource) {
 // channel_id, config} overrides the saved auditor id (all of it when id is
 // 0), so unsaved changes can be tried (new-api TryModerationAuditor).
 func (p *Plugin) tryWith(ctx context.Context, req *pluginv1.HTTPRequest, id int64) (*pluginv1.HTTPResponse, error) {
-	in, bad := testInput(req, p.cfg.Load())
+	var body struct {
+		testBody
+		Draft json.RawMessage `json:"draft"`
+	}
+	if err := json.Unmarshal(req.GetBody(), &body); err != nil {
+		return invalidJSON(), nil
+	}
+	in, bad := body.input(p.cfg.Load())
 	if bad != nil {
 		return bad, nil
 	}
-	var body struct {
-		Draft *auditorDraft `json:"draft"`
+	var draft *auditorDraft
+	if len(body.Draft) > 0 && string(body.Draft) != "null" {
+		draft = &auditorDraft{}
+		if err := json.Unmarshal(body.Draft, draft); err != nil {
+			return tryError("draft", "invalid", "draft is not a valid auditor / 审核器草稿格式无效"), nil
+		}
 	}
-	if err := json.Unmarshal(req.GetBody(), &body); err != nil {
-		return tryError("draft", "invalid", "draft is not a valid auditor / 审核器草稿格式无效"), nil
-	}
-	if id == 0 && body.Draft == nil {
+	if id == 0 && draft == nil {
 		return tryError("draft", "required", "draft is required / 请提供审核器草稿"), nil
 	}
 	db, err := p.db(ctx)
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	a, err := p.tryAuditorOf(ctx, db, id, body.Draft)
+	a, err := p.tryAuditorOf(ctx, db, id, draft)
 	var ce *compileError
 	switch {
 	case errors.Is(err, errNotFound):
@@ -896,7 +918,8 @@ func (p *Plugin) tryAuditorOf(ctx context.Context, db *pgxpool.Pool, id int64, d
 	}
 	if d == nil {
 		a, err := p.compileSource(ctx, id, src)
-		if _, bad := errors.AsType[*compileError](err); bad {
+		var ce *compileError
+		if errors.As(err, &ce) {
 			return nil, errStoredAuditor
 		}
 		return a, err

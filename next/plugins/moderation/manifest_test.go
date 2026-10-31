@@ -74,7 +74,7 @@ func TestManifest(t *testing.T) {
 		routes[r.Method+" "+r.Path] = r.Permission
 	}
 	for route, perm := range map[string]string{
-		"GET /overview": "moderation:read", "GET /events": "moderation:read", "GET /events/:id/input": "moderation:read",
+		"GET /events": "moderation:read", "GET /events/:id/input": "moderation:read",
 		"POST /events/review": "moderation:manage", "PATCH /watchlist/:user_id": "moderation:manage", "POST /channels/:id/test": "moderation:manage",
 		"POST /auditors/:id/try": "moderation:manage", "POST /flows/:id/publish": "moderation:manage", "POST /import": "moderation:manage",
 		"POST /test": "moderation:manage", "GET /jev/default-questions": "moderation:read", "DELETE /blocks/:user_id": "moderation:manage",
@@ -88,7 +88,7 @@ func TestManifest(t *testing.T) {
 			t.Errorf("route %s: permission %q, want %q", route, routes[route], perm)
 		}
 	}
-	if len(routes) != 56 {
+	if len(routes) != 53 {
 		t.Errorf("routes = %v", routes)
 	}
 	granted := map[string]*manifest.HostPermission{}

@@ -83,30 +83,36 @@ func loadWatch(ctx context.Context, tx pgx.Tx, uid int64) (Watch, bool, error) {
 	return w, err == nil, err
 }
 
-func watchEvent(ctx context.Context, tx pgx.Tx, uid int64, action, from, to, reason string, operator *int64) error {
-	return watchEventFor(ctx, tx, uid, action, from, to, reason, operator, nil)
+// watchChange is one row of the watch history: action from one level to
+// another, by operator (nil = automatic), applying the suggestion of
+// analysis (nil = none).
+type watchChange struct {
+	uid                int64
+	action, from, to   string
+	reason             string
+	operator, analysis *int64
 }
 
-// watchEventFor also links the analysis whose suggestion was applied.
-func watchEventFor(ctx context.Context, tx pgx.Tx, uid int64, action, from, to, reason string, operator, analysis *int64) error {
+func watchEvent(ctx context.Context, tx pgx.Tx, c watchChange) error {
 	_, err := tx.Exec(ctx, `INSERT INTO watch_events (user_id, action, from_level, to_level, reason, operator_id, analysis_id) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-		uid, action, from, to, truncateRunes(reason, 500), operator, analysis)
+		c.uid, c.action, c.from, c.to, truncateRunes(c.reason, 500), c.operator, c.analysis)
 	return err
 }
 
-func removeWatch(ctx context.Context, tx pgx.Tx, w Watch, action, reason string, operator *int64) error {
-	return removeWatchFor(ctx, tx, w, action, reason, operator, nil)
-}
-
-// removeWatchFor also links the analysis whose suggestion was applied.
-func removeWatchFor(ctx context.Context, tx pgx.Tx, w Watch, action, reason string, operator, analysis *int64) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM watchlist WHERE user_id = $1`, w.UserID); err != nil {
+// removeEntry deletes an entry and records c (c.from is the level it had).
+func removeEntry(ctx context.Context, tx pgx.Tx, c watchChange) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM watchlist WHERE user_id = $1`, c.uid); err != nil {
 		return err
 	}
-	if err := watchEventFor(ctx, tx, w.UserID, action, w.Level, "", reason, operator, analysis); err != nil {
+	if err := watchEvent(ctx, tx, c); err != nil {
 		return err
 	}
 	return bumpWatch(ctx, tx)
+}
+
+// expireEntry removes an entry whose expiry has passed.
+func expireEntry(ctx context.Context, tx pgx.Tx, w Watch) error {
+	return removeEntry(ctx, tx, watchChange{uid: w.UserID, action: "expire", from: w.Level, reason: "expired"})
 }
 
 // WatchEvent is one row of the watch history.
@@ -141,15 +147,21 @@ type watchInput struct {
 	Note       *string     `json:"note"`
 	Reason     *string     `json:"reason"`
 	AnalysisID *int64      `json:"analysis_id"`
-
-	expires    *time.Time
-	hasExpires bool
 }
 
-func (in *watchInput) validate(c *config, create bool) (uid int64, errs pluginsdk.FieldErrors) {
+// watchValues are the parsed values of a watchInput.
+type watchValues struct {
+	uid        int64 // create only
+	days       *int
+	expires    *time.Time // expires_at (nil = none)
+	hasExpires bool       // expires_at was sent
+}
+
+func (in watchInput) validate(c *config, create bool) (v watchValues, errs pluginsdk.FieldErrors) {
+	v.days = in.Days
 	if create {
-		var err error
-		uid, err = strconv.ParseInt(in.UserID.String(), 10, 64)
+		uid, err := strconv.ParseInt(in.UserID.String(), 10, 64)
+		v.uid = uid
 		if err != nil || uid <= 0 {
 			errs = errs.Add("user_id", "invalid", "user_id must be a positive integer / user_id 必须是正整数")
 		} else if c.exempt[uid] {
@@ -172,27 +184,27 @@ func (in *watchInput) validate(c *config, create bool) (uid int64, errs pluginsd
 		errs = errs.Add("analysis_id", "invalid", "analysis_id must be a positive integer / analysis_id 必须是正整数")
 	}
 	if in.ExpiresAt != nil {
-		in.hasExpires = true
-		if v := strings.TrimSpace(*in.ExpiresAt); v != "" {
-			t, err := time.Parse(time.RFC3339, v)
+		v.hasExpires = true
+		if s := strings.TrimSpace(*in.ExpiresAt); s != "" {
+			t, err := time.Parse(time.RFC3339, s)
 			if err != nil {
 				errs = errs.Add("expires_at", "format", "expires_at must be RFC 3339 / expires_at 必须是 RFC 3339 时间")
 			} else {
 				t = t.UTC()
-				in.expires = &t
+				v.expires = &t
 			}
 		}
 	}
-	return uid, errs
+	return v, errs
 }
 
 // expiry applies days or expires_at; ok = one of them was given.
-func (in watchInput) expiry(c *config, now time.Time) (*time.Time, bool) {
-	if in.hasExpires {
-		return in.expires, true
+func (v watchValues) expiry(c *config, now time.Time) (*time.Time, bool) {
+	if v.hasExpires {
+		return v.expires, true
 	}
-	if in.Days != nil {
-		return expiryOf(in.Days, c, now), true
+	if v.days != nil {
+		return expiryOf(v.days, c, now), true
 	}
 	return nil, false
 }
@@ -220,10 +232,11 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		return bad, nil
 	}
 	c := p.cfg.Load()
-	uid, errs := in.validate(c, true)
+	v, errs := in.validate(c, true)
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}
+	uid := v.uid
 	if p.isStaff(ctx, uid) {
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效",
 			pluginsdk.FieldErrors{}.Add("user_id", "staff", "moderators are not put on the watch list / 审核管理员不进入观察名单")), nil
@@ -236,9 +249,11 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		if found {
 			return w, errConflict
 		}
-		w = Watch{UserID: uid, Level: level, Source: "manual", SinceAt: now, ViolationEpoch: newEpoch()}
+		w = Watch{UserID: uid, Level: level, Source: "manual", SinceAt: now, UpdatedAt: now, ViolationEpoch: newEpoch()}
+		// Without days or expires_at an observe entry expires after
+		// watch_days and an enforce entry never (new-api addModerationWatch).
 		var ok bool
-		if w.ExpiresAt, ok = in.expiry(c, now); !ok {
+		if w.ExpiresAt, ok = v.expiry(c, now); !ok && level == LevelObserve {
 			w.ExpiresAt = expiryOf(nil, c, now)
 		}
 		if in.Note != nil {
@@ -248,7 +263,8 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$4)`, uid, w.Level, w.Source, now, w.ExpiresAt, w.ViolationEpoch, w.Note); err != nil {
 			return w, err
 		}
-		return w, watchEventFor(ctx, tx, uid, "add", "", level, in.historyReason(w.Note), callerID(req), in.AnalysisID)
+		return w, watchEvent(ctx, tx, watchChange{uid: uid, action: "add", to: level, reason: in.historyReason(w.Note),
+			operator: callerID(req), analysis: in.AnalysisID})
 	})
 }
 
@@ -275,7 +291,8 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		return bad, nil
 	}
 	c := p.cfg.Load()
-	if _, errs := in.validate(c, false); len(errs) > 0 {
+	v, errs := in.validate(c, false)
+	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}
 	return p.writeWatch(ctx, req, uid, func(tx pgx.Tx, w Watch, found bool, now time.Time) (Watch, error) {
@@ -289,19 +306,23 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		changed := from != w.Level
 		if changed {
 			// A new level opens a new counting window (new-api
-			// moderation_watch.go): violations, epoch and since restart, and
-			// back at observe the entry expires after watch_days again.
+			// updateModerationWatch): violations, epoch, since and the new
+			// hits restart; back at observe the entry expires after
+			// watch_days again, at enforce never, unless days or expires_at
+			// says otherwise.
 			w.ViolationEpoch, w.ViolationCount, w.SinceAt = newEpoch(), 0, now
+			w.Source, w.HitsSinceSeen, w.ExpiresAt = "manual", 0, nil
 			if w.Level == LevelObserve {
 				w.ExpiresAt = expiryOf(nil, c, now)
 			}
 		}
-		if exp, ok := in.expiry(c, now); ok {
+		if exp, ok := v.expiry(c, now); ok {
 			w.ExpiresAt = exp
 		}
 		if in.Note != nil {
 			w.Note = strings.TrimSpace(*in.Note)
 		}
+		w.UpdatedAt = now
 		if _, err := tx.Exec(ctx, `UPDATE watchlist SET level = $2, expires_at = $3, note = $4, updated_at = $6,
 			source = CASE WHEN $5 THEN 'manual' ELSE source END,
 			since_at = CASE WHEN $5 THEN $6 ELSE since_at END,
@@ -312,12 +333,13 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			return w, err
 		}
 		action := "update"
-		if from != w.Level {
+		if changed {
 			action = "set_level"
-		} else if in.Note != nil && in.Level == nil && in.Days == nil && !in.hasExpires {
+		} else if in.Note != nil && in.Level == nil && in.Days == nil && !v.hasExpires {
 			action = "note"
 		}
-		return w, watchEventFor(ctx, tx, uid, action, from, w.Level, in.historyReason(w.Note), callerID(req), in.AnalysisID)
+		return w, watchEvent(ctx, tx, watchChange{uid: uid, action: action, from: from, to: w.Level, reason: in.historyReason(w.Note),
+			operator: callerID(req), analysis: in.AnalysisID})
 	})
 }
 
@@ -328,20 +350,24 @@ func (p *Plugin) deleteWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if bad != nil {
 		return bad, nil
 	}
-	f := &sqlFilter{}
 	var analysis *int64
-	if id, ok := f.queryID(req, "analysis_id"); ok && id > 0 {
-		analysis = &id
+	id, ok, ferr := queryID(req, "analysis_id")
+	if ok && id == 0 {
+		ferr = &pluginv1.FieldError{Field: "analysis_id", Code: "invalid", Message: "analysis_id must be a positive integer / analysis_id 必须是正整数"}
 	}
-	if len(f.errs) > 0 {
-		return pluginsdk.FieldErrorResponse("invalid query / 查询参数无效", f.errs), nil
+	if ferr != nil {
+		return pluginsdk.FieldErrorResponse("invalid query / 查询参数无效", pluginsdk.FieldErrors{ferr}), nil
+	}
+	if ok {
+		analysis = &id
 	}
 	reason := strings.TrimSpace(pluginsdk.Query(req, "reason"))
 	return p.writeWatch(ctx, req, uid, func(tx pgx.Tx, w Watch, found bool, _ time.Time) (Watch, error) {
 		if !found {
 			return w, errNotFound
 		}
-		return w, removeWatchFor(ctx, tx, w, "remove", reason, callerID(req), analysis)
+		return w, removeEntry(ctx, tx, watchChange{uid: uid, action: "remove", from: w.Level, reason: reason,
+			operator: callerID(req), analysis: analysis})
 	})
 }
 
@@ -365,7 +391,7 @@ func (p *Plugin) writeWatch(ctx context.Context, req *pluginv1.HTTPRequest, uid 
 			return err
 		}
 		if found && w.ExpiresAt != nil && !now.Before(*w.ExpiresAt) {
-			if err := removeWatch(ctx, tx, w, "expire", "expired", nil); err != nil {
+			if err := expireEntry(ctx, tx, w); err != nil {
 				return err
 			}
 			found = false

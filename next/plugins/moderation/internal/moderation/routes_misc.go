@@ -36,16 +36,27 @@ type jsonNumber = json.Number
 
 func jsonRaw(b []byte) json.RawMessage { return json.RawMessage(b) }
 
-// testInput reads {text, images?} (images are data URLs or URLs) into an
-// Input, normalized like a request.
+// testBody is the {text, images?} of a test or a try; images are data URLs
+// or URLs.
+type testBody struct {
+	Text   string   `json:"text"`
+	Images []string `json:"images"`
+}
+
+func invalidJSON() *pluginv1.HTTPResponse {
+	return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "invalid JSON body / 请求体不是合法 JSON")
+}
+
+// testInput reads a testBody into an Input, normalized like a request.
 func testInput(req *pluginv1.HTTPRequest, c *config) (*Input, *pluginv1.HTTPResponse) {
-	var in struct {
-		Text   string   `json:"text"`
-		Images []string `json:"images"`
-	}
+	var in testBody
 	if err := json.Unmarshal(req.GetBody(), &in); err != nil {
-		return nil, pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "invalid JSON body / 请求体不是合法 JSON")
+		return nil, invalidJSON()
 	}
+	return in.input(c)
+}
+
+func (in testBody) input(c *config) (*Input, *pluginv1.HTTPResponse) {
 	var b inputBuilder
 	b.addText(in.Text)
 	content := []any{map[string]any{"type": "text", "text": in.Text}}
@@ -370,7 +381,7 @@ func (p *Plugin) expireWatch(ctx context.Context, now time.Time) (int, error) {
 				return err
 			}
 			n++
-			return removeWatch(ctx, tx, w, "expire", "expired", nil)
+			return expireEntry(ctx, tx, w)
 		})
 		if err != nil {
 			return n, err

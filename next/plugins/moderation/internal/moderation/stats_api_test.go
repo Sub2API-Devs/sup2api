@@ -3,15 +3,20 @@ package moderation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/batch"
 )
 
 func TestStatsAPIs(t *testing.T) {
@@ -121,10 +126,12 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	if got := list(map[string]string{"new_only": "true"}); len(got) != 1 || got[0].UserID != 11 {
 		t.Fatalf("new_only after seen = %+v", got)
 	}
-	// Absolute expiry, reason and the analysis link go to the history.
+	// Absolute expiry, reason and the analysis link go to the history. The
+	// answer is the entry as stored: a level change resets the new hits and
+	// makes the entry manual.
 	w := decodeData[Watch](t, h.Do("PATCH", "/watchlist/11", nil, map[string]any{"level": "enforce", "expires_at": "2099-01-01T00:00:00Z", "reason": "manual check"}))
-	if w.ExpiresAt == nil || w.ExpiresAt.Year() != 2099 {
-		t.Fatalf("absolute expiry = %v", w.ExpiresAt)
+	if w.ExpiresAt == nil || w.ExpiresAt.Year() != 2099 || w.HitsSinceSeen != 0 || w.Source != "manual" {
+		t.Fatalf("absolute expiry = %+v", w)
 	}
 	evs := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/11/events", nil, nil))
 	if evs[0].Action != "set_level" || evs[0].Reason != "manual check" {
@@ -148,6 +155,23 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	if evs := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/12/events", nil, nil)); evs[0].Action != "remove" || evs[0].Reason != "AI suggests release" ||
 		evs[0].AnalysisID == nil || *evs[0].AnalysisID != 7 {
 		t.Fatalf("remove history = %+v", evs[0])
+	}
+	// Without days or expires_at, enforce never expires and observe gets
+	// watch_days (new-api addModerationWatch / updateModerationWatch).
+	if w := decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 31, "level": "enforce"})); w.ExpiresAt != nil {
+		t.Fatalf("new enforce entry expires %v", w.ExpiresAt)
+	}
+	if w := decodeData[Watch](t, h.Do("PATCH", "/watchlist/31", nil, map[string]any{"level": "observe"})); w.ExpiresAt == nil {
+		t.Fatal("observe entry without expiry")
+	}
+	if w := decodeData[Watch](t, h.Do("PATCH", "/watchlist/31", nil, map[string]any{"level": "enforce"})); w.ExpiresAt != nil {
+		t.Fatalf("enforce kept the observe expiry %v", w.ExpiresAt)
+	}
+	if w := decodeData[Watch](t, h.Do("PATCH", "/watchlist/31", nil, map[string]any{"level": "observe", "days": 0})); w.ExpiresAt != nil {
+		t.Fatalf("explicit days 0 = %v", w.ExpiresAt)
+	}
+	if resp := h.Do("DELETE", "/watchlist/31", map[string]string{"analysis_id": "0"}, nil); resp.GetStatus() != 400 {
+		t.Fatalf("delete with analysis_id 0 = %d", resp.GetStatus())
 	}
 	// Moderators are not put on the watch list by hand.
 	fh.Authz = func(uid int64, _ string) bool { return uid == 77 }
@@ -278,7 +302,147 @@ func TestMessageParts(t *testing.T) {
 	if got := MessageText("anthropic.messages", `[{"role":"user","content":"a  b"},{"role":"user","content":[{"type":"image","source":{"data":"zz"}}]}]`); got != "a b [图片]" {
 		t.Fatalf("text = %q", got)
 	}
+	// The display shows what the hook moderated: a Gemini PDF is no image.
+	parts, _ = MessageParts("gemini.generate", `[{"role":"user","parts":[{"text":"a"},{"inlineData":{"mimeType":"application/pdf","data":"JVBERi0x"}}]}]`)
+	if len(parts) != 1 || parts[0].Type != "text" {
+		t.Fatalf("gemini pdf parts = %+v", parts)
+	}
 	if _, ok := MessageParts("openai.chat", "not json"); ok {
 		t.Fatal("invalid JSON parsed")
+	}
+}
+
+// testRec is a record as finish builds it.
+func testRec(uid int64, requestID, result, highest string, cats ...string) eventRec {
+	now := time.Now().UTC()
+	r := eventRec{At: now, RequestID: requestID, UserID: uid, GroupID: 9, Mode: ModeObserve, Timing: TimingPost, Result: result,
+		HighestCategory: highest, HitCategories: append([]string{}, cats...), Trace: []byte(`{}`), KeepUntil: now.Add(time.Hour)}
+	if result == ResultHit {
+		r.Severity = "high"
+	}
+	return r
+}
+
+// Suspicious records drive the watch list and must not be lost: a failed
+// batch writes them again one by one, a full queue writes them at once.
+func TestSuspiciousRecordsAreKept(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "record_pass": true})
+	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	ctx := context.Background()
+	bad := testRec(40, "bad", ResultPass, "")
+	text := "nul \x00 byte"
+	bad.Text = &text
+	evs := []eventRec{bad, testRec(41, "kept", ResultHit, "violence", "violence")}
+	if err := p.storeEvents(ctx, evs); err == nil {
+		t.Fatal("a batch with a NUL byte was written")
+	}
+	if kept := p.retrySuspicious(ctx, evs); kept != 1 {
+		t.Fatalf("retried %d suspicious records", kept)
+	}
+	waitEvents(t, h, map[string]string{"request_id": "kept"}, 1)
+	if d := decodeData[UserDetail](t, h.Do("GET", "/users/41", nil, nil)); d.Watch == nil {
+		t.Fatal("the retried hit did not reach the watch list")
+	}
+
+	// A writer that no longer reads, with its one slot taken: the queue is full.
+	full := batch.New(ctx, 1, func(context.Context, []eventRec) error { return nil }, nil)
+	if err := full.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	full.Send(eventRec{})
+	p.eventWriter = full
+	mustHook(t, h, hookReqAs(42, "full-hit", "MOD-HIT-violence queue full"))
+	mustHook(t, h, hookReqAs(42, "full-pass", "a clean request while full"))
+	waitEvents(t, h, map[string]string{"request_id": "full-hit"}, 1)
+	waitFor(t, "the pass dropped", func() bool {
+		for _, q := range decodeData[Status](t, h.Do("GET", "/status", nil, nil)).Queue {
+			if q.Name == "records" && q.Dropped == 1 {
+				return true
+			}
+		}
+		return false
+	})
+	if n := len(decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"request_id": "full-pass"}, nil))); n != 0 {
+		t.Fatalf("pass written while the queue was full: %d", n)
+	}
+}
+
+// The watch list ranks and filters by the highest category of each record;
+// reviews only touch suspicious records.
+func TestWatchHighestCategoryAndReview(t *testing.T) {
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "record_pass": true})
+	ctx := context.Background()
+	evs := []eventRec{testRec(51, "a", ResultHit, "violence", "violence", "hate"), testRec(51, "b", ResultHit, ""),
+		testRec(51, "c", ResultPass, "")}
+	if err := p.storeEvents(ctx, evs); err != nil {
+		t.Fatal(err)
+	}
+	items := decodeData[[]WatchItem](t, h.Do("GET", "/watchlist", map[string]string{"user_id": "51"}, nil))
+	if len(items) != 1 || items[0].SuspiciousTotal != 2 || len(items[0].TopCategories) != 1 || items[0].TopCategories[0].Category != "violence" ||
+		items[0].TopOther != 1 {
+		t.Fatalf("watch item = %+v", items)
+	}
+	if got := decodeData[[]WatchItem](t, h.Do("GET", "/watchlist", map[string]string{"category": "hate"}, nil)); len(got) != 0 {
+		t.Fatalf("category filter by any hit category = %+v", got)
+	}
+	if got := decodeData[[]WatchItem](t, h.Do("GET", "/watchlist", map[string]string{"category": "violence"}, nil)); len(got) != 1 {
+		t.Fatalf("category filter = %+v", got)
+	}
+	all := waitEvents(t, h, map[string]string{"user_id": "51"}, 3)
+	ids := make([]int64, 0, len(all))
+	for _, e := range all {
+		ids = append(ids, e.ID)
+	}
+	out := decodeData[map[string]any](t, h.Do("POST", "/events/review", nil, map[string]any{"ids": ids, "status": "confirmed"}))
+	if out["updated"] != float64(2) {
+		t.Fatalf("review = %v", out)
+	}
+	if pass := decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"request_id": "c"}, nil)); pass[0].ReviewStatus != "pending" {
+		t.Fatalf("pass record reviewed: %+v", pass[0])
+	}
+}
+
+// failingAuthz makes AuthzCheck fail while fail is set.
+type failingAuthz struct {
+	pluginsdk.Host
+	fail *atomic.Bool
+}
+
+func (h failingAuthz) AuthzCheck(ctx context.Context, uid int64, perm string) (bool, error) {
+	if h.fail.Load() {
+		return false, errors.New("authz unavailable")
+	}
+	return h.Host.AuthzCheck(ctx, uid, perm)
+}
+
+// A user whose moderator check fails keeps the daily counts for a later
+// flush instead of being written as a non-moderator.
+func TestStaffCheckFailureKeepsDailyCounts(t *testing.T) {
+	p, _, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	var fail atomic.Bool
+	fail.Store(true)
+	q := New()
+	q.host = failingAuthz{Host: p.host, fail: &fail}
+	ctx := context.Background()
+	db, err := q.db(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	suspicious := func() (n int64) {
+		if err := db.QueryRow(ctx, `SELECT coalesce(sum(suspicious), 0) FROM user_daily WHERE user_id = 61`).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	q.countUser(61, 9, ResultHit, "high")
+	q.flushStats(ctx)
+	if n := suspicious(); n != 0 {
+		t.Fatalf("written with an unknown staff status: %d", n)
+	}
+	fail.Store(false)
+	q.flushStats(ctx)
+	if n := suspicious(); n != 1 {
+		t.Fatalf("kept counts not written: %d", n)
 	}
 }

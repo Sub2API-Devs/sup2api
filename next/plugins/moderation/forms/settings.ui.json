@@ -355,12 +355,12 @@
       "zh": "首字超时（毫秒）"
     },
     "ui:help": {
-      "en": "An upstream call that has not answered (headers, or the first model output of a stream) in this time fails with ttft_timeout.",
-      "zh": "上游调用在这段时间内没有响应（收到响应头，流式调用为第一个模型输出）就按 ttft_timeout 失败。"
+      "en": "An upstream call that has not answered (headers, or the first model output of a stream) in this time fails with ttft_timeout. A non-streaming LLM call gets its answer all at once, so only the channel timeout applies to it.",
+      "zh": "上游调用在这段时间内没有响应（收到响应头，流式调用为第一个模型输出）就按 ttft_timeout 失败。非流式的 LLM 调用一次性收到全部回答，只受渠道超时限制。"
     },
     "ui:details": {
-      "en": "Applies to every auditor call and every AI analysis step, together with the channel's total timeout; whichever fires first ends the call.",
-      "zh": "对所有审核器调用和 AI 分析的每一步生效，与渠道的总超时同时计时，先到者结束调用。"
+      "en": "Applies to the OpenAI moderation and Jev auditor calls and to every AI analysis step (streamed), together with the channel's total timeout; whichever fires first ends the call. LLM verdict auditors are not streamed and only have the channel timeout.",
+      "zh": "对 OpenAI 审核和 Jev 审核器的调用以及 AI 分析的每一步（流式）生效，与渠道的总超时同时计时，先到者结束调用。LLM 判定审核器不走流式，只受渠道超时限制。"
     }
   },
   "cache_ttl_seconds": {

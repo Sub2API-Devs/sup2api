@@ -505,7 +505,10 @@ func (p *Plugin) drainPricing(ctx context.Context, d time.Duration) {
 
 // flushStats upserts the counters; on failure they are kept for the next
 // round. Users who are moderators (moderation:read) are left out of
-// user_daily like new-api leaves out administrators.
+// user_daily like new-api leaves out administrators; the counts of a user
+// whose check fails stay in the accumulator until a later flush can tell.
+// The readers of the tables call it first, so a run of this node shows up
+// at once.
 //
 // Flushes are serialised and run detached from the caller's context (a
 // reader that goes away must not leave an ambiguous commit behind).
@@ -517,13 +520,26 @@ func (p *Plugin) flushStats(ctx context.Context) {
 		return
 	}
 	base := context.WithoutCancel(ctx)
-	sctx, cancel := context.WithTimeout(base, 5*time.Second)
-	for k := range users {
-		if p.isStaff(sctx, k.user) {
+	unsure := map[userKey]*userRow{}
+	failed := false // after a failed check the host is not asked again this round
+	for k, u := range users {
+		staff, known := p.cachedStaff(k.user)
+		if !known && !failed {
+			var err error
+			staff, err = p.checkStaff(base, k.user)
+			known, failed = err == nil, err != nil
+		}
+		switch {
+		case !known:
+			unsure[k] = u
+			delete(users, k)
+		case staff:
 			delete(users, k)
 		}
 	}
-	cancel()
+	if len(unsure) > 0 {
+		p.hourly.restore(nil, nil, unsure)
+	}
 	wctx, cancel := context.WithTimeout(base, 10*time.Second)
 	defer cancel()
 	if err := p.writeStats(wctx, rows, chans, users); err != nil {
@@ -547,7 +563,7 @@ func (p *Plugin) writeStats(ctx context.Context, rows map[statKey]*counters, cha
 	// Keys in a fixed order: concurrent writers (other nodes) then take row
 	// locks in the same order and cannot deadlock.
 	b := &pgx.Batch{}
-	for _, k := range sortedKeys(rows, compareStatKey) {
+	for _, k := range slices.SortedFunc(maps.Keys(rows), compareStatKey) {
 		c := rows[k]
 		b.Queue(`INSERT INTO stats_hourly (hour, group_id, flow_id, stage, auditor_id, timing, audited, hit, blocked, overturned, errors,
 				cache_skipped, calls, tokens_in, tokens_out, latency_ms_sum, lat, cost, priced_calls, unpriced_calls, unpriced_tokens, free_calls)
@@ -564,7 +580,7 @@ func (p *Plugin) writeStats(ctx context.Context, rows map[statKey]*counters, cha
 			k.hour, k.group, k.flow, k.stage, k.auditor, k.timing, c.audited, c.hit, c.blocked, c.overturned, c.errors,
 			c.cacheSkipped, c.calls, c.tokensIn, c.tokensOut, c.latSum, c.lat[:], formatCost(c.units), c.priced, c.unpriced, c.unpricedTokens, c.free)
 	}
-	for _, k := range sortedKeys(chans, compareCostKey) {
+	for _, k := range slices.SortedFunc(maps.Keys(chans), compareCostKey) {
 		r := chans[k]
 		b.Queue(`INSERT INTO costs (hour, channel_id, source, calls, errors, latency_ms_sum, lat, priced_calls, unpriced_calls, unpriced_tokens,
 				free_calls, tokens_in, tokens_out, cost)
@@ -577,7 +593,7 @@ func (p *Plugin) writeStats(ctx context.Context, rows map[statKey]*counters, cha
 				tokens_in = costs.tokens_in + EXCLUDED.tokens_in, tokens_out = costs.tokens_out + EXCLUDED.tokens_out, cost = costs.cost + EXCLUDED.cost`,
 			k.hour, k.channel, k.source, r.calls, r.errors, r.latSum, r.lat[:], r.priced, r.unpriced, r.unpricedTokens, r.free, r.in, r.out, formatCost(r.units))
 	}
-	for _, k := range sortedKeys(users, compareUserKey) {
+	for _, k := range slices.SortedFunc(maps.Keys(users), compareUserKey) {
 		u := users[k]
 		var last *time.Time
 		if !u.lastHit.IsZero() {
@@ -592,10 +608,6 @@ func (p *Plugin) writeStats(ctx context.Context, rows map[statKey]*counters, cha
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		return tx.SendBatch(ctx, b).Close()
 	})
-}
-
-func sortedKeys[K comparable, V any](m map[K]V, cmpFn func(a, b K) int) []K {
-	return slices.SortedFunc(maps.Keys(m), cmpFn)
 }
 
 func compareStatKey(a, b statKey) int {

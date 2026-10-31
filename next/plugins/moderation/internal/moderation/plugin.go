@@ -136,22 +136,19 @@ func New() *Plugin {
 func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 	p.host = h
 	p.log = h.Logger()
+	// A batch that fails is dropped; drops are counted here and by finish
+	// (the writer's own drop count would also see a full queue whose
+	// suspicious record finish then writes itself).
 	p.eventWriter = batch.New(p.bg, 4096, func(ctx context.Context, evs []eventRec) error {
-		ids, err := p.writeEvents(ctx, evs)
-		if err != nil && ctx.Err() == nil && dropInputMessages(evs, "save_failed") {
-			// The messages are the largest and least checked part of a
-			// record: keep the records without them (new-api worker.go).
-			ids, err = p.writeEvents(ctx, evs)
+		err := p.storeEvents(ctx, evs)
+		if err == nil {
+			return nil
 		}
-		if err != nil {
-			p.log.Warn("moderation: write events failed", "error", err.Error(), "events", len(evs))
-			return err
-		}
-		p.afterWrite(ctx, evs, ids)
+		p.log.Warn("moderation: write events failed", "error", err.Error(), "events", len(evs))
+		kept := p.retrySuspicious(ctx, evs)
+		p.stats.droppedEvents.Add(int64(len(evs) - kept))
 		return nil
-	}, func(n int) {
-		p.stats.droppedEvents.Add(int64(n))
-	})
+	}, nil)
 	p.wg.Add(3)
 	go p.refreshLoop(p.bg)
 	go p.statsLoop(p.bg)

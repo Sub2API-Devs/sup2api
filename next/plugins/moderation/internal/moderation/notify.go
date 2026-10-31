@@ -80,7 +80,10 @@ func (p *Plugin) noticeSender(ctx context.Context) {
 }
 
 func postNotice(ctx context.Context, client *http.Client, url, secret string, n notice) error {
-	body, _ := json.Marshal(n)
+	body, err := json.Marshal(n)
+	if err != nil {
+		return err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -133,17 +136,11 @@ func (p *Plugin) runAlertsJob(ctx context.Context) (*pluginv1.RunJobResponse, er
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
 	now := p.now().UTC()
-	p.flushStats(ctx)
 	rows, err := p.loadStats(ctx, db, statFilter{from: now.Truncate(time.Hour).Add(-time.Hour), to: now.Add(time.Hour)})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "alerts: %v", err)
 	}
-	flows := map[int64]*counters{}
-	for i := range rows {
-		if rows[i].kind() == kindFlow {
-			mergeInto(flows, rows[i].flow, &rows[i].counters)
-		}
-	}
+	flows, _ := flowCounters(rows, time.Time{})
 	names, err := p.flowNames(ctx, db)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "alerts: %v", err)
@@ -153,7 +150,9 @@ func (p *Plugin) runAlertsJob(ctx context.Context) (*pluginv1.RunJobResponse, er
 		over := flagged(fc.errors, fc.audited, c.ErrorRateAlertPercent)
 		was, err := p.alerted(ctx, id)
 		if err != nil {
-			continue // KV unavailable: better no notice than one per minute
+			// KV unavailable: better no notice than one per minute.
+			p.log.Warn("moderation: alert state unavailable", "flow_id", id, "error", err.Error())
+			continue
 		}
 		if over && !was {
 			p.notifyFlowAlert(id, names[id], fc.errors, fc.audited, c.ErrorRateAlertPercent)
@@ -189,17 +188,17 @@ func (p *Plugin) setAlerted(ctx context.Context, flow int64, over bool) {
 	}
 }
 
-func (p *Plugin) notifyFlowAlert(id int64, name string, errors, audited int64, percent int) {
+func (p *Plugin) notifyFlowAlert(id int64, name string, failed, audited int64, percent int) {
 	if name == "" {
 		name = "#" + strconv.FormatInt(id, 10)
 	}
-	rate := float64(errors) * 100 / float64(audited)
+	rate := float64(failed) * 100 / float64(audited)
 	title := fmt.Sprintf("提示词审核：流程「%s」异常率 %.1f%% 超过阈值 %d%% / Moderation: flow %q error rate %.1f%% is above %d%%",
 		name, rate, percent, name, rate, percent)
 	text := fmt.Sprintf("流程「%s」（#%d）近 1 小时异常 %d / %d 次，异常率 %.1f%%，阈值 %d%%。审核异常时请求会直接放行，请检查审核器和渠道。\n"+
 		"Flow %q (#%d) failed %d of %d runs in the last hour (%.1f%%, threshold %d%%). Failed moderation lets requests through; check the auditors and channels.",
-		name, id, errors, audited, rate, percent, name, id, errors, audited, rate, percent)
+		name, id, failed, audited, rate, percent, name, id, failed, audited, rate, percent)
 	p.notify(NoticeFlowErrorRate, title, text, map[string]any{
-		"flow_id": id, "flow_name": name, "errors": errors, "audited": audited, "error_rate": rate / 100, "threshold_percent": percent,
+		"flow_id": id, "flow_name": name, "errors": failed, "audited": audited, "error_rate": rate / 100, "threshold_percent": percent,
 	})
 }

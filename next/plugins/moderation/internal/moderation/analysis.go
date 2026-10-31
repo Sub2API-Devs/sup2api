@@ -85,14 +85,19 @@ type RecordVerdict struct {
 	Reason   string `json:"reason"`
 }
 
+// VerdictTally counts records by AI verdict.
+type VerdictTally struct {
+	Violation     int64 `json:"violation"`
+	FalsePositive int64 `json:"false_positive"`
+	Unsure        int64 `json:"unsure"`
+}
+
 // VerdictCounts sums record verdicts; High/Medium/Low count violations.
 type VerdictCounts struct {
-	Violation     int `json:"violation"`
-	FalsePositive int `json:"false_positive"`
-	Unsure        int `json:"unsure"`
-	High          int `json:"high"`
-	Medium        int `json:"medium"`
-	Low           int `json:"low"`
+	VerdictTally
+	High   int64 `json:"high"`
+	Medium int64 `json:"medium"`
+	Low    int64 `json:"low"`
 }
 
 // FlowRef is one flow an analysis relied on.

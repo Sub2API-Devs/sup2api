@@ -79,7 +79,10 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 	mustHook(t, h, hookReqAs(3, "r2", "again MOD-HIT-sexual two"))
 	var w Watch
 	waitFor(t, "analysis applied", func() bool {
-		w = decodeData[Watch](t, h.Do("GET", "/watchlist/3", nil, nil))
+		d := decodeData[UserDetail](t, h.Do("GET", "/users/3", nil, nil))
+		if d.Watch != nil {
+			w = *d.Watch
+		}
 		return w.LatestAnalysisID > 0
 	})
 	if w.Level != LevelEnforce || w.Source != "analysis" || w.LatestTrend != TrendPersistent || w.LatestAnalysisStatus != AnalysisStatusOK ||
@@ -134,7 +137,7 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 		t.Fatalf("analyze = %d %s", r.GetStatus(), r.GetBody())
 	}
 	waitFor(t, "user removed by the analysis", func() bool {
-		return h.Do("GET", "/watchlist/3", nil, nil).GetStatus() == 404
+		return decodeData[UserDetail](t, h.Do("GET", "/users/3", nil, nil)).Watch == nil
 	})
 	if r := h.Do("POST", "/watchlist/3/analyze", nil, nil); r.GetStatus() != 404 {
 		t.Fatalf("analyze a removed user = %d", r.GetStatus())
@@ -150,7 +153,7 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 	if n := len(decodeData[[]ToolView](t, h.Do("GET", "/analysis/tools", nil, nil))); n != 5 {
 		t.Fatalf("tools = %d", n)
 	}
-	o := decodeData[Overview](t, h.Do("GET", "/overview", nil, nil))
+	o := decodeData[Status](t, h.Do("GET", "/status", nil, nil))
 	if !o.Runtime.Analysis.ChannelConfigured {
 		t.Fatalf("runtime = %+v", o.Runtime)
 	}
@@ -168,7 +171,7 @@ func TestAnalyzeWithoutChannel(t *testing.T) {
 	if errs := h.Configure(map[string]any{"mode": ModeOff, "analysis_channel_id": 1}, nil); len(errs) > 0 {
 		t.Fatal(errs)
 	}
-	if o := decodeData[Overview](t, h.Do("GET", "/overview", nil, nil)); !o.Runtime.Analysis.ChannelConfigured {
+	if o := decodeData[Status](t, h.Do("GET", "/status", nil, nil)); !o.Runtime.Analysis.ChannelConfigured {
 		t.Fatalf("runtime = %+v", o.Runtime.Analysis)
 	}
 	if r := h.Do("POST", "/watchlist/5/analyze", nil, nil); r.GetStatus() != 400 || !strings.Contains(string(r.GetBody()), "moderation_off") {
@@ -236,5 +239,33 @@ func TestFlowVersionsRollbackSimulate(t *testing.T) {
 	c := decodeData[CostReport](t, h.Do("GET", "/costs", nil, nil))
 	if len(c.BySource) != 1 || c.BySource[0].Source != SourceSimulate || c.Totals.PricedCalls != 1 || c.Totals.FreeCalls != 1 || c.Totals.Cost() != "0.00000042" {
 		t.Fatalf("costs = %+v", c)
+	}
+}
+
+// A stale analysis releases the queue and the claim but leaves the latest
+// analysis of the entry alone (new-api moderation_watch.go).
+func TestStaleAnalysisKeepsLatest(t *testing.T) {
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	w := decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 21}))
+	ctx := context.Background()
+	db, err := p.db(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ctx, `UPDATE watchlist SET latest_analysis_id = 99, latest_analysis_status = 'ok', latest_trend = 'persistent',
+		analysis_requested_at = now(), analysis_source = 'manual', analysis_claim_until = now() + interval '1 hour', analysis_token = 5
+		WHERE user_id = 21`); err != nil {
+		t.Fatal(err)
+	}
+	// The level changed while the analysis ran.
+	job := analysisJob{UserID: 21, Token: 5, Source: AnalysisSourceManual, Level: LevelEnforce, SinceAt: w.SinceAt}
+	if err := p.applyAnalysis(ctx, job, &Analysis{Source: AnalysisSourceManual, Status: AnalysisStatusOK, Trend: TrendLikelyFalsePositive,
+		Suggestion: SuggestRelease}); err != nil {
+		t.Fatal(err)
+	}
+	got := decodeData[UserDetail](t, h.Do("GET", "/users/21", nil, nil)).Watch
+	if got == nil || got.LatestAnalysisID != 99 || got.LatestTrend != TrendPersistent || got.AnalysisRequestedAt != nil || got.AnalysisRunning ||
+		got.Level != LevelObserve {
+		t.Fatalf("watch after a stale analysis = %+v", got)
 	}
 }

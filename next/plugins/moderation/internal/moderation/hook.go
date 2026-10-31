@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
@@ -160,51 +161,62 @@ func passKey(s *snapshot, f *liveFlow, h [32]byte) string {
 	return strconv.FormatInt(s.version, 10) + ":" + strconv.FormatInt(f.ID, 10) + ":" + strconv.Itoa(f.Version) + ":" + hex.EncodeToString(h[:])
 }
 
-// runPre moderates inline; a hit refuses the request.
-func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayRequestHookResponse {
-	start := p.now()
-	resp := p.moderatePre(ctx, m)
-	denied := resp.GetDecision() == pluginv1.GatewayRequestHookResponse_DECISION_DENY
-	if denied || ctx.Err() == nil { // a client that left without a hit added no latency (new-api gate.go)
-		p.countRequest(m.rec.GroupID, p.now().Sub(start).Milliseconds(), denied)
-	}
-	return resp
+// sharedRun is one pre run shared by concurrent requests with the same
+// input (singleflight); counted makes its flow statistics count once.
+type sharedRun struct {
+	tr      Trace
+	counted atomic.Bool
 }
 
-func (p *Plugin) moderatePre(ctx context.Context, m *moderation) *pluginv1.GatewayRequestHookResponse {
+// runPre moderates inline; a hit refuses the request. Without a hit, a
+// client that left adds nothing: no request, run or record. A hit is
+// counted and recorded as a refusal even after the client left, so
+// disconnecting cannot dodge the watch list (new-api gate.go runPre).
+func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayRequestHookResponse {
+	start := p.now()
 	budget := min(m.flow.timeout, preBudget)
 	ch := p.sf.DoChan(m.key, func() (any, error) {
 		// The shared run has its own deadline, so a waiter that gives up
 		// does not cancel it for the others.
 		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), budget)
 		defer cancel()
-		tr := p.run(rctx, m)
-		return &tr, nil
+		return &sharedRun{tr: p.run(rctx, m)}, nil
 	})
-	var tr Trace
+	var r *sharedRun
 	select {
-	case r := <-ch:
-		tr = *r.Val.(*Trace)
+	case res := <-ch:
+		r = res.Val.(*sharedRun)
 	case <-ctx.Done():
-		// The client is gone or the hook timed out: no record unless the
-		// shared run hits (written by finish below once it returns).
+		// The client is gone or the hook timed out: the shared run goes on
+		// and only a hit is concluded once it returns.
 		go func() {
-			r := <-ch
-			if t := *r.Val.(*Trace); t.Final == Hit {
-				p.finish(m, t, false)
+			res := <-ch
+			if r := res.Val.(*sharedRun); r.tr.Final == Hit {
+				p.concludePre(m, r, start)
 			}
 		}()
 		return allow(notePrefix + "error canceled")
 	}
-	refused := tr.Final == Hit
+	refused := r.tr.Final == Hit
 	if ctx.Err() != nil && !refused {
-		return allow(traceNote(m, tr))
+		return allow(traceNote(m, r.tr))
 	}
-	p.finish(m, tr, refused)
+	p.concludePre(m, r, start)
 	if refused {
-		return deny(m.cfg.BlockStatus, DenyBlocked, m.cfg.BlockMessage, traceNote(m, tr))
+		return deny(m.cfg.BlockStatus, DenyBlocked, m.cfg.BlockMessage, traceNote(m, r.tr))
 	}
-	return allow(traceNote(m, tr))
+	return allow(traceNote(m, r.tr))
+}
+
+// concludePre counts the request (with the latency moderation added) and the
+// shared run, and records the result; a hit is a refusal.
+func (p *Plugin) concludePre(m *moderation, r *sharedRun, start time.Time) {
+	refused := r.tr.Final == Hit
+	p.countRequest(m.rec.GroupID, p.now().Sub(start).Milliseconds(), refused)
+	if r.counted.CompareAndSwap(false, true) && p.bg.Err() == nil { // runs cut short by Shutdown are not errors
+		p.countRun(m, r.tr)
+	}
+	p.finish(m, r.tr, refused)
 }
 
 // runPost moderates one queued request (worker). Jobs still queued when
@@ -222,13 +234,15 @@ func (p *Plugin) runPost(m *moderation) {
 	ctx, cancel := context.WithTimeout(p.bg, m.flow.timeout)
 	defer cancel()
 	tr := p.run(ctx, m)
-	if p.bg.Err() != nil {
+	if p.bg.Err() != nil { // runs cut short by Shutdown are not errors
 		return
 	}
+	p.countRun(m, tr)
 	p.finish(m, tr, false)
 }
 
-// run executes the flow of m.
+// run executes the flow of m. The caller counts the run (countRun) once it
+// knows the run is to be counted.
 func (p *Plugin) run(ctx context.Context, m *moderation) Trace {
 	tr := runFlow(ctx, m.flow.Spec, m.flow.timeout, func(ctx context.Context, id int64) Outcome {
 		a := m.snap.auditors[id]
@@ -242,9 +256,6 @@ func (p *Plugin) run(ctx context.Context, m *moderation) Trace {
 		return p.audit(ctx, a, m.in, m.timing == TimingPre, src)
 	})
 	tr.TruncatedRun = m.in.TruncatedRun
-	if m.source == "" && p.bg.Err() == nil { // runs cut short by Shutdown are not errors
-		p.countRun(m, tr)
-	}
 	return tr
 }
 
@@ -279,7 +290,22 @@ func (p *Plugin) finish(m *moderation, tr Trace, refused bool) {
 		}
 	}
 	rec.KeepUntil = rec.At.Add(m.cfg.retention[rec.Result])
-	p.eventWriter.Send(rec)
+	if p.eventWriter.Send(rec) {
+		return
+	}
+	// The queue is full. A suspicious record drives the watch list, the
+	// violation count and the ban, so it is written right here (new-api
+	// worker.go enqueue); anything else is dropped.
+	if rec.suspicious() {
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(p.bg), 10*time.Second)
+		defer cancel()
+		err := p.storeEvents(ctx, []eventRec{rec})
+		if err == nil {
+			return
+		}
+		p.log.Warn("moderation: suspicious record lost", "user_id", rec.UserID, "request_id", rec.RequestID, "error", err.Error())
+	}
+	p.stats.droppedEvents.Add(1)
 }
 
 // traceNote renders "moderation: hit flow=3 v5 [a,b] 0.97".
