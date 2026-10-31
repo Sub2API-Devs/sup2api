@@ -8,6 +8,12 @@
 
 2026-11-01 核心 **0.1.223**（`f138979f8`，manifest `b8a0de4d…`，无 schema 变化）：插件自带页面的设置可以带 schema（CONTRACTS §75.5），moderation 0.6.1 的全部设置移到插件自己的「设置」标签，插件详情页不再有设置。`start-primary` 第一次以 “waiting for fresh follower observations” 暂停（两节点已停，16:20:16–16:23:10 UTC 入口 503 约 3 分钟），`sub2api-shell resume -id <计划>` 后 20 秒完成；以后遇到这条原因直接 resume。
 
+2026-11-01 认证失效一律 401（北京时间 02:50–03:25）：
+- **ccgateway 0.1.116**（`c8e3fa827`，包 SHA `7103bfc0…939e`，rollout 212）：定制 CLI **v41 `ccgateway-v41-login-401`**（2.1.312，ELF `2c80da64…f211`，Bun 1.4.4，TLS 与官方 2.1.312 identical；ovh `/tmp/ccg41/build-v41.sh`）。CC 发送前自己抛的 `OAuthRefreshDeadError` 以前被补丁当作传输错误报成 502（插件只冷却、不禁用），现在报 401 `authentication_error`（`OAuthAccountOnHoldError` 报 403，没登录报 401），消息保持 CC 原文。验证：#50 测试返回 401 `oauth_refresh_dead`；19:16 UTC 真实请求打到 #50，按默认 401 规则自动禁用。
+- **ccgateway 0.1.117**（`4d53f0d81`，包 SHA `2c697efb…b477`，CLI 仍为 v41）：刷新令牌被拒后 CC 会清空 `.credentials.json` 里的两个令牌，资源身份校验（fallback credit、helper history、文件引用要用）以前在 CLI 握手阶段失败（`tokenSource:"none"`），Worker 回 503。现在检测到登录已清空就直接回 401（source `input`），不再启动 CLI；`/api/oauth/profile` 的上游 401 原样转出。
+- **核心 0.1.224**（`6771d384d`，manifest `fe12b580…c530`，无 schema / Host API 变化，内置插件与 0.1.223 相同）：Worker 在身份校验中转出的 401/403（`AccountRefusalError`）按上游错误响应处理：切换账号、套用自动禁用规则，响应体原样返回给客户端。以前报 503 “account does not provide a verified resource issuer”，只切换账号，账号一直可调度。计划 51 秒完成，没有暂停。
+- 脚本 `stage/ccgateway-0.1.116`、`stage/ccgateway-0.1.117`、`stage/0.1.224`；备份在 `backups/ccgateway-0.1.116`、`ccgateway-0.1.117`、`core-0.1.224`。#23 的 paired 更新仍是 `not_found`（0.1.115 时就有）。
+
 **2026-10-31 事故（14:22–14:32 UTC，两节点 503 约 10 分钟）**：第一次用 0.1.128 外壳签发 `v0.1.222`，manifest 的 Host API 写成 7，候选核心报 8，`start-primary` 在 Prepare 前失败、计划暂停，两节点都已停服。迁移未执行。schema 变化的计划不允许回滚、破坏性步骤后也不允许取消，最后在 `updater.upgrades` 手工把计划标为 cancelled，重启两节点外壳回到 0.1.221 基线。**教训**：核心的 `HostAPIVersion`（或集群/任务协议）变了，先升外壳，再用新外壳镜像签核心包。
 
 2026-10-31 最新发布（北京时间 03:10–03:20）：Core 两节点 **0.1.221** + moderation **0.3.1**（CONTRACTS §72.13 P2），并把 new-api 的内容审核配置迁了过来、给审核渠道补了模型价格。
