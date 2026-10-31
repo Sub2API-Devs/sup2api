@@ -37,6 +37,9 @@ func (t resourceTransport) Identity(ctx context.Context, accountID int64) (core.
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		if refusal := accountRefusal(resp); refusal != nil {
+			return core.ResourceBinding{}, verificationHTTPError("identity", resp, "", refusal)
+		}
 		missing := verifiedMissingResourceIssuer(resp) // One bounded read; never log its contents.
 		if missing {
 			return core.ResourceBinding{}, verificationHTTPError("identity", resp, "issuer_unsupported", core.ErrUnsupported.WithMessage("account has no managed resource issuer"))

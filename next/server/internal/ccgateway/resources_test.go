@@ -3,6 +3,7 @@ package ccgateway
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -94,5 +95,42 @@ func TestResourceTransportDBReusesAccountDiscoveryWithoutControllerBody(t *testi
 	// The runtime's connection is asked once and kept for its revision.
 	if calls != 3 || controlCalls != 1 || closed != 3 {
 		t.Fatalf("resource connection lifecycle: worker=%d controller=%d closed=%d", calls, controlCalls, closed)
+	}
+}
+
+// A Worker's 401/403 with a CLI or HTTP source is the account's own verdict on
+// its login and reaches the gateway with its body (AccountRefusalError); the
+// Worker's own refusals stay verification failures.
+func TestResourceIdentityKeepsTheAccountRefusal(t *testing.T) {
+	const refused = `{"type":"error","error":{"type":"authentication_error","code":"not_logged_in","message":"cleared"}}`
+	for _, tc := range []struct {
+		status  int
+		source  string
+		refusal bool
+	}{
+		{401, "input", true}, {401, "http", true}, {403, "transport", true},
+		{401, "gateway", false}, {401, "", false}, {503, "input", false},
+	} {
+		f := newRuntimeFixture(t, func(w http.ResponseWriter, r *http.Request) {
+			_ = json.NewEncoder(w).Encode(accountConnection{IP: "10.52.74.181", Port: 8787, Key: strings.Repeat("k", 32), Revision: r.Header.Get("X-CCG-Revision")})
+		})
+		id := f.account(true)
+		f.s.openAccount = func(_ context.Context, _ Config, _ string) (*http.Client, func() error, error) {
+			return &http.Client{Transport: accountTransportFunc(func(r *http.Request) (*http.Response, error) {
+				h := http.Header{"Content-Type": {"application/json"}}
+				if tc.source != "" {
+					h.Set("X-CCGateway-Error-Source", tc.source)
+				}
+				return &http.Response{StatusCode: tc.status, Header: h, Body: io.NopCloser(strings.NewReader(refused)), Request: r}, nil
+			})}, func() error { return nil }, nil
+		}
+		_, err := f.s.ResourceTransport().Identity(context.Background(), id)
+		var refusal *AccountRefusalError
+		if got := errors.As(err, &refusal); got != tc.refusal {
+			t.Fatalf("%d %q: refusal %v, want %v (%v)", tc.status, tc.source, got, tc.refusal, err)
+		}
+		if tc.refusal && (refusal.Status != tc.status || string(refusal.Body) != refused) {
+			t.Fatalf("%d %q: refusal %d %s", tc.status, tc.source, refusal.Status, refusal.Body)
+		}
 	}
 }

@@ -609,12 +609,21 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if err := c.applyResourceHeaders(prepareCtx, req, acc, body); err != nil {
+		if res, ok := c.accountRefused(ctx, rt, pacct, execution, err); ok {
+			return res
+		}
 		return c.resourcePreparationFailure(err)
 	}
 	if err := c.applyCreditHeaders(prepareCtx, req, acc, body); err != nil {
+		if res, ok := c.accountRefused(ctx, rt, pacct, execution, err); ok {
+			return res
+		}
 		return c.resourcePreparationFailure(err)
 	}
 	if err := c.wrapHelperHistoryRequest(prepareCtx, req, acc, rt, body); err != nil {
+		if res, ok := c.accountRefused(ctx, rt, pacct, execution, err); ok {
+			return res
+		}
 		var eligibility *resourceEligibilityError
 		if errors.As(err, &eligibility) {
 			return c.resourcePreparationFailure(err)
