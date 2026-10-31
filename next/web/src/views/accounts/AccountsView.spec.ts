@@ -233,15 +233,23 @@ describe('account status recovery', () => {
     expect(orphaned.find('[data-testid="account-reset-status"]').exists()).toBe(false)
   })
 
-  it('distinguishes automatic disable and shows only its enable time, keeping the reason in the badge tooltip', () => {
+  it('shows an automatic disable as a plain badge, with the reason and the enable time only on hover', () => {
     Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'rate limited until 2026-10-12T08:00:00Z', auto_disabled_until: '2026-10-12T08:00:00Z' })
     const w = render()
     const badge = w.get('[data-testid="account-status"]')
     expect(badge.text()).toBe('自动禁用')
-    expect(badge.attributes('title')).toBe('rate limited until 2026-10-12T08:00:00Z')
-    expect(w.get('[data-testid="account-status-note"]').text()).toMatch(/自动启用$/)
+    const [reason, release] = badge.attributes('title')!.split('\n')
+    expect(reason).toBe('rate limited until 2026-10-12T08:00:00Z')
+    expect(release).toMatch(/自动启用$/)
+    expect(w.find('[data-testid="account-status-note"]').exists()).toBe(false)
     expect(w.text()).not.toContain('rate limited until')
     expect(w.get('[data-testid="account-schedulable-switch"]').attributes('aria-checked')).toBe('true')
+  })
+
+  it('translates the reason of the usage limit (CONTRACTS §73)', () => {
+    Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'usage limit reached: $200.00 / $200.00 (per week)', auto_disabled_until: null })
+    const w = render()
+    expect(w.get('[data-testid="account-status"]').attributes('title')).toBe('用量已达上限：$200.00 / $200.00 (per week)')
   })
 
   it('shows a manual disable as a plain badge without the reason or a note', () => {

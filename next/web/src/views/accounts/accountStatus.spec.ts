@@ -6,9 +6,9 @@ describe('accountStatus', () => {
     [{ status: 'active', schedulable: true }, 'active', 'success'],
     [{ status: 'disabled', schedulable: false }, 'disabled', 'danger'],
     [{ status: 'disabled', schedulable: true }, 'disabled', 'danger'],
-    [{ status: 'auto_disabled', schedulable: true }, 'auto_disabled', 'danger'],
-    [{ status: 'error', schedulable: true }, 'auto_disabled', 'danger'],
-    [{ status: 'active', schedulable: false }, 'auto_disabled', 'danger']
+    [{ status: 'auto_disabled', schedulable: true }, 'auto_disabled', 'warning'],
+    [{ status: 'error', schedulable: true }, 'auto_disabled', 'warning'],
+    [{ status: 'active', schedulable: false }, 'auto_disabled', 'warning']
   ])('maps %o to %s', (a, key, tone) => {
     expect(accountStatusKey(a)).toBe(key)
     expect(accountStatusTone(a)).toBe(tone)

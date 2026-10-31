@@ -9,7 +9,7 @@ import { api } from '@sub2api/host'
 import { toast } from '@sub2api/ui'
 import type { Account, AccountType } from '@/api/types'
 import { useProxiesLookup } from '@/composables/lookups'
-import { fieldErrors, notifyError } from '@/utils/errors'
+import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { savedOverrides, validFeatureOverrides, type AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
 import { reasonOf } from '@/views/ccgateway/ccgAuthFlow'
 import { accountControl } from './accountTypeChoices'
@@ -80,6 +80,13 @@ export interface AccountSaveDeps {
   collectCredentials(): Promise<Record<string, unknown> | null>
   showCredentialErrors(cred: Record<string, string>): void
   loadAutoDisablePolicy(): Promise<void>
+  /** The usage limit card (CONTRACTS §73), saved on its own endpoint once the account is. */
+  usageLimit?: {
+    /** Shows the card's errors and reports whether it blocks saving. */
+    invalid(): boolean
+    /** Saves the limit of the saved account when it changed. */
+    save(a: Account): Promise<void>
+  }
   saved(a: Account): void
 }
 
@@ -116,6 +123,7 @@ export function useAccountSave(deps: AccountSaveDeps) {
       errors.value = { model_limits: t('accounts.modelLimits.duplicate', { model: repeated }) }
       return 'scheduling'
     }
+    if (deps.usageLimit?.invalid()) return 'scheduling'
     // Pending text-mode / draft edits are committed (and validated) before saving.
     return models.commitPending() ? null : 'models'
   }
@@ -218,6 +226,15 @@ export function useAccountSave(deps: AccountSaveDeps) {
         // The proxy picker cache may now miss the (re)used proxy.
         useProxiesLookup(true)
         if (result?.proxy_created) toast(t('accounts.proxyAutoCreated'), 'info')
+      }
+      if (deps.usageLimit && result?.id) {
+        // The account is saved either way: a refused limit is reported, not retried
+        // (re-submitting a new account would create it twice).
+        try {
+          await deps.usageLimit.save(result)
+        } catch (e) {
+          toast(t('accounts.usageLimit.saveFailed', { error: errorMessage(e) }), 'error')
+        }
       }
       deps.saved(result)
     } catch (e) {

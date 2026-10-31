@@ -35,6 +35,9 @@ import AccountModelsCard from './AccountModelsCard.vue'
 import FetchedModelsModal from './FetchedModelsModal.vue'
 import { accountControl, sameCreationGroup } from './accountTypeChoices'
 import ModelLimitsEditor from './ModelLimitsEditor.vue'
+import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
+import { defaultUsageLimit, fetchUsageLimit, saveUsageLimit, usageLimitError } from './accountUsage'
+import type { AccountUsageLimit } from '@/api/types'
 import { toCards, type ModelLimitCard } from './modelLimits'
 import { shouldPrefillOnEdit } from './modelDefaults'
 import { containerLocales, containerTimezones, environmentOptions } from './containerEnvironment'
@@ -51,6 +54,49 @@ const auth = useAuthStore()
 const own = useOwnership()
 
 const editing = computed(() => !!props.account?.id)
+
+// Usage limit (CONTRACTS §73): its own endpoint, loaded the first time the
+// scheduling section of an existing account is opened, and saved after the
+// account when it changed.
+const usageLimit = ref<AccountUsageLimit>(defaultUsageLimit())
+const usageLimitSaved = ref(JSON.stringify(usageLimit.value))
+const usageLimitErrors = ref<Record<string, string>>({})
+const usageLimitFor = ref<number | null>(null)
+watch(
+  () => props.account?.id,
+  () => {
+    usageLimit.value = defaultUsageLimit()
+    usageLimitSaved.value = JSON.stringify(usageLimit.value)
+    usageLimitErrors.value = {}
+    usageLimitFor.value = null
+  }
+)
+async function loadUsageLimit() {
+  const id = props.account?.id
+  if (!id || usageLimitFor.value === id) return
+  usageLimitFor.value = id
+  try {
+    const loaded = { ...defaultUsageLimit(), ...((await fetchUsageLimit(id)) || {}) }
+    if (props.account?.id !== id) return
+    usageLimit.value = loaded
+    usageLimitSaved.value = JSON.stringify(loaded)
+  } catch (e) {
+    usageLimitFor.value = null
+    notifyError(e)
+  }
+}
+const usageLimitPlugin = {
+  invalid() {
+    const field = usageLimitError(usageLimit.value)
+    usageLimitErrors.value = field === 'amount' ? { amount: t('accounts.usageLimit.amountInvalid') } : field === 'period_count' ? { period_count: t('accounts.usageLimit.periodCountInvalid') } : {}
+    return field !== null
+  },
+  async save(a: Account) {
+    if (JSON.stringify(usageLimit.value) === usageLimitSaved.value) return
+    await saveUsageLimit(a.id, usageLimit.value)
+    usageLimitSaved.value = JSON.stringify(usageLimit.value)
+  }
+}
 const mode = computed(() => props.accountType?.form.mode || 'schema')
 // Row-level rights (CONTRACTS §21.1): editing an account needs the all-level
 // key or the own-level key on an account the caller created.
@@ -134,6 +180,7 @@ onBeforeUnmount(() => {
 // ---------------------------------------------------------------- sections
 
 const activeSection = ref<EditorSection>('connection')
+watch(activeSection, (section) => { if (section === 'scheduling') void loadUsageLimit() })
 // Each section starts at its top: the modal body keeps the previous scroll
 // offset otherwise. Post-flush, so save() still scrolls to an invalid field.
 const formEl = ref<HTMLFormElement>()
@@ -179,7 +226,16 @@ const editorSections = computed(() => [
       ...(mappingCount.value ? [t('accounts.editorUi.mappingSummary', { n: mappingCount.value })] : [])
     ].join(' · ')
   },
-  { key: 'scheduling' as const, icon: 'bolt', label: t('accounts.editorUi.scheduling'), summary: [t('accounts.editorUi.schedulingSummary', { p: basic.priority, w: basic.weight, c: basic.max_concurrency || '∞' }), ...(modelLimitCards.value.length ? [t('accounts.modelLimits.summary', { n: modelLimitCards.value.length })] : [])].join(' · ') },
+  {
+    key: 'scheduling' as const,
+    icon: 'bolt',
+    label: t('accounts.editorUi.scheduling'),
+    summary: [
+      t('accounts.editorUi.schedulingSummary', { p: basic.priority, w: basic.weight, c: basic.max_concurrency || '∞' }),
+      ...(modelLimitCards.value.length ? [t('accounts.modelLimits.summary', { n: modelLimitCards.value.length })] : []),
+      ...(usageLimit.value.enabled ? [t('accounts.usageLimit.summary', { amount: `$${usageLimit.value.amount}`, period: t(`accounts.usage.periodShort.${usageLimit.value.period}`) })] : [])
+    ].join(' · ')
+  },
   ...(props.accountType?.plugin_key === 'ccgateway' ? [{ key: 'cc_features' as const, icon: 'settings', label: t('ccgateway.features.ccTitle'), summary: t('ccgateway.layers.' + (ccFeaturePolicy.value?.mode === 'custom' ? 'custom' : 'follow')) }] : [])
 ])
 const limitFields = computed(() => [
@@ -194,7 +250,7 @@ const serverMappingError = computed(() => mappingErrorText(errors.value))
 const sectionErrors = computed<Record<EditorSection, boolean>>(() => ({
   connection: CONNECTION_FIELDS.some((k) => errors.value[k]) || Object.keys(credErrors.value).length > 0,
   models: !!(modelsError.value || serverModelsError.value || mappingError.value || serverMappingError.value),
-  scheduling: SCHEDULING_FIELDS.some((k) => errors.value[k]),
+  scheduling: SCHEDULING_FIELDS.some((k) => errors.value[k]) || Object.keys(usageLimitErrors.value).length > 0,
   cc_features: Object.keys(errors.value).some(k => k.startsWith('cc_feature_policy'))
 }))
 
@@ -535,6 +591,7 @@ const { save } = useAccountSave({
   collectCredentials,
   showCredentialErrors,
   loadAutoDisablePolicy,
+  usageLimit: usageLimitPlugin,
   saved: (a) => emit('saved', a)
 })
 </script>
@@ -707,6 +764,8 @@ const { save } = useAccountSave({
               <SInput v-model.number="basic[f.key]" type="number" :min="0" :suffix="f.unit" class="w-full sm:w-48" :data-testid="`account-${f.key}`" />
             </SSettingRow>
           </SSettingsGroup>
+
+          <AccountUsageLimitCard v-model="usageLimit" :usage="account?.usage" :disabled="saving" :errors="usageLimitErrors" />
 
           <SSettingsGroup :title="t('accounts.modelLimits.title')" :description="t('accounts.modelLimits.hint')" data-testid="account-model-limits">
             <div class="p-4">

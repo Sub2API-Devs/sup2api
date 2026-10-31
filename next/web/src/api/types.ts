@@ -350,6 +350,60 @@ export interface AccountDefaultLimits {
   model_limits?: ModelLimit[]
 }
 
+/** Usage of an account over some time (CONTRACTS §73); money as decimal strings in USD. */
+export interface AccountUsageFigures {
+  /** Charged, after the group multiplier. */
+  cost: string
+  /** Before the group multiplier ("raw ratio"). */
+  raw_cost: string
+  requests: number
+  tokens: number
+}
+
+export type UsageLimitPeriod = 'hour' | 'day' | 'week' | 'month' | 'none'
+
+/** The usage limit of an account and what its current period used, in the limit's basis. */
+export interface AccountUsageLimitState {
+  amount: string
+  used: string
+  period: UsageLimitPeriod
+  period_count: number
+  window_start: string | null
+  /** When the period resets; null for a lifetime limit ("none"). */
+  window_end: string | null
+}
+
+/** Account.usage: the core's usage record of the account (CONTRACTS §73). */
+export interface AccountUsage {
+  /** Usage counts at the raw ratio: the main figure is raw_cost. */
+  raw_cost_accounting: boolean
+  total: AccountUsageFigures
+  today: AccountUsageFigures
+  /** Null when no usage limit is on. */
+  limit: AccountUsageLimitState | null
+}
+
+/** GET /accounts/:id/usage: the details behind the usage cell. */
+export interface AccountUsageDetail {
+  raw_cost_accounting: boolean
+  today: AccountUsageFigures
+  last_7_days: AccountUsageFigures
+  last_30_days: AccountUsageFigures
+  total: AccountUsageFigures
+  limit: AccountUsageLimitState | null
+}
+
+/** GET/PUT /accounts/:id/usage-limit (CONTRACTS §73). */
+export interface AccountUsageLimit {
+  raw_cost_accounting: boolean
+  enabled: boolean
+  amount: string
+  period: UsageLimitPeriod
+  period_count: number
+  /** Periods are counted from here (whole hours); null = 2024-01-01 00:00 server time. */
+  anchor: string | null
+}
+
 /** Success-rate figure of an account (CONTRACTS §73): 400s, cancellations and gateway rate limiting are not failures. */
 export interface AccountOutcomes {
   success: number
@@ -392,6 +446,8 @@ export interface Account {
   rate_usage?: { rpm: number; tpm: number; sessions?: number; models?: ModelRateUsage[] }
   /** Successful requests and failed attempts of the last minute (CONTRACTS §73); null when unavailable. */
   outcomes?: AccountOutcomes | null
+  /** The core's usage record and usage limit (CONTRACTS §73); null when unavailable. */
+  usage?: AccountUsage | null
   status: string
   status_reason?: string
   auto_disabled_until?: string | null

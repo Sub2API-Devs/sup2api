@@ -17,8 +17,29 @@ export default {
     title: 'Concurrency / RPM / TPM / Sessions details', scope: 'Scope', allModels: 'All models', lists: '{n} model lists', sessions: 'Sessions',
     windowHint: 'RPM, TPM and sessions are the usage of the last 60 seconds; tokens are counted when a response finishes, sessions are the sessions active in that time (by sticky session key; a request matching no sticky rule counts as one). Without a cap only the usage is shown. A request for a listed model counts on the account and on its list.'
   },
+  usage: {
+    column: 'Usage', title: 'Account usage', raw: 'Raw', rawHint: 'Counted at the raw ratio: group multiplier taken as 1',
+    today: 'Today {cost} · {n} requests', range: 'Range', rawCost: 'Raw cost', cost: 'Charged', requests: 'Requests',
+    ranges: { today: 'Today', last7: 'Last 7 days', last30: 'Last 30 days', total: 'Lifetime' },
+    periodShort: { hour: 'h', day: 'day', week: 'wk', month: 'mo', none: 'total' }, periodShortN: '{n} {unit}',
+    limitLine: 'Usage limit ({period}): {used} / {amount}', resetsAt: 'resets {time}', loadFailed: 'Could not load the usage details',
+    limitReached: 'Usage limit reached: {detail}',
+    hint: 'From the usage records (core statistics). With raw-ratio accounting, lifetime usage and the usage limit count the raw cost (group multiplier taken as 1).'
+  },
+  usageLimit: {
+    title: 'Usage limit', description: 'Caps the cost an account serves. At the limit the account is auto-disabled and comes back when the next period starts; raising the limit or turning it off enables it at once. Works for every account type.',
+    rawCost: 'Raw-ratio accounting', rawCostHint: 'Lifetime usage and the usage limit count the cost before the group multiplier. Both costs are recorded, so switching also applies to past usage.',
+    enabled: 'Enable usage limit', enabledHint: 'Off: usage is only recorded, the account is never disabled. Independent of "Allow auto-disable".',
+    amount: 'Limit', amountHint: 'Counted in {basis}', basisRaw: 'raw cost', basisCost: 'charged cost', unit: 'USD',
+    period: 'Reset period', periodHint: '"Never" is a lifetime limit: once reached the account stays auto-disabled until the limit is raised.',
+    periods: { hour: 'Hourly', day: 'Daily', week: 'Weekly', month: 'Monthly', none: 'Never' },
+    periodCount: 'Period length', periodCountHint: 'For example 2 + weekly = resets every two weeks', periodCountUnit: 'periods',
+    anchor: 'Periods start at', anchorHint: 'Periods are counted from here (whole hours, server time zone); empty = 2024-01-01 00:00, so days, weeks and months fall on their natural boundaries.',
+    current: 'Used this period ({start} → {end})', currentTotal: 'Used in total', summary: 'Usage limit {amount}/{period}', saveFailed: 'The account was saved, but the usage limit was not: {error}',
+    amountInvalid: 'An enabled usage limit needs an amount above 0 and up to 1000000000', periodCountInvalid: 'Period length must be 1-1000'
+  },
   successRate: {
-    column: 'Success 1m', title: 'Success rate (last 60 seconds)', success: 'Successful requests', failed: 'Failed attempts',
+    column: 'Success · 1 min', title: 'Success rate (last 60 seconds)', success: 'Successful requests', failed: 'Failed attempts',
     requests: '{success} / {total}', idle: 'No requests in the last minute',
     hint: 'Success rate = successes ÷ (successes + failures) over a rolling 60-second window. Every failed upstream attempt counts once; a 400 (the request itself is wrong), a client cancellation and the gateway\'s own rate limiting are not failures.'
   },
@@ -234,7 +255,7 @@ export default {
   selectAll: 'Select all',
   selectNone: 'Select none',
   quota: {
-    column: 'Usage',
+    column: 'Balance',
     /** Known window keys, in display order. Unknown keys follow in server order. */
     /** Windows sorted as KNOWN_QUOTA_WINDOWS, unknown keys last (stable). */
     windows: { '5h': '5 hours', '7d': '7 days', '7d_sonnet': '7 days Sonnet', '7d_fable': '7 days Fable' },
@@ -306,6 +327,7 @@ export default {
   balance: {
     column: 'Balance',
     label: 'Balance',
+    accountLabel: 'Account balance',
     refresh: 'Refresh balance',
     refreshHint: 'Query the current account balance',
     refreshing: 'Querying',
