@@ -1,14 +1,15 @@
 package rules
 
-// Event kinds. weight_up is only reported to the snapshot, not kept as an
-// event; the turning points (down, first climb, restored, revived) are the
-// ones notified.
+// Event kinds; down, up and revived are also the State.LastChange kinds.
+// weight_up (a climb step that is not a turning point) is never an event:
+// the state shows it. The turning points (down, first climb, restored,
+// revived) are the ones notified.
 const (
-	EventWeightDown     = KindWeightDown
-	EventWeightUp       = KindWeightUp
+	EventWeightDown     = "weight_down"
+	EventWeightUp       = "weight_up"
 	EventWeightUpStart  = "weight_up_start" // the first climb after a degrade
 	EventWeightRestored = "weight_restored" // back to the base
-	EventWeightRevived  = KindWeightRevived
+	EventWeightRevived  = "weight_revived"  // the window started at 0 and ended above it
 	EventReset          = "reset"
 	EventAffinityClear  = "affinity_cleared"
 )
@@ -72,8 +73,8 @@ func ChangeKind(out Output) string {
 }
 
 // Events expands an evaluation into its events: a base mismatch reset; or,
-// once applied, a rules change reset then the weight change, both with the
-// rules that fired and the window's evidence.
+// once applied, a rules change reset then the weight change (but a plain
+// weight_up), both with the rules that fired and the window's evidence.
 func Events(cfg *Resolved, window int64, out Output) []Event {
 	if out.Action == ActionReset {
 		return []Event{{Kind: EventReset, Reason: ReasonBaseMismatch}}
@@ -94,7 +95,7 @@ func Events(cfg *Resolved, window int64, out Output) []Event {
 		}
 		events = append(events, Event{Kind: EventReset, Reason: ReasonRulesChange, From: out.WeightFrom, To: to, Window: win})
 	}
-	if kind := ChangeKind(out); kind != "" {
+	if kind := ChangeKind(out); kind != "" && kind != EventWeightUp {
 		events = append(events, Event{Kind: kind, From: out.WeightFrom, To: out.WeightTo, Rules: FiredRules(cfg, st.LastRules), Window: win})
 	}
 	return events

@@ -10,15 +10,29 @@ const props = defineProps<{ rules: string[] }>()
 const strategies = defineModel<Strategy[]>({ required: true })
 const t = useDwHost().t
 
-const typeOptions = computed(() => enumOptions('action', ['weight_degrade', 'weight_climb', 'affinity_clear']))
 const modeOptions = computed(() => enumOptions('mode', ['current_percent', 'base_percent', 'fixed']))
 
+const actionTypes: readonly ActionType[] = ['weight_degrade', 'weight_climb', 'affinity_clear']
 const isWeight = (a: Action) => a.type !== 'affinity_clear'
+
+/** Types an action may take beside the strategy's others, as the plugin
+ * accepts: no type twice, and one weight action at most. */
+function freeTypes(s: Strategy, self?: Action): ActionType[] {
+  const others = s.actions.filter((a) => a !== self)
+  return actionTypes.filter((ty) => (ty === 'affinity_clear' ? !others.some((a) => a.type === ty) : !others.some(isWeight)))
+}
+const typeOptions = (s: Strategy, a: Action) => enumOptions('action', freeTypes(s, a))
 
 function setType(a: Action, type: ActionType) {
   a.type = type
   if (isWeight(a)) Object.assign(a, { mode: a.mode ?? 'current_percent', value: a.value ?? 30, percent: undefined })
   else Object.assign(a, { mode: undefined, value: undefined, percent: a.percent ?? 50 })
+}
+
+function addAction(s: Strategy) {
+  const a: Action = { type: freeTypes(s)[0] }
+  setType(a, a.type)
+  s.actions.push(a)
 }
 
 function add() {
@@ -51,20 +65,16 @@ function add() {
       <SField :label="t('strategies.actions')">
         <div class="dw-list">
           <div v-for="(a, j) in s.actions" :key="j" class="dw-row">
-            <SSelect class="dw-w-10" :model-value="a.type" :options="typeOptions" @update:model-value="setType(a, $event as ActionType)" />
+            <SSelect class="dw-w-10" :model-value="a.type" :options="typeOptions(s, a)" @update:model-value="setType(a, $event as ActionType)" />
             <template v-if="isWeight(a)">
               <SSelect v-model="a.mode" class="dw-w-10" :options="modeOptions" />
-              <SInput v-model="a.value" class="dw-w-8" type="number" min="1" :aria-label="t('strategies.value')">
-                <template v-if="a.mode !== 'fixed'" #suffix>%</template>
-              </SInput>
+              <SInput v-model="a.value" class="dw-w-8" type="number" min="1" :aria-label="t('strategies.value')" :suffix="a.mode === 'fixed' ? '' : '%'" />
             </template>
-            <SInput v-else v-model="a.percent" class="dw-w-8" type="number" min="1" max="100" :aria-label="t('strategies.percent')">
-              <template #suffix>%</template>
-            </SInput>
+            <SInput v-else v-model="a.percent" class="dw-w-8" type="number" min="1" max="100" :aria-label="t('strategies.percent')" suffix="%" />
             <SButton size="sm" variant="ghost" icon="x" icon-only :aria-label="t('remove')" :disabled="s.actions.length <= 1" @click="s.actions.splice(j, 1)" />
           </div>
           <div>
-            <SButton size="xs" icon="plus" @click="s.actions.push({ type: 'affinity_clear', percent: 50 })">{{ t('strategies.addAction') }}</SButton>
+            <SButton size="xs" icon="plus" :disabled="!freeTypes(s).length" @click="addAction(s)">{{ t('strategies.addAction') }}</SButton>
           </div>
         </div>
       </SField>

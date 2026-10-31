@@ -10,7 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/dynweight/internal/rules"
@@ -80,24 +84,36 @@ func (p *Plugin) putConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*plu
 	return pluginsdk.DataResponse(configBody{Config: body.Config, Version: version, Warnings: warnings}), nil
 }
 
-// checkChannel refuses notifications on a channel no enabled plugin declares.
+// checkChannel refuses notifications on a channel no enabled plugin
+// declares, or to recipients the channel does not accept.
 func (p *Plugin) checkChannel(ctx context.Context, n rules.Notify) *pluginv1.HTTPResponse {
 	if !n.Enabled {
 		return nil
 	}
 	channels, err := pluginsdk.ListNotificationChannels(ctx, p.host)
+	if status.Code(err) == codes.PermissionDenied {
+		return pluginsdk.BadRequest("notify.enabled", "not_granted", "the notify.send permission is not granted to this plugin / 本插件未获授予 notify.send 权限")
+	}
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error())
 	}
-	if !slices.ContainsFunc(channels, func(c *pluginv1.NotificationChannel) bool { return c.GetId() == n.Channel }) {
+	i := slices.IndexFunc(channels, func(c *pluginv1.NotificationChannel) bool { return c.GetId() == n.Channel })
+	if i < 0 {
 		return pluginsdk.BadRequest("notify.channel", "unknown", "no enabled plugin delivers this channel / 没有已启用的插件提供该通知渠道")
+	}
+	for _, r := range n.Recipients {
+		if !manifest.ValidRecipient(channels[i].GetRecipient(), r) {
+			return pluginsdk.BadRequest("notify.recipients", "invalid", "the channel does not accept "+strconv.Quote(r)+" / 该渠道不接受此收件人")
+		}
 	}
 	return nil
 }
 
+// listChannels lists the notification channels; none without the optional
+// notify.send grant.
 func (p *Plugin) listChannels(ctx context.Context, _ *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	channels, err := pluginsdk.ListNotificationChannels(ctx, p.host)
-	if err != nil {
+	if err != nil && status.Code(err) != codes.PermissionDenied {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	type channel struct {
@@ -147,23 +163,23 @@ type ruleResult struct {
 
 // keyStatus is a key's state as the console shows it.
 type keyStatus struct {
-	AccountID   int64        `json:"account_id"`
-	AccountName string       `json:"account_name"`
-	GroupID     int64        `json:"group_id"`
-	Model       string       `json:"model"`
-	Base        int          `json:"base"`
-	Effective   float64      `json:"effective"`
-	Adjusting   bool         `json:"adjusting"`
-	Reset       bool         `json:"reset"`
-	Verdict     string       `json:"verdict"`
-	LastChange  string       `json:"last_change"`
-	ChangedAt   int64        `json:"changed_at"`
-	EvalWindow  int64        `json:"eval_window"`
-	Total       int64        `json:"total"`
-	Fail        int64        `json:"fail"`
-	Lookback    int64        `json:"lookback"`
-	Recent      any          `json:"recent"`
-	Rules       []ruleResult `json:"rules"`
+	AccountID   int64           `json:"account_id"`
+	AccountName string          `json:"account_name"`
+	GroupID     int64           `json:"group_id"`
+	Model       string          `json:"model"`
+	Base        int             `json:"base"`
+	Effective   float64         `json:"effective"`
+	Adjusting   bool            `json:"adjusting"`
+	Reset       bool            `json:"reset"`
+	Verdict     string          `json:"verdict"`
+	LastChange  string          `json:"last_change"`
+	ChangedAt   int64           `json:"changed_at"`
+	EvalWindow  int64           `json:"eval_window"`
+	Total       int64           `json:"total"`
+	Fail        int64           `json:"fail"`
+	Lookback    int64           `json:"lookback"`
+	Recent      rules.RecentAgg `json:"recent"`
+	Rules       []ruleResult    `json:"rules"`
 }
 
 // listStatus lists the keys' states, degraded ones first.

@@ -23,13 +23,6 @@ const (
 	ActionApplied = "applied"
 )
 
-// Weight change kinds kept in State.LastChange.
-const (
-	KindWeightDown    = "weight_down"
-	KindWeightUp      = "weight_up"
-	KindWeightRevived = "weight_revived" // the window started at 0 and ended above it
-)
-
 // The per-rule result characters of State.LastRules. Fired implies hit.
 const (
 	ruleNone     = '0'
@@ -85,21 +78,19 @@ type State struct {
 	ErrCut int64 `json:"err_cut,omitempty"`
 	// Cooldowns holds the window each enabled strategy last took effect in
 	// (changed the weight or ran a side effect), 0 = never.
-	Cooldowns         []int64       `json:"cooldowns,omitempty"`
-	WeightDir         string        `json:"dir,omitempty"`
-	LastTotal         int64         `json:"last_total"`
-	LastFail          int64         `json:"last_fail"`
-	LastLookback      int64         `json:"last_lookback"`
-	LastTN            int64         `json:"last_tn"`
-	LastCounts        map[int]int64 `json:"last_counts,omitempty"`
-	LastLN            int64         `json:"last_ln"`
-	LastLatencyCounts map[int]int64 `json:"last_latency_counts,omitempty"`
-	LastRules         string        `json:"last_rules,omitempty"`
-	LastRuleStats     []RuleStat    `json:"last_rule_stats,omitempty"`
-	LastVerdict       string        `json:"last_verdict,omitempty"`
-	LastChange        string        `json:"last_change,omitempty"`
-	LastChangeAt      int64         `json:"last_change_at,omitempty"`
-	Recent            RecentAgg     `json:"recent"`
+	Cooldowns     []int64       `json:"cooldowns,omitempty"`
+	WeightDir     string        `json:"dir,omitempty"`
+	LastTotal     int64         `json:"last_total"`
+	LastFail      int64         `json:"last_fail"`
+	LastLookback  int64         `json:"last_lookback"`
+	LastTN        int64         `json:"last_tn"`
+	LastCounts    map[int]int64 `json:"last_counts,omitempty"`
+	LastRules     string        `json:"last_rules,omitempty"`
+	LastRuleStats []RuleStat    `json:"last_rule_stats,omitempty"`
+	LastVerdict   string        `json:"last_verdict,omitempty"`
+	LastChange    string        `json:"last_change,omitempty"`
+	LastChangeAt  int64         `json:"last_change_at,omitempty"`
+	Recent        RecentAgg     `json:"recent"`
 }
 
 // Tombstone is the state a reset leaves at the newest closed window.
@@ -123,7 +114,6 @@ type Input struct {
 	State *State // nil = no state yet
 }
 
-
 // SideEffect is a non-weight action of a strategy that took effect.
 type SideEffect struct {
 	Strategy        string
@@ -132,17 +122,15 @@ type SideEffect struct {
 
 // Output is the result of an evaluation.
 type Output struct {
-	Action     string
-	Verdict    string
-	State      State
-	WeightFrom float64
-	WeightTo   float64
-	Adjust     bool // false: the weight was pinned to the base, not changed
-	SigReset   bool // the rules changed: the history was cleared, the weight kept
-	Revived    bool
-	PrevDir    string
-	// Missed is how many windows went unevaluated before this one.
-	Missed      int64
+	Action      string
+	Verdict     string
+	State       State
+	WeightFrom  float64
+	WeightTo    float64
+	Adjust      bool // false: the weight was pinned to the base, not changed
+	SigReset    bool // the rules changed: the history was cleared, the weight kept
+	Revived     bool
+	PrevDir     string
 	SideEffects []SideEffect
 }
 
@@ -712,11 +700,11 @@ func Evaluate(in Input) Output {
 		st.WeightEff, st.Cooldowns = float64(in.Base), nil
 		st.LastChange, st.LastChangeAt, st.WeightDir = "", 0, ""
 	case st.WeightEff < from:
-		change, st.WeightDir = KindWeightDown, dirDown
+		change, st.WeightDir = EventWeightDown, dirDown
 	case revived:
-		change, st.WeightDir = KindWeightRevived, dirUp
+		change, st.WeightDir = EventWeightRevived, dirUp
 	case st.WeightEff > from:
-		change, st.WeightDir = KindWeightUp, dirUp
+		change, st.WeightDir = EventWeightUp, dirUp
 	}
 	if change != "" {
 		st.LastChange, st.LastChangeAt = change, in.Now
@@ -725,11 +713,10 @@ func Evaluate(in Input) Output {
 	st.LastEvalWindow = in.Window
 	st.LastTotal, st.LastFail, st.LastLookback = l.winTotal, l.winFail, int64(l.errDepth)
 	st.LastTN, st.LastCounts = l.win.TN, pick(in.Cfg.Thresholds, l.win.Thresholds)
-	st.LastLN, st.LastLatencyCounts = l.win.LN, pick(in.Cfg.LatencyThresholds, l.win.Latency)
 	st.LastRules, st.LastRuleStats = string(ro.lastRules), ro.stats
 	st.LastVerdict, st.Recent = verdict, l.recent
 	return Output{Action: ActionApplied, Verdict: verdict, State: st, WeightFrom: from, WeightTo: st.WeightEff,
-		Adjust: in.Cfg.Enabled, SigReset: c.sigReset, Revived: revived, PrevDir: prevDir, Missed: ro.missed, SideEffects: effects}
+		Adjust: in.Cfg.Enabled, SigReset: c.sigReset, Revived: revived, PrevDir: prevDir, SideEffects: effects}
 }
 
 // pick keeps the counts of the configured thresholds (0 included).

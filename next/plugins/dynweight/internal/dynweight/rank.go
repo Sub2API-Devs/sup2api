@@ -24,10 +24,9 @@ func (p *Plugin) RankAccounts(_ context.Context, in *pluginv1.RankAccountsReques
 	if !p.cfg.Load().Enabled || meta.GetGroupId() <= 0 || meta.GetModel() == "" {
 		return resp, nil
 	}
-	now := p.now()
+	p.bases.see(meta.GetGroupId(), in.GetCandidates(), p.now())
 	weights := *p.weights.Load()
 	for _, c := range in.GetCandidates() {
-		p.bases.see(pair{AccountID: c.GetAccountId(), GroupID: meta.GetGroupId()}, int(c.GetWeight()), c.GetName(), now)
 		w, ok := weights[key{AccountID: c.GetAccountId(), GroupID: meta.GetGroupId(), Model: meta.GetModel()}]
 		// A state computed from another base is stale: the evaluation resets it.
 		if !ok || w.base != int(c.GetWeight()) {
@@ -58,14 +57,18 @@ func newBaseTracker() *baseTracker {
 	return &baseTracker{known: map[pair]base{}, pending: map[pair]base{}}
 }
 
-func (t *baseTracker) see(p pair, weight int, name string, now time.Time) {
+// see records the bases of a request's candidates, under one lock.
+func (t *baseTracker) see(groupID int64, candidates []*pluginv1.RankCandidate, now time.Time) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if k, ok := t.known[p]; ok && k.Weight == weight && k.Name == name && now.Sub(k.SeenAt) < seenRefresh {
-		return
+	for _, c := range candidates {
+		p, weight, name := pair{AccountID: c.GetAccountId(), GroupID: groupID}, int(c.GetWeight()), c.GetName()
+		if k, ok := t.known[p]; ok && k.Weight == weight && k.Name == name && now.Sub(k.SeenAt) < seenRefresh {
+			continue
+		}
+		b := base{Weight: weight, Name: name, SeenAt: now}
+		t.pending[p], t.known[p] = b, b
 	}
-	b := base{Weight: weight, Name: name, SeenAt: now}
-	t.pending[p], t.known[p] = b, b
 }
 
 // take hands over the bases to write.

@@ -145,11 +145,15 @@ export interface RuleResult {
   lookback: number
 }
 
-export interface KeyStatus {
+/** A (account, group, model) key; 0 / '' widen a reset to every value. */
+export interface Key {
   account_id: number
-  account_name: string
   group_id: number
   model: string
+}
+
+export interface KeyStatus extends Key {
+  account_name: string
   base: number
   effective: number
   adjusting: boolean
@@ -180,7 +184,7 @@ export interface WeightEvent {
 }
 
 /** Puts the keys of an account and/or group (and model) back to their base. */
-export const resetWeights = (k: { account_id: number; group_id: number; model: string }) => api().post<{ reset: number }>('/reset', k)
+export const resetWeights = ({ account_id, group_id, model }: Key) => api().post<{ reset: number }>('/reset', { account_id, group_id, model })
 
 // ------------------------------------------------------------------ account list slot
 

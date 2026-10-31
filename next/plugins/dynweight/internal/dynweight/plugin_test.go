@@ -15,6 +15,10 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
+
 	"github.com/Sub2API-Devs/sup2api/next/plugins/dynweight/internal/rules"
 )
 
@@ -30,6 +34,7 @@ type env struct {
 	t     *testing.T
 	p     *Plugin
 	h     *pluginsdktest.Harness
+	fh    *pluginsdktest.FakeHost
 	clock atomic.Int64 // unix seconds
 
 	mu       sync.Mutex
@@ -44,6 +49,7 @@ func newEnv(t *testing.T) *env {
 	e := &env{t: t}
 	e.clock.Store(1_700_000_000)
 	fh := pluginsdktest.NewFakeHost()
+	e.fh = fh
 	fh.SetDSN(dsn, schema)
 	fh.ListNotificationChannelsFunc = func(context.Context, *pluginv1.ListNotificationChannelsRequest) (*pluginv1.ListNotificationChannelsResponse, error) {
 		return &pluginv1.ListNotificationChannelsResponse{Channels: []*pluginv1.NotificationChannel{{Id: "email", PluginKey: "mailer", Recipient: "email"}}}, nil
@@ -232,7 +238,10 @@ func TestConfigRoutes(t *testing.T) {
 	c := current.Data.Config
 	c.Notify = rules.Notify{Enabled: true, Channel: "sms", Recipients: []string{"x"}}
 	e.decode(e.h.Do("PUT", "/config", nil, configBody{Config: c}), http.StatusBadRequest, nil)
+	// The email channel only takes bare addresses.
 	c.Notify.Channel = "email"
+	e.decode(e.h.Do("PUT", "/config", nil, configBody{Config: c}), http.StatusBadRequest, nil)
+	c.Notify.Recipients = []string{"ops@example.com"}
 	c.WindowSeconds = 1
 	e.decode(e.h.Do("PUT", "/config", nil, configBody{Config: c}), http.StatusBadRequest, nil)
 	c.WindowSeconds = 30
@@ -243,6 +252,87 @@ func TestConfigRoutes(t *testing.T) {
 		t.Fatalf("config in force: %d %d", got.version, got.WindowSeconds)
 	}
 	e.decode(e.h.Do("POST", "/reset", nil, map[string]any{}), http.StatusBadRequest, nil)
+}
+
+// Without the optional notify.send grant there are no channels to pick and
+// notifications cannot be turned on.
+func TestChannelsWithoutGrant(t *testing.T) {
+	e := newEnv(t)
+	e.fh.ListNotificationChannelsFunc = func(context.Context, *pluginv1.ListNotificationChannelsRequest) (*pluginv1.ListNotificationChannelsResponse, error) {
+		return nil, status.Error(codes.PermissionDenied, "no notify.send grant")
+	}
+	var channels struct {
+		Data []any `json:"data"`
+	}
+	e.decode(e.h.Do("GET", "/channels", nil, nil), http.StatusOK, &channels)
+	if channels.Data == nil || len(channels.Data) != 0 {
+		t.Fatalf("channels %v", channels.Data)
+	}
+	c := rules.DefaultConfig()
+	c.Notify = rules.Notify{Enabled: true, Channel: "email", Recipients: []string{"ops@example.com"}}
+	e.decode(e.h.Do("PUT", "/config", nil, configBody{Config: c}), http.StatusBadRequest, nil)
+}
+
+// Turning the plugin off pins the degraded keys to their base, without
+// events, so turning it back on starts from the base.
+func TestGlobalDisablePinsToBase(t *testing.T) {
+	e := newEnv(t)
+	e.configure(nil)
+	e.rank(100)
+	e.window(5, 5)
+	e.window(5, 5)
+	if w := e.rank(100); w != 70 {
+		t.Fatalf("degraded weight %d", w)
+	}
+	e.configure(func(c *rules.Config) { c.Enabled = false })
+	if msg := e.window(0, 0); msg != "evaluated 1 keys, 1 changed" {
+		t.Fatalf("disabled run: %s", msg)
+	}
+	if n := len(*e.p.weights.Load()); n != 0 {
+		t.Fatalf("%d keys still degraded", n)
+	}
+	e.configure(nil)
+	if w := e.rank(100); w != 0 {
+		t.Fatalf("weight after re-enabling %d", w)
+	}
+	var events struct {
+		Data []eventItem `json:"data"`
+	}
+	e.decode(e.h.Do("GET", "/events", nil, nil), http.StatusOK, &events)
+	if len(events.Data) != 1 || events.Data[0].Kind != rules.EventWeightDown {
+		t.Fatalf("events %+v", events.Data)
+	}
+}
+
+// A key whose reset fails does not stop the others, which are recorded.
+func TestResetContinuesPastFailures(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	s, err := e.p.store(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(ctx, `CREATE FUNCTION refuse_bad() RETURNS trigger LANGUAGE plpgsql AS $$
+		BEGIN IF NEW.model = 'bad' THEN RAISE EXCEPTION 'refused'; END IF; RETURN NEW; END $$;
+		CREATE TRIGGER refuse_bad BEFORE INSERT OR UPDATE ON state FOR EACH ROW EXECUTE FUNCTION refuse_bad()`); err != nil {
+		t.Fatal(err)
+	}
+	for _, model := range []string{"bad", "good"} {
+		e.p.obs.add(obsWindow{key: key{AccountID: testAccount, GroupID: testGroup, Model: model}, window: e.clock.Load()},
+			rules.Sample{TTFBMs: -1, LatencyMs: -1}, e.p.cfg.Load().GroupLayer(testGroup))
+	}
+	e.p.flush(ctx)
+	n, err := e.p.resetKeys(ctx, filter{AccountID: testAccount}, 1)
+	if n != 1 || err == nil {
+		t.Fatalf("reset %d, error %v", n, err)
+	}
+	var events struct {
+		Data []eventItem `json:"data"`
+	}
+	e.decode(e.h.Do("GET", "/events", nil, nil), http.StatusOK, &events)
+	if len(events.Data) != 1 || events.Data[0].Model != "good" || events.Data[0].Kind != rules.EventReset {
+		t.Fatalf("events %+v", events.Data)
+	}
 }
 
 func TestSampleOf(t *testing.T) {
@@ -257,9 +347,9 @@ func TestSampleOf(t *testing.T) {
 		t.Fatalf("transport failure: %+v", s)
 	}
 	// A stream that fails after its first event has no timings (new-api).
-	failed := *base
+	failed := proto.Clone(base).(*pluginv1.RequestObservation)
 	failed.Success, failed.UpstreamStatusCode = false, 529
-	if _, s, _ := sampleOf(&failed); !s.Fail || s.FailStatus != 529 || s.TTFBMs != -1 || s.LatencyMs != -1 {
+	if _, s, _ := sampleOf(failed); !s.Fail || s.FailStatus != 529 || s.TTFBMs != -1 || s.LatencyMs != -1 {
 		t.Fatalf("failed stream: %+v", s)
 	}
 	for name, o := range map[string]*pluginv1.RequestObservation{

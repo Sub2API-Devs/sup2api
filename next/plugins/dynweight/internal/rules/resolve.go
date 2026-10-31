@@ -24,9 +24,8 @@ type Resolved struct {
 	// layer and account switches all on. The exempt codes and the floor
 	// include the account override.
 	Layer
-	GroupConfigured bool
-	Rules           []Rule             // enabled rules only; the index is the rule's slot in State
-	Strategies      []ResolvedStrategy // enabled strategies only; the index is the cooldown slot
+	Rules      []Rule             // enabled rules only; the index is the rule's slot in State
+	Strategies []ResolvedStrategy // enabled strategies only; the index is the cooldown slot
 	// Thresholds / LatencyThresholds are the percentile thresholds of the
 	// enabled rules (sorted, unique): what observations count per bucket.
 	Thresholds        []int
@@ -48,13 +47,8 @@ func (r *Resolved) RetentionPeriods() int {
 	return n + 2
 }
 
-// NoClimb: a degraded weight never recovers on its own.
-func (r *Resolved) NoClimb() bool {
-	strategies := make([]Strategy, len(r.Strategies))
-	for i, s := range r.Strategies {
-		strategies[i] = s.Strategy
-	}
-	return noClimb(strategies)
+func (r *Resolved) retentionSeconds() int64 {
+	return int64(r.RetentionPeriods() * r.WindowSeconds)
 }
 
 // derived is a resolved layer without an account override, with the parts
@@ -119,30 +113,41 @@ func (d derived) withExempt(codes string) derived {
 type Compiled struct {
 	Config
 	global derived
-	groups map[int64]derived
+	groups map[int64]*derived
 }
 
 // Compile derives the layers of a normalized configuration.
 func Compile(c Config) *Compiled {
-	out := &Compiled{Config: c, global: derive(c.Layer), groups: make(map[int64]derived, len(c.Groups))}
+	out := &Compiled{Config: c, global: derive(c.Layer), groups: make(map[int64]*derived, len(c.Groups))}
 	for id, l := range c.Groups {
-		out.groups[id] = derive(*l)
+		d := derive(*l)
+		out.groups[id] = &d
 	}
 	return out
 }
 
+// GroupLayer is the layer of a group as derived, without the global switch
+// or any account override: enough for what an account does not change, the
+// window and the thresholds counted. It is cheap, for the gateway path.
+func (c *Compiled) GroupLayer(groupID int64) *Resolved {
+	return &c.derivedOf(groupID).cfg
+}
+
+func (c *Compiled) derivedOf(groupID int64) *derived {
+	if d, ok := c.groups[groupID]; ok {
+		return d
+	}
+	return &c.global
+}
+
 // Resolve is the effective configuration of an (account, group).
 func (c *Compiled) Resolve(accountID, groupID int64) Resolved {
-	d, grouped := c.groups[groupID]
-	if !grouped {
-		d = c.global
-	}
+	d := *c.derivedOf(groupID)
 	o, overridden := c.Accounts[accountID]
 	if overridden && o.ExemptStatusCodes != nil {
 		d = d.withExempt(*o.ExemptStatusCodes)
 	}
 	cfg := d.cfg
-	cfg.GroupConfigured = grouped
 	cfg.Enabled = c.Enabled && cfg.Enabled && (!overridden || o.Enabled == nil || *o.Enabled)
 	if overridden && o.MinWeightMode != nil {
 		cfg.MinWeightMode, cfg.MinWeight = *o.MinWeightMode, *o.MinWeight
@@ -152,9 +157,9 @@ func (c *Compiled) Resolve(accountID, groupID int64) Resolved {
 
 // RetentionSeconds is the longest any layer keeps observations.
 func (c *Compiled) RetentionSeconds() int64 {
-	var n int64
-	for _, d := range append([]derived{c.global}, slices.Collect(maps.Values(c.groups))...) {
-		n = max(n, int64(d.cfg.RetentionPeriods()*d.cfg.WindowSeconds))
+	n := c.global.cfg.retentionSeconds()
+	for _, d := range c.groups {
+		n = max(n, d.cfg.retentionSeconds())
 	}
 	return n
 }

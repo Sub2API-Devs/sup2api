@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SButton, SSelect } from '@sub2api/ui'
-import { useDwHost, type When } from './host'
+import { enumOptions, useDwHost, type When } from './host'
 
 // A strategy's trigger: one rule, or all / any of several, where a member may
 // itself be all / any of rules (one level of nesting, as the plugin accepts).
+// A member is a nested editor: a rule, or a group that cannot switch to a rule
+// nor add groups of its own.
 const props = withDefaults(defineProps<{ rules: string[]; nested?: boolean }>(), { nested: false })
 const when = defineModel<When | null>({ required: true })
 const t = useDwHost().t
@@ -18,7 +20,7 @@ const members = computed<When[]>(() => {
 })
 
 const ruleOptions = computed(() => props.rules.map((r) => ({ value: r, label: r })))
-const kindOptions = computed(() => (['rule', 'all', 'any'] as const).map((k) => ({ value: k, label: t(`when.${k}`) })))
+const kindOptions = computed(() => enumOptions('when', props.nested ? ['all', 'any'] : ['rule', 'all', 'any']))
 
 const firstRule = () => props.rules[0] ?? ''
 const wrap = (k: Kind, list: When[]): When => (k === 'all' ? { all: list } : { any: list })
@@ -45,16 +47,12 @@ function removeMember(i: number) {
 <template>
   <div class="dw-when">
     <div class="dw-row">
-      <SSelect v-if="!nested" class="dw-w-8" :model-value="kind" :options="kindOptions" @update:model-value="setKind($event as Kind)" />
+      <SSelect v-if="!nested || kind !== 'rule'" class="dw-w-8" :model-value="kind" :options="kindOptions" @update:model-value="setKind($event as Kind)" />
       <SSelect v-if="kind === 'rule'" class="dw-grow" :model-value="(when as string) ?? ''" :options="ruleOptions" @update:model-value="when = $event as string" />
     </div>
     <div v-if="kind !== 'rule'" class="dw-when-members">
       <div v-for="(m, i) in members" :key="i" class="dw-row">
-        <SSelect v-if="typeof m === 'string'" class="dw-grow" :model-value="m" :options="ruleOptions" @update:model-value="setMember(i, $event as string)" />
-        <div v-else class="dw-grow dw-when-nested">
-          <SSelect class="dw-w-8" :model-value="'all' in m ? 'all' : 'any'" :options="kindOptions.slice(1)" @update:model-value="setMember(i, $event === 'all' ? { all: 'all' in m ? m.all : m.any } : { any: 'all' in m ? m.all : m.any })" />
-          <WhenEditor :model-value="m" :rules="rules" nested @update:model-value="setMember(i, $event)" />
-        </div>
+        <WhenEditor class="dw-grow" :model-value="m" :rules="rules" nested @update:model-value="setMember(i, $event)" />
         <SButton size="sm" variant="ghost" icon="trash" icon-only :aria-label="t('remove')" :disabled="members.length <= 1" @click="removeMember(i)" />
       </div>
       <div class="dw-row">

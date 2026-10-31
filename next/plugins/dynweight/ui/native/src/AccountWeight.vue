@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { SBadge } from '@sub2api/ui'
 import { loadAccountWeight, useDwHost, weightTone, type AccountWeight } from './host'
 
 // account.list.weight slot: the lowest effective weight of an account's
-// degraded (group, model) keys, under its weight in the account list.
-const props = defineProps<{ account: { id: number } }>()
+// degraded (group, model) keys, under its weight in the account list. The list
+// keeps a row's instance across its reloads, so a new row object reloads too.
+const props = defineProps<{ account: { id: number; weight?: number } }>()
 const t = useDwHost().t
 const weight = ref<AccountWeight | null>(null)
 
@@ -15,8 +16,7 @@ async function load() {
   if (props.account?.id === id) weight.value = w // the row may show another account by now
 }
 
-onMounted(load)
-watch(() => props.account?.id, load)
+watch(() => [props.account, props.account?.weight], load, { immediate: true })
 </script>
 
 <template>

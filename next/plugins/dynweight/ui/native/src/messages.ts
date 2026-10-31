@@ -34,7 +34,8 @@ const zh = {
     kind: '事件类型',
     allKinds: '全部',
     col: { time: '时间', kind: '类型', key: '账号 · 分组 / 模型', weight: '权重', rules: '触发规则', detail: '说明' },
-    cleared: '清理了 {n} 个粘性会话',
+    cleared: '{strategy}：清理了 {n} 个粘性会话',
+    clearFailed: '{strategy}：清理粘性会话失败：{error}',
     window: '窗口 {total} 次，失败 {fail}'
   },
   kind: {
@@ -50,7 +51,7 @@ const zh = {
   reason: { base_mismatch: '账号权重已修改', rules_change: '规则已修改，历史清空', manual: '手动重置' },
   scope: { all: '全部请求', stream: '仅流式', non_stream: '仅非流式' },
   metric: { error_rate: '错误率', ttfb: '首字耗时', latency: '整次耗时', weight: '有效权重' },
-  unit: { error_rate: '%', ttfb: 'ms', latency: 'ms', weight: '' },
+  unit: { error_rate: '%', ttfb: 'ms', latency: 'ms', weight: '', second: '秒' },
   join: { and: '且', or: '或' },
   op: { gt: '>', gte: '≥', lt: '<', lte: '≤' },
   rules: {
@@ -61,6 +62,7 @@ const zh = {
     hitPeriods: '命中数 M',
     if: '当',
     p: '分位',
+    pPrefix: 'P',
     value: '阈值',
     addCondition: '添加条件',
     add: '添加规则',
@@ -100,7 +102,8 @@ const zh = {
     rulesHint: '规则只判定，不动作；策略按规则名引用它们。',
     restoreRules: '恢复默认规则和策略',
     strategies: '策略',
-    strategiesHint: '规则触发后执行的动作。'
+    strategiesHint: '规则触发后执行的动作。',
+    staleRefs: '这些策略引用了已删除或停用的规则，保存前请修改：{names}'
   },
   config: {
     loadFailed: '加载配置失败',
@@ -117,6 +120,7 @@ const zh = {
     addAccount: '添加账号覆盖',
     save: '保存',
     discard: '放弃修改',
+    discardConfirm: '放弃未保存的修改并重新加载配置？',
     saved: '配置已保存',
     conflict: '配置已被他人修改，请刷新后重试'
   },
@@ -168,7 +172,8 @@ const en: typeof zh = {
     kind: 'Kind',
     allKinds: 'All',
     col: { time: 'Time', kind: 'Kind', key: 'Account · group / model', weight: 'Weight', rules: 'Rules fired', detail: 'Detail' },
-    cleared: '{n} sticky sessions cleared',
+    cleared: '{strategy}: {n} sticky sessions cleared',
+    clearFailed: '{strategy}: clearing sticky sessions failed: {error}',
     window: 'window: {total} attempts, {fail} failed'
   },
   kind: {
@@ -184,7 +189,7 @@ const en: typeof zh = {
   reason: { base_mismatch: 'Account weight changed', rules_change: 'Rules changed, history dropped', manual: 'Manual reset' },
   scope: { all: 'All requests', stream: 'Streaming only', non_stream: 'Non-streaming only' },
   metric: { error_rate: 'Error rate', ttfb: 'First token', latency: 'Whole attempt', weight: 'Effective weight' },
-  unit: { error_rate: '%', ttfb: 'ms', latency: 'ms', weight: '' },
+  unit: { error_rate: '%', ttfb: 'ms', latency: 'ms', weight: '', second: 's' },
   join: { and: 'and', or: 'or' },
   op: { gt: '>', gte: '≥', lt: '<', lte: '≤' },
   rules: {
@@ -195,6 +200,7 @@ const en: typeof zh = {
     hitPeriods: 'Hits M',
     if: 'If',
     p: 'Percentile',
+    pPrefix: 'P',
     value: 'Threshold',
     addCondition: 'Add condition',
     add: 'Add rule',
@@ -234,7 +240,8 @@ const en: typeof zh = {
     rulesHint: 'Rules only judge; strategies reference them by name.',
     restoreRules: 'Restore default rules and strategies',
     strategies: 'Strategies',
-    strategiesHint: 'What happens when rules fire.'
+    strategiesHint: 'What happens when rules fire.',
+    staleRefs: 'These strategies reference a removed or disabled rule; fix them before saving: {names}'
   },
   config: {
     loadFailed: 'Failed to load the configuration',
@@ -251,6 +258,7 @@ const en: typeof zh = {
     addAccount: 'Add account override',
     save: 'Save',
     discard: 'Discard changes',
+    discardConfirm: 'Drop the unsaved changes and reload the configuration?',
     saved: 'Configuration saved',
     conflict: 'Someone changed the configuration meanwhile; reload and try again'
   },

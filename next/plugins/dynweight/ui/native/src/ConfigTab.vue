@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SAlert, SButton, SCard, SDisclosure, SField, SHint, SInput, SSegmented, SSelect, SSwitch, STagInput } from '@sub2api/ui'
+import AccountOverrideRow from './AccountOverrideRow.vue'
 import LayerEditor from './LayerEditor.vue'
 import {
   canManage, clone, errorMessage, fetchChannels, fetchConfig, fetchDefaults, saveConfig, useDwHost,
@@ -15,8 +16,15 @@ const host = useDwHost()
 const t = host.t
 const manage = computed(() => canManage())
 
-const draft = ref<Config | null>(null)
+/** The edited config, with groups and accounts always present. */
+interface Draft extends Config {
+  groups: Record<string, Layer>
+  accounts: Record<string, AccountOverride>
+}
+
+const draft = ref<Draft | null>(null)
 const version = ref(0)
+const pristine = ref('') // the draft as read or saved, to tell unsaved edits
 const defaults = ref<Layer | null>(null)
 const channels = ref<Channel[]>([])
 const loading = ref(false)
@@ -25,8 +33,11 @@ const warnings = ref<string[]>([])
 
 function setDraft(body: ConfigBody) {
   draft.value = { ...body.config, groups: body.config.groups ?? {}, accounts: body.config.accounts ?? {} }
+  pristine.value = JSON.stringify(draft.value)
   version.value = body.version
 }
+
+const dirty = computed(() => !!draft.value && JSON.stringify(draft.value) !== pristine.value)
 
 async function reload() {
   loading.value = true
@@ -44,14 +55,20 @@ async function reload() {
   }
 }
 
+/** Reloads, once the user agrees to drop unsaved edits. */
+async function discard() {
+  if (dirty.value && !(await host.confirm({ message: t('config.discardConfirm'), confirmText: t('config.discard'), danger: true }))) return
+  await reload()
+}
+
 onMounted(reload)
-defineExpose({ reload })
+defineExpose({ reload: discard })
 
 // ---- groups and accounts, keyed by id
 
-const sortedIds = (m: Record<string, unknown> | null) => Object.keys(m ?? {}).sort((a, b) => Number(a) - Number(b))
-const groupIds = computed(() => sortedIds(draft.value?.groups ?? null))
-const accountIds = computed(() => sortedIds(draft.value?.accounts ?? null))
+const sortedIds = (m: Record<string, unknown>) => Object.keys(m).sort((a, b) => Number(a) - Number(b))
+const groupIds = computed(() => sortedIds(draft.value?.groups ?? {}))
+const accountIds = computed(() => sortedIds(draft.value?.accounts ?? {}))
 
 const newGroup = ref('')
 const newAccount = ref('')
@@ -59,39 +76,21 @@ const validId = (v: string) => /^\d+$/.test(v.trim()) && Number(v) > 0
 
 function addGroup() {
   const c = draft.value
-  if (!c || !validId(newGroup.value) || c.groups![newGroup.value.trim()]) return
+  const id = newGroup.value.trim()
+  if (!c || !validId(id) || c.groups[id]) return
   // A new group starts as a copy of the global layer that adjusts: the
   // master switch stays the global one's.
   const { groups: _g, accounts: _a, notify: _n, ...global } = c
-  c.groups![newGroup.value.trim()] = { ...clone(global), enabled: true }
+  c.groups[id] = { ...clone(global), enabled: true }
   newGroup.value = ''
 }
 
 function addAccount() {
   const c = draft.value
-  if (!c || !validId(newAccount.value) || c.accounts![newAccount.value.trim()]) return
-  c.accounts![newAccount.value.trim()] = {}
+  const id = newAccount.value.trim()
+  if (!c || !validId(id) || c.accounts[id]) return
+  c.accounts[id] = {}
   newAccount.value = ''
-}
-
-const inheritOptions = computed(() => [
-  { value: '', label: t('accounts.inherit') },
-  { value: 'on', label: t('accounts.on') },
-  { value: 'off', label: t('accounts.off') }
-])
-const floorOptions = computed(() => [
-  { value: '', label: t('accounts.inherit') },
-  { value: 'base_percent', label: t('floor.base_percent') },
-  { value: 'fixed', label: t('floor.fixed') }
-])
-
-const enabledOf = (o: AccountOverride) => (o.enabled === undefined ? '' : o.enabled ? 'on' : 'off')
-function setEnabled(o: AccountOverride, v: string) {
-  o.enabled = v === '' ? undefined : v === 'on'
-}
-function setFloorMode(o: AccountOverride, v: string) {
-  o.min_weight_mode = v === '' ? undefined : (v as AccountOverride['min_weight_mode'])
-  o.min_weight = v === '' ? undefined : (o.min_weight ?? 0)
 }
 
 // ---- notifications
@@ -114,7 +113,7 @@ async function save() {
   if (!c) return
   saving.value = true
   try {
-    for (const o of Object.values(c.accounts ?? {})) if (o.exempt_status_codes === '') o.exempt_status_codes = undefined
+    for (const o of Object.values(c.accounts)) if (o.exempt_status_codes === '') o.exempt_status_codes = undefined
     const body = await saveConfig({ config: c, version: version.value })
     setDraft(body)
     warnings.value = body.warnings ?? []
@@ -133,45 +132,36 @@ async function save() {
     <SAlert v-if="error" tone="danger" class="dw-block">{{ error }}</SAlert>
     <SAlert v-for="w in warnings" :key="w" tone="warning" class="dw-block">{{ w }}</SAlert>
 
+    <!-- Read-only users get disabled fieldsets around the controls, never
+         around a disclosure, whose toggle must keep working. -->
     <template v-if="draft">
-      <fieldset class="dw-fieldset" :disabled="!manage">
-        <SCard :title="t('config.global')" :subtitle="t('config.globalHint')" class="dw-block">
+      <SCard :title="t('config.global')" :subtitle="t('config.globalHint')" class="dw-block">
+        <fieldset class="dw-fieldset" :disabled="!manage">
           <LayerEditor :model-value="draft" :defaults="defaults" master />
-        </SCard>
+        </fieldset>
+      </SCard>
 
-        <SCard :title="t('config.groups')" :subtitle="t('config.groupsHint')" class="dw-block">
-          <div class="dw-list">
-            <SDisclosure v-for="id in groupIds" :key="id" variant="section" :label="t('config.group', { id })">
-              <template #actions>
-                <SButton size="sm" variant="ghost" icon="trash" @click="delete draft.groups![id]">{{ t('remove') }}</SButton>
-              </template>
-              <LayerEditor v-model="draft.groups![id]" :defaults="defaults" />
-            </SDisclosure>
-            <form class="dw-row" @submit.prevent="addGroup">
-              <SInput v-model="newGroup" class="dw-w-10" inputmode="numeric" :placeholder="t('config.groupId')" />
-              <SButton type="submit" icon="plus" :disabled="!validId(newGroup)">{{ t('config.addGroup') }}</SButton>
-            </form>
-          </div>
-        </SCard>
+      <SCard :title="t('config.groups')" :subtitle="t('config.groupsHint')" class="dw-block">
+        <div class="dw-list">
+          <SDisclosure v-for="id in groupIds" :key="id" variant="section" :label="t('config.group', { id })">
+            <template v-if="manage" #actions>
+              <SButton size="sm" variant="ghost" icon="trash" @click="delete draft.groups[id]">{{ t('remove') }}</SButton>
+            </template>
+            <fieldset class="dw-fieldset" :disabled="!manage">
+              <LayerEditor v-model="draft.groups[id]" :defaults="defaults" />
+            </fieldset>
+          </SDisclosure>
+          <form v-if="manage" class="dw-row" @submit.prevent="addGroup">
+            <SInput v-model="newGroup" class="dw-w-10" inputmode="numeric" :placeholder="t('config.groupId')" />
+            <SButton type="submit" icon="plus" :disabled="!validId(newGroup)">{{ t('config.addGroup') }}</SButton>
+          </form>
+        </div>
+      </SCard>
 
+      <fieldset class="dw-fieldset" :disabled="!manage">
         <SCard :title="t('config.accounts')" :subtitle="t('config.accountsHint')" class="dw-block">
           <div class="dw-list">
-            <div v-for="id in accountIds" :key="id" class="dw-row">
-              <span class="dw-w-6 dw-num">#{{ id }}</span>
-              <SField class="dw-w-8" :label="t('accounts.enabled')">
-                <SSelect :model-value="enabledOf(draft.accounts![id])" :options="inheritOptions" @update:model-value="setEnabled(draft.accounts![id], $event as string)" />
-              </SField>
-              <SField class="dw-grow" :label="t('layer.exempt')">
-                <SInput v-model="draft.accounts![id].exempt_status_codes" :placeholder="t('accounts.inherit')" />
-              </SField>
-              <SField class="dw-w-10" :label="t('layer.floorMode')">
-                <SSelect :model-value="draft.accounts![id].min_weight_mode ?? ''" :options="floorOptions" @update:model-value="setFloorMode(draft.accounts![id], $event as string)" />
-              </SField>
-              <SField class="dw-w-8" :label="t('layer.floor')">
-                <SInput v-model="draft.accounts![id].min_weight" type="number" min="0" :disabled="!draft.accounts![id].min_weight_mode" />
-              </SField>
-              <SButton class="dw-end" size="sm" variant="ghost" icon="trash" icon-only :aria-label="t('remove')" @click="delete draft.accounts![id]" />
-            </div>
+            <AccountOverrideRow v-for="id in accountIds" :id="id" :key="id" v-model="draft.accounts[id]" @remove="delete draft.accounts[id]" />
             <form class="dw-row" @submit.prevent="addAccount">
               <SInput v-model="newAccount" class="dw-w-10" inputmode="numeric" :placeholder="t('config.accountId')" />
               <SButton type="submit" icon="plus" :disabled="!validId(newAccount)">{{ t('config.addAccount') }}</SButton>
@@ -199,7 +189,7 @@ async function save() {
       </fieldset>
 
       <div v-if="manage" class="dw-toolbar">
-        <SButton @click="reload">{{ t('config.discard') }}</SButton>
+        <SButton :disabled="!dirty" @click="discard">{{ t('config.discard') }}</SButton>
         <SButton variant="primary" icon="check" :loading="saving" @click="save">{{ t('config.save') }}</SButton>
       </div>
     </template>

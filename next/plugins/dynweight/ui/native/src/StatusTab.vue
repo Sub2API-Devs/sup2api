@@ -3,7 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { useList } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SField, SHint, SPagination, SSwitch, STable, type TableColumn } from '@sub2api/ui'
 import KeyFilters from './KeyFilters.vue'
-import { applyQuery, canManage, emptyFilter, errorMessage, filterQuery, resetWeights, useDwHost, weightOf, weightTone, type Filter, type KeyStatus } from './host'
+import { applyQuery, canManage, emptyFilter, errorMessage, filterQuery, resetWeights, useDwHost, weightOf, weightTone, type Filter, type Key, type KeyStatus } from './host'
 
 // Effective weights per (account, group, model), degraded first; a key, or
 // every key of the filtered account / group, can be reset to its base.
@@ -39,12 +39,12 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'actions', label: t('status.col.actions'), align: 'right', nowrap: true }
 ])
 
-const keyOf = (r: { account_id: number; group_id: number; model: string }) => `${r.account_id}|${r.group_id}|${r.model}`
-const rows = computed(() => list.items.value.map((r) => ({ ...r, key: keyOf(r) })))
+const keyOf = (r: Key) => `${r.account_id}|${r.group_id}|${r.model}`
+const rows = computed(() => list.items.value.map((r) => ({ ...r, key: keyOf(r), hits: r.rules.filter((x) => x.hit) })))
 const percent = (fail: number, total: number) => (total ? Math.round((fail / total) * 1000) / 10 : 0)
 
 const busy = ref('')
-async function reset(k: { account_id: number; group_id: number; model: string }, message: string, tag: string) {
+async function reset(k: Key, message: string, tag: string) {
   if (!(await host.confirm({ message, confirmText: t('status.reset'), danger: true }))) return
   busy.value = tag
   try {
@@ -119,10 +119,10 @@ const showEvents = (r: KeyStatus) => emit('show-events', { account_id: String(r.
         </template>
         <template #cell-rules="{ row }">
           <div class="dw-chips">
-            <SBadge v-for="r in row.rules.filter((x: { hit: boolean }) => x.hit)" :key="r.name" :tone="r.fired ? 'danger' : 'warning'" size="xs" :title="t('status.ruleSamples', { n: r.samples, lookback: r.lookback })">
+            <SBadge v-for="r in row.hits" :key="r.name" :tone="r.fired ? 'danger' : 'warning'" size="xs" :title="t('status.ruleSamples', { n: r.samples, lookback: r.lookback })">
               {{ r.name }}
             </SBadge>
-            <SHint v-if="!row.rules.some((x: { hit: boolean }) => x.hit)" inline>—</SHint>
+            <SHint v-if="!row.hits.length" inline>—</SHint>
           </div>
         </template>
         <template #cell-changed_at="{ row }">{{ row.changed_at ? host.i18n.formatDateTime(row.changed_at * 1000) : '—' }}</template>

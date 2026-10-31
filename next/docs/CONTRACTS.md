@@ -5151,7 +5151,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 ### 73.1 请求观测的新字段（`RequestObservation`）
 
 - `group_id`（26）：请求所在分组。
-- `local_failure`（27）：这次失败不怪账号。来源是平台插件的 `ClassifyError` 判为 local_failure，响应在本地读取失败，或者失败不是上游失败（错误类型不是 `upstream_error`，例如账号不可用、资源准备失败）。健康统计应把它排除。
+- `local_failure`（27）：这次失败不怪账号。来源是平台插件的 `ClassifyError` 判为 local_failure，核心在本地转交响应时出错（例如缓冲响应的临时文件写失败），或者失败不是上游失败（错误类型不是 `upstream_error`，例如账号不可用、资源准备失败）。上游的错误响应读不完整（连接被重置、卡住）仍算上游失败。WebSocket 会话的每一轮同样按这三条判断。健康统计应把它排除。
 - `upstream_status_code`（28）：上游对这次尝试回的状态码。上游没有响应时为 0。客户端看到的 `status_code` 可能经过映射，也可能是合成的 502，所以健康统计按这个字段算。流式响应开始时就记下，上游回 200 以外的状态也照记。
 
 ### 73.2 清理粘性会话（`HostService.ClearStickyBindings`，Host API 8，授权 `sticky.clear`）
@@ -5170,9 +5170,9 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **已声明的变量**（定义见 `core/environment.go`）：
   - `relay_timeout_seconds`、`response_header_timeout_seconds`、`streaming_idle_timeout_seconds`
   - `max_request_body_mb`：没有账号层，因为选账号之前就要用到。
-  - `task_timeout_minutes`、`task_poll_max_failures`
+  - `task_timeout_minutes`、`task_poll_max_failures`：只有分组层和账号层，全局层就是对账设置（§8 的 `max_reconcile_age_sec`、`max_poll_failures`），没有进程环境变量。只作用于异步任务；普通预扣条目只按对账设置。
   - 三个超时只作用于 HTTP 转发；WebSocket 会话是长连接，只用请求体上限（作为单条消息的上限）。
-  - 进程环境变量非法（非数字或超出范围）时启动日志告警并忽略。
+  - 进程环境变量（`SUB2API_RELAY_TIMEOUT_SECONDS` 等，见声明的 `process_env`）由 `config.Load` 解析，作为全局层的回退；非法（非数字或超出范围）时启动失败。
 - **核心接口**：
   - `GET /environment/variables`：声明和进程层。
   - `GET|PUT /settings/environment`：全局层。
@@ -5233,9 +5233,10 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 分组层整体替换全局层，但总开关仍以全局为准。分组层与 new-api 一样叠在出厂默认层上：没写的字段取默认值，`enabled` 不写即为开启。
   - 账号覆盖可以改开关、豁免状态码和权重下限。
   - 和 new-api 的差别：豁免状态码只在层上配置，规则上不能单独配；保存时除了"有降权没有回升"，还多一条警告：没有引用权重条件的回升策略且下限为 0 时，降到 0 的权重不会自己恢复。
-- **评估任务**：`evaluate` 每 10 秒跑一次，同一时刻只有一个节点执行。
+- **评估任务**：`evaluate` 每 10 秒跑一次。每个调度槽只有一个节点执行，但任务锁按槽加，超时（60 秒）长于间隔，相邻两次运行可能重叠。
   - 先 flush，再逐键运行 `rules.Evaluate`。
-  - 状态写回时用 `gen` 做 CAS，避免覆盖并发的重置。
+  - 状态写回时用 `gen` 做 CAS：重叠的运行或并发的重置只有一方写入，输掉的一方不记事件、不通知、不清理粘性会话，所以每个（键、窗口）恰好生效一次。正确性靠 CAS，不靠任务锁。
+  - 全局关闭时照常运行：已降权的键按"不调整"钉回基准（规则历史清空，消费截止保留），重新开启后从基准开始，已评估过的窗口不再消费。
   - 记录事件，发送通知，按动作清理粘性会话。某个键失败不影响其他键，已写入状态的键的事件照常记录，任务最后报告失败数。
   - 有效权重有变化时广播 `dynweight.weights`，各节点重新加载快照。快照里只有不在基准上的键。
 - **基准权重**：从 `RankCandidate` 学到（账号、分组）的权重，写入 `bases`。

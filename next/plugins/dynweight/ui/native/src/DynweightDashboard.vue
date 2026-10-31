@@ -43,10 +43,9 @@ async function refresh() {
 }
 
 // "Events of this key" from the status tab.
-const eventsPreset = ref<(Filter & { n: number }) | null>(null)
-let presetN = 0
+const eventsPreset = ref<Filter | null>(null)
 function showEvents(f: Filter) {
-  eventsPreset.value = { ...f, n: ++presetN }
+  eventsPreset.value = { ...f }
   tab.value = 'events'
 }
 </script>

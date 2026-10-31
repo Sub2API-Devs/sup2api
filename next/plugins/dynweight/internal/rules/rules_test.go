@@ -294,8 +294,8 @@ func TestMissedWindowsPadWeightRules(t *testing.T) {
 	// Skip three windows: the weight rule held in all of them.
 	s.win += 3 * 60
 	s.obs = append(make([]Counts, 3), s.obs...)
-	if out := s.step(0, 0, -1); out.Missed != 3 || out.WeightTo != 10 {
-		t.Fatalf("after a gap: missed %d weight %v", out.Missed, out.WeightTo)
+	if out := s.step(0, 0, -1); out.WeightTo != 10 {
+		t.Fatalf("after a gap: weight %v", out.WeightTo)
 	}
 }
 
@@ -386,11 +386,11 @@ func TestResolveLayers(t *testing.T) {
 		c.Groups = map[int64]*Layer{2: &g, 3: nil}
 		c.Accounts = map[int64]AccountOverride{7: {ExemptStatusCodes: &codes, MinWeightMode: &mode, MinWeight: &floor}, 8: {Enabled: &off}}
 	})
-	if r := c.Resolve(1, 2); !r.GroupConfigured || r.WindowSeconds != 30 || !r.Enabled {
+	if r := c.Resolve(1, 2); r.WindowSeconds != 30 || !r.Enabled || c.GroupLayer(2).WindowSeconds != 30 {
 		t.Fatalf("group: %+v", r.Layer)
 	}
 	global, narrowed := c.Resolve(1, 1), c.Resolve(7, 1)
-	if global.GroupConfigured || narrowed.RulesSig == global.RulesSig || !reflect.DeepEqual(narrowed.ExemptCodes, []int{429}) || narrowed.WeightFloor(100) != 5 {
+	if c.GroupLayer(1).WindowSeconds != 60 || narrowed.RulesSig == global.RulesSig || !reflect.DeepEqual(narrowed.ExemptCodes, []int{429}) || narrowed.WeightFloor(100) != 5 {
 		t.Fatalf("override: %+v", narrowed.Layer)
 	}
 	if c.Resolve(8, 1).Enabled {

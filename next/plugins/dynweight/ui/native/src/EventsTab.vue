@@ -7,7 +7,7 @@ import { applyQuery, emptyFilter, enumOptions, errorMessage, eventKinds, eventTo
 
 // Weight events (newest first): degrades, climbs, restores, revivals, cleared
 // sticky sessions and resets, filtered by key and kind.
-const props = defineProps<{ preset?: (Filter & { n: number }) | null }>()
+const props = defineProps<{ preset?: Filter | null }>()
 const host = useDwHost()
 const t = host.t
 
@@ -27,12 +27,12 @@ function clear() {
   search()
 }
 
-watch(kind, search)
 watch(
   () => props.preset,
   (p) => {
     if (!p) return
     Object.assign(filter, filterQuery(p))
+    kind.value = ''
     search()
   }
 )
@@ -52,11 +52,14 @@ const columns = computed<TableColumn[]>(() => [
 
 const isWeightKind = (k: string) => k.startsWith('weight_')
 
-/** One-line detail: the window counts, the reason, or the cleared sessions. */
+/** One-line detail: the window counts, the reason, or the strategy's clearing. */
 function detailText(e: WeightEvent): string {
   const d = e.detail ?? {}
   if (e.reason) return t(`reason.${e.reason}`)
-  if (e.kind === 'affinity_cleared') return t('events.cleared', { n: Number(d.cleared ?? 0) })
+  if (e.kind === 'affinity_cleared') {
+    const strategy = String(d.strategy ?? '')
+    return d.error ? t('events.clearFailed', { strategy, error: String(d.error) }) : t('events.cleared', { strategy, n: Number(d.cleared ?? 0) })
+  }
   const w = d.window as { total?: number; fail?: number } | undefined
   return w ? t('events.window', { total: w.total ?? 0, fail: w.fail ?? 0 }) : ''
 }
@@ -67,7 +70,7 @@ function detailText(e: WeightEvent): string {
     <SCard>
       <KeyFilters v-model="filter" :loading="list.loading.value" @search="search" @clear="clear">
         <SField class="dw-filter" :label="t('events.kind')">
-          <SSelect v-model="kind" :options="kindOptions" />
+          <SSelect v-model="kind" :options="kindOptions" @update:model-value="search" />
         </SField>
       </KeyFilters>
     </SCard>

@@ -4,14 +4,16 @@ import { SButton, SField, SInput, SSelect, SSwitch } from '@sub2api/ui'
 import { enumOptions, metrics, opsOf, percentileMetric, useDwHost, type Condition, type Metric, type Rule } from './host'
 
 // Judgement rules: conditions joined by and / or ("and" binds first), judged
-// per window; a rule fires once it hit in M of the last N windows.
+// per window; a rule fires once it hit in M of the last N windows. A name
+// change is committed on blur and reported so strategies can follow it.
 const rules = defineModel<Rule[]>({ required: true })
+const emit = defineEmits<{ (e: 'rename', from: string, to: string): void }>()
 const t = useDwHost().t
 
 const scopeOptions = computed(() => enumOptions('scope', ['all', 'stream', 'non_stream']))
 const metricOptions = computed(() => enumOptions('metric', metrics))
 const joinOptions = computed(() => enumOptions('join', ['and', 'or']))
-const opOptions = (m: Metric) => opsOf(m).map((op) => ({ value: op, label: t(`op.${op}`) }))
+const opOptions = (m: Metric) => enumOptions('op', opsOf(m))
 
 function setMetric(c: Condition, m: Metric) {
   c.metric = m
@@ -25,12 +27,17 @@ function add() {
   rules.value.push({ name: t('rules.newName', { n: rules.value.length + 1 }), conditions: [{ ...newCondition(), join: undefined }], periods: 1, hit_periods: 1 })
 }
 
+function rename(r: Rule, name: string) {
+  const from = r.name
+  r.name = name
+  emit('rename', from, name)
+}
+
 function removeCondition(r: Rule, i: number) {
   r.conditions.splice(i, 1)
   if (r.conditions[0]) r.conditions[0].join = undefined
 }
 
-const unit = (m: Metric) => t(`unit.${m}`)
 </script>
 
 <template>
@@ -38,7 +45,7 @@ const unit = (m: Metric) => t(`unit.${m}`)
     <div v-for="(r, i) in rules" :key="i" class="dw-item">
       <div class="dw-row">
         <SField class="dw-grow" :label="t('rules.name')">
-          <SInput v-model="r.name" :maxlength="64" />
+          <SInput :model-value="r.name" :maxlength="64" lazy @update:model-value="rename(r, String($event))" />
         </SField>
         <SField class="dw-w-10" :label="t('rules.scope')">
           <SSelect :model-value="r.scope || 'all'" :options="scopeOptions" @update:model-value="r.scope = $event as Rule['scope']" />
@@ -60,12 +67,10 @@ const unit = (m: Metric) => t(`unit.${m}`)
         <span v-else class="dw-w-6 dw-sub">{{ t('rules.if') }}</span>
         <SSelect class="dw-w-10" :model-value="c.metric" :options="metricOptions" @update:model-value="setMetric(c, $event as Metric)" />
         <SInput v-if="percentileMetric(c.metric)" v-model="c.p" class="dw-w-6" type="number" min="50" max="100" :aria-label="t('rules.p')">
-          <template #prefix>P</template>
+          <template #prefix>{{ t('rules.pPrefix') }}</template>
         </SInput>
         <SSelect class="dw-w-6" v-model="c.op" :options="opOptions(c.metric)" />
-        <SInput v-model="c.value" class="dw-w-8" type="number" min="0" :aria-label="t('rules.value')">
-          <template #suffix>{{ unit(c.metric) }}</template>
-        </SInput>
+        <SInput v-model="c.value" class="dw-w-8" type="number" min="0" :aria-label="t('rules.value')" :suffix="t(`unit.${c.metric}`)" />
         <SButton size="sm" variant="ghost" icon="x" icon-only :aria-label="t('remove')" :disabled="r.conditions.length <= 1" @click="removeCondition(r, j)" />
       </div>
       <SButton size="xs" icon="plus" :disabled="r.conditions.length >= 10" @click="r.conditions.push(newCondition())">{{ t('rules.addCondition') }}</SButton>

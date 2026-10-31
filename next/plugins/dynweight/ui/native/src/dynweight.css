@@ -122,11 +122,6 @@
   padding-left: 1rem;
   border-left: 2px solid rgb(var(--line));
 }
-.dw-when-nested {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
 
 @media (max-width: 640px) {
   .dw-filter {

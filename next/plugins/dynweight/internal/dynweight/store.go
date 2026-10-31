@@ -287,6 +287,8 @@ func (s store) addEvents(ctx context.Context, events []eventRow) error {
 
 // keys lists the keys matching f with a state, or with counters from since on.
 func (s store) keys(ctx context.Context, f filter, since int64) ([]key, error) {
+	// Both clauses number f's conditions alike; the obs clause appends one
+	// more, so its arguments serve the state clause too.
 	stateWhere, _ := f.where()
 	obsWhere, args := f.where(cond{"window_start >= $%d", since})
 	rows, err := s.db.Query(ctx, `SELECT account_id, group_id, model FROM state`+stateWhere+
@@ -311,8 +313,9 @@ func (s store) listEvents(ctx context.Context, f filter, kind string, limit, off
 	if err := s.db.QueryRow(ctx, `SELECT count(*) FROM events`+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
+	n := len(args)
 	rows, err := s.db.Query(ctx, `SELECT id, created_at, account_id, group_id, model, kind, reason, weight_from, weight_to, rules, detail
-		FROM events`+where+fmt.Sprintf(" ORDER BY id DESC LIMIT %d OFFSET %d", limit, offset), args...)
+		FROM events`+where+fmt.Sprintf(" ORDER BY id DESC LIMIT $%d OFFSET $%d", n+1, n+2), append(args, limit, offset)...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -366,7 +369,10 @@ func (f filter) where(extra ...cond) (string, []any) {
 // scheduling has not seen since staleBefore.
 func (s store) prune(ctx context.Context, since int64, eventsBefore, staleBefore time.Time) (int64, error) {
 	var n int64
-	for _, q := range []cond{
+	for _, q := range []struct {
+		sql string
+		arg any
+	}{
 		{`DELETE FROM obs WHERE window_start < $1`, since},
 		{`DELETE FROM events WHERE created_at < $1`, eventsBefore},
 		{`DELETE FROM state s WHERE (tombstone OR eff = base) AND eval_window < $1 AND NOT EXISTS (

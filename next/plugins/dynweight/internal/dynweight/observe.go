@@ -30,9 +30,10 @@ func (p *Plugin) OnObservations(_ context.Context, in *pluginv1.ObservationBatch
 		if !ok {
 			continue
 		}
-		res := cfg.Resolve(k.AccountID, k.GroupID)
-		window := rules.WindowStart(k.AccountID, o.GetOccurredAtUnixMs()/1000, res.WindowSeconds)
-		p.obs.add(obsWindow{key: k, window: window}, sample, &res)
+		// What is counted depends on the group only, not on the account.
+		layer := cfg.GroupLayer(k.GroupID)
+		window := rules.WindowStart(k.AccountID, o.GetOccurredAtUnixMs()/1000, layer.WindowSeconds)
+		p.obs.add(obsWindow{key: k, window: window}, sample, layer)
 	}
 	return &pluginv1.ObservationResult{}, nil
 }
