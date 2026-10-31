@@ -4,15 +4,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
-	"strings"
 
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
-
-// stickyClearScanCount is the SCAN batch of ClearStickyBindings.
-const stickyClearScanCount = 1000
 
 // stickyDeleteIfValue deletes a binding only while it still holds the value
 // that was read, so a session rebound meanwhile keeps its new binding.
@@ -34,12 +30,7 @@ func (s *StickyClearer) ClearStickyBindings(ctx context.Context, req core.Sticky
 		return 0, 0, core.ErrUnavailable.WithMessage("sticky store unavailable")
 	}
 	group := itoa(req.GroupID)
-	var cursor uint64
-	for {
-		keys, next, err := s.rdb.Scan(ctx, cursor, "sticky:*", stickyClearScanCount).Result()
-		if err != nil {
-			return matched, cleared, err
-		}
+	err = scanStickyKeys(ctx, s.rdb, "sticky:*", func(keys []string) error {
 		var candidates []string
 		for _, key := range keys {
 			if stickyKeyServes(key, group, req.Model) {
@@ -48,14 +39,9 @@ func (s *StickyClearer) ClearStickyBindings(ctx context.Context, req core.Sticky
 		}
 		m, c, err := s.clearBatch(ctx, candidates, req)
 		matched, cleared = matched+m, cleared+c
-		if err != nil {
-			return matched, cleared, err
-		}
-		if next == 0 {
-			return matched, cleared, nil
-		}
-		cursor = next
-	}
+		return err
+	})
+	return matched, cleared, err
 }
 
 func (s *StickyClearer) clearBatch(ctx context.Context, keys []string, req core.StickyClearRequest) (matched, cleared int64, err error) {
@@ -82,7 +68,7 @@ func (s *StickyClearer) clearBatch(ctx context.Context, keys []string, req core.
 	if len(deletes) == 0 {
 		return matched, 0, nil
 	}
-	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+	if _, err := pipe.Exec(ctx); err != nil {
 		return matched, 0, err
 	}
 	for _, d := range deletes {
@@ -91,33 +77,4 @@ func (s *StickyClearer) clearBatch(ctx context.Context, keys []string, req core.
 		}
 	}
 	return matched, cleared, nil
-}
-
-// stickyKeyServes reports whether a binding key of stickyKey's shape could
-// route a request of the group and model. The stats hashes share the prefix
-// and are skipped.
-func stickyKeyServes(key, group, model string) bool {
-	if strings.HasPrefix(key, stickyStatsKeyPrefix) {
-		return false
-	}
-	rest, ok := strings.CutPrefix(key, "sticky:")
-	if !ok {
-		return false
-	}
-	// The rule segment never contains ':' (keySegment) and the hash is the
-	// last segment; the model in between may contain ':'.
-	_, rest, ok = strings.Cut(rest, ":")
-	if !ok {
-		return false
-	}
-	g, rest, ok := strings.Cut(rest, ":")
-	if !ok {
-		return false
-	}
-	end := strings.LastIndexByte(rest, ':')
-	if end < 0 {
-		return false
-	}
-	m := rest[:end]
-	return (g == group || g == "_") && (m == model || m == "_")
 }

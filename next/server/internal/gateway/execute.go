@@ -91,10 +91,7 @@ func (c *call) executeAttempt(ctx context.Context, rt *typeRoute, acc *core.Acco
 		}
 		var result attemptResult
 		if c.failurePolicy != nil {
-			result = c.classifyFailure(ctx, acct.GetId(), int(x.response.Error.Status), x.header, x.raw, x.response.Error.TransportError, rt.conv != nil)
-			if x.response.Error.Status > 0 {
-				c.applyPluginAccountState(ctx, acct.GetId(), cls)
-			}
+			result = c.policyClassification(ctx, acct.GetId(), int(x.response.Error.Status), x.header, x.raw, x.response.Error.TransportError, rt.conv != nil, cls)
 		} else {
 			result = c.applyClassification(ctx, rt, acct, int(x.response.Error.Status), x.raw, x.response.Error.TransportError, cls)
 		}

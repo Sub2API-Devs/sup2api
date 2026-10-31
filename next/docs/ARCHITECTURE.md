@@ -1282,7 +1282,7 @@ flowchart LR
   subgraph host["控制台（核心）"]
     im["import map（nonce）<br/>vue · vue-router · pinia · vue-i18n<br/>@sub2api/ui · @sub2api/host"]
     loader["插件加载器"]
-    slots["挂载点<br/>pages · dashboard.widgets<br/>account.detail.tabs · account.form.widgets"]
+    slots["挂载点<br/>pages · dashboard.widgets<br/>account.detail.tabs · account.form.widgets<br/>account.list.weight"]
   end
   subgraph pkg["插件包 ui/native/"]
     entry["entry.js<br/>export register(host) / unregister()"]

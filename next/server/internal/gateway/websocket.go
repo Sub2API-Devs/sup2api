@@ -717,7 +717,11 @@ func (s *wsSession) observe(ctx context.Context, t *wsTurn, data []byte) (bool, 
 	cl := t.cl
 	if cl.rec.FirstTokenMs == 0 {
 		cl.rec.FirstTokenMs = max(1, int(s.g.now().Sub(cl.start)/time.Millisecond))
-		cl.observeRequest(observation.ResponseStarted, cl.rec)
+		// A turn has no status of its own: its first message is the
+		// upstream's answer.
+		started := *cl.rec
+		started.StatusCode = http.StatusOK
+		cl.observeRequest(observation.ResponseStarted, &started)
 		cl.observeRequest(observation.FirstStreamEvent, cl.rec)
 	}
 	t.usage.ApplySSE("", data)

@@ -32,6 +32,18 @@ func TestStickyKeyServes(t *testing.T) {
 	require.True(t, stickyKeyServes("sticky:r:7:llama3:8b:abc", "7", "llama3:8b"))
 }
 
+// stickyKeyServes reads the layout stickyKey writes, for every choice of
+// included dimensions.
+func TestStickyKeyServesRoundTrip(t *testing.T) {
+	for _, includes := range [][]string{nil, {"rule"}, {"group"}, {"model"}, {"rule", "group", "model"}} {
+		r := &stickyRule{Name: "a:b rule", KeyIncludes: includes}
+		key := stickyKey(r, 7, "llama3:8b", "session")
+		require.True(t, stickyKeyServes(key, "7", "llama3:8b"), key)
+		require.Equal(t, !r.includes("group"), stickyKeyServes(key, "8", "llama3:8b"), key)
+		require.Equal(t, !r.includes("model"), stickyKeyServes(key, "7", "gpt-4o"), key)
+	}
+}
+
 func TestClearStickyBindings(t *testing.T) {
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})

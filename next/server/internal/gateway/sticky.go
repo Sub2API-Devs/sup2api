@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/tidwall/gjson"
 
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -124,6 +125,55 @@ func stickyKey(r *stickyRule, groupID int64, model, value string) string {
 	}
 	sum := sha256.Sum256([]byte(value))
 	return "sticky:" + rule + ":" + group + ":" + mdl + ":" + hex.EncodeToString(sum[:])
+}
+
+// stickyKeyServes reports whether a binding key of stickyKey's shape could
+// route a request of the group and model. The stats hashes (sticky:stats:
+// {rule}) have too few segments to match.
+func stickyKeyServes(key, group, model string) bool {
+	rest, ok := strings.CutPrefix(key, "sticky:")
+	if !ok {
+		return false
+	}
+	// The rule segment never contains ':' (keySegment) and the hash is the
+	// last segment; the model in between may contain ':'.
+	_, rest, ok = strings.Cut(rest, ":")
+	if !ok {
+		return false
+	}
+	g, rest, ok := strings.Cut(rest, ":")
+	if !ok {
+		return false
+	}
+	end := strings.LastIndexByte(rest, ':')
+	if end < 0 {
+		return false
+	}
+	m := rest[:end]
+	return (g == group || g == "_") && (m == model || m == "_")
+}
+
+// stickyScanCount is the SCAN batch over binding keys.
+const stickyScanCount = 500
+
+// scanStickyKeys calls fn with each SCAN batch of the keys matching pattern.
+func scanStickyKeys(ctx context.Context, rdb redis.UniversalClient, pattern string, fn func([]string) error) error {
+	var cursor uint64
+	for {
+		keys, next, err := rdb.Scan(ctx, cursor, pattern, stickyScanCount).Result()
+		if err != nil {
+			return err
+		}
+		if len(keys) > 0 {
+			if err := fn(keys); err != nil {
+				return err
+			}
+		}
+		if next == 0 {
+			return nil
+		}
+		cursor = next
+	}
 }
 
 // ---------------------------------------------------------------- rule cache

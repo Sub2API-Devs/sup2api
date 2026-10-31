@@ -793,16 +793,24 @@ func (c *call) classifyWithPlugin(ctx context.Context, rt *typeRoute, acct *plug
 	return cls
 }
 
+// policyClassification is the failure policy's verdict on an upstream
+// failure, carrying the plugin's local_failure; the plugin's account state is
+// applied when the upstream answered.
+func (c *call) policyClassification(ctx context.Context, accountID int64, status int, header http.Header, body []byte, transportErr string,
+	converted bool, cls *pluginv1.ClassifyErrorResponse) attemptResult {
+	res := c.classifyFailure(ctx, accountID, status, header, body, transportErr, converted)
+	if res.err != nil {
+		res.err.LocalFailure = cls.GetLocalFailure()
+	}
+	if status > 0 {
+		c.applyPluginAccountState(ctx, accountID, cls)
+	}
+	return res
+}
+
 func (c *call) applyClassification(ctx context.Context, rt *typeRoute, acct *pluginv1.Account, status int, body []byte, transportErr string, cls *pluginv1.ClassifyErrorResponse) attemptResult {
 	if c.failurePolicy != nil {
-		res := c.classifyFailure(ctx, acct.GetId(), status, nil, body, transportErr, rt.conv != nil)
-		if res.err != nil {
-			res.err.LocalFailure = cls.GetLocalFailure()
-		}
-		if status > 0 {
-			c.applyPluginAccountState(ctx, acct.GetId(), cls)
-		}
-		return res
+		return c.policyClassification(ctx, acct.GetId(), status, nil, body, transportErr, rt.conv != nil, cls)
 	}
 	c.applyQuotaObservation(ctx, acct.GetId(), cls.GetQuota())
 	reason, failover := c.applyAccountEffect(ctx, acct, status, body, transportErr, cls)

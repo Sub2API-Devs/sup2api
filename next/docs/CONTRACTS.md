@@ -5151,7 +5151,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 ### 73.1 请求观测的新字段（`RequestObservation`）
 
 - `group_id`（26）：请求所在分组。
-- `local_failure`（27）：这次失败不怪账号。来源是平台插件的 `ClassifyError` 判为 local_failure，或者响应在本地读取失败。健康统计应把它排除。
+- `local_failure`（27）：这次失败不怪账号。来源是平台插件的 `ClassifyError` 判为 local_failure，响应在本地读取失败，或者失败不是上游失败（错误类型不是 `upstream_error`，例如账号不可用、资源准备失败）。健康统计应把它排除。
 - `upstream_status_code`（28）：上游对这次尝试回的状态码。上游没有响应时为 0。客户端看到的 `status_code` 可能经过映射，也可能是合成的 502，所以健康统计按这个字段算。流式响应开始时就记下，上游回 200 以外的状态也照记。
 
 ### 73.2 清理粘性会话（`HostService.ClearStickyBindings`，Host API 8，授权 `sticky.clear`）
@@ -5185,12 +5185,15 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **渠道由插件提供**：插件声明 `notify.channel.v1`，在 manifest 的 `notifications.channels` 里写 `[{id, label, description, recipient: email|text}]`，并实现 `NotificationChannel.DeliverNotification`。
   - 渠道 id 全局唯一，冲突时先声明的插件生效。
   - 内置的 `mailer` 插件提供 `email`，经它设置里的 SMTP 服务器发送。
+  - 渠道 id 和平台 id 一样保留给第一方插件（`email` 只能由 `mailer` 声明），因为渠道的提供方能读到发往该渠道的每条通知。
+  - `mailer` 一封邮件发给全部接收人：任一接收人被 SMTP 以 5xx 拒绝，整条通知按最终失败处理。超时上限 25 秒，低于核心投递调用的 30 秒期限。
 - **发送方只认渠道 id**：持有 `notify.send` 授权的插件调用 `ListNotificationChannels` 和 `Notify{channel, recipients 1..20, subject, body 纯文本, severity info|warning|critical, dedupe_key, dedupe_seconds}`，核心自己发通知也走同一条路。
   - 业务插件不需要了解是哪个插件在投递。
 - **核心的处理**：
   - 校验，然后按来源去重：同一个 `dedupe_key` 在窗口内只发一次，默认窗口 600 秒，最长 86400 秒。
   - 限速：每个来源每 5 分钟最多 20 条。超过返回 `rate_limited`。
-  - 写入 `notifications` 表排队，worker 投递。失败退避重试，从 30 秒到 1 小时，最多 8 次。记录保留 30 天。
+  - 写入 `notifications` 表排队，worker 每次领取一条投递，避免慢的 SMTP 让同批其他行的租约过期而被别的节点重复发送。失败退避重试，从 30 秒到 1 小时，最多 8 次；节点关闭打断的投递不计次数。记录保留 30 天。
+  - 控制台的测试通知以 `core:test` 为来源，不占核心通知的限速额度。
 - **控制台**：`GET /notifications/channels`、`GET /notifications`，以及 `POST /notifications/test`（需要 `settings:manage`）。
 
 ### 73.5 dynweight 插件

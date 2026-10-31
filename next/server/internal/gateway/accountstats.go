@@ -1,8 +1,6 @@
 package gateway
 
 import (
-	"cmp"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -25,19 +23,13 @@ func (c *call) publishObservation(phase string, rec *core.UsageRecord, localFail
 		id = rec.RequestID + ":" + phase
 	}
 	if phase == observation.ResponseStarted && c.observationResponseAt.IsZero() {
-		c.observationResponseAt = c.g.now()
-		// A WebSocket turn has no status of its own: its first message is
-		// the upstream's answer.
-		c.observationUpstreamCode = cmp.Or(rec.StatusCode, http.StatusOK)
+		c.observationResponseAt, c.observationUpstreamCode = c.g.now(), rec.StatusCode
 	}
 	v := &pluginv1.RequestObservation{Id: id, RequestId: rec.RequestID, AttemptId: attempt, Phase: phase, AccountId: *rec.AccountID,
 		AccountPluginKey: rec.PluginKey, Model: truncateUTF8(rec.Model, 256), UpstreamModel: truncateUTF8(rec.UpstreamModel, 256), Protocol: rec.Protocol,
 		Stream: rec.Stream, OccurredAtUnixMs: c.g.now().UnixMilli(), StartedAtUnixMs: c.start.UnixMilli(), Revision: 1,
 		LocalFailure: localFailure, Success: rec.Success && !c.statsCanceled, Canceled: c.statsCanceled, StatusCode: int32(rec.StatusCode), ErrorType: truncateUTF8(rec.ErrorType, 128), NodeId: rec.NodeID,
-		UsagePending: rec.Reservation != nil || rec.ReservationDropped != "" || (phase != observation.UsageFinalized && c.usage != nil)}
-	if c.principal != nil {
-		v.GroupId = c.principal.Group.ID
-	}
+		UsagePending: rec.Reservation != nil || rec.ReservationDropped != "" || (phase != observation.UsageFinalized && c.usage != nil), GroupId: rec.GroupID}
 	if !c.statsCompletedAt.IsZero() {
 		v.CompletedAtUnixMs = c.statsCompletedAt.UnixMilli()
 	}
@@ -98,7 +90,9 @@ func (c *call) observeAttemptResult(ref *core.AccountRef, result attemptResult) 
 	local := false
 	if result.err != nil {
 		rec.Success, rec.StatusCode, rec.ErrorType = false, result.err.Status, result.err.RecordType
-		local = result.err.LocalFailure
+		// Only an upstream failure is the account's: the others happen
+		// before or beside the upstream call.
+		local = result.err.LocalFailure || result.err.RecordType != errTypeUpstream
 	}
 	c.publishObservation(observation.AttemptFinished, &rec, local)
 }

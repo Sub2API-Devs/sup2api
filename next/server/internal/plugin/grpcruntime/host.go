@@ -31,6 +31,9 @@ const (
 	// uses AccountsDefaultListLimit.
 	AccountsMaxListLimit     = 200
 	AccountsDefaultListLimit = 100
+	// ClearStickyBindings bounds its model and salt.
+	ClearStickyBindingsMaxModel = 256
+	ClearStickyBindingsMaxSalt  = 128
 )
 
 // hostServer serves HostService to exactly one plugin instance, so the
@@ -455,16 +458,14 @@ func (h *hostServer) SetAccountAutomaticState(ctx context.Context, in *pluginv1.
 	return out, nil
 }
 
-// ClearStickyBindingsMaxModel bounds the model of a ClearStickyBindings call.
-const ClearStickyBindingsMaxModel = 256
-
 func (h *hostServer) ClearStickyBindings(ctx context.Context, in *pluginv1.ClearStickyBindingsRequest) (*pluginv1.ClearStickyBindingsResponse, error) {
 	if err := h.require(ctx, "sticky.clear"); err != nil {
 		return nil, err
 	}
 	if in.GetAccountId() <= 0 || in.GetGroupId() <= 0 || in.GetModel() == "" || len(in.GetModel()) > ClearStickyBindingsMaxModel ||
-		in.GetPercent() < 1 || in.GetPercent() > 100 || len(in.GetSalt()) > 128 {
-		return nil, status.Error(codes.InvalidArgument, "account_id, group_id, model (1..256 bytes) and percent (1..100) are required; salt is at most 128 bytes")
+		in.GetPercent() < 1 || in.GetPercent() > 100 || len(in.GetSalt()) > ClearStickyBindingsMaxSalt {
+		return nil, status.Errorf(codes.InvalidArgument, "account_id, group_id, model (1..%d bytes) and percent (1..100) are required; salt is at most %d bytes",
+			ClearStickyBindingsMaxModel, ClearStickyBindingsMaxSalt)
 	}
 	if h.i.rt.o.Sticky == nil {
 		return nil, status.Error(codes.Unavailable, "sticky bindings unavailable")

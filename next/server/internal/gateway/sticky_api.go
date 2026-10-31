@@ -516,25 +516,12 @@ func (g *Gateway) flushBindings(ctx context.Context, rule string) (int64, error)
 		return 0, nil
 	}
 	var total int64
-	var cursor uint64
-	pattern := stickyBindingPattern(rule)
-	for {
-		keys, next, err := g.d.Redis.Scan(ctx, cursor, pattern, 500).Result()
-		if err != nil {
-			return total, err
-		}
-		if len(keys) > 0 {
-			n, err := g.d.Redis.Del(ctx, keys...).Result()
-			if err != nil {
-				return total, err
-			}
-			total += n
-		}
-		if next == 0 {
-			return total, nil
-		}
-		cursor = next
-	}
+	err := scanStickyKeys(ctx, g.d.Redis, stickyBindingPattern(rule), func(keys []string) error {
+		n, err := g.d.Redis.Del(ctx, keys...).Result()
+		total += n
+		return err
+	})
+	return total, err
 }
 
 type ruleStat struct {
