@@ -13,7 +13,7 @@ import {
   SHint,
   SIcon,
   SInput,
-  SModal,
+  SFormModal,
   SPageHeader,
   SPagination,
   SSelect,
@@ -237,7 +237,7 @@ async function revokeKey(p: Publisher, k: PublisherKey) {
       </template>
     </SPageHeader>
 
-    <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value" expandable>
+    <STable :columns="columns" :rows="list.items.value" :loading="list.loading.value" :error="list.error.value" expandable @retry="list.reload">
       <template #cell-name="{ row }">
         <span class="font-medium text-gray-900 dark:text-white">{{ row.name }}</span>
       </template>
@@ -297,43 +297,31 @@ async function revokeKey(p: Publisher, k: PublisherKey) {
     <SPagination v-model:page="list.page.value" v-model:page-size="list.pageSize.value" :total="list.total.value" />
 
     <!-- create publisher -->
-    <SModal v-model:open="createOpen" :title="t('publishers.create')">
-      <form class="space-y-4" @submit.prevent="submitCreate">
-        <SField :label="t('common.name')" required :error="createErrors.name">
-          <SInput v-model="createForm.name" placeholder="acme" />
-        </SField>
-        <SField :label="t('publishers.trustLevel')" :hint="t(`publishers.trustHint_.${createForm.trust_level}`)" :error="createErrors.trust_level">
-          <SSelect v-model="createForm.trust_level" :options="trustOptions" />
-        </SField>
-      </form>
-      <template #footer>
-        <SButton @click="createOpen = false">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" :loading="creating" @click="submitCreate">{{ t('common.create') }}</SButton>
-      </template>
-    </SModal>
+    <SFormModal v-model:open="createOpen" :title="t('publishers.create')" :loading="creating" :submit-text="t('common.create')" @submit="submitCreate">
+      <SField :label="t('common.name')" required :error="createErrors.name">
+        <SInput v-model="createForm.name" placeholder="acme" />
+      </SField>
+      <SField :label="t('publishers.trustLevel')" :hint="t(`publishers.trustHint_.${createForm.trust_level}`)" :error="createErrors.trust_level">
+        <SSelect v-model="createForm.trust_level" :options="trustOptions" />
+      </SField>
+    </SFormModal>
 
     <!-- add key -->
-    <SModal v-model:open="keyOpen" :title="t('publishers.addKeyTitle', { name: keyPublisher?.name || '' })" width="lg">
-      <form class="space-y-4" @submit.prevent="submitKey">
-        <SField :label="t('publishers.keyId')" required :hint="t('publishers.keyIdHint')" :error="keyErrors.key_id">
-          <SInput v-model="keyForm.key_id" mono placeholder="acme-2026" />
+    <SFormModal v-model:open="keyOpen" :title="t('publishers.addKeyTitle', { name: keyPublisher?.name || '' })" width="lg" :loading="creating" :submit-text="t('common.add')" @submit="submitKey">
+      <SField :label="t('publishers.keyId')" required :hint="t('publishers.keyIdHint')" :error="keyErrors.key_id">
+        <SInput v-model="keyForm.key_id" mono placeholder="acme-2026" />
+      </SField>
+      <SField :label="t('publishers.publicKey')" required :hint="t('publishers.publicKeyHint')" :error="keyErrors.public_key">
+        <STextarea v-model="keyForm.public_key" mono class="text-xs" :rows="2" spellcheck="false" />
+      </SField>
+      <SGrid>
+        <SField :label="t('publishers.notBefore')" :hint="t('common.optional')" :error="keyErrors.not_before">
+          <SInput v-model="keyForm.not_before" type="datetime-local" />
         </SField>
-        <SField :label="t('publishers.publicKey')" required :hint="t('publishers.publicKeyHint')" :error="keyErrors.public_key">
-          <STextarea v-model="keyForm.public_key" mono class="text-xs" :rows="2" spellcheck="false" />
+        <SField :label="t('publishers.notAfter')" :hint="t('common.optional')" :error="keyErrors.not_after">
+          <SInput v-model="keyForm.not_after" type="datetime-local" />
         </SField>
-        <SGrid>
-          <SField :label="t('publishers.notBefore')" :hint="t('common.optional')" :error="keyErrors.not_before">
-            <SInput v-model="keyForm.not_before" type="datetime-local" />
-          </SField>
-          <SField :label="t('publishers.notAfter')" :hint="t('common.optional')" :error="keyErrors.not_after">
-            <SInput v-model="keyForm.not_after" type="datetime-local" />
-          </SField>
-        </SGrid>
-      </form>
-      <template #footer>
-        <SButton @click="keyOpen = false">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" :loading="creating" @click="submitKey">{{ t('common.add') }}</SButton>
-      </template>
-    </SModal>
+      </SGrid>
+    </SFormModal>
   </div>
 </template>

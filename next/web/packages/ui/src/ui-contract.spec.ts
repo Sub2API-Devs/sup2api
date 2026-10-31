@@ -9,7 +9,7 @@ describe('host UI 3 contract', () => {
     expect('TabBar' in ui).toBe(false)
   })
   it('rejects unported UI 1 plugins and accepts the migrated compatibility range', () => {
-    expect(HOST_UI_VERSION).toBe('3.3.0')
+    expect(HOST_UI_VERSION).toBe('3.4.0')
     expect(satisfiesRange(HOST_UI_VERSION, '^1.0')).toBe(false)
     expect(satisfiesRange(HOST_UI_VERSION, '^2.0')).toBe(false)
     expect(satisfiesRange(HOST_UI_VERSION, '^3.0')).toBe(true)
@@ -18,6 +18,13 @@ describe('host UI 3 contract', () => {
     expect(satisfiesRange('3.1.0', '^3.2')).toBe(false)
     expect(satisfiesRange(HOST_UI_VERSION, '^3.3')).toBe(true)
     expect(satisfiesRange('3.2.0', '^3.3')).toBe(false)
+    expect(satisfiesRange(HOST_UI_VERSION, '^3.4')).toBe(true)
+    expect(satisfiesRange('3.3.0', '^3.4')).toBe(false)
+  })
+  it('exports the shared page building blocks (UI 3.4)', () => {
+    for (const name of ['SStatusBadge', 'statusTone', 'SFormModal', 'SFilterBar', 'SAutoRefresh', 'useAutoRefresh'] as const) {
+      expect(ui[name]).toBeDefined()
+    }
   })
   it('exports listAll from the host (UI 3.3)', async () => {
     expect((await import('@sub2api/host')).listAll).toBeTypeOf('function')

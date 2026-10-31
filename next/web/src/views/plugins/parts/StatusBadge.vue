@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SBadge } from '@sub2api/ui'
+import { SStatusBadge } from '@sub2api/ui'
 import { statusTone } from '../pluginUtil'
 import { useOptionalT } from '@/composables/optionalText'
 
@@ -14,5 +14,5 @@ const label = computed(() => {
 </script>
 
 <template>
-  <SBadge :tone="statusTone(status)" dot>{{ label }}</SBadge>
+  <SStatusBadge :status="status" :label="label" :tone="statusTone(status)" />
 </template>

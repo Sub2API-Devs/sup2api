@@ -7,7 +7,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCard, SHint, SModal, SSegmented, SSwitch, STable, STooltip, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SHint, SFormModal, SSegmented, SSwitch, STable, STooltip, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { fetchFirstPage } from '@/composables/lookups'
@@ -477,16 +477,12 @@ async function refreshAuth(r: Row) {
       </STable>
       <RetainedRuntimes :revision="retainedRevision" />
     </div>
-    <SModal v-model:open="fullDialogOpen" :title="t('ccgateway.requestLogs.fullTitle')" width="sm" describedby="request-log-full-warning">
+    <SFormModal v-model:open="fullDialogOpen" :title="t('ccgateway.requestLogs.fullTitle')" width="sm" describedby="request-log-full-warning" :submit-text="t('ccgateway.requestLogs.fullAction')" :submit-attrs="{ 'data-testid': 'request-log-full-confirm' }" :cancel-attrs="{ 'data-testid': 'request-log-full-cancel' }" @submit="confirmFull">
       <div class="space-y-3" data-testid="request-log-full-dialog">
         <SHint id="request-log-full-warning" tone="warning">{{ t(fullDialog?.row.logsPolicy ? 'ccgateway.requestLogs.followFullWarning' : 'ccgateway.requestLogs.fullWarning') }}</SHint>
         <SSegmented v-if="fullDialog" :model-value="fullDialog.hours" :options="hourOptions" block :aria-label="t('ccgateway.requestLogs.fullDuration')" data-testid="request-log-full-hours" @update:model-value="setHours" />
       </div>
-      <template #footer>
-        <SButton data-testid="request-log-full-cancel" @click="fullDialog = null">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" data-testid="request-log-full-confirm" @click="confirmFull">{{ t('ccgateway.requestLogs.fullAction') }}</SButton>
-      </template>
-    </SModal>
+    </SFormModal>
     <RequestLogViewer v-if="viewing" v-model:open="viewerOpen" :account-id="viewing.id" :account-name="viewing.name" :summary="workerOf(viewing) ? logDetails(viewing) : undefined" :search="workerOf(viewing)?.viewerSearch === true" />
   </SCard>
 </template>

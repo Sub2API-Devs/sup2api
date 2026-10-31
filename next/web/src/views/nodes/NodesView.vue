@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SButton, SChip, SCode, SGrid, SHint, SPageHeader, SStatCard, SStatusDot, STable, type TableColumn, type Tone, type StatusTone } from '@sub2api/ui'
+import { SDateTime, useAutoRefresh, SBadge, SButton, SChip, SCode, SGrid, SHint, SPageHeader, SStatCard, SStatusDot, STable, type TableColumn, type Tone, type StatusTone } from '@sub2api/ui'
 import type { NodeInfo } from '@/api/types'
 import { statusTone, type NodePluginState } from '@/api/admin'
 import { notifyError } from '@/utils/errors'
 import { fetchFirstPage } from '@/composables/lookups'
-import TimeText from '@/components/TimeText.vue'
 import TopologyGraph from './TopologyGraph.vue'
 
 const { t } = useI18n()
@@ -19,7 +18,6 @@ const nodes = ref<NodeInfo[]>([])
 const loading = ref(true)
 const lastLoaded = ref<Date | null>(null)
 const tick = ref(Date.now())
-let timer: ReturnType<typeof setInterval> | undefined
 let clock: ReturnType<typeof setInterval> | undefined
 let inflight = false
 let failures = 0
@@ -42,17 +40,12 @@ async function load(manual = false) {
   }
 }
 
+useAutoRefresh(load, REFRESH_MS)
 onMounted(() => {
   load()
-  timer = setInterval(() => {
-    if (document.visibilityState !== 'hidden') load()
-  }, REFRESH_MS)
   clock = setInterval(() => (tick.value = Date.now()), 1000)
 })
-onBeforeUnmount(() => {
-  clearInterval(timer)
-  clearInterval(clock)
-})
+onBeforeUnmount(() => clearInterval(clock))
 
 // ------------------------------------------------------------------ helpers
 
@@ -147,7 +140,7 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
         <SStatusDot tone="success" pulse size="xs">
           <SHint inline size="xs">
             {{ t('nodes.autoRefresh') }}
-            <template v-if="lastLoaded">· <TimeText :value="lastLoaded" mode="relative" live /></template>
+            <template v-if="lastLoaded">· <SDateTime muted :value="lastLoaded" mode="relative" live /></template>
           </SHint>
         </SStatusDot>
         <SButton size="sm" icon="refresh" :loading="loading" @click="load(true)">{{ t('common.refresh') }}</SButton>
@@ -176,10 +169,10 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
         <SBadge tone="gray">{{ row.host_version }}</SBadge>
       </template>
       <template #cell-started_at="{ row }">
-        <TimeText :value="row.started_at" mode="relative" live />
+        <SDateTime muted :value="row.started_at" mode="relative" live />
       </template>
       <template #cell-last_heartbeat="{ row }">
-        <TimeText :value="row.last_heartbeat" mode="relative" live :muted="false" :class="isStale(row) ? 'font-medium text-danger-600 dark:text-danger-400' : 'text-fg'" />
+        <SDateTime :value="row.last_heartbeat" mode="relative" live :class="isStale(row) ? 'font-medium text-danger-600 dark:text-danger-400' : 'text-fg'" />
         <SBadge v-if="isStale(row)" tone="danger" class="ml-2">{{ t('nodes.stale') }}</SBadge>
       </template>
       <template #cell-plugins="{ row }">

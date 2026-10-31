@@ -2,8 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SCode, SHint, SPagination, STable, type TableColumn } from '@sub2api/ui'
-import TimeText from '@/components/TimeText.vue'
+import { SDateTime, SAlert, SCode, SHint, SPagination, STable, type TableColumn } from '@sub2api/ui'
 import { errorMessage } from '@/utils/errors'
 
 // Audit log rows (GET /audit-logs, audit:read) matching `query`, newest first.
@@ -68,7 +67,7 @@ defineExpose({ load, loading })
   <div>
     <SAlert v-if="error" tone="danger" class="mb-3">{{ error }}</SAlert>
     <STable card :columns="columns" :rows="rows" :loading="loading" row-key="id" expandable data-testid="audit-log-table">
-      <template #cell-created_at="{ row }"><TimeText :value="row.created_at" :muted="false" /></template>
+      <template #cell-created_at="{ row }"><SDateTime mode="absolute" :value="row.created_at" /></template>
       <template #cell-user_id="{ row }">
         <template v-if="row.user_id == null">{{ t('observe.system') }}</template>
         <span v-else :title="row.user_email || undefined">{{ row.user_name || row.user_email || '#' + row.user_id }}</span>

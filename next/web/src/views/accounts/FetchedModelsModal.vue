@@ -3,7 +3,7 @@
 // the ticked ones are merged into the account's list (`apply`).
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SButton, SCheckbox, SHint, SLink, SModal } from '@sub2api/ui'
+import { SBadge, SCheckbox, SHint, SLink, SFormModal } from '@sub2api/ui'
 
 const props = defineProps<{ models: string[]; skipped: number; /** The account's current list (marked "already listed"). */ existing: string[] }>()
 const open = defineModel<boolean>('open', { required: true })
@@ -19,7 +19,7 @@ watch(() => props.models, () => setAll(true), { immediate: true })
 </script>
 
 <template>
-  <SModal v-model:open="open" :title="t('accounts.fetchModelsTitle', { n: models.length })" width="md">
+  <SFormModal v-model:open="open" :title="t('accounts.fetchModelsTitle', { n: models.length })" width="md" :submit-disabled="!pickedModels.length" :submit-text="t('accounts.fetchApply')" @submit="emit('apply', pickedModels)">
     <div class="mb-2 flex items-center justify-between text-xs">
       <SHint inline size="xs">
         {{ t('accounts.fetchPicked', { n: pickedModels.length, total: models.length }) }}
@@ -38,9 +38,5 @@ watch(() => props.models, () => setAll(true), { immediate: true })
         </span>
       </SCheckbox>
     </div>
-    <template #footer>
-      <SButton @click="open = false">{{ t('common.cancel') }}</SButton>
-      <SButton variant="primary" :disabled="!pickedModels.length" @click="emit('apply', pickedModels)">{{ t('accounts.fetchApply') }}</SButton>
-    </template>
-  </SModal>
+  </SFormModal>
 </template>

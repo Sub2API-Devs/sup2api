@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SModal, SPageHeader, SPagination, SSelect, SSettingsGroup, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
+import { SStatusBadge, SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SFormModal, SModal, SPageHeader, SPagination, SSelect, SSettingsGroup, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
 import type { EnvironmentValues, Group } from '@/api/types'
 import { deleteWithConfirm, toggleStatus, useStatusOptions } from '@/composables/crud'
 import { useList } from '@/composables/useList'
@@ -10,7 +10,6 @@ import { useGroupsLookup } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
-import StatusBadge from '@/components/StatusBadge.vue'
 import { formatNumber } from '@/utils/format'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
@@ -209,7 +208,7 @@ function onAction(g: Group, key: string) {
       </template>
     </SPageHeader>
 
-    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value">
+    <STable card :columns="columns" :rows="list.items.value" :loading="list.loading.value" :error="list.error.value" @retry="list.reload">
       <template #cell-name="{ row }">
         <SLink as="button" class="text-left font-medium" data-testid="group-name" @click="openDetail(row)">{{ row.name }}</SLink>
         <SHint v-if="row.description" size="xs" class="max-w-xs truncate">{{ row.description }}</SHint>
@@ -238,7 +237,7 @@ function onAction(g: Group, key: string) {
       <template #cell-account_count="{ row }">{{ formatNumber(row.account_count) }}</template>
       <template #cell-key_count="{ row }">{{ formatNumber(keyCount(row)) }}</template>
       <template #cell-status="{ row }">
-        <StatusBadge :status="row.status" />
+        <SStatusBadge :status="row.status" />
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
@@ -257,50 +256,44 @@ function onAction(g: Group, key: string) {
       </template>
     </STable>
 
-    <SModal v-model:open="open" :title="editing ? t('groups.editTitle', { name: editing.name }) : t('groups.create')" width="xl">
-      <form class="space-y-4" @submit.prevent="submit">
-        <SGrid>
-          <SField :label="t('common.name')" required :error="errors.name">
-            <SInput v-model="form.name" />
-          </SField>
-          <SField :label="t('common.status')" :error="errors.status">
-            <SSelect v-model="form.status" :options="statusOptions" />
-          </SField>
-        </SGrid>
-        <SField :label="t('common.description')" :error="errors.description">
-          <STextarea v-model="form.description" :rows="2" />
+    <SFormModal v-model:open="open" :title="editing ? t('groups.editTitle', { name: editing.name }) : t('groups.create')" width="xl" :loading="saving" :submit-text="editing ? t('common.save') : t('common.create')" @submit="submit">
+      <SGrid>
+        <SField :label="t('common.name')" required :error="errors.name">
+          <SInput v-model="form.name" />
         </SField>
-        <SGrid>
-          <SField :label="t('groups.rateMultiplier')" required :hint="t('groups.multiplierHint')" :error="errors.rate_multiplier">
-            <SInput v-model="form.rate_multiplier" mono inputmode="decimal" />
-          </SField>
-          <SField
-            :label="t('groups.visibility')"
-            :hint="form.visibility === 'restricted' ? t('groups.restrictedHint') : t('groups.publicHint')"
-            :error="errors.visibility"
-          >
-            <SSelect v-model="form.visibility" :options="visibilityOptions" />
-          </SField>
-        </SGrid>
-        <SField :label="t('groups.modelRules')" :hint="t('groups.allowlistHint')" :error="errors.model_allowlist || errors.model_filter_mode">
-          <GroupModelPolicyEditor v-if="open" :key="editing?.id ?? 'new'" ref="modelPolicyEditor" v-model="form.model_allowlist" v-model:mode="form.model_filter_mode" :options="currentModelSource.models" :loading="modelsLoading" :unrestricted-accounts="currentModelSource.unrestricted_accounts" />
-          <SHint v-if="modelLoadError" tone="danger" size="xs">{{ modelLoadError }}</SHint>
+        <SField :label="t('common.status')" :error="errors.status">
+          <SSelect v-model="form.status" :options="statusOptions" />
         </SField>
-        <SField v-if="editing" :label="t('platforms.served')">
-          <GroupPlatforms :group="editing" hint />
+      </SGrid>
+      <SField :label="t('common.description')" :error="errors.description">
+        <STextarea v-model="form.description" :rows="2" />
+      </SField>
+      <SGrid>
+        <SField :label="t('groups.rateMultiplier')" required :hint="t('groups.multiplierHint')" :error="errors.rate_multiplier">
+          <SInput v-model="form.rate_multiplier" mono inputmode="decimal" />
         </SField>
-        <SSettingsGroup :title="t('settings.environment.title')" :description="t('settings.environment.groupHint')" data-testid="group-environment">
-          <EnvironmentEditor v-model="form.environment" layer="group" field="environment" :errors="errors" :disabled="saving" />
-        </SSettingsGroup>
-        <SField v-if="canEditAccounts" :label="t('groups.accounts.title')" :hint="t('groups.accounts.hint')">
-          <GroupAccountsEditor v-if="open" ref="accountsEditor" :group-id="editing?.id ?? null" @models="selectedModelSource = $event" />
+        <SField
+          :label="t('groups.visibility')"
+          :hint="form.visibility === 'restricted' ? t('groups.restrictedHint') : t('groups.publicHint')"
+          :error="errors.visibility"
+        >
+          <SSelect v-model="form.visibility" :options="visibilityOptions" />
         </SField>
-      </form>
-      <template #footer>
-        <SButton @click="open = false">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" :loading="saving" @click="submit">{{ editing ? t('common.save') : t('common.create') }}</SButton>
-      </template>
-    </SModal>
+      </SGrid>
+      <SField :label="t('groups.modelRules')" :hint="t('groups.allowlistHint')" :error="errors.model_allowlist || errors.model_filter_mode">
+        <GroupModelPolicyEditor v-if="open" :key="editing?.id ?? 'new'" ref="modelPolicyEditor" v-model="form.model_allowlist" v-model:mode="form.model_filter_mode" :options="currentModelSource.models" :loading="modelsLoading" :unrestricted-accounts="currentModelSource.unrestricted_accounts" />
+        <SHint v-if="modelLoadError" tone="danger" size="xs">{{ modelLoadError }}</SHint>
+      </SField>
+      <SField v-if="editing" :label="t('platforms.served')">
+        <GroupPlatforms :group="editing" hint />
+      </SField>
+      <SSettingsGroup :title="t('settings.environment.title')" :description="t('settings.environment.groupHint')" data-testid="group-environment">
+        <EnvironmentEditor v-model="form.environment" layer="group" field="environment" :errors="errors" :disabled="saving" />
+      </SSettingsGroup>
+      <SField v-if="canEditAccounts" :label="t('groups.accounts.title')" :hint="t('groups.accounts.hint')">
+        <GroupAccountsEditor v-if="open" ref="accountsEditor" :group-id="editing?.id ?? null" @models="selectedModelSource = $event" />
+      </SField>
+    </SFormModal>
 
     <!-- detail -->
     <SModal v-model:open="detailOpen" :title="detail?.name || ''" width="lg">
@@ -308,7 +301,7 @@ function onAction(g: Group, key: string) {
         <SDescriptions data-testid="group-detail" dense>
           <SDescItem :label="t('common.id')" :value="detail.id" />
           <SDescItem v-if="detail.description" :label="t('common.description')" :value="detail.description" />
-          <SDescItem :label="t('common.status')"><StatusBadge :status="detail.status" /></SDescItem>
+          <SDescItem :label="t('common.status')"><SStatusBadge :status="detail.status" /></SDescItem>
           <SDescItem :label="t('groups.visibility')">{{ detail.visibility === 'public' ? t('groups.public') : t('groups.restricted') }}</SDescItem>
           <SDescItem :label="t('groups.rateMultiplier')"><span class="font-mono">×{{ multiplier(detail.rate_multiplier) }}</span></SDescItem>
           <SDescItem><template #label>{{ t('groups.modelRules') }} · {{ t(detail.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}</template>{{ detail.model_allowlist?.length ? detail.model_allowlist.join(', ') : t('common.unlimited') }}</SDescItem>

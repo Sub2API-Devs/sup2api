@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SField, SHint, SInput, SModal, SRadioGroup, STextarea, toast, type SelectOption } from '@sub2api/ui'
+import { SField, SHint, SInput, SFormModal, SRadioGroup, STextarea, toast, type SelectOption } from '@sub2api/ui'
 import type { User } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { applyFormError } from '@/utils/formErrors'
@@ -116,7 +116,7 @@ async function submit() {
 </script>
 
 <template>
-  <SModal :open="open" :title="t('ledger.adjust.title')" width="md" @update:open="emit('update:open', $event)">
+  <SFormModal :open="open" :title="t('ledger.adjust.title')" width="md" :loading="busy" :submit-text="t('common.confirm')" @update:open="emit('update:open', $event)" @submit="submit">
     <div class="space-y-4">
       <div v-if="currentBalance !== undefined && currentBalance !== null && targetUserId === userId" class="text-sm" data-testid="adjust-current-balance">
         <SHint inline>{{ t('ledger.adjust.currentBalance') }}:</SHint>
@@ -148,9 +148,5 @@ async function submit() {
         <STextarea v-model="note" :rows="2" :placeholder="t('ledger.adjust.notePlaceholder')" />
       </SField>
     </div>
-    <template #footer>
-      <SButton @click="emit('update:open', false)">{{ t('common.cancel') }}</SButton>
-      <SButton variant="primary" :loading="busy" @click="submit">{{ t('common.confirm') }}</SButton>
-    </template>
-  </SModal>
+  </SFormModal>
 </template>

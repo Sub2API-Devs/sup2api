@@ -104,7 +104,7 @@ export const usePluginStore = defineStore('plugins', () => {
   /**
    * Reloads /ui/plugins; unregisters removed/changed plugins, loads new ones.
    * Resolves once every native module has loaded or failed; whoever only needs
-   * the list (menus, page lookup) waits on whenListed() instead.
+   * the list waits on whenListed() instead.
    */
   async function refresh() {
     let resolveListed!: () => void

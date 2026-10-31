@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SCheckbox, SChoiceCards, SField, SGrid, SHint, SInput, SModal, SSectionTitle, SSelect, SSettingRow, SSwitch, STagInput, toast, type ChoiceOption } from '@sub2api/ui'
+import { SAlert, SButton, SCheckbox, SChoiceCards, SField, SGrid, SHint, SInput, SFormModal, SSectionTitle, SSelect, SSettingRow, SSwitch, STagInput, toast, type ChoiceOption } from '@sub2api/ui'
 import type { StickyRule } from '@/api/types'
 import { applyFormError } from '@/utils/formErrors'
 import StickyProtocolPicker from './StickyProtocolPicker.vue'
@@ -164,7 +164,7 @@ async function submit() {
 </script>
 
 <template>
-  <SModal :open="open" :title="title" width="xl" @update:open="emit('update:open', $event)">
+  <SFormModal :open="open" :title="title" width="xl" :loading="busy" @update:open="emit('update:open', $event)" @submit="submit">
     <div class="space-y-5">
       <SAlert v-if="limited" tone="accent" dense>{{ t('sticky.modal.limitedHint') }}</SAlert>
 
@@ -258,9 +258,5 @@ async function submit() {
         />
       </SField>
     </div>
-    <template #footer>
-      <SButton @click="emit('update:open', false)">{{ t('common.cancel') }}</SButton>
-      <SButton variant="primary" :loading="busy" @click="submit">{{ t('common.save') }}</SButton>
-    </template>
-  </SModal>
+  </SFormModal>
 </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Pill label. `tone` picks the colour (purple = accent); `size` xs is the
+// Pill label. `tone` picks the colour (neutral = gray, purple = accent); `size` xs is the
 // compact table-cell variant. Literal class names so Tailwind keeps them.
 import type { Tone } from './types'
 withDefaults(defineProps<{ tone?: Tone; dot?: boolean; size?: 'xs' | 'sm' }>(), { tone: 'gray', size: 'sm' })
@@ -10,6 +10,7 @@ const TONE: Record<Tone, string> = {
   warning: 'badge-warning',
   danger: 'badge-danger',
   gray: 'badge-gray',
+  neutral: 'badge-gray',
   accent: 'badge-accent',
   purple: 'badge-purple'
 }

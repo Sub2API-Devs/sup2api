@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SField, SInput, SModal, SSelect, STextarea, confirm, toast } from '@sub2api/ui'
+import { SButton, SField, SInput, SFormModal, SSelect, STextarea, confirm, toast } from '@sub2api/ui'
 import type { ApiKey, Group } from '@/api/types'
 import { usePlatforms } from '@/composables/platforms'
 import { notifyError } from '@/utils/errors'
@@ -75,8 +75,17 @@ async function resetQuota() {
 </script>
 
 <template>
-  <SModal :open="open" :title="t(editing ? 'apikeys.edit' : 'apikeys.create')" width="lg" :persistent="saving" :closable="!saving" @update:open="!$event && close()">
-    <form class="space-y-4" data-testid="key-editor" @submit.prevent="save">
+  <SFormModal
+    :open="open"
+    :title="t(editing ? 'apikeys.edit' : 'apikeys.create')"
+    width="lg"
+    :loading="saving"
+    :submit-text="t(editing ? 'common.save' : 'common.create')"
+    :submit-attrs="{ 'data-testid': 'save-key' }"
+    data-testid="key-editor"
+    @update:open="!$event && close()"
+    @submit="save"
+  >
       <SField :label="t('common.name')" required :error="errors.name">
         <SInput v-model="form.name" :placeholder="t('apikeys.namePlaceholder')" :disabled="saving" data-testid="key-name" />
       </SField>
@@ -95,10 +104,5 @@ async function resetQuota() {
       <SField :label="t('apikeys.expiresAt')" :hint="t('apikeys.expiresHint')" :error="errors.expires_at">
         <SInput v-model="form.expires_at" type="datetime-local" :disabled="saving" data-testid="key-expires" />
       </SField>
-    </form>
-    <template #footer>
-      <SButton :disabled="saving" @click="close">{{ t('common.cancel') }}</SButton>
-      <SButton variant="primary" :loading="saving" data-testid="save-key" @click="save">{{ t(editing ? 'common.save' : 'common.create') }}</SButton>
-    </template>
-  </SModal>
+  </SFormModal>
 </template>

@@ -2,7 +2,7 @@
 import { reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SField, SInput, SModal, toast } from '@sub2api/ui'
+import { SField, SInput, SFormModal, toast } from '@sub2api/ui'
 import { errorMessage, fieldErrors } from '@/utils/errors'
 
 const props = defineProps<{ open: boolean }>()
@@ -46,24 +46,15 @@ async function submit() {
 </script>
 
 <template>
-  <SModal :open="open" :title="t('nav.changePassword')" width="sm" @update:open="emit('update:open', $event)">
-    <form class="space-y-4" @submit.prevent="submit">
-      <SField :label="t('nav.password.old')" :error="errors.old_password" required>
-        <SInput v-model="form.old_password" type="password" autocomplete="current-password" revealable />
-      </SField>
-      <SField :label="t('nav.password.new')" :error="errors.new_password" required>
-        <SInput v-model="form.new_password" type="password" autocomplete="new-password" revealable />
-      </SField>
-      <SField :label="t('nav.password.confirm')" :error="errors.confirm" required>
-        <SInput v-model="form.confirm" type="password" autocomplete="new-password" revealable />
-      </SField>
-      <button type="submit" class="hidden" />
-    </form>
-    <template #footer>
-      <SButton @click="emit('update:open', false)">{{ t('common.cancel') }}</SButton>
-      <SButton variant="primary" :loading="busy" :disabled="!form.old_password || !form.new_password" @click="submit">
-        {{ t('common.save') }}
-      </SButton>
-    </template>
-  </SModal>
+  <SFormModal :open="open" :title="t('nav.changePassword')" width="sm" :loading="busy" :submit-disabled="!form.old_password || !form.new_password" @update:open="emit('update:open', $event)" @submit="submit">
+    <SField :label="t('nav.password.old')" :error="errors.old_password" required>
+      <SInput v-model="form.old_password" type="password" autocomplete="current-password" revealable />
+    </SField>
+    <SField :label="t('nav.password.new')" :error="errors.new_password" required>
+      <SInput v-model="form.new_password" type="password" autocomplete="new-password" revealable />
+    </SField>
+    <SField :label="t('nav.password.confirm')" :error="errors.confirm" required>
+      <SInput v-model="form.confirm" type="password" autocomplete="new-password" revealable />
+    </SField>
+  </SFormModal>
 </template>

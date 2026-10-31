@@ -81,7 +81,6 @@ export default {
     unitRpm: 'req / min', unitTpm: 'tokens / min', unitTpd: 'tokens / day', unitSpm: 'sessions / min', create: 'Create account', noCredentials: 'This account type has no credential fields to fill in here.', modelsInputHint: 'Type or pick a model, Enter or comma adds it, paste comma or line separated lists; click a tag to copy it, mapped models show → target' },
   title: 'Accounts',
   subtitle: 'Upstream accounts used by the gateway. Account types are declared by plugins; a group can mix accounts of different types.',
-  autoRefresh: 'Auto refresh',
   new: 'New account',
   allTypes: 'All types',
   allGroups: 'All groups',

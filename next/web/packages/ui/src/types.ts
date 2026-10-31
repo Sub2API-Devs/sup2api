@@ -63,8 +63,11 @@ export interface MenuAction {
   checked?: boolean
 }
 
-/** `purple` is the older name of `accent` (same colours). */
-export type Tone = 'primary' | 'success' | 'warning' | 'danger' | 'gray' | 'purple' | 'accent' | 'info'
+/**
+ * Badge tone. `neutral` (the StatusTone name) and `gray` are the same colour;
+ * `purple` is the older name of `accent`. Prefer the StatusTone names.
+ */
+export type Tone = 'primary' | 'success' | 'warning' | 'danger' | 'gray' | 'neutral' | 'purple' | 'accent' | 'info'
 
 /** Status tones of SAlert / SChip / SStatusDot / SProgress. */
 export type StatusTone = 'neutral' | 'primary' | 'info' | 'success' | 'warning' | 'danger' | 'accent'

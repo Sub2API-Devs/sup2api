@@ -5,7 +5,7 @@
 // dialog stays open while the request runs.
 import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SButton, SHint, SModal, SRadioGroup } from '@sub2api/ui'
+import { SHint, SFormModal, SRadioGroup } from '@sub2api/ui'
 import type { Account } from '@/api/types'
 import { deleteResource } from '@/composables/crud'
 
@@ -41,7 +41,18 @@ async function remove() {
 </script>
 
 <template>
-  <SModal :open="open" :title="t('common.delete')" width="sm" :persistent="busy" :closable="!busy" :describedby="describedby" @update:open="v => emit('update:open', v)">
+  <SFormModal
+    :open="open"
+    :title="t('common.delete')"
+    width="sm"
+    :describedby="describedby"
+    :loading="busy"
+    submit-variant="danger"
+    :submit-text="t('common.delete')"
+    :submit-attrs="{ 'data-testid': 'account-delete-confirm' }"
+    @update:open="v => emit('update:open', v)"
+    @submit="remove"
+  >
     <div class="space-y-3">
       <p :id="messageId">{{ t('common.confirmDelete', { name: account?.name ?? '' }) }}</p>
       <template v-if="retentionDays > 0">
@@ -49,9 +60,5 @@ async function remove() {
         <SHint :id="hintId">{{ keep === 'retain' ? t('accounts.deleteResources.retainHint', { days: retentionDays }) : t('accounts.deleteResources.nowHint') }}</SHint>
       </template>
     </div>
-    <template #footer>
-      <SButton :disabled="busy" @click="emit('update:open', false)">{{ t('common.cancel') }}</SButton>
-      <SButton variant="danger" :loading="busy" data-testid="account-delete-confirm" @click="remove">{{ t('common.delete') }}</SButton>
-    </template>
-  </SModal>
+  </SFormModal>
 </template>

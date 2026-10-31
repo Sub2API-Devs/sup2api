@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SEmpty, SIcon, SIPAddress, SSpinner, STable, STableColumnSettings, useTableColumns, type TableColumn } from '@sub2api/ui'
-import TimeText from '@/components/TimeText.vue'
+import { SDateTime, SBadge, SEmpty, SIcon, SIPAddress, SSpinner, STable, STableColumnSettings, useTableColumns, type TableColumn } from '@sub2api/ui'
 import { formatMoney, formatNumber } from '@/utils/format'
 import UsageDetail from './UsageDetail.vue'
 import UsageError from './UsageError.vue'
@@ -79,7 +78,7 @@ function toggleMobile(id: number) {
       <template v-if="$slots.footer" #footer><slot name="footer" /></template>
       <template #cell-created_at="{ row }">
         <div class="flex min-w-0 flex-col items-start gap-1">
-          <TimeText :value="row.created_at" mode="time" :muted="false" class="font-mono text-xs tabular-nums" />
+          <SDateTime :value="row.created_at" mode="time" class="font-mono text-xs tabular-nums" />
           <UsageStatus :row="row" />
           <UsageError v-if="!row.success" :row="row" class="max-w-full" data-testid="usage-error-summary" />
         </div>
@@ -172,7 +171,7 @@ function toggleMobile(id: number) {
               <span class="break-all">{{ row.model || '—' }}</span>
             </p>
             <p class="mt-1 text-xs text-fg-subtle">
-              <TimeText :value="row.created_at" mode="time" class="tabular-nums" />
+              <SDateTime muted :value="row.created_at" mode="time" class="tabular-nums" />
             </p>
           </div>
           <UsageStatus :row="row" />
