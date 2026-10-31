@@ -44,23 +44,30 @@ async function loadPending() {
   for (const id of ids) inflight.add(id)
   for (let i = 0; i < ids.length; i += 500) {
     const batch = ids.slice(i, i + 500)
-    if (viaPlugin) {
-      try {
-        for (const u of await fetchUsers(batch)) users.set(u.id, u)
-        for (const id of batch) if (!users.has(id)) users.set(id, null)
-        continue
-      } catch (e) {
-        if (!isApiError(e) || e.code !== 'users_unavailable') {
-          for (const id of batch) users.set(id, null)
-          setTimeout(() => batch.forEach((id) => users.get(id) === null && users.delete(id)), RETRY_MS)
-          continue
-        }
-        viaPlugin = false
-      }
-    }
-    await Promise.all(batch.map(loadCoreUser))
+    if (!viaPlugin || !(await loadViaPlugin(batch))) await Promise.all(batch.map(loadCoreUser))
   }
   for (const id of ids) inflight.delete(id)
+}
+
+/**
+ * Looks a batch up through the plugin; false when the plugin cannot
+ * (users_unavailable), and the core is asked from then on. Other errors
+ * leave the batch unknown for RETRY_MS.
+ */
+async function loadViaPlugin(batch: number[]): Promise<boolean> {
+  try {
+    for (const u of await fetchUsers(batch)) users.set(u.id, u)
+    for (const id of batch) if (!users.has(id)) users.set(id, null)
+    return true
+  } catch (e) {
+    if (isApiError(e) && e.code === 'users_unavailable') {
+      viaPlugin = false
+      return false
+    }
+    for (const id of batch) users.set(id, null)
+    setTimeout(() => batch.forEach((id) => users.get(id) === null && users.delete(id)), RETRY_MS)
+    return true
+  }
 }
 
 async function loadCoreUser(id: number) {

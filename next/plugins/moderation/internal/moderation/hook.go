@@ -190,12 +190,12 @@ func (p *Plugin) runPre(ctx context.Context, m *moderation) *pluginv1.GatewayReq
 	case <-ctx.Done():
 		// The client is gone or the hook timed out: the shared run goes on
 		// and only a hit is concluded once it returns.
-		go func() {
+		p.goTracked(func() {
 			res := <-ch
 			if r := res.Val.(*sharedRun); r.tr.Final == Hit {
 				p.concludePre(m, r, start)
 			}
-		}()
+		})
 		return allow(notePrefix + "error canceled")
 	}
 	refused := r.tr.Final == Hit
@@ -291,10 +291,10 @@ func (p *Plugin) finish(m *moderation, tr Trace, refused bool) {
 		}
 	}
 	rec.KeepUntil = rec.At.Add(m.cfg.retention[rec.Result])
-	if p.eventWriter.Send(rec) {
+	if p.sendEvent(rec) {
 		return
 	}
-	// The queue is full. A suspicious record drives the watch list, the
+	// The queue is full or the writer stopped. A suspicious record drives the watch list, the
 	// violation count and the ban, so it is written right here (new-api
 	// worker.go enqueue); anything else is dropped.
 	if rec.suspicious() {

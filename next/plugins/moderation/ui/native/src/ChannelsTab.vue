@@ -8,7 +8,7 @@ import PriceCell from './PriceCell.vue'
 import RateCell from './RateCell.vue'
 import { useCatalog } from './catalog'
 import { callCostText, enumLabel, joinList, money, ms, num } from './format'
-import { canManage, channelBody, deleteChannel, errorDetails, errorMessage, saveChannel, testChannel, toastError, useModHost } from './host'
+import { canManage, channelBody, confirmDelete, deleteChannel, errorDetails, errorMessage, saveChannel, testChannel, toastError, useModHost } from './host'
 import type { Channel } from './types'
 
 // Channels (CONTRACTS §72.6, new-api channels): the upstreams auditors call,
@@ -87,17 +87,8 @@ function deleteError(e: unknown): string {
   return names.length ? t('channels.inUse', { names: joinList(names) }) : errorMessage(e, t('actionFailed'))
 }
 
-async function remove(c: Channel) {
-  const ok = await host.confirm({ message: t('channels.deleteConfirm', { name: c.name }), danger: true, confirmText: t('delete') })
-  if (!ok) return
-  try {
-    await deleteChannel(c.id)
-    host.toast(t('deleted'), 'success')
-    void catalog.refresh(['channels'])
-  } catch (e) {
-    host.toast(deleteError(e), 'error')
-  }
-}
+const remove = (c: Channel) =>
+  confirmDelete(t('channels.deleteConfirm', { name: c.name }), () => deleteChannel(c.id), () => void catalog.refresh(['channels']), deleteError)
 
 const testing = ref<number | null>(null)
 async function test(c: Channel) {

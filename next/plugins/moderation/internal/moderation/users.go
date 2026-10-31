@@ -72,7 +72,7 @@ func (p *Plugin) getUsers(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	}
 	rows, err := db.Query(ctx, `SELECT u FROM unnest($1::bigint[]) AS u WHERE
 		EXISTS (SELECT 1 FROM events WHERE user_id = u) OR EXISTS (SELECT 1 FROM watchlist WHERE user_id = u)
-		OR EXISTS (SELECT 1 FROM watch_events WHERE user_id = u) OR u IN (SELECT operator_id FROM watch_events WHERE operator_id IS NOT NULL)
+		OR EXISTS (SELECT 1 FROM watch_events WHERE user_id = u) OR EXISTS (SELECT 1 FROM watch_events WHERE operator_id = u)
 		OR EXISTS (SELECT 1 FROM blocks WHERE user_id = u) OR EXISTS (SELECT 1 FROM unblocks WHERE user_id = u)
 		OR EXISTS (SELECT 1 FROM user_analyses WHERE user_id = u) OR EXISTS (SELECT 1 FROM user_daily WHERE user_id = u)`, ids)
 	if err == nil {

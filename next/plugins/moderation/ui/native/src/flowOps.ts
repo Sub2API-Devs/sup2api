@@ -222,6 +222,16 @@ export function canvasAuditors(auditors: readonly Auditor[], channels: readonly 
 }
 
 /** Automatic total timeout: Σ over stages of the slowest channel of the stage. */
+/** The canvas auditors by id, with an auditor's type (undefined when it is missing) and name (#id when missing). */
+export function auditorIndex(auditors: readonly CanvasAuditor[]) {
+  const byId: ReadonlyMap<number, CanvasAuditor> = new Map(auditors.map((a) => [a.id, a]))
+  return {
+    byId,
+    typeOf: ((id) => byId.get(id)?.type) as AuditorTypeOf,
+    nameOf: (id: number) => byId.get(id)?.name ?? `#${id}`
+  }
+}
+
 export function autoTimeoutMs(spec: Spec, byId: ReadonlyMap<number, CanvasAuditor>): number {
   return spec.stages.reduce((sum, st) => sum + Math.max(0, ...st.auditors.map((id) => byId.get(id)?.timeoutMs ?? 0)), 0)
 }

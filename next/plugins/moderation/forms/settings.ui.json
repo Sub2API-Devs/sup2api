@@ -803,8 +803,8 @@
       "zh": "统计保留天数"
     },
     "ui:help": {
-      "en": "Hourly statistics and per-user daily counts older than this are deleted by the daily cleanup.",
-      "zh": "每日清理时删除超过该天数的小时统计和用户每日计数。"
+      "en": "Hourly statistics, per-user daily counts and moderation costs older than this are deleted by the daily cleanup.",
+      "zh": "每日清理时删除超过该天数的小时统计、用户每日计数和审核费用。"
     }
   }
 }

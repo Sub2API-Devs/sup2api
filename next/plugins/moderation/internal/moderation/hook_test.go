@@ -497,6 +497,11 @@ func TestBansExemptAndModeOff(t *testing.T) {
 	if r := mustHook(t, h, hookReqAs(8, "", "MOD-HIT-sexual")); r.GetNote() != "" {
 		t.Fatalf("exempt user moderated: %+v", r)
 	}
+	for _, path := range []string{"/watchlist", "/blocks"} {
+		if resp := h.Do("POST", path, nil, map[string]any{"user_id": 8}); resp.GetStatus() != 400 || !strings.Contains(string(resp.GetBody()), `"exempt"`) {
+			t.Fatalf("exempt %s = %d %s", path, resp.GetStatus(), resp.GetBody())
+		}
+	}
 	if errs := h.Configure(map[string]any{"mode": ModeOff}, nil); len(errs) > 0 {
 		t.Fatal(errs)
 	}
@@ -655,5 +660,27 @@ func TestPreCanceledClient(t *testing.T) {
 	// Only the hit counts: one run, one refused request.
 	if st := decodeData[Status](t, h.Do("GET", "/status", nil, nil)); st.Today.Audited != 1 || st.Today.Blocked != 1 {
 		t.Fatalf("counted after the client left = %+v", st.Today)
+	}
+}
+
+// A pre hit concluded after its client left is still stored when the
+// plugin shuts down meanwhile: Shutdown waits for it before it stops the
+// event writer.
+func TestShutdownKeepsLatePreHit(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeEnforce, "cache_ttl_seconds": 0})
+	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
+	mod.delay.Store(int64(500 * time.Millisecond))
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	r, err := p.OnGatewayRequest(ctx, hookReqAs(3, "late-hit", "MOD-HIT-sexual gone"))
+	cancel()
+	if err != nil || denied(r) {
+		t.Fatalf("canceled request = %+v %v", r, err)
+	}
+	if err := p.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"request_id": "late-hit", "result": "block"}, nil))); n != 1 {
+		t.Fatalf("late hit recorded %d times", n)
 	}
 }

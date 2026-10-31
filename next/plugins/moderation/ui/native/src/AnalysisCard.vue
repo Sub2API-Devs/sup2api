@@ -43,9 +43,9 @@ watch(
   { immediate: true }
 )
 
-/** stale = finished but not applied; contract §72.13.4 leaves open whether it is a status or an error code. */
-const stale = computed(() => a.value.status === 'stale' || a.value.error === 'stale')
-const failed = computed(() => a.value.status === 'failed' && !stale.value)
+/** stale = finished but not applied: status ok with error stale (§72.13.4). */
+const stale = computed(() => a.value.error === 'stale')
+const failed = computed(() => a.value.status === 'failed')
 const counts = computed(() => a.value.verdict_counts)
 /** " (高 1 · 中 2 · 低 2)" after the violation count, when the backend splits it. */
 const severityText = computed(() => {

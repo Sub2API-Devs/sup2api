@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, watch, type Ref } from 'vue'
-import { fetchUserDetail, markWatchSeen, useModHost } from './host'
+import { analysisState, fetchUserDetail, markWatchSeen, useModHost } from './host'
 import type { UserDetail, Watch } from './types'
 import { useAsync } from './useAsync'
 
@@ -20,10 +20,7 @@ export function useUserDetail(
   const detail = useAsync<UserDetail>(() => fetchUserDetail(userId.value!), () => t('watch.loadFailed'))
   const data = detail.data
   const entry = computed(() => data.value?.watch ?? null)
-  const state = computed(() => {
-    const a = data.value?.analysis
-    return a?.running ? 'running' : a?.queued ? 'pending' : 'idle'
-  })
+  const state = computed(() => analysisState(entry.value))
 
   /** Loads the user; the first load of an opening also marks new records as seen. */
   async function load(markSeen = false) {

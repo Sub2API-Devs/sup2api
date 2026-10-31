@@ -157,15 +157,13 @@ type watchValues struct {
 	hasExpires bool       // expires_at was sent
 }
 
-func (in watchInput) validate(c *config, create bool) (v watchValues, errs pluginsdk.FieldErrors) {
+func (in watchInput) validate(create bool) (v watchValues, errs pluginsdk.FieldErrors) {
 	v.days = in.Days
 	if create {
 		uid, err := strconv.ParseInt(in.UserID.String(), 10, 64)
 		v.uid = uid
 		if err != nil || uid <= 0 {
 			errs = errs.Add("user_id", "invalid", "user_id must be a positive integer / user_id 必须是正整数")
-		} else if c.exempt[uid] {
-			errs = errs.Add("user_id", "exempt", "the user is exempt from moderation / 该用户在豁免名单中")
 		}
 	}
 	if in.Level != nil && *in.Level != LevelObserve && *in.Level != LevelEnforce {
@@ -217,6 +215,19 @@ func (in watchInput) historyReason(note string) string {
 	return note
 }
 
+// protectedUser refuses to put a user moderation leaves alone on the watch
+// list or under a ban by hand: exempt users and moderators (staff), whom
+// the hook never watches or bans either (new-api: administrators).
+func (p *Plugin) protectedUser(ctx context.Context, c *config, uid int64) pluginsdk.FieldErrors {
+	if c.exempt[uid] {
+		return pluginsdk.FieldErrors{}.Add("user_id", "exempt", "the user is exempt from moderation / 该用户在豁免名单中")
+	}
+	if p.isStaff(ctx, uid) {
+		return pluginsdk.FieldErrors{}.Add("user_id", "staff", "moderators are not watched or banned / 审核管理员不进入观察名单，也不会被封禁")
+	}
+	return nil
+}
+
 func decodeBody(req *pluginv1.HTTPRequest, v any) *pluginv1.HTTPResponse {
 	dec := json.NewDecoder(strings.NewReader(string(req.GetBody())))
 	dec.UseNumber()
@@ -232,17 +243,16 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		return bad, nil
 	}
 	c := p.cfg.Load()
-	v, errs := in.validate(c, true)
+	v, errs := in.validate(true)
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}
 	uid := v.uid
+	if errs := p.protectedUser(ctx, c, uid); len(errs) > 0 {
+		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
+	}
 	if resp := p.missingUser(ctx, uid); resp != nil {
 		return resp, nil
-	}
-	if p.isStaff(ctx, uid) {
-		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效",
-			pluginsdk.FieldErrors{}.Add("user_id", "staff", "moderators are not put on the watch list / 审核管理员不进入观察名单")), nil
 	}
 	level := LevelObserve
 	if in.Level != nil {
@@ -294,7 +304,7 @@ func (p *Plugin) updateWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		return bad, nil
 	}
 	c := p.cfg.Load()
-	v, errs := in.validate(c, false)
+	v, errs := in.validate(false)
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}

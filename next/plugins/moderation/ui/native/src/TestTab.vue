@@ -1,32 +1,31 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SEmpty, SField, SGrid, SHint, SSelect, STextarea } from '@sub2api/ui'
-import ResultBadge from './ResultBadge.vue'
-import CategoryChips from './CategoryChips.vue'
+import { SAlert, SButton, SCard, SEmpty, SField, SGrid, SHint, SSelect, STextarea } from '@sub2api/ui'
+import TestResultView from './TestResultView.vue'
 import TraceView from './TraceView.vue'
-import CostBadge from './CostBadge.vue'
 import ImageInput from './ImageInput.vue'
 import { useCatalog } from './catalog'
-import { enumLabel } from './format'
-import { errorMessage, runTest, useModHost } from './host'
-import { severityTone } from './tones'
-import type { TestResult, TabKey } from './types'
+import { runTest, useModHost } from './host'
+import { useAsync } from './useAsync'
+import type { TabKey } from './types'
 
 const emit = defineEmits<{ (e: 'go-tab', tab: TabKey): void }>()
 
 // Playground: POST /test {text, images, flow_id} -> result + per-stage trace.
-// Nothing is cached, recorded or counted.
+// Nothing is cached, recorded or counted. Only the latest run shows.
 const host = useModHost()
 const t = host.t
 
 const text = ref('')
 const images = ref<string[]>([])
 const flowId = ref<number>(0)
-const running = ref(false)
-const result = ref<TestResult | null>(null)
-const failure = ref('')
-const notConfigured = ref(false)
+const required = ref(false)
+const test = useAsync(() => runTest(text.value, images.value, flowId.value), () => t('test.failed'))
+const result = test.data
+const running = test.loading
+const notConfigured = computed(() => isApiError(test.failure.value) && test.failure.value.code === 'not_configured')
+const failure = computed(() => (required.value ? t('test.required') : notConfigured.value ? '' : test.error.value))
 
 const catalog = useCatalog()
 const flowOptions = computed(() => [
@@ -39,23 +38,10 @@ function useSample(k: (typeof samples)[number]) {
   text.value = t(`test.sample.${k}Text`)
 }
 
-async function run() {
-  if (!text.value.trim() && !images.value.length) {
-    failure.value = t('test.required')
-    return
-  }
-  running.value = true
-  failure.value = ''
-  notConfigured.value = false
-  result.value = null
-  try {
-    result.value = await runTest(text.value, images.value, flowId.value)
-  } catch (e) {
-    if (isApiError(e) && e.code === 'not_configured') notConfigured.value = true
-    else failure.value = errorMessage(e, t('test.failed'))
-  } finally {
-    running.value = false
-  }
+function run() {
+  required.value = !text.value.trim() && !images.value.length
+  test.reset()
+  if (!required.value) test.reload()
 }
 
 function onKey(e: KeyboardEvent) {
@@ -95,15 +81,7 @@ function onKey(e: KeyboardEvent) {
         </SAlert>
         <SAlert v-else-if="failure" tone="danger">{{ failure }}</SAlert>
         <SEmpty v-else-if="!result" :text="running ? t('test.running') : t('test.empty')" icon="eyeglass" />
-        <div v-else class="mod-verdict">
-          <div class="mod-verdict-head">
-            <ResultBadge :result="result.result" />
-            <SBadge v-if="result.severity" :tone="severityTone(result.severity)">{{ t('detail.f.severity') }}: {{ enumLabel('severity', result.severity) }}</SBadge>
-            <SHint inline size="xs">#{{ result.flow_id }} v{{ result.flow_version }}</SHint>
-            <CostBadge :cost="result.cost" class="mod-ml-auto" />
-          </div>
-          <CategoryChips :categories="result.categories" wrap />
-        </div>
+        <TestResultView v-else :result="result" />
       </SCard>
     </SGrid>
 

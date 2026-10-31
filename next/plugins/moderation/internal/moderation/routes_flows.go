@@ -30,8 +30,10 @@ type FlowView struct {
 	Groups      []int64         `json:"groups"`
 	// Dirty: the draft differs from the published spec (a draft total
 	// timeout of 0 means "computed at publish" and matches any value).
-	Dirty           bool `json:"dirty"`
-	HasDraftChanges bool `json:"has_draft_changes"` // = Dirty, under new-api's name
+	Dirty bool `json:"dirty"`
+	// PublishedAutoTimeout: the published version was drafted with
+	// total_timeout_ms 0 ("automatic"); a discard puts 0 back in the draft.
+	PublishedAutoTimeout bool `json:"published_auto_timeout"`
 	// StageTimeoutSumMs is the automatic total timeout of the draft.
 	StageTimeoutSumMs int        `json:"stage_timeout_sum_ms"`
 	Stats24h          *FlowStats `json:"stats_24h,omitempty"`
@@ -47,6 +49,7 @@ type querier interface {
 func (p *Plugin) flowViews(ctx context.Context, q querier, where string, args ...any) ([]FlowView, error) {
 	rows, err := q.Query(ctx, `SELECT f.id, f.name, f.enabled, f.draft, f.published, f.version, f.published_at, f.published_by,
 			coalesce((SELECT array_agg(group_id ORDER BY group_id) FROM flow_groups g WHERE g.flow_id = f.id), '{}'),
+			coalesce((SELECT v.auto_timeout FROM flow_versions v WHERE v.flow_id = f.id AND v.version = f.version), false),
 			f.created_at, f.updated_at
 		FROM flows f WHERE f.deleted_at IS NULL `+where+` ORDER BY f.id`, args...)
 	if err != nil {
@@ -55,10 +58,9 @@ func (p *Plugin) flowViews(ctx context.Context, q querier, where string, args ..
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (FlowView, error) {
 		var f FlowView
 		err := r.Scan(&f.ID, &f.Name, &f.Enabled, &f.Draft, &f.Published, &f.Version, &f.PublishedAt, &f.PublishedBy,
-			&f.Groups, &f.CreatedAt, &f.UpdatedAt)
+			&f.Groups, &f.PublishedAutoTimeout, &f.CreatedAt, &f.UpdatedAt)
 		f.CreatedAt, f.UpdatedAt, f.PublishedAt = f.CreatedAt.UTC(), f.UpdatedAt.UTC(), utcPtr(f.PublishedAt)
 		f.Dirty = draftChanged(f.Draft, f.Published)
-		f.HasDraftChanges = f.Dirty
 		return f, err
 	})
 	if err != nil {
@@ -346,9 +348,7 @@ func (p *Plugin) setFlowGroups(ctx context.Context, req *pluginv1.HTTPRequest) (
 	return p.getFlow(ctx, req)
 }
 
-// publishFlow publishes the draft: {expected_version}. total_timeout_ms 0
-// is filled from the channel timeouts in the published spec only; the draft
-// keeps 0 ("automatic") so later channel changes are picked up.
+// publishFlow publishes the draft: {expected_version}.
 func (p *Plugin) publishFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	id, bad := parseID(req, "id")
 	if bad != nil {
@@ -383,19 +383,7 @@ func (p *Plugin) publishFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 			resp = pluginsdk.FieldErrorResponse("invalid flow / 流程参数无效", pluginsdk.FieldErrors{}.Add("draft", "invalid", err.Error()))
 			return errRollback
 		}
-		draftRaw, _ := json.Marshal(spec)
-		if err := fillAutoTimeout(ctx, tx, spec); err != nil {
-			return err
-		}
-		raw, _ := json.Marshal(spec)
-		now := p.now().UTC()
-		by := callerID(req)
-		if _, err := tx.Exec(ctx, `UPDATE flows SET draft=$6, published=$2, version=$3, published_at=$4, published_by=$5, updated_at=$4 WHERE id=$1`,
-			id, raw, version+1, now, by, draftRaw); err != nil {
-			return err
-		}
-		_, err = tx.Exec(ctx, `INSERT INTO flow_versions (flow_id, version, spec, published_at, published_by) VALUES ($1,$2,$3,$4,$5)`, id, version+1, raw, now, by)
-		return err
+		return publishSpec(ctx, tx, id, version+1, spec, p.now().UTC(), callerID(req))
 	})
 	if resp != nil {
 		return resp, nil
@@ -404,6 +392,27 @@ func (p *Plugin) publishFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		return nil, err
 	}
 	return p.getFlow(ctx, req)
+}
+
+// publishSpec publishes spec as the given version of flow id and makes it
+// the draft. A total_timeout_ms of 0 ("automatic") stays 0 in the draft and
+// is resolved from the channel timeouts in the published spec only, so the
+// draft keeps following its auditors; the version row remembers it
+// (auto_timeout) for a rollback or a discard.
+func publishSpec(ctx context.Context, tx pgx.Tx, id int64, version int, spec *Spec, now time.Time, by *int64) error {
+	draft, _ := json.Marshal(spec)
+	auto := spec.TotalTimeoutMs == 0
+	if err := fillAutoTimeout(ctx, tx, spec); err != nil {
+		return err
+	}
+	raw, _ := json.Marshal(spec)
+	if _, err := tx.Exec(ctx, `UPDATE flows SET draft=$2, published=$3, version=$4, published_at=$5, published_by=$6, updated_at=$5 WHERE id=$1`,
+		id, draft, raw, version, now, by); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO flow_versions (flow_id, version, spec, published_at, published_by, auto_timeout) VALUES ($1,$2,$3,$4,$5,$6)`,
+		id, version, raw, now, by, auto)
+	return err
 }
 
 // fillAutoTimeout gives a spec without a total timeout the automatic one

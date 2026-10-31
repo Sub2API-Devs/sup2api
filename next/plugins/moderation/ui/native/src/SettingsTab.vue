@@ -14,9 +14,10 @@ import type { JevQuestions } from './types'
 // response with a preview per API format, the AI analysis channel, the
 // error-rate alert, statistics retention, the notification webhook and the
 // Jev default question set. The other settings stay on the plugin's schema
-// form; a save writes all stored values back with these keys changed. A key
-// left empty is not stored, so the schema default (shown as placeholder)
-// applies.
+// form; a save re-reads the stored values and writes them back with only
+// this page's keys changed, so a change made elsewhere meanwhile is kept
+// (the core settings API has no version to compare). A key left empty is
+// not stored, so the schema default (shown as placeholder) applies.
 const host = useModHost()
 const t = host.t
 const catalog = useCatalog()
@@ -35,7 +36,6 @@ const settingsKey = (path: string) =>
     .replace(/\//g, '.')
     .split(/[.[]/)[0]
 
-const stored = ref<Record<string, unknown>>({})
 const form = reactive(Object.fromEntries(KEYS.map((k) => [k, ''])) as Record<Key, string | number | null>)
 /** secret keys with a stored value, kept while their input stays empty */
 const kept = reactive<Partial<Record<Key, boolean>>>({})
@@ -54,16 +54,16 @@ const schemaDefault = (k: Key) => {
 }
 watch(data, (v) => {
   if (!v) return
-  stored.value = v[0].values || {}
-  for (const k of KEYS) kept[k] = stored.value[k] === SETTINGS_MASK
+  const stored = v[0].values || {}
+  for (const k of KEYS) kept[k] = stored[k] === SETTINGS_MASK
   const value = (k: Key) => {
-    const x = stored.value[k]
+    const x = stored[k]
     return kept[k] || (typeof x !== 'number' && typeof x !== 'string') ? '' : x
   }
   Object.assign(form, Object.fromEntries(KEYS.map((k) => [k, value(k)])))
   // the select has no empty choice: an unset channel shows its default
   if (form.analysis_channel_id === '') form.analysis_channel_id = Number(schemaDefault('analysis_channel_id')) || 0
-  const set = stored.value.jev_default_set as JevQuestions | null | undefined
+  const set = stored.jev_default_set as JevQuestions | null | undefined
   jev.value = set ? copyQuestions(set) : null
 })
 onMounted(reload)
@@ -72,9 +72,9 @@ defineExpose({ reload })
 /** A secret as sent: the new value, the mask to keep the stored one, or '' to clear it. */
 const secretValue = (k: Key) => (form[k] ? String(form[k]) : kept[k] ? SETTINGS_MASK : '')
 
-/** The stored values with the keys of this page; an empty key is removed (its default applies). */
-function values(): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...stored.value, jev_default_set: jev.value && jevPayload(jev.value) }
+/** The stored values base with the keys of this page; an empty key is removed (its default applies). */
+function values(base: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base, jev_default_set: jev.value && jevPayload(jev.value) }
   for (const k of KEYS) {
     const v = SECRETS.includes(k) ? secretValue(k) : String(form[k] ?? '').trim()
     if (v === '') delete out[k]
@@ -87,7 +87,8 @@ async function save() {
   clearErrors(errs)
   saving.value = true
   try {
-    await savePluginSettings(values())
+    const latest = await fetchPluginSettings()
+    await savePluginSettings(values(latest.values || {}))
     host.toast(t('saved'), 'success')
     await reload()
   } catch (e) {

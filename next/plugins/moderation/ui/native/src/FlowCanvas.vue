@@ -15,6 +15,7 @@ import {
   addStage,
   applyDrop,
   applyTemplate,
+  auditorIndex,
   isAuditorType,
   leavesInside,
   moveStage,
@@ -41,9 +42,9 @@ const t = host.t
 const root = ref<HTMLElement>()
 const overNew = ref(false)
 const usable = computed(() => props.auditors.filter((a) => isAuditorType(a.type)))
-const byId = computed(() => new Map(props.auditors.map((a) => [a.id, a])))
-const typeOf = (id: number) => byId.value.get(id)?.type
-const nameOf = (id: number) => byId.value.get(id)?.name ?? `#${id}`
+const lookup = computed(() => auditorIndex(props.auditors))
+const typeOf = (id: number) => lookup.value.typeOf(id)
+const nameOf = (id: number) => lookup.value.nameOf(id)
 
 const change = (next: Spec) => {
   if (next !== props.spec) emit('update:spec', next)
@@ -75,7 +76,7 @@ const warnings = computed(() => {
   const list: string[] = []
   const spec = props.spec
   for (const id of new Set(spec.stages.flatMap((s) => s.auditors))) {
-    const a = byId.value.get(id)
+    const a = lookup.value.byId.get(id)
     if (a && !a.channelOk) list.push(t('flows.warnChannel', { name: a.name }))
   }
   if (spec.stages[0]?.auditors.some((id) => typeOf(id) === 'typesafe')) list.push(t('flows.warnJevFirst'))
@@ -135,7 +136,7 @@ function onDropNew(e: DragEvent) {
             :index="i"
             :count="spec.stages.length"
             :role="stageRole(i, st, typeOf)"
-            :by-id="byId"
+            :by-id="lookup.byId"
             :addable="st.auditors.length < MAX_STAGE_AUDITORS ? usable.filter((a) => !st.auditors.includes(a.id)) : []"
             :disabled="disabled"
             @drop="drop"

@@ -9,9 +9,9 @@ import FlowSimulate from './FlowSimulate.vue'
 import FlowVersions from './FlowVersions.vue'
 import { useCatalog } from './catalog'
 import { joinList } from './format'
-import { canManage, errorMessage, fetchFlow, hasDraftChanges, publishFlow, saveFlow, setFlowEnabled, toastError, useModHost } from './host'
+import { canManage, errorMessage, fetchFlow, publishFlow, saveFlow, setFlowEnabled, toastError, useModHost } from './host'
 import type { Flow, Spec } from './types'
-import { applyTemplate, autoTimeoutMs, canonicalSpec, canvasAuditors, isAuditorType, newSpec, sameSpec, validateSpec, type SpecIssue } from './flowOps'
+import { applyTemplate, auditorIndex, autoTimeoutMs, canonicalSpec, canvasAuditors, isAuditorType, newSpec, sameSpec, validateSpec, type SpecIssue } from './flowOps'
 
 // Flow editor (new-api flow-editor-form.tsx): name + draft kept locally and
 // compared with the saved draft ("unsaved") and the published version
@@ -44,8 +44,7 @@ const simulateOpen = ref(false)
 // Auditors and channels of the library come from the shared catalog.
 const catalog = useCatalog()
 const auditors = computed(() => canvasAuditors(catalog.state.auditors, catalog.state.channels))
-const byId = computed(() => new Map(auditors.value.map((a) => [a.id, a])))
-const typeOf = (id: number) => byId.value.get(id)?.type
+const lookup = computed(() => auditorIndex(auditors.value))
 
 function resetFrom(f: Flow) {
   saved.value = f
@@ -88,12 +87,12 @@ async function refresh() {
 }
 
 const isNew = computed(() => !saved.value)
-const issues = computed(() => validateSpec(draft.value, typeOf))
+const issues = computed(() => validateSpec(draft.value, lookup.value.typeOf))
 const nameMissing = computed(() => !name.value.trim())
 const dirty = computed(() => !saved.value || name.value !== saved.value.name || !sameSpec(draft.value, saved.value.draft))
-const unpublished = computed(() => !saved.value?.version || hasDraftChanges(saved.value))
+const unpublished = computed(() => !saved.value?.version || saved.value.dirty)
 const publishedVersion = computed(() => saved.value?.version ?? 0)
-const autoMs = computed(() => autoTimeoutMs(draft.value, byId.value))
+const autoMs = computed(() => autoTimeoutMs(draft.value, lookup.value.byId))
 const groupNames = computed(() => (saved.value?.groups || []).map(props.groupLabel))
 
 function issueText(i: SpecIssue): string {
@@ -173,10 +172,11 @@ async function discard() {
   if (!ok) return
   busy.value = 'discard'
   try {
-    // The published spec carries the resolved total timeout; the auto value
-    // goes back as 0 (auto) so the draft keeps following its auditors.
+    // The published spec carries the resolved total timeout; a version
+    // published as automatic goes back as 0 so the draft keeps following
+    // its auditors.
     const spec = canonicalSpec(f.published)
-    if (spec.total_timeout_ms === autoTimeoutMs(spec, byId.value)) spec.total_timeout_ms = 0
+    if (f.published_auto_timeout) spec.total_timeout_ms = 0
     await saveFlow(f.id, { name: f.name, draft: spec })
     host.toast(t('flows.discarded', { v: f.version }), 'success')
     await refresh()

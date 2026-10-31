@@ -84,8 +84,22 @@ func TestFlowDraftTimeoutAndDelete(t *testing.T) {
 	draft, _ := ParseSpec(f.Draft)
 	pub, _ := ParseSpec(f.Published)
 	// The draft keeps "automatic"; the published spec has the computed sum.
-	if draft.TotalTimeoutMs != 0 || pub.TotalTimeoutMs != 3000+8000 || f.StageTimeoutSumMs != 11000 || f.Dirty || f.HasDraftChanges {
+	if draft.TotalTimeoutMs != 0 || pub.TotalTimeoutMs != 3000+8000 || f.StageTimeoutSumMs != 11000 || f.Dirty || !f.PublishedAutoTimeout {
 		t.Fatalf("flow = %+v draft %d published %d", f, draft.TotalTimeoutMs, pub.TotalTimeoutMs)
+	}
+	// v2 has an explicit timeout; rolling back to v1 restores "automatic"
+	// in the draft, rolling back to v2 its explicit value.
+	path := fmt.Sprintf("/flows/%d", flow)
+	draft.TotalTimeoutMs = 5000
+	decodeData[FlowView](t, h.Do("PUT", path, nil, map[string]any{"name": "f", "draft": draft}))
+	f = decodeData[FlowView](t, h.Do("POST", path+"/publish", nil, map[string]any{"expected_version": 1}))
+	for _, c := range []struct{ version, draftMs, publishedMs int }{{1, 0, 11000}, {2, 5000, 5000}} {
+		f = decodeData[FlowView](t, h.Do("POST", path+"/rollback", nil, map[string]any{"version": c.version, "expected_version": f.Version}))
+		d, _ := ParseSpec(f.Draft)
+		pub, _ := ParseSpec(f.Published)
+		if d.TotalTimeoutMs != c.draftMs || pub.TotalTimeoutMs != c.publishedMs || f.PublishedAutoTimeout != (c.draftMs == 0) || f.Dirty {
+			t.Fatalf("rollback to v%d: draft %d published %d auto %v dirty %v", c.version, d.TotalTimeoutMs, pub.TotalTimeoutMs, f.PublishedAutoTimeout, f.Dirty)
+		}
 	}
 	if resp := h.Do("DELETE", fmt.Sprintf("/flows/%d", flow), nil, nil); resp.GetStatus() != 409 || !strings.Contains(string(resp.GetBody()), "flow_in_use") {
 		t.Fatalf("delete in use = %d %s", resp.GetStatus(), resp.GetBody())
@@ -173,10 +187,12 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	if resp := h.Do("DELETE", "/watchlist/31", map[string]string{"analysis_id": "0"}, nil); resp.GetStatus() != 400 {
 		t.Fatalf("delete with analysis_id 0 = %d", resp.GetStatus())
 	}
-	// Moderators are not put on the watch list by hand.
+	// Moderators are neither put on the watch list nor banned by hand.
 	fh.Authz = func(uid int64, _ string) bool { return uid == 77 }
-	if resp := h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 77}); resp.GetStatus() != 400 {
-		t.Fatalf("staff watch = %d %s", resp.GetStatus(), resp.GetBody())
+	for _, path := range []string{"/watchlist", "/blocks"} {
+		if resp := h.Do("POST", path, nil, map[string]any{"user_id": 77}); resp.GetStatus() != 400 || !strings.Contains(string(resp.GetBody()), `"staff"`) {
+			t.Fatalf("staff %s = %d %s", path, resp.GetStatus(), resp.GetBody())
+		}
 	}
 	// A user the core does not know is neither watched nor banned (new-api
 	// AddModerationWatch); the console gets names of a page in one call, only

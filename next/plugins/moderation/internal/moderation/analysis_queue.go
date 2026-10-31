@@ -276,11 +276,10 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 	}
 	c := p.cfg.Load()
 	now := p.now().UTC()
-	changed := false
-	var action, from, to string
+	var esc escalation
 	var analysisID int64
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		changed, action = false, ""
+		esc = escalation{}
 		if err := lockBlockSubject(ctx, tx, job.UserID); err != nil {
 			return err
 		}
@@ -294,87 +293,116 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 		if stale {
 			a.Error = analysisErrStale
 		}
-		id, err := insertAnalysis(ctx, tx, job.UserID, a, now)
-		if err != nil {
+		if analysisID, err = storeAnalysis(ctx, tx, c, job.UserID, a, now); err != nil || !owned {
 			return err
 		}
-		analysisID = id
-		if _, err := tx.Exec(ctx, `DELETE FROM user_analyses WHERE user_id = $1 AND id IN (
-				SELECT id FROM user_analyses WHERE user_id = $1 ORDER BY id DESC OFFSET $2)`, job.UserID, c.AnalysisKeepPerUser); err != nil {
+		if err := releaseAnalysis(ctx, tx, job.UserID, a, analysisID, stale, now); err != nil || !ok || stale {
 			return err
 		}
-		if ok {
-			for _, v := range a.RecordVerdicts {
-				if _, err := tx.Exec(ctx, `UPDATE events SET ai_verdict=$3, ai_severity=$4, ai_category=$5, ai_evidence=$6, ai_reason=$7, ai_analysis_id=$8
-					WHERE id = $1 AND user_id = $2 AND `+suspiciousResult,
-					v.RecordID, job.UserID, v.Verdict, v.Severity, v.Category, v.Evidence, v.Reason, id); err != nil {
-					return err
-				}
-			}
-		}
-		if !owned {
-			return nil
-		}
-		// A stale analysis only releases the queue and the claim: the
-		// latest analysis of the entry stays the last one that applied to
-		// it (new-api moderation_watch.go).
-		release := `UPDATE watchlist SET analysis_requested_at = NULL, analysis_source = '', analysis_claim_until = NULL, analysis_token = 0`
-		switch {
-		case stale:
-			_, err = tx.Exec(ctx, release+` WHERE user_id = $1`, job.UserID)
-		case ok:
-			_, err = tx.Exec(ctx, release+`, latest_analysis_id = $2, latest_analysis_status = $3, latest_trend = $4, latest_suggestion = $5,
-				analyzed_at = $6 WHERE user_id = $1`, job.UserID, id, a.Status, a.Trend, a.Suggestion, now)
-		default:
-			_, err = tx.Exec(ctx, release+`, latest_analysis_id = $2, latest_analysis_status = $3 WHERE user_id = $1`, job.UserID, id, a.Status)
-		}
-		if err != nil || !ok || stale {
-			return err
-		}
-		var denied string
-		action, denied = decideEscalation(c, w.Level, a.Trend, a.Suggestion, int(a.VerdictCounts.Violation))
-		reason := "trend:" + a.Trend
-		from, to = w.Level, w.Level
-		switch action {
-		case "":
-			return nil
-		case ActionAutoUpgrade, ActionAutoDowngrade:
-			to = LevelEnforce
-			var expires *time.Time
-			if action == ActionAutoDowngrade {
-				to = LevelObserve
-				t := now.Add(c.watchFor)
-				expires = &t
-			}
-			tag, err := tx.Exec(ctx, `UPDATE watchlist SET level = $3, source = 'analysis', since_at = $4, expires_at = $5,
-				hit_count = 0, hits_since_seen = 0, violation_count = 0, violation_epoch = $6, updated_at = $4 WHERE user_id = $1 AND level = $2`,
-				job.UserID, w.Level, to, now, expires, newEpoch())
-			if err != nil || tag.RowsAffected() != 1 {
-				return err
-			}
-			changed = true
-		case ActionAutoRemove:
-			to = ""
-			if _, err := tx.Exec(ctx, `DELETE FROM watchlist WHERE user_id = $1`, job.UserID); err != nil {
-				return err
-			}
-			changed = true
-		case ActionAutoNotAllowed:
-			reason = denied + ":" + a.Trend
-		}
-		if err := watchEvent(ctx, tx, watchChange{uid: job.UserID, action: action, from: w.Level, to: to, reason: reason, analysis: &id}); err != nil {
-			return err
-		}
-		if changed {
-			return bumpWatch(ctx, tx)
-		}
-		return nil
+		esc, err = escalateWatch(ctx, tx, c, w, a, analysisID, now)
+		return err
 	})
-	if err == nil && changed {
+	if err == nil && esc.changed {
 		p.watchChanged(ctx) // only real level changes set changed
-		p.notifyWatchChange(job.UserID, action, from, to, a.Trend, a.Suggestion, analysisID)
+		p.notifyWatchChange(job.UserID, esc.action, esc.from, esc.to, a.Trend, a.Suggestion, analysisID)
 	}
 	return err
+}
+
+// storeAnalysis inserts the analysis, keeps the user's latest
+// analysis_keep_per_user and, for a successful one, writes its verdicts
+// into the ai_* columns of the user's suspicious records. It returns the
+// analysis id.
+func storeAnalysis(ctx context.Context, tx pgx.Tx, c *config, uid int64, a *Analysis, now time.Time) (int64, error) {
+	id, err := insertAnalysis(ctx, tx, uid, a, now)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM user_analyses WHERE user_id = $1 AND id IN (
+			SELECT id FROM user_analyses WHERE user_id = $1 ORDER BY id DESC OFFSET $2)`, uid, c.AnalysisKeepPerUser); err != nil {
+		return 0, err
+	}
+	if a.Status != AnalysisStatusOK {
+		return id, nil
+	}
+	for _, v := range a.RecordVerdicts {
+		if _, err := tx.Exec(ctx, `UPDATE events SET ai_verdict=$3, ai_severity=$4, ai_category=$5, ai_evidence=$6, ai_reason=$7, ai_analysis_id=$8
+			WHERE id = $1 AND user_id = $2 AND `+suspiciousResult,
+			v.RecordID, uid, v.Verdict, v.Severity, v.Category, v.Evidence, v.Reason, id); err != nil {
+			return 0, err
+		}
+	}
+	return id, nil
+}
+
+// releaseAnalysis clears the queue and the claim of the entry the analysis
+// id ran for and records it as the entry's latest analysis. A stale
+// analysis only releases: the latest analysis of the entry stays the last
+// one that applied to it (new-api moderation_watch.go).
+func releaseAnalysis(ctx context.Context, tx pgx.Tx, uid int64, a *Analysis, id int64, stale bool, now time.Time) error {
+	release := `UPDATE watchlist SET analysis_requested_at = NULL, analysis_source = '', analysis_claim_until = NULL, analysis_token = 0`
+	var err error
+	switch {
+	case stale:
+		_, err = tx.Exec(ctx, release+` WHERE user_id = $1`, uid)
+	case a.Status == AnalysisStatusOK:
+		_, err = tx.Exec(ctx, release+`, latest_analysis_id = $2, latest_analysis_status = $3, latest_trend = $4, latest_suggestion = $5,
+			analyzed_at = $6 WHERE user_id = $1`, uid, id, a.Status, a.Trend, a.Suggestion, now)
+	default:
+		_, err = tx.Exec(ctx, release+`, latest_analysis_id = $2, latest_analysis_status = $3 WHERE user_id = $1`, uid, id, a.Status)
+	}
+	return err
+}
+
+// escalation is what an analysis did to the watch entry: the action
+// written to the history (empty = none), the levels before and after ("" =
+// removed) and whether the level set changed.
+type escalation struct {
+	action, from, to string
+	changed          bool
+}
+
+// escalateWatch applies the conclusion of analysis id to the locked entry w
+// (§72.13.4): upgrade, downgrade or removal when the settings allow it,
+// otherwise auto_not_allowed; every action goes to the history.
+func escalateWatch(ctx context.Context, tx pgx.Tx, c *config, w Watch, a *Analysis, id int64, now time.Time) (escalation, error) {
+	action, denied := decideEscalation(c, w.Level, a.Trend, a.Suggestion, int(a.VerdictCounts.Violation))
+	esc := escalation{action: action, from: w.Level, to: w.Level}
+	reason := "trend:" + a.Trend
+	switch action {
+	case "":
+		return esc, nil
+	case ActionAutoUpgrade, ActionAutoDowngrade:
+		esc.to = LevelEnforce
+		var expires *time.Time
+		if action == ActionAutoDowngrade {
+			esc.to = LevelObserve
+			t := now.Add(c.watchFor)
+			expires = &t
+		}
+		tag, err := tx.Exec(ctx, `UPDATE watchlist SET level = $3, source = 'analysis', since_at = $4, expires_at = $5,
+			hit_count = 0, hits_since_seen = 0, violation_count = 0, violation_epoch = $6, updated_at = $4 WHERE user_id = $1 AND level = $2`,
+			w.UserID, w.Level, esc.to, now, expires, newEpoch())
+		if err != nil || tag.RowsAffected() != 1 {
+			return escalation{}, err
+		}
+		esc.changed = true
+	case ActionAutoRemove:
+		esc.to = ""
+		if _, err := tx.Exec(ctx, `DELETE FROM watchlist WHERE user_id = $1`, w.UserID); err != nil {
+			return escalation{}, err
+		}
+		esc.changed = true
+	case ActionAutoNotAllowed:
+		reason = denied + ":" + a.Trend
+	}
+	if err := watchEvent(ctx, tx, watchChange{uid: w.UserID, action: action, from: w.Level, to: esc.to, reason: reason, analysis: &id}); err != nil {
+		return escalation{}, err
+	}
+	if esc.changed {
+		return esc, bumpWatch(ctx, tx)
+	}
+	return esc, nil
 }
 
 func insertAnalysis(ctx context.Context, tx pgx.Tx, uid int64, a *Analysis, now time.Time) (int64, error) {

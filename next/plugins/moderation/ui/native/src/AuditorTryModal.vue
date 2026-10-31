@@ -5,8 +5,9 @@ import CategoryChips from './CategoryChips.vue'
 import CostBadge from './CostBadge.vue'
 import ImageInput from './ImageInput.vue'
 import { categoryLabel, enumLabel, ms, score } from './format'
-import { toastError, tryAuditor, useModHost } from './host'
-import type { AuditorTryTarget, TryResult } from './types'
+import { tryAuditor, useModHost } from './host'
+import { useAsync } from './useAsync'
+import type { AuditorTryTarget } from './types'
 
 // Tries an auditor on a text and images: a stored one from its row, or the
 // editor's unsaved edits (target.draft). The inputs are kept between tries.
@@ -17,31 +18,15 @@ const t = host.t
 
 const text = ref('')
 const images = ref<string[]>([])
-const result = ref<TryResult | null>(null)
-const trying = ref(false)
 // Only the latest try writes the result; opening again drops a pending one.
-let seq = 0
-watch(open, (v) => {
-  if (!v) return
-  seq++
-  trying.value = false
-  result.value = null
-})
+const attempt = useAsync(() => tryAuditor(props.target!.id, text.value, images.value, props.target!.draft), () => t('actionFailed'))
+const { data: result, loading: trying, error: failure } = attempt
+watch(open, (v) => v && attempt.reset())
 
-async function run() {
-  const a = props.target
-  if (!a) return
-  const my = ++seq
-  trying.value = true
-  result.value = null
-  try {
-    const r = await tryAuditor(a.id, text.value, images.value, a.draft)
-    if (my === seq) result.value = r
-  } catch (e) {
-    if (my === seq) toastError(e)
-  } finally {
-    if (my === seq) trying.value = false
-  }
+function run() {
+  if (!props.target) return
+  attempt.reset()
+  attempt.reload()
 }
 
 const scores = computed(() =>
@@ -58,6 +43,7 @@ const scores = computed(() =>
       <ImageInput v-model="images">
         <STextarea v-model="text" :rows="5" :placeholder="t('test.placeholder')" />
       </ImageInput>
+      <SAlert v-if="failure" tone="danger" dense>{{ failure }}</SAlert>
       <div v-if="result" class="mod-verdict">
         <div class="mod-verdict-head">
           <SBadge v-if="result.error" tone="warning">{{ enumLabel('err', result.err) }} {{ result.status || '' }}</SBadge>

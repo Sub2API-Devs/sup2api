@@ -6,7 +6,7 @@ import AuditorTryModal from './AuditorTryModal.vue'
 import EnabledBadge from './EnabledBadge.vue'
 import { useCatalog } from './catalog'
 import { enumLabel, money, num } from './format'
-import { canManage, deleteAuditor, errorMessage, fetchDefaults, toastError, useModHost } from './host'
+import { canManage, confirmDelete, deleteAuditor, errorMessage, fetchDefaults, useModHost } from './host'
 import type { Auditor, AuditorTryTarget } from './types'
 import { thresholdPresetOf } from './thresholdPresets'
 import { useAsync } from './useAsync'
@@ -69,17 +69,7 @@ function openTry(target: AuditorTryTarget) {
   tryOpen.value = true
 }
 
-async function remove(a: Auditor) {
-  const ok = await host.confirm({ message: t('auditors.deleteConfirm', { name: a.name }), danger: true, confirmText: t('delete') })
-  if (!ok) return
-  try {
-    await deleteAuditor(a.id)
-    host.toast(t('deleted'), 'success')
-    void refreshLists()
-  } catch (e) {
-    toastError(e)
-  }
-}
+const remove = (a: Auditor) => confirmDelete(t('auditors.deleteConfirm', { name: a.name }), () => deleteAuditor(a.id), () => void refreshLists())
 </script>
 
 <template>

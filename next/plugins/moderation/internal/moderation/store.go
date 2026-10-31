@@ -234,79 +234,15 @@ func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, even
 		if err := lockBlockSubject(ctx, tx, e.UserID); err != nil {
 			return err
 		}
-		w, found, err := loadWatch(ctx, tx, e.UserID)
+		w, found, entryChanged, err := liveWatchEntry(ctx, tx, c, e.UserID, now)
 		if err != nil {
 			return err
 		}
-		if found && w.ExpiresAt != nil && !now.Before(*w.ExpiresAt) {
-			if err := expireEntry(ctx, tx, w); err != nil {
+		changed = entryChanged
+		if found {
+			if queued, err = p.countWatchHit(ctx, tx, c, w, e, eventID, now); err != nil {
 				return err
 			}
-			found, changed = false, true
-		}
-		if !found {
-			if !c.AutoWatch {
-				if changed {
-					return bumpWatch(ctx, tx)
-				}
-				return nil
-			}
-			exp := now.Add(c.watchFor)
-			w = Watch{UserID: e.UserID, Level: LevelObserve, Source: "auto", SinceAt: now, ExpiresAt: &exp, ViolationEpoch: newEpoch()}
-			if _, err := tx.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, since_at, expires_at, violation_epoch, updated_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $4)`, w.UserID, w.Level, w.Source, now, exp, w.ViolationEpoch); err != nil {
-				return err
-			}
-			if err := watchEvent(ctx, tx, watchChange{uid: e.UserID, action: "auto_add", to: LevelObserve, reason: "首次可疑记录 / first suspicious record"}); err != nil {
-				return err
-			}
-			changed = true
-		}
-		if w.Level != LevelObserve {
-			_, err := tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, hits_since_seen = hits_since_seen + 1, last_hit_at = $2, updated_at = $2 WHERE user_id = $1`, e.UserID, now)
-			return err
-		}
-		counted := false
-		if e.RequestID != "" {
-			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM events WHERE user_id = $1 AND request_id = $2 AND counted AND id <> $3)`,
-				e.UserID, e.RequestID, eventID).Scan(&counted); err != nil {
-				return err
-			}
-		}
-		exp := now.Add(c.watchFor)
-		if w.ExpiresAt == nil {
-			exp = time.Time{}
-		} else if w.ExpiresAt.After(exp) {
-			exp = *w.ExpiresAt
-		}
-		var expArg *time.Time
-		if !exp.IsZero() {
-			expArg = &exp
-		}
-		inc := 0
-		if !counted {
-			inc = 1
-			if _, err := tx.Exec(ctx, `UPDATE events SET counted = true, violation_epoch = $2 WHERE id = $1`, eventID, w.ViolationEpoch); err != nil {
-				return err
-			}
-		}
-		_, err = tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, hits_since_seen = hits_since_seen + 1, violation_count = violation_count + $2,
-			last_hit_at = $3, expires_at = $4, updated_at = $3 WHERE user_id = $1`, e.UserID, inc, now, expArg)
-		if err != nil {
-			return err
-		}
-		if inc == 1 && c.AnalysisEveryViolations > 0 && c.AnalysisChannelID != 0 && w.ViolationCount+1 >= c.AnalysisEveryViolations {
-			// The window closes: the count restarts and this record no
-			// longer belongs to a window a false positive could reduce.
-			if _, err := tx.Exec(ctx, `UPDATE watchlist SET violation_count = 0, violation_epoch = $2,
-				analysis_source = CASE WHEN analysis_requested_at IS NULL THEN $4 ELSE analysis_source END,
-				analysis_requested_at = coalesce(analysis_requested_at, $3) WHERE user_id = $1`, e.UserID, newEpoch(), now, AnalysisSourceAuto); err != nil {
-				return err
-			}
-			if _, err := tx.Exec(ctx, `UPDATE events SET violation_epoch = 0 WHERE id = $1`, eventID); err != nil {
-				return err
-			}
-			queued = true
 		}
 		if changed {
 			return bumpWatch(ctx, tx)
@@ -314,6 +250,91 @@ func (p *Plugin) recordWatchHit(ctx context.Context, c *config, e eventRec, even
 		return nil
 	})
 	return changed, queued, err
+}
+
+// liveWatchEntry returns the user's unexpired watch entry: an expired one
+// is removed first, and with auto_watch a user not on the list joins it at
+// observe level (§72.8). changed: an entry was removed or added;
+// found=false: the user is not watched.
+func liveWatchEntry(ctx context.Context, tx pgx.Tx, c *config, uid int64, now time.Time) (w Watch, found, changed bool, err error) {
+	if w, found, err = loadWatch(ctx, tx, uid); err != nil {
+		return w, false, false, err
+	}
+	if found && w.ExpiresAt != nil && !now.Before(*w.ExpiresAt) {
+		if err := expireEntry(ctx, tx, w); err != nil {
+			return w, false, false, err
+		}
+		found, changed = false, true
+	}
+	if found || !c.AutoWatch {
+		return w, found, changed, nil
+	}
+	exp := now.Add(c.watchFor)
+	w = Watch{UserID: uid, Level: LevelObserve, Source: "auto", SinceAt: now, ExpiresAt: &exp, ViolationEpoch: newEpoch()}
+	if _, err := tx.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, since_at, expires_at, violation_epoch, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $4)`, w.UserID, w.Level, w.Source, now, exp, w.ViolationEpoch); err != nil {
+		return w, false, false, err
+	}
+	if err := watchEvent(ctx, tx, watchChange{uid: uid, action: "auto_add", to: LevelObserve, reason: "首次可疑记录 / first suspicious record"}); err != nil {
+		return w, false, false, err
+	}
+	return w, true, true, nil
+}
+
+// countWatchHit counts a hit on the entry w. At observe level it also
+// extends the expiry, counts the violation once per request id, and queues
+// an analysis when the count reaches analysis_every_violations (queued).
+func (p *Plugin) countWatchHit(ctx context.Context, tx pgx.Tx, c *config, w Watch, e eventRec, eventID int64, now time.Time) (queued bool, err error) {
+	if w.Level != LevelObserve {
+		_, err := tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, hits_since_seen = hits_since_seen + 1, last_hit_at = $2, updated_at = $2 WHERE user_id = $1`, e.UserID, now)
+		return false, err
+	}
+	counted := false
+	if e.RequestID != "" {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM events WHERE user_id = $1 AND request_id = $2 AND counted AND id <> $3)`,
+			e.UserID, e.RequestID, eventID).Scan(&counted); err != nil {
+			return false, err
+		}
+	}
+	var expArg *time.Time
+	if w.ExpiresAt != nil {
+		exp := now.Add(c.watchFor)
+		if w.ExpiresAt.After(exp) {
+			exp = *w.ExpiresAt
+		}
+		expArg = &exp
+	}
+	inc := 0
+	if !counted {
+		inc = 1
+		if _, err := tx.Exec(ctx, `UPDATE events SET counted = true, violation_epoch = $2 WHERE id = $1`, eventID, w.ViolationEpoch); err != nil {
+			return false, err
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE watchlist SET hit_count = hit_count + 1, hits_since_seen = hits_since_seen + 1, violation_count = violation_count + $2,
+		last_hit_at = $3, expires_at = $4, updated_at = $3 WHERE user_id = $1`, e.UserID, inc, now, expArg); err != nil {
+		return false, err
+	}
+	// Without a usable analysis channel the window stays open: closing it
+	// would queue an analysis nothing runs and reset the count for nothing.
+	if inc == 0 || c.AnalysisEveryViolations <= 0 || w.ViolationCount+1 < c.AnalysisEveryViolations || !p.analysisChannelUsable() {
+		return false, nil
+	}
+	return true, queueAutoAnalysis(ctx, tx, e.UserID, eventID, now)
+}
+
+// queueAutoAnalysis closes the user's counting window and queues an
+// automatic analysis (§72.13.4): the count restarts, and the record that
+// closed the window no longer belongs to a window a false positive could
+// reduce.
+func queueAutoAnalysis(ctx context.Context, tx pgx.Tx, uid, eventID int64, now time.Time) error {
+	if _, err := tx.Exec(ctx, `UPDATE watchlist SET violation_count = 0, violation_epoch = $2,
+		analysis_source = CASE WHEN analysis_requested_at IS NULL THEN $4 ELSE analysis_source END,
+		analysis_requested_at = coalesce(analysis_requested_at, $3) WHERE user_id = $1`, uid, newEpoch(), now, AnalysisSourceAuto); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `UPDATE events SET violation_epoch = 0 WHERE id = $1`, eventID)
+	return err
 }
 
 // applyBans bans the users whose suspicious requests since max(now -

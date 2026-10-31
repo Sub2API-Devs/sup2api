@@ -4,7 +4,7 @@ import { SBadge, SButton, SHint, SModal } from '@sub2api/ui'
 import { joinList } from './format'
 import { useModHost } from './host'
 import type { Spec } from './types'
-import { stageRole, type CanvasAuditor } from './flowOps'
+import { auditorIndex, stageRole, type CanvasAuditor } from './flowOps'
 
 // Publish confirmation (new-api flow-publish-dialog.tsx): state, groups,
 // timing and where each stage goes.
@@ -22,15 +22,14 @@ const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'confirm'):
 const host = useModHost()
 const t = host.t
 
-const byId = computed(() => new Map(props.auditors.map((a) => [a.id, a])))
-const typeOf = (id: number) => byId.value.get(id)?.type
+const lookup = computed(() => auditorIndex(props.auditors))
 
 const lines = computed(() =>
   props.draft.stages.map((st, i) => {
     const head = t('flows.pubStage', {
       n: i + 1,
-      role: t(`flows.role.${stageRole(i, st, typeOf)}`),
-      auditors: st.auditors.map((id) => byId.value.get(id)?.name ?? `#${id}`).join(' ∥ ')
+      role: t(`flows.role.${stageRole(i, st, lookup.value.typeOf)}`),
+      auditors: st.auditors.map(lookup.value.nameOf).join(' ∥ ')
     })
     const combine = st.auditors.length > 1 ? ` · ${t(`flows.combineOpt.${st.combine || 'any'}`)}${st.combine === 'at_least' ? ` (N = ${st.n ?? 1})` : ''}` : ''
     const out = i === props.draft.stages.length - 1 ? t('flows.pubPassLast') : t('flows.pubPassNext', { n: i + 2 })

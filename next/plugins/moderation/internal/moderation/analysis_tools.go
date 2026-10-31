@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // The read-only tools of the analysis agent (new-api analysis_tools.go).
@@ -504,7 +505,35 @@ func toolUserSummary(ctx context.Context, tc *toolCtx, _ json.RawMessage) (any, 
 	}
 	now := tc.p.now().UTC()
 	since := now.AddDate(0, 0, -toolWindowDays)
-	today := now.Truncate(24 * time.Hour)
+	out := map[string]any{"group": tc.group, "flow": nil}
+	if err := tc.summaryCounts(ctx, db, out, now, since); err != nil {
+		return nil, err
+	}
+	if err := tc.summaryWatch(ctx, db, out, now); err != nil {
+		return nil, err
+	}
+	var flow *FlowRef
+	if tc.group != nil {
+		if f := tc.snap.flowFor(*tc.group); f != nil {
+			flow = &FlowRef{FlowID: f.ID, Name: f.Name, Version: f.Version}
+			out["flow"] = map[string]any{"flow_id": f.ID, "name": f.Name, "version": f.Version}
+		}
+	}
+	sources, err := tc.p.loadSources(ctx, db, tc.userID, since, tc.group, flow)
+	if err != nil {
+		return nil, err
+	}
+	for _, src := range sources {
+		tc.allowFlow(src.FlowID, src.Version)
+	}
+	out["sources"] = sources
+	return out, nil
+}
+
+// summaryCounts adds the user's moderated and suspicious counts of today
+// and the window to out ("today", "last_30_days"), and the window's
+// suspicious records by category, severity and review status.
+func (tc *toolCtx) summaryCounts(ctx context.Context, db *pgxpool.Pool, out map[string]any, now, since time.Time) error {
 	type counts struct {
 		Records    int64 `json:"records"`
 		Suspicious int64 `json:"suspicious"`
@@ -518,25 +547,27 @@ func toolUserSummary(ctx context.Context, tc *toolCtx, _ json.RawMessage) (any, 
 	if err := db.QueryRow(ctx, `SELECT
 			coalesce(sum(audited) FILTER (WHERE day >= $3), 0), coalesce(sum(suspicious) FILTER (WHERE day >= $3), 0),
 			coalesce(sum(high) FILTER (WHERE day >= $3), 0), coalesce(sum(audited), 0), coalesce(sum(suspicious), 0), coalesce(sum(high), 0)
-		FROM user_daily WHERE user_id = $1 AND day >= $2`, tc.userID, since.Truncate(24*time.Hour), today).Scan(&d.Records, &d.Suspicious, &d.High, &m.Records, &m.Suspicious, &m.High); err != nil {
-		return nil, err
+		FROM user_daily WHERE user_id = $1 AND day >= $2`, tc.userID, since.Truncate(24*time.Hour), now.Truncate(24*time.Hour)).
+		Scan(&d.Records, &d.Suspicious, &d.High, &m.Records, &m.Suspicious, &m.High); err != nil {
+		return err
 	}
+	out["today"], out["last_30_days"] = d, m
 	byCategory := map[string]int64{}
 	rows, err := db.Query(ctx, `SELECT c, count(*) FROM events, unnest(hit_categories) AS c
 		WHERE user_id = $1 AND created_at >= $2 AND `+suspiciousResult+` GROUP BY c`, tc.userID, since)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var cat string
 	var n int64
 	if _, err := pgx.ForEachRow(rows, []any{&cat, &n}, func() error { byCategory[cat] = n; return nil }); err != nil {
-		return nil, err
+		return err
 	}
 	bySeverity, byReview := map[string]int64{}, map[string]int64{}
 	rows, err = db.Query(ctx, `SELECT severity, review_status, count(*) FROM events
 		WHERE user_id = $1 AND created_at >= $2 AND `+suspiciousResult+` GROUP BY 1, 2`, tc.userID, since)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var sev, rev string
 	if _, err := pgx.ForEachRow(rows, []any{&sev, &rev, &n}, func() error {
@@ -544,35 +575,35 @@ func toolUserSummary(ctx context.Context, tc *toolCtx, _ json.RawMessage) (any, 
 		byReview[reviewStatusNames[rev]] += n
 		return nil
 	}); err != nil {
-		return nil, err
+		return err
 	}
-	out := map[string]any{"today": d, "last_30_days": m,
-		"suspicious_30_days": map[string]any{"by_category": byCategory, "by_severity": bySeverity, "by_review_status": byReview},
-		"group":              tc.group, "flow": nil, "watch": nil, "history": []any{}, "last_analysis": nil}
-	if tc.group != nil {
-		if f := tc.snap.flowFor(*tc.group); f != nil {
-			out["flow"] = map[string]any{"flow_id": f.ID, "name": f.Name, "version": f.Version}
-		}
-	}
-	c := tc.p.cfg.Load()
+	out["suspicious_30_days"] = map[string]any{"by_category": byCategory, "by_severity": bySeverity, "by_review_status": byReview}
+	return nil
+}
+
+// summaryWatch adds the user's live watch entry ("watch", null when not
+// watched), its last 20 history entries ("history") and the last
+// successful analysis ("last_analysis", null when none) to out.
+func (tc *toolCtx) summaryWatch(ctx context.Context, db *pgxpool.Pool, out map[string]any, now time.Time) error {
+	out["watch"], out["last_analysis"] = nil, nil
 	var w struct {
 		level, source    string
 		since            time.Time
 		expires          *time.Time
 		violations, hits int
 	}
-	err = db.QueryRow(ctx, `SELECT level, source, since_at, expires_at, violation_count, hit_count FROM watchlist
+	err := db.QueryRow(ctx, `SELECT level, source, since_at, expires_at, violation_count, hit_count FROM watchlist
 		WHERE user_id = $1 AND (expires_at IS NULL OR expires_at > $2)`, tc.userID, now).Scan(&w.level, &w.source, &w.since, &w.expires, &w.violations, &w.hits)
 	switch {
 	case err == nil:
 		out["watch"] = map[string]any{"level": w.level, "source": w.source, "since_at": toolTime(&w.since), "expires_at": toolTime(w.expires),
-			"violations_since_analysis": w.violations, "hits": w.hits, "analysis_every_violations": c.AnalysisEveryViolations}
+			"violations_since_analysis": w.violations, "hits": w.hits, "analysis_every_violations": tc.p.cfg.Load().AnalysisEveryViolations}
 	case !errors.Is(err, pgx.ErrNoRows):
-		return nil, err
+		return err
 	}
-	rows, err = db.Query(ctx, `SELECT action, from_level, to_level, reason, created_at FROM watch_events WHERE user_id = $1 ORDER BY id DESC LIMIT 20`, tc.userID)
+	rows, err := db.Query(ctx, `SELECT action, from_level, to_level, reason, created_at FROM watch_events WHERE user_id = $1 ORDER BY id DESC LIMIT 20`, tc.userID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	history := []map[string]any{}
 	var action, from, to, reason string
@@ -581,7 +612,7 @@ func toolUserSummary(ctx context.Context, tc *toolCtx, _ json.RawMessage) (any, 
 		history = append(history, map[string]any{"action": action, "from_level": from, "to_level": to, "reason": reason, "at": toolTime(&at)})
 		return nil
 	}); err != nil {
-		return nil, err
+		return err
 	}
 	out["history"] = history
 	var trend, suggestion, summary string
@@ -591,34 +622,9 @@ func toolUserSummary(ctx context.Context, tc *toolCtx, _ json.RawMessage) (any, 
 	case err == nil:
 		out["last_analysis"] = map[string]any{"trend": trend, "suggestion": suggestion, "summary": summary, "at": toolTime(&at)}
 	case !errors.Is(err, pgx.ErrNoRows):
-		return nil, err
+		return err
 	}
-	rows, err = db.Query(ctx, `SELECT group_id, flow_id, flow_version, count(*),
-			count(*) FILTER (WHERE ai_verdict = 'violation'), count(*) FILTER (WHERE ai_verdict = 'false_positive'),
-			count(*) FILTER (WHERE ai_verdict = 'unsure'), count(*) FILTER (WHERE ai_verdict = '')
-		FROM events WHERE user_id = $1 AND created_at >= $2 AND `+suspiciousResult+`
-		GROUP BY 1, 2, 3 ORDER BY 4 DESC LIMIT 50`, tc.userID, since)
-	if err != nil {
-		return nil, err
-	}
-	sources := []map[string]any{}
-	var gid, fid int64
-	var ver int
-	var total, vio, fp, uns, none int64
-	if _, err := pgx.ForEachRow(rows, []any{&gid, &fid, &ver, &total, &vio, &fp, &uns, &none}, func() error {
-		tc.allowFlow(fid, ver)
-		name := ""
-		if f := tc.snap.flows[fid]; f != nil {
-			name = f.Name
-		}
-		sources = append(sources, map[string]any{"group": gid, "flow_id": fid, "flow_name": name, "version": ver, "count": total,
-			"ai_verdicts": map[string]int64{"violation": vio, "false_positive": fp, "unsure": uns, "none": none}})
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-	out["sources"] = sources
-	return out, nil
+	return nil
 }
 
 // ---------------------------------------------------------------- flows

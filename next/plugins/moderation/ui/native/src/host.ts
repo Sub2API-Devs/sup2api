@@ -250,6 +250,22 @@ export function toastError(e: unknown, key = 'actionFailed') {
   h.toast(errorMessage(e, h.t(key)), 'error')
 }
 
+/**
+ * Asks to confirm a delete, then runs del: "deleted" is toasted and done
+ * runs, or the failure is toasted as failText(e) (default: its message).
+ */
+export async function confirmDelete(message: string, del: () => Promise<unknown>, done: () => void, failText?: (e: unknown) => string) {
+  const h = useModHost()
+  if (!(await h.confirm({ message, danger: true, confirmText: h.t('delete') }))) return
+  try {
+    await del()
+    h.toast(h.t('deleted'), 'success')
+    done()
+  } catch (e) {
+    h.toast(failText ? failText(e) : errorMessage(e, h.t('actionFailed')), 'error')
+  }
+}
+
 /** `details` members of the API errors the views read. */
 interface ErrorDetails {
   /** 409 of DELETE /channels/:id: the auditors using the channel */
@@ -265,9 +281,6 @@ export function errorDetails<K extends keyof ErrorDetails>(e: unknown, key: K): 
   const v: unknown = isApiError(e) ? e.details[key] : undefined
   return (Array.isArray(v) ? v : []) as ErrorDetails[K]
 }
-
-/** Draft differs from the published version (has_draft_changes, else dirty). */
-export const hasDraftChanges = (f: Pick<Flow, 'dirty' | 'has_draft_changes'>) => f.has_draft_changes ?? f.dirty
 
 /** Path of the plugin's settings in the console: its page's tab, or the settings-only page without plugin:read (§75.1). */
 export function settingsPath(): string {

@@ -59,12 +59,16 @@ type Plugin struct {
 	configured atomic.Bool
 
 	// Post queue: workers = max_concurrency, capacity = queue_size.
+	// poolMu also guards closed (Shutdown began: no new tracked goroutines)
+	// and eventsStopped (the event writer is stopped: finish stores
+	// suspicious records itself).
 	poolMu sync.RWMutex
 	// queuedBytes is what the queued requests hold; enqueue refuses beyond
 	// maxQueueBytes so a burst of image requests cannot exhaust memory.
-	queuedBytes atomic.Int64
-	pool        *workerPool
-	closed      bool
+	queuedBytes   atomic.Int64
+	pool          *workerPool
+	closed        bool
+	eventsStopped bool
 
 	eventWriter *batch.Writer[eventRec]
 
@@ -138,8 +142,9 @@ func (p *Plugin) Init(_ context.Context, h pluginsdk.Host) error {
 	p.log = h.Logger()
 	// A batch that fails is dropped; drops are counted here and by finish
 	// (the writer's own drop count would also see a full queue whose
-	// suspicious record finish then writes itself).
-	p.eventWriter = batch.New(p.bg, 4096, func(ctx context.Context, evs []eventRec) error {
+	// suspicious record finish then writes itself). Only Shutdown stops it,
+	// after the workers and hooks it waits for have sent their records.
+	p.eventWriter = batch.New(context.WithoutCancel(p.bg), 4096, func(ctx context.Context, evs []eventRec) error {
 		err := p.storeEvents(ctx, evs)
 		if err == nil {
 			return nil
@@ -225,13 +230,11 @@ func (p *Plugin) Health(context.Context) (*pluginv1.HealthResponse, error) {
 	}}, nil
 }
 
-// Shutdown implements pluginsdk.Shutdowner: stops the workers and flushes
-// the pending event records.
+// Shutdown implements pluginsdk.Shutdowner: stops the workers, waits for
+// them and the tracked goroutines (goTracked), then flushes the pending
+// event records. A record concluded after that is stored by finish itself.
 func (p *Plugin) Shutdown(ctx context.Context) error {
 	p.cancel()
-	if err := p.eventWriter.Stop(); err != nil {
-		return err
-	}
 	p.poolMu.Lock()
 	p.closed = true
 	var pool *workerPool
@@ -246,15 +249,43 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 		p.wg.Wait()
 		close(done)
 	}()
+	var err error
 	select {
 	case <-done:
 		p.flushStats(ctx)
-		return nil
 	case <-ctx.Done():
-		return ctx.Err()
+		err = ctx.Err()
 	case <-time.After(5 * time.Second):
-		return errors.New("moderation: workers did not stop in time")
+		err = errors.New("moderation: workers did not stop in time")
 	}
+	p.poolMu.Lock()
+	p.eventsStopped = true
+	p.poolMu.Unlock()
+	return errors.Join(err, p.eventWriter.Stop())
+}
+
+// goTracked runs fn in a goroutine Shutdown waits for before it stops the
+// event writer. Once Shutdown began, fn runs untracked.
+func (p *Plugin) goTracked(fn func()) {
+	p.poolMu.RLock()
+	defer p.poolMu.RUnlock()
+	if p.closed {
+		go fn()
+		return
+	}
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		fn()
+	}()
+}
+
+// sendEvent queues a record for the event writer; false when the queue is
+// full or the writer is stopped.
+func (p *Plugin) sendEvent(rec eventRec) bool {
+	p.poolMu.RLock()
+	defer p.poolMu.RUnlock()
+	return !p.eventsStopped && p.eventWriter.Send(rec)
 }
 
 // errDBUnavailable marks a database outage; HandleHTTP answers it with 503.

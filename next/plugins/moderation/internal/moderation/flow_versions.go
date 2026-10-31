@@ -145,7 +145,9 @@ func (p *Plugin) getFlowVersion(ctx context.Context, req *pluginv1.HTTPRequest) 
 
 // rollbackFlow publishes an old version's spec as the next version:
 // {version, expected_version}. An old version naming deleted auditors is a
-// 400 missing_auditors.
+// 400 missing_auditors. A version published with the automatic total
+// timeout goes back to automatic: the draft gets 0 and the timeout is
+// resolved again.
 func (p *Plugin) rollbackFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	id, bad := parseID(req, "id")
 	if bad != nil {
@@ -176,7 +178,8 @@ func (p *Plugin) rollbackFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*
 			return errRollback
 		}
 		var raw []byte
-		err = tx.QueryRow(ctx, `SELECT spec FROM flow_versions WHERE flow_id = $1 AND version = $2`, id, in.Version).Scan(&raw)
+		var auto bool
+		err = tx.QueryRow(ctx, `SELECT spec, auto_timeout FROM flow_versions WHERE flow_id = $1 AND version = $2`, id, in.Version).Scan(&raw, &auto)
 		if errors.Is(err, pgx.ErrNoRows) {
 			resp = pluginsdk.ErrorResponse(http.StatusNotFound, "not_found", "flow version not found / 流程版本不存在")
 			return errRollback
@@ -195,14 +198,10 @@ func (p *Plugin) rollbackFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*
 			resp = pluginsdk.FieldErrorResponse("invalid flow / 流程参数无效", pluginsdk.FieldErrors{}.Add("version", "invalid", err.Error()))
 			return errRollback
 		}
-		raw, _ = json.Marshal(spec)
-		now, by := p.now().UTC(), callerID(req)
-		if _, err := tx.Exec(ctx, `UPDATE flows SET draft=$2, published=$2, version=$3, published_at=$4, published_by=$5, updated_at=$4 WHERE id=$1`,
-			id, raw, cur+1, now, by); err != nil {
-			return err
+		if auto {
+			spec.TotalTimeoutMs = 0
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO flow_versions (flow_id, version, spec, published_at, published_by) VALUES ($1,$2,$3,$4,$5)`, id, cur+1, raw, now, by)
-		return err
+		return publishSpec(ctx, tx, id, cur+1, spec, p.now().UTC(), callerID(req))
 	})
 	if resp != nil {
 		return resp, nil

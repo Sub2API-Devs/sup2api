@@ -379,25 +379,11 @@ func (p *Plugin) countRun(m *moderation, tr Trace) {
 		if st.Errored {
 			sc.errors++
 		}
-		for _, o := range st.Outcomes {
+		for j := range st.Outcomes {
+			o := &st.Outcomes[j]
 			ak := sk
 			ak.auditor = o.AuditorID
-			ac := p.hourly.row(ak)
-			ac.audited++
-			ac.calls += int64(o.Calls)
-			ac.tokensIn += o.Usage.InputTokens
-			ac.tokensOut += o.Usage.OutputTokens
-			if o.Calls > 0 { // skipped or never run: no latency sample
-				ac.observe(o.LatencyMs)
-			}
-			switch {
-			case o.Skipped:
-				ac.cacheSkipped++ // nothing to send: neither a hit nor an error
-			case o.ErrType != "" || o.Err != nil:
-				ac.errors++
-			case o.Hit:
-				ac.hit++
-			}
+			p.hourly.row(ak).countOutcome(o)
 			if ch := m.snap.channels[o.ChannelID]; ch != nil && metered(o.EngineResult, o.Err) {
 				items = append(items, priceItem{key: costKey{hour: k.hour, channel: ch.ID, source: SourceAudit}, auditor: ak, ch: ch,
 					usage: o.Usage, calls: int64(max(o.Calls, 1))})
@@ -407,6 +393,25 @@ func (p *Plugin) countRun(m *moderation, tr Trace) {
 	p.hourly.mu.Unlock()
 	for _, it := range items {
 		p.priceLater(it)
+	}
+}
+
+// countOutcome counts one auditor's outcome of a run on its auditor row.
+func (ac *counters) countOutcome(o *Outcome) {
+	ac.audited++
+	ac.calls += int64(o.Calls)
+	ac.tokensIn += o.Usage.InputTokens
+	ac.tokensOut += o.Usage.OutputTokens
+	if o.Calls > 0 { // skipped or never run: no latency sample
+		ac.observe(o.LatencyMs)
+	}
+	switch {
+	case o.Skipped:
+		ac.cacheSkipped++ // nothing to send: neither a hit nor an error
+	case o.ErrType != "" || o.Err != nil:
+		ac.errors++
+	case o.Hit:
+		ac.hit++
 	}
 }
 

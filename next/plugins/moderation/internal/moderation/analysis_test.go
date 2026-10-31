@@ -195,6 +195,24 @@ func TestAnalyzeWithoutChannel(t *testing.T) {
 	}
 }
 
+// TestAutoAnalysisWaitsForUsableChannel: without a usable analysis channel
+// reaching analysis_every_violations queues nothing and keeps the count.
+func TestAutoAnalysisWaitsForUsableChannel(t *testing.T) {
+	mod := newFakeMod(t)
+	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "analysis_every_violations": 2, "analysis_channel_id": 1})
+	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI}) // channel 1 is not an llm one
+	mustHook(t, h, hookReqAs(3, "r1", "MOD-HIT-sexual one"))
+	mustHook(t, h, hookReqAs(3, "r2", "MOD-HIT-sexual two"))
+	var w *Watch
+	waitFor(t, "two violations counted", func() bool {
+		w = decodeData[UserDetail](t, h.Do("GET", "/users/3", nil, nil)).Watch
+		return w != nil && w.ViolationCount == 2
+	})
+	if w.AnalysisRequestedAt != nil {
+		t.Fatalf("analysis queued without a usable channel: %+v", w)
+	}
+}
+
 // TestFlowVersionsRollbackSimulate: history, an old version's structure,
 // rollback (also refused when an auditor is gone) and simulation with cost.
 func TestFlowVersionsRollbackSimulate(t *testing.T) {

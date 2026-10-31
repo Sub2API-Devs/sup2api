@@ -550,7 +550,8 @@ export interface StatsQuery {
 export type AIVerdict = 'violation' | 'false_positive' | 'unsure'
 export type Trend = 'occasional' | 'persistent' | 'escalating' | 'likely_false_positive'
 export type Suggestion = 'release' | 'observe' | 'block'
-export type AnalysisStatus = 'ok' | 'failed' | 'stale'
+/** a stale analysis has status ok and error stale (§72.13.4) */
+export type AnalysisStatus = 'ok' | 'failed'
 
 export interface VerdictCounts {
   violation: number
@@ -770,8 +771,8 @@ export interface Flow {
   groups: number[]
   /** the draft differs from the published spec */
   dirty: boolean
-  /** same meaning as dirty (newer backends); dirty is the fallback */
-  has_draft_changes?: boolean
+  /** the published version was drafted with total_timeout_ms 0 (automatic); a discard puts 0 back */
+  published_auto_timeout?: boolean
   /** automatic total timeout of the draft: Σ of each stage's slowest channel timeout */
   stage_timeout_sum_ms?: number
   /** last 24 hours, summed over all nodes */

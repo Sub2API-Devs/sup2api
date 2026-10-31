@@ -134,7 +134,6 @@ func loadUserSummary(ctx context.Context, db *pgxpool.Pool, d *UserDetail, _ tim
 // of the last recentDays by group, flow and version.
 func (p *Plugin) loadUserContext(ctx context.Context, db *pgxpool.Pool, d *UserDetail, now time.Time) error {
 	uc := &d.Context
-	uc.Sources = []ContextSource{}
 	var group int64
 	err := db.QueryRow(ctx, `SELECT group_id FROM events WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`, d.UserID).Scan(&group)
 	switch {
@@ -147,25 +146,35 @@ func (p *Plugin) loadUserContext(ctx context.Context, db *pgxpool.Pool, d *UserD
 	if f := snap.flowFor(group); uc.GroupID != nil && f != nil {
 		uc.Flow = &FlowRef{FlowID: f.ID, Name: f.Name, Version: f.Version}
 	}
+	uc.Sources, err = p.loadSources(ctx, db, d.UserID, now.Add(-recentDays*24*time.Hour), uc.GroupID, uc.Flow)
+	return err
+}
+
+// loadSources returns the user's suspicious records since `since` by group,
+// flow and version ("group → flow@version"), latest first, at most 50, with
+// their AI verdicts. current marks the source of group through flow, the
+// flow bound to that group now (both may be nil).
+func (p *Plugin) loadSources(ctx context.Context, db *pgxpool.Pool, uid int64, since time.Time, group *int64, flow *FlowRef) ([]ContextSource, error) {
 	names, err := p.flowNames(ctx, db)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	rows, err := db.Query(ctx, `SELECT group_id, flow_id, flow_version, count(*), `+aiVerdictSums+`
 		FROM events WHERE user_id = $1 AND created_at >= $2 AND `+suspiciousResult+`
-		GROUP BY group_id, flow_id, flow_version ORDER BY max(created_at) DESC`, d.UserID, now.Add(-recentDays*24*time.Hour))
+		GROUP BY group_id, flow_id, flow_version ORDER BY max(created_at) DESC LIMIT 50`, uid, since)
 	if err != nil {
-		return err
+		return nil, err
 	}
+	sources := []ContextSource{}
 	var s ContextSource
 	_, err = pgx.ForEachRow(rows, append([]any{&s.GroupID, &s.FlowID, &s.Version, &s.Count}, s.AIVerdicts.targets()...), func() error {
 		src := s
 		src.FlowName = names[s.FlowID]
-		src.Current = uc.Flow != nil && s.GroupID == group && s.FlowID == uc.Flow.FlowID && s.Version == uc.Flow.Version
-		uc.Sources = append(uc.Sources, src)
+		src.Current = group != nil && flow != nil && s.GroupID == *group && s.FlowID == flow.FlowID && s.Version == flow.Version
+		sources = append(sources, src)
 		return nil
 	})
-	return err
+	return sources, err
 }
 
 // loadUserDaily reads the user's user_daily rows, this node's pending

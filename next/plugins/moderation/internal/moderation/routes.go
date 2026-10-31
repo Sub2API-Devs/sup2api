@@ -745,6 +745,9 @@ func (p *Plugin) createBlock(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	if utf8.RuneCountInString(reason) > 500 {
 		errs = errs.Add("reason", "too_long", "reason must be at most 500 characters / 原因最多 500 字")
 	}
+	if len(errs) == 0 {
+		errs = p.protectedUser(ctx, p.cfg.Load(), uid)
+	}
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid block / 封禁参数无效", errs), nil
 	}

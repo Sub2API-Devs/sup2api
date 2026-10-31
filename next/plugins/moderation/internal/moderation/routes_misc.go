@@ -304,9 +304,6 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup: %v", err)
 	}
-	if _, err := db.Exec(ctx, `DELETE FROM costs WHERE hour < $1`, now.Add(-400*24*time.Hour)); err != nil {
-		return nil, status.Errorf(codes.Internal, "cleanup costs: %v", err)
-	}
 	// analysis_keep_per_user may have been lowered since a user's last analysis.
 	if _, err := db.Exec(ctx, `DELETE FROM user_analyses WHERE id IN (SELECT id FROM (
 			SELECT id, row_number() OVER (PARTITION BY user_id ORDER BY id DESC) AS n FROM user_analyses) t WHERE n > $1)`,

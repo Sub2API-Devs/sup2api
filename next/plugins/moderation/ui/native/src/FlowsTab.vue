@@ -9,7 +9,7 @@ import FlowSimulate from './FlowSimulate.vue'
 import ImportDialog from './ImportDialog.vue'
 import { useCatalog } from './catalog'
 import { dt, enumLabel, joinList, ms, num, pct } from './format'
-import { canManage, deleteFlow, errorMessage, hasDraftChanges, setFlowEnabled, toastError, useModHost } from './host'
+import { canManage, confirmDelete, deleteFlow, errorMessage, setFlowEnabled, toastError, useModHost } from './host'
 import type { Flow, Group, Spec, TabKey } from './types'
 import { groupCoverage, type GroupOwner } from './flowOps'
 
@@ -122,17 +122,13 @@ async function toggle(f: Flow, on: boolean) {
 
 const deleteBlocked = (f: Flow) => f.enabled && f.groups.length > 0
 
-async function remove(f: Flow) {
-  const ok = await host.confirm({ message: t('flows.deleteConfirm', { name: f.name }), danger: true, confirmText: t('delete') })
-  if (!ok) return
-  try {
-    await deleteFlow(f.id)
-    host.toast(t('deleted'), 'success')
-    void refreshFlows()
-  } catch (e) {
-    host.toast(isApiError(e) && e.code === 'flow_in_use' ? t('flows.deleteBlocked') : errorMessage(e, t('actionFailed')), 'error')
-  }
-}
+const remove = (f: Flow) =>
+  confirmDelete(
+    t('flows.deleteConfirm', { name: f.name }),
+    () => deleteFlow(f.id),
+    () => void refreshFlows(),
+    (e) => (isApiError(e) && e.code === 'flow_in_use' ? t('flows.deleteBlocked') : errorMessage(e, t('actionFailed')))
+  )
 
 // ---- editor (?flow=<id> | ?flow=new)
 const route = host.router.currentRoute
@@ -204,7 +200,7 @@ function onCreated(id: number) {
             <SSwitch v-if="manage" :model-value="row.enabled" size="sm" :aria-label="t('enabled')" @update:model-value="toggle(row, $event)" />
             <SBadge v-if="row.version" tone="info">v{{ row.version }}</SBadge>
             <SBadge v-else tone="gray">{{ t('flows.unpublished') }}</SBadge>
-            <SBadge v-if="row.version && hasDraftChanges(row)" tone="warning">{{ t('flows.badgeChanges') }}</SBadge>
+            <SBadge v-if="row.version && row.dirty" tone="warning">{{ t('flows.badgeChanges') }}</SBadge>
           </template>
           <template #cell-groups="{ row }">
             <FlowGroupsCell :flow="row" :all-groups="allGroups" :owners="owners" :can-write="manage" :group-label="groupLabel" @saved="refreshFlows" />
