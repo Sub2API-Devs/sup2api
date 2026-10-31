@@ -137,6 +137,7 @@ func (p *Plugin) admit(in *pluginv1.GatewayRequestHookRequest) (*moderation, *pl
 	m.rec = eventRec{
 		At: p.now().UTC(), RequestID: meta.GetRequestId(), UserID: uid, APIKeyID: meta.GetApiKeyId(),
 		GroupID: meta.GetGroupId(), Model: textutil.TruncateRunes(model, 200), Protocol: protocol, Mode: c.Mode,
+		Endpoint: textutil.TruncateRunes(meta.GetEndpoint(), 255), SessionFp: textutil.TruncateRunes(meta.GetSessionFingerprint(), 64),
 		Timing: m.timing, FlowID: flow.ID, FlowVersion: flow.Version, InputFormat: protocol,
 		TextChars: len([]rune(input.Text)), TextHash: hex.EncodeToString(input.Hash[:]), ImageCount: len(input.Images),
 		WatchLevel: level,

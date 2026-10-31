@@ -441,6 +441,17 @@ func compile(s Settings) *config {
 	return c
 }
 
+// retentionCut reports whether c keeps some records or statistics for a
+// shorter time than old.
+func (c *config) retentionCut(old *config) bool {
+	for result, keep := range c.retention {
+		if keep < old.retention[result] {
+			return true
+		}
+	}
+	return c.StatsRetentionDays < old.StatsRetentionDays
+}
+
 // settingsDigest is a short sha256 of the raw settings JSON (tells nodes
 // apart while a change propagates).
 func settingsDigest(raw []byte) string {

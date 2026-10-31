@@ -1,14 +1,19 @@
 import { reactive, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { fetchCoreUser, searchCoreUsers, useModHost } from './host'
+import { fetchCoreUser, fetchUsers, searchCoreUsers, useModHost } from './host'
 import type { CoreUser } from './types'
 
-// Users of the core (GET /users/:id, needs user:read), cached for the page:
-// name, status and roles. Without the permission every lookup stops after
-// the first 403 and the views show #id only.
+// Users of the core, cached for the page: name, status and roles. The ids a
+// render asks for are looked up together through the plugin (GET /users,
+// grant users.read), which works for every moderator; when the plugin cannot
+// (no grant, older core) each id goes to the core's GET /users/:id, which
+// needs user:read and stops after the first 403 (the views then show #id).
 
 const users = reactive(new Map<number, CoreUser | null>())
 const inflight = new Set<number>()
+/** ids asked for during the current tick, looked up in one call */
+const pending = new Set<number>()
+let viaPlugin = true
 let denied = false
 
 const nameOf = (u: CoreUser | null | undefined) => u?.display_name || u?.email || ''
@@ -23,16 +28,43 @@ export function coreUser(id: number | null | undefined): CoreUser | null {
 /** Name of a user once loaded ('' while loading, unknown or not permitted). */
 export const userName = (id: number | null | undefined): string => nameOf(coreUser(id))
 
-async function loadUser(id: number) {
-  if (denied || users.has(id) || inflight.has(id)) return
-  inflight.add(id)
+function loadUser(id: number) {
+  if (users.has(id) || inflight.has(id) || pending.has(id)) return
+  if (!pending.size) queueMicrotask(loadPending)
+  pending.add(id)
+}
+
+/** Looks the pending ids up, at most 500 per plugin call (its limit). */
+async function loadPending() {
+  const ids = [...pending]
+  pending.clear()
+  for (const id of ids) inflight.add(id)
+  for (let i = 0; i < ids.length; i += 500) {
+    const batch = ids.slice(i, i + 500)
+    if (viaPlugin) {
+      try {
+        for (const u of await fetchUsers(batch)) users.set(u.id, u)
+        for (const id of batch) if (!users.has(id)) users.set(id, null)
+        continue
+      } catch {
+        viaPlugin = false
+      }
+    }
+    await Promise.all(batch.map(loadCoreUser))
+  }
+  for (const id of ids) inflight.delete(id)
+}
+
+async function loadCoreUser(id: number) {
+  if (denied) {
+    users.set(id, null)
+    return
+  }
   try {
     users.set(id, await fetchCoreUser(id))
   } catch (e) {
     if (isApiError(e) && (e.status === 401 || e.status === 403)) denied = true
     users.set(id, null)
-  } finally {
-    inflight.delete(id)
   }
 }
 

@@ -1090,3 +1090,36 @@ p.mod-text-danger {
   border: 1px solid rgb(var(--line));
   border-radius: 0.375rem;
 }
+
+/* ImageInput: thumbnails with a remove button, then upload / URL. */
+.mod-image-list,
+.mod-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.mod-image-actions .input {
+  flex: 1;
+  min-width: 10rem;
+}
+.mod-image-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+}
+.mod-image-item img {
+  width: 3rem;
+  height: 3rem;
+  object-fit: cover;
+  border: 1px solid rgb(var(--line));
+  border-radius: 0.375rem;
+}
+.mod-image-url {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}

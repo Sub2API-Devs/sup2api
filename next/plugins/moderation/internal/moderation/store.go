@@ -22,6 +22,8 @@ type eventRec struct {
 	GroupID          int64
 	Model            string
 	Protocol         string
+	Endpoint         string // RequestMeta.endpoint (path pattern)
+	SessionFp        string // RequestMeta.session_fingerprint ("" = no sticky session)
 	Mode             string
 	Timing           string
 	FlowID           int64
@@ -161,13 +163,13 @@ func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) ([]int64, erro
 				verdict, action, categories, severity, reason, error, text, text_chars, text_hash, cached,
 				llm_model, turns, latency_ms, prompt_tokens, completion_tokens,
 				result, timing, flow_id, flow_version, highest_category, highest_score, hit_categories, trace,
-				input_format, input_message, input_message_size, image_count, keep_until, queue_ms)
+				input_format, input_message, input_message_size, image_count, keep_until, queue_ms, endpoint, session_fp)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'','',$13,$14,$15,false,'',0,$16,0,0,
-				$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30) RETURNING id`,
+				$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32) RETURNING id`,
 			e.At, e.RequestID, e.UserID, e.APIKeyID, e.GroupID, e.Model, e.Protocol, mode,
 			verdict, action, e.HitCategories, e.Severity, e.Text, e.TextChars, e.TextHash, e.LatencyMs,
 			e.Result, e.Timing, e.FlowID, e.FlowVersion, e.HighestCategory, e.HighestScore, e.HitCategories, e.Trace,
-			e.InputFormat, e.InputMessage, e.InputMessageSize, e.ImageCount, e.KeepUntil, e.QueueMs)
+			e.InputFormat, e.InputMessage, e.InputMessageSize, e.ImageCount, e.KeepUntil, e.QueueMs, e.Endpoint, e.SessionFp)
 	}
 	ids := make([]int64, len(evs))
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {

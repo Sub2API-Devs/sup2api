@@ -285,8 +285,11 @@ func (s *CostSummary) targets() []any {
 	return []any{&s.units, &s.Calls, &s.PricedCalls, &s.UnpricedCalls, &s.UnpricedTokens, &s.FreeCalls, &s.TokensIn, &s.TokensOut}
 }
 
+// getCosts: day buckets start at the caller's midnight (tz_offset_minutes,
+// like the statistics).
 func (p *Plugin) getCosts(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
-	now := p.now().UTC()
+	ck := p.clockOf(req)
+	now := ck.now
 	r := CostReport{Range: pluginsdk.Query(req, "range"), To: now, Bucket: "day", ByChannel: []ChannelCost{}, BySource: []SourceCost{}, Trend: []CostPoint{}}
 	switch r.Range {
 	case "", "24h":
@@ -303,15 +306,15 @@ func (p *Plugin) getCosts(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	if err != nil {
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
-	if err := p.loadCostReport(ctx, db, &r); err != nil {
+	if err := p.loadCostReport(ctx, db, &r, ck); err != nil {
 		return nil, err
 	}
 	return pluginsdk.DataResponse(r), nil
 }
 
 // loadCostReport reads the costs rows since r.From, this node's pending sums
-// included (a test shows up at once).
-func (p *Plugin) loadCostReport(ctx context.Context, db *pgxpool.Pool, r *CostReport) error {
+// included (a test shows up at once); the trend is bucketed by ck.
+func (p *Plugin) loadCostReport(ctx context.Context, db *pgxpool.Pool, r *CostReport, ck clock) error {
 	p.flushStats(ctx)
 	if err := db.QueryRow(ctx, `SELECT `+costSums+` FROM costs WHERE hour >= $1`, r.From).Scan(r.Totals.targets()...); err != nil {
 		return err
@@ -343,31 +346,25 @@ func (p *Plugin) loadCostReport(ctx context.Context, db *pgxpool.Pool, r *CostRe
 	if err != nil {
 		return err
 	}
-	rows, err = db.Query(ctx, `SELECT date_trunc($2, hour, 'UTC'), coalesce(sum(cost), 0)::text FROM costs WHERE hour >= $1 GROUP BY 1 ORDER BY 1`, r.From, r.Bucket)
+	rows, err = db.Query(ctx, `SELECT hour, `+costUnits("sum(cost)")+` FROM costs WHERE hour >= $1 GROUP BY hour`, r.From)
 	if err != nil {
 		return err
 	}
-	byBucket := map[int64]string{}
+	byBucket := map[int64]int64{}
 	var b time.Time
-	var cost string
-	if _, err := pgx.ForEachRow(rows, []any{&b, &cost}, func() error {
-		u, _ := parseCost(cost)
-		byBucket[b.Unix()] = formatCost(u)
+	var units int64
+	if _, err := pgx.ForEachRow(rows, []any{&b, &units}, func() error {
+		byBucket[ck.bucket(b, r.Bucket).Unix()] += units
 		return nil
 	}); err != nil {
 		return err
 	}
 	step := 24 * time.Hour
-	b = time.Date(r.From.Year(), r.From.Month(), r.From.Day(), 0, 0, 0, 0, time.UTC)
 	if r.Bucket == "hour" {
-		step, b = time.Hour, r.From.Truncate(time.Hour)
+		step = time.Hour
 	}
-	for ; !b.After(r.To); b = b.Add(step) {
-		c, ok := byBucket[b.Unix()]
-		if !ok {
-			c = formatCost(0)
-		}
-		r.Trend = append(r.Trend, CostPoint{Bucket: b, Cost: c})
+	for b = ck.bucket(r.From.Truncate(time.Hour), r.Bucket); !b.After(r.To); b = b.Add(step) {
+		r.Trend = append(r.Trend, CostPoint{Bucket: b, Cost: formatCost(byBucket[b.Unix()])})
 	}
 	if r.ByChannel == nil {
 		r.ByChannel = []ChannelCost{}

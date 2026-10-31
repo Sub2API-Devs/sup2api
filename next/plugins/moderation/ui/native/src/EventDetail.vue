@@ -15,7 +15,7 @@ import { useCatalog } from './catalog'
 import { categoryLabel, dt, enumLabel, idText, isSuspicious, ms, num } from './format'
 import { canManage, deleteEvent, fetchEvent, reviewEvents, toastError, useModHost } from './host'
 import { aiVerdictTone, modeTone, severityTone } from './tones'
-import type { ModEventDetail, ReviewStatus, Watch } from './types'
+import type { EventFilter, ModEventDetail, ReviewStatus, Watch } from './types'
 import { useAsync } from './useAsync'
 
 // Record detail (GET /events/:id, new-api record-detail-drawer): result, the
@@ -23,14 +23,16 @@ import { useAsync } from './useAsync'
 // flow version it ran with, other records of the same request, text and the
 // structured input message; manage users review a suspicious record (hit,
 // block) or delete any. userLink=false (the user drawer, already showing
-// the user) leaves the user as plain text.
-const props = withDefaults(defineProps<{ open: boolean; eventId: number | null; userLink?: boolean }>(), { userLink: true })
+// the user) leaves the user as plain text. filterable (the records tab)
+// offers to filter the list by the record's endpoint or session (filter).
+const props = withDefaults(defineProps<{ open: boolean; eventId: number | null; userLink?: boolean; filterable?: boolean }>(), { userLink: true })
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void
   (e: 'deleted', id: number): void
   (e: 'reviewed', ids: number[], status: ReviewStatus): void
   (e: 'show-user', userId: number): void
   (e: 'open-user', userId: number): void
+  (e: 'filter', q: EventFilter): void
 }>()
 const host = useModHost()
 const t = host.t
@@ -107,6 +109,10 @@ function openUser(id: number) {
   close()
   emit('open-user', id)
 }
+function filterBy(q: EventFilter) {
+  close()
+  emit('filter', q)
+}
 
 // AI verdict of the record (§72.13.4) and the analysis that wrote it.
 const hasAI = computed(() => !!ev.value?.ai_verdict)
@@ -140,11 +146,13 @@ const fields = computed<DescItem[]>(() => {
     { key: 'flow', label: t('detail.f.flow') },
     { key: 'model', label: t('detail.f.model'), value: e.model || '' },
     { key: 'protocol', label: t('detail.f.protocol'), value: e.protocol || '' },
+    { key: 'endpoint', label: t('detail.f.endpoint'), value: e.endpoint || '', mono: true },
     { key: 'latency', label: t('detail.f.latency'), value: ms(e.latency_ms) + (e.queue_ms ? ` (${t('detail.queued', { n: num(e.queue_ms) })})` : '') },
     { key: 'counted', label: t('detail.f.counted'), value: e.counted ? t('yes') : t('no') },
     { key: 'keep', label: t('detail.f.keepUntil'), value: e.keep_until ? dt(e.keep_until) : '' }
   ]
   if (e.reviewed_at) items.push({ key: 'reviewed', label: t('detail.f.reviewed'), value: `${dt(e.reviewed_at)} ${idText(e.reviewed_by)}` })
+  if (e.session_fp) items.push({ key: 'session', label: t('detail.f.session'), value: e.session_fp, mono: true, copyable: true, full: true })
   if (e.llm_model) items.push({ key: 'llm', label: t('detail.f.llmModel'), value: e.llm_model })
   return items
 })
@@ -225,6 +233,14 @@ const fields = computed<DescItem[]>(() => {
         <template #item-categories><CategoryChips :categories="ev.hit_categories" wrap /></template>
         <template #item-user><UserRef :user-id="ev.user_id" :link="userLink" :title="userLink ? t('events.openUser') : undefined" @click="openUser" /></template>
         <template #item-flow><FlowRef :flow-id="ev.flow_id" :version="ev.flow_version" :name="ev.flow_name" :current="ev.flow_current_version" /></template>
+        <template #item-endpoint>
+          {{ ev.endpoint || '—' }}
+          <SButton v-if="filterable && ev.endpoint" size="xs" variant="ghost" icon="filter" icon-only :aria-label="t('detail.endpointRecords')" :title="t('detail.endpointRecords')" @click="filterBy({ endpoint: ev.endpoint })" />
+        </template>
+        <template #item-session>
+          {{ ev.session_fp }}
+          <SButton v-if="filterable" size="xs" variant="ghost" icon="filter" @click="filterBy({ session_fp: ev.session_fp })">{{ t('detail.sessionRecords') }}</SButton>
+        </template>
       </SDescriptions>
     </div>
     <template #footer>

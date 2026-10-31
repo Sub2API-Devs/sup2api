@@ -39,7 +39,7 @@ func init() {
 			Schema:  objectSchema(nil, map[string]any{}), Handler: toolUserSummary},
 		{Name: "list_suspicious_records", Purpose: "列出这个用户的可疑记录（新的在前，分页）",
 			Args:    "since_days? 默认 30 · limit? 默认 20，≤50 · before_id? 翻页",
-			Returns: "id、时间、group、flow_id、flow_version、命中类别、严重度（按分数）、各级各审核器的得分和阈值（含送审的图片数 sent_images、没送出的 skipped_images）、处理状态（误报 / 确认 / 还没处理）、上次 AI 复核结论、120 字摘录（没保存原文时为空）",
+			Returns: "id、时间、group、flow_id、flow_version、命中类别、严重度（按分数）、各级各审核器的得分和阈值（含送审的图片数 sent_images、没送出的 skipped_images）、处理状态（误报 / 确认 / 还没处理）、上次 AI 复核结论、120 字摘录（没保存原文时为空）、session_fp（请求所属粘性会话的指纹，没有粘性会话时为空；同一指纹即同一粘性会话，可据此判断违规是否集中在同一会话）",
 			Schema: objectSchema(nil, map[string]any{
 				"since_days": map[string]any{"type": "integer", "minimum": 1, "maximum": 365},
 				"limit":      map[string]any{"type": "integer", "minimum": 1, "maximum": 50},
@@ -47,7 +47,7 @@ func init() {
 			}), Handler: toolListRecords},
 		{Name: "get_record", Purpose: "看一条可疑记录的详情",
 			Args:    "id（必须是这个用户的记录，否则返回错误给模型）· offset? 全文从第几个字开始读，默认 0 · limit? 这次最多读多少字，默认 12000，≤20000",
-			Returns: "240 字摘录；记录保存了原文时另有 text：用户消息全文从 offset 起的一段（审核器只看了全文的前 12000 字），以 text 为准，和 text_range（offset 本段起点、returned 本段字数、total 全文字数、complete 是否已读到全文末尾、next_offset 没读完时下一段的 offset）；没读完又需要后文时，用 next_offset 再调一次；hit_categories（类别、得分、阈值、所在级）、group、flow_id、flow_version、各级各审核器的得分和阈值（含送审的图片数 sent_images、没送出的 skipped_images）、处理状态（记录上没有 evidence）",
+			Returns: "240 字摘录；记录保存了原文时另有 text：用户消息全文从 offset 起的一段（审核器只看了全文的前 12000 字），以 text 为准，和 text_range（offset 本段起点、returned 本段字数、total 全文字数、complete 是否已读到全文末尾、next_offset 没读完时下一段的 offset）；没读完又需要后文时，用 next_offset 再调一次；hit_categories（类别、得分、阈值、所在级）、group、flow_id、flow_version、各级各审核器的得分和阈值（含送审的图片数 sent_images、没送出的 skipped_images）、处理状态（记录上没有 evidence）、session_fp（请求所属粘性会话的指纹，没有粘性会话时为空；同一指纹即同一粘性会话）",
 			Schema: objectSchema([]string{"id"}, map[string]any{
 				"id":     map[string]any{"type": "integer"},
 				"offset": map[string]any{"type": "integer", "minimum": 0},
@@ -274,6 +274,7 @@ type toolRow struct {
 	ID           int64
 	CreatedAt    time.Time
 	GroupID      int64
+	SessionFp    string
 	FlowID       int64
 	FlowVersion  int
 	Timing       string
@@ -287,12 +288,12 @@ type toolRow struct {
 	TextLen      int
 }
 
-const toolRowColumns = `id, created_at, group_id, flow_id, flow_version, timing, severity, review_status,
+const toolRowColumns = `id, created_at, group_id, session_fp, flow_id, flow_version, timing, severity, review_status,
 	ai_verdict, ai_severity, ai_reason, trace, left(coalesce(text, ''), $EXCERPT), coalesce(char_length(text), 0)`
 
 func scanToolRow(r pgx.Row) (toolRow, error) {
 	var t toolRow
-	err := r.Scan(&t.ID, &t.CreatedAt, &t.GroupID, &t.FlowID, &t.FlowVersion, &t.Timing, &t.Severity, &t.ReviewStatus,
+	err := r.Scan(&t.ID, &t.CreatedAt, &t.GroupID, &t.SessionFp, &t.FlowID, &t.FlowVersion, &t.Timing, &t.Severity, &t.ReviewStatus,
 		&t.AIVerdict, &t.AISeverity, &t.AIReason, &t.Trace, &t.Excerpt, &t.TextLen)
 	return t, err
 }
@@ -332,6 +333,7 @@ type toolRecord struct {
 	ID            int64          `json:"id"`
 	CreatedAt     string         `json:"created_at"`
 	Group         int64          `json:"group"`
+	SessionFp     string         `json:"session_fp"`
 	FlowID        int64          `json:"flow_id"`
 	FlowVersion   int            `json:"flow_version"`
 	Timing        string         `json:"timing"`
@@ -350,7 +352,7 @@ type toolRecord struct {
 var reviewStatusNames = map[string]string{"pending": "还没处理", "false_positive": "误报", "confirmed": "确认"}
 
 func (tc *toolCtx) recordOf(r *toolRow, excerptRunes int, detail bool) toolRecord {
-	out := toolRecord{ID: r.ID, CreatedAt: toolTime(&r.CreatedAt), Group: r.GroupID, FlowID: r.FlowID, FlowVersion: r.FlowVersion,
+	out := toolRecord{ID: r.ID, CreatedAt: toolTime(&r.CreatedAt), Group: r.GroupID, SessionFp: r.SessionFp, FlowID: r.FlowID, FlowVersion: r.FlowVersion,
 		Timing: r.Timing, Severity: r.Severity, ReviewStatus: reviewStatusNames[r.ReviewStatus], Excerpt: truncateRunes(r.Excerpt, excerptRunes),
 		HitCategories: []toolHit{}, Stages: []toolStage{}}
 	var tr Trace

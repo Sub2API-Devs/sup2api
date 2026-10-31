@@ -34,7 +34,7 @@ func hookReqAs(user int64, id, text string) *pluginv1.GatewayRequestHookRequest 
 	msgs, _ := json.Marshal([]any{map[string]any{"role": "user", "content": text}})
 	return &pluginv1.GatewayRequestHookRequest{
 		Meta: &pluginv1.RequestMeta{RequestId: id, Protocol: "anthropic.messages", ClientProtocol: "anthropic.messages",
-			Model: "claude-opus-5", UserId: user, ApiKeyId: 5, GroupId: 9},
+			Model: "claude-opus-5", UserId: user, ApiKeyId: 5, GroupId: 9, Endpoint: "/v1/messages"},
 		Fields: map[string]string{FieldModel: `"claude-opus-5"`, FieldMessages: string(msgs)},
 	}
 }
@@ -145,6 +145,11 @@ func startDB(t *testing.T, llm *fakeLLM, extra map[string]any, beforeInit ...fun
 	fh.SetDSN(dsn, schema)
 	// Nobody is a moderator unless a test says so (isStaff).
 	fh.Authz = func(int64, string) bool { return false }
+	// Users 1-100 exist in the core (GetUsers).
+	fh.Users = map[int64]*pluginv1.UserInfo{}
+	for id := int64(1); id <= 100; id++ {
+		fh.Users[id] = &pluginv1.UserInfo{Id: id, Email: fmt.Sprintf("u%d@example.com", id), DisplayName: fmt.Sprintf("user %d", id), Status: "active"}
+	}
 	p := New()
 	for _, configure := range beforeInit {
 		configure(p)
@@ -270,10 +275,22 @@ func TestObserveWatchListAndEnforceLevel(t *testing.T) {
 	mod := newFakeMod(t)
 	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
 	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
-	if r := mustHook(t, h, hookReqAs(3, "req-a", "MOD-HIT-sexual one")); denied(r) || r.GetNote() != notePrefix+"queued" {
+	first := hookReqAs(3, "req-a", "MOD-HIT-sexual one")
+	first.Meta.SessionFingerprint = "fp-a"
+	if r := mustHook(t, h, first); denied(r) || r.GetNote() != notePrefix+"queued" {
 		t.Fatalf("observe = %+v", r)
 	}
 	waitEvents(t, h, map[string]string{"result": "hit", "user_id": "3"}, 1)
+	// The record keeps the endpoint and the sticky-session fingerprint; the
+	// list filters by both (new-api records filters).
+	if ev := waitEvents(t, h, map[string]string{"endpoint": "/v1/messages", "session_fp": "fp-a"}, 1); ev[0].Endpoint != "/v1/messages" || ev[0].SessionFp != "fp-a" {
+		t.Fatalf("record = %+v", ev[0].Event)
+	}
+	for _, q := range []map[string]string{{"session_fp": "fp-b"}, {"endpoint": "/v1/chat/completions"}} {
+		if n := len(decodeData[[]EventListItem](t, h.Do("GET", "/events", q, nil))); n != 0 {
+			t.Fatalf("filter %v = %d", q, n)
+		}
+	}
 	var w []Watch
 	waitFor(t, "watch entry", func() bool {
 		w = decodeData[[]Watch](t, h.Do("GET", "/watchlist", nil, nil))
@@ -496,6 +513,10 @@ func TestCleanupAndImport(t *testing.T) {
 		(1,'observe','pass','allow','pass', now() - interval '1 hour'), (1,'observe','flag','allow','hit', now() + interval '1 day')`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := db.Exec(ctx, `INSERT INTO events (user_id, mode, verdict, action, result, keep_until, request_id, created_at) VALUES
+		(1,'observe','flag','allow','hit', now() + interval '170 days', 'aged-hit', now() - interval '10 days')`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Exec(ctx, `INSERT INTO watchlist (user_id, level, source, expires_at) VALUES (5,'observe','auto', now() - interval '1 minute')`); err != nil {
 		t.Fatal(err)
 	}
@@ -515,6 +536,19 @@ func TestCleanupAndImport(t *testing.T) {
 	}
 	if n, err := countViolations(ctx, db, 9, time.Now().Add(-time.Hour)); err != nil || n != 1 {
 		t.Fatalf("violations = %d %v (0.1 flags must not count)", n, err)
+	}
+	// A shortened retention applies to the stored records at once, not only
+	// to the keep_until of new ones (new-api cleanup.go).
+	if errs := h.Configure(map[string]any{"mode": ModeObserve, "hit_retention_days": 5}, nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	waitFor(t, "retention cleanup", func() bool {
+		var n int
+		return db.QueryRow(ctx, `SELECT count(*) FROM events WHERE request_id = 'aged-hit'`).Scan(&n) == nil && n == 0
+	})
+	var left int
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM events WHERE user_id = 1`).Scan(&left); err != nil || left != 1 {
+		t.Fatalf("records younger than the retention = %d %v", left, err)
 	}
 	doc := map[string]any{"data": map[string]any{
 		"channels": []any{map[string]any{"type": "openai", "name": "omni", "base_url": "https://api.openai.com"}},

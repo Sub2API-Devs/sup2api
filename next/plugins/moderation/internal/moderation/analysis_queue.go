@@ -619,9 +619,15 @@ func (p *Plugin) runAnalysisJob(ctx context.Context) (*pluginv1.RunJobResponse, 
 
 // analysisStats is the runtime view of the analysis queue.
 type analysisStats struct {
-	ChannelConfigured bool  `json:"channel_configured"`
-	Pending           int64 `json:"pending"`
-	Running           int64 `json:"running"`
+	ChannelConfigured bool `json:"channel_configured"`
+	// ChannelProblem says why a set analysis_channel_id is not used:
+	// not_found, not_llm, or unusable (disabled, or its key or proxy does
+	// not open). The settings are saved by the core without asking the
+	// plugin, so a wrong channel is reported here and analyses stay off
+	// (new-api refuses it on save).
+	ChannelProblem string `json:"channel_problem,omitempty"`
+	Pending        int64  `json:"pending"`
+	Running        int64  `json:"running"`
 }
 
 func (p *Plugin) analysisRuntime(ctx context.Context) analysisStats {
@@ -629,6 +635,18 @@ func (p *Plugin) analysisRuntime(ctx context.Context) analysisStats {
 	db, err := p.db(ctx)
 	if err != nil {
 		return st
+	}
+	if id := p.cfg.Load().AnalysisChannelID; id != 0 && !st.ChannelConfigured {
+		var typ string
+		err := db.QueryRow(ctx, `SELECT type FROM channels WHERE id = $1 AND deleted_at IS NULL`, id).Scan(&typ)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			st.ChannelProblem = "not_found"
+		case err == nil && typ != ChannelLLM:
+			st.ChannelProblem = "not_llm"
+		case err == nil:
+			st.ChannelProblem = "unusable"
+		}
 	}
 	_ = db.QueryRow(ctx, `SELECT count(*) FILTER (WHERE analysis_claim_until IS NULL OR analysis_claim_until < $1),
 			count(*) FILTER (WHERE analysis_claim_until >= $1)

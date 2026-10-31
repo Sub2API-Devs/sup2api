@@ -97,15 +97,27 @@ func (f *sqlFilter) idList(req *pluginv1.HTTPRequest, name, column string) {
 	if v == "" {
 		return
 	}
+	ids, ok := parseIDList(v)
+	if !ok {
+		f.errs = f.errs.Add(name, "invalid", name+" is a comma list of up to 500 user ids (0 = none) / "+name+" 为逗号分隔的用户 id，最多 500 个（0 表示无匹配）")
+		return
+	}
+	f.conds = append(f.conds, column+" = ANY("+f.arg(ids)+")")
+}
+
+// parseIDList reads a comma list of at most maxIDList ids (>= 0).
+func parseIDList(v string) ([]int64, bool) {
 	parts := strings.Split(v, ",")
+	if len(parts) > maxIDList {
+		return nil, false
+	}
 	ids := make([]int64, 0, len(parts))
 	for _, part := range parts {
 		id, err := strconv.ParseInt(strings.TrimSpace(part), 10, 64)
-		if err != nil || id < 0 || len(ids) >= maxIDList {
-			f.errs = f.errs.Add(name, "invalid", name+" is a comma list of up to 500 user ids (0 = none) / "+name+" 为逗号分隔的用户 id，最多 500 个（0 表示无匹配）")
-			return
+		if err != nil || id < 0 {
+			return nil, false
 		}
 		ids = append(ids, id)
 	}
-	f.conds = append(f.conds, column+" = ANY("+f.arg(ids)+")")
+	return ids, true
 }

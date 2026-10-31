@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -276,8 +277,8 @@ func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*
 
 // ---------------------------------------------------------------- jobs
 
-// RunJob implements pluginsdk.JobRunner. cleanup deletes records past
-// keep_until, expired watch entries and expired blocks; an expired ban counts
+// RunJob implements pluginsdk.JobRunner. cleanup deletes records past their
+// retention (purgeRetention), expired watch entries and expired blocks; an expired ban counts
 // as an unblock at its expiry, so violations before it are not counted again.
 func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
 	switch in.GetJobId() {
@@ -299,16 +300,12 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 	if _, err := db.Exec(ctx, BackfillLegacySQL); err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup backfill: %v", err)
 	}
-	tag, err := db.Exec(ctx, `DELETE FROM events WHERE keep_until < $1`, now)
+	events, err := p.purgeRetention(ctx, db, now)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "cleanup events: %v", err)
+		return nil, status.Errorf(codes.Internal, "cleanup: %v", err)
 	}
-	events := tag.RowsAffected()
 	if _, err := db.Exec(ctx, `DELETE FROM costs WHERE hour < $1`, now.Add(-400*24*time.Hour)); err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup costs: %v", err)
-	}
-	if err := p.cleanupStats(ctx, db, now); err != nil {
-		return nil, status.Errorf(codes.Internal, "cleanup stats: %v", err)
 	}
 	// analysis_keep_per_user may have been lowered since a user's last analysis.
 	if _, err := db.Exec(ctx, `DELETE FROM user_analyses WHERE id IN (SELECT id FROM (
@@ -354,6 +351,33 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 		p.watchChanged(ctx)
 	}
 	return &pluginv1.RunJobResponse{Message: fmt.Sprintf("deleted %d events, %d expired watch entries and %d expired blocks", events, watch, blocks)}, nil
+}
+
+// purgeRetention deletes the records past their keep_until or older than
+// the current retention of their result, and the statistics past
+// stats_retention_days: a shortened retention also applies to the rows
+// already stored (new-api cleanup.go). It returns the records deleted.
+func (p *Plugin) purgeRetention(ctx context.Context, db *pgxpool.Pool, now time.Time) (int64, error) {
+	tag, err := db.Exec(ctx, `DELETE FROM events WHERE keep_until < $1`, now)
+	if err != nil {
+		return 0, fmt.Errorf("events: %w", err)
+	}
+	deleted := tag.RowsAffected()
+	retention := p.cfg.Load().retention
+	results, cuts := make([]string, 0, len(retention)), make([]time.Time, 0, len(retention))
+	for result, keep := range retention {
+		results, cuts = append(results, result), append(cuts, now.Add(-keep))
+	}
+	tag, err = db.Exec(ctx, `DELETE FROM events e USING unnest($1::text[], $2::timestamptz[]) AS r(result, cut)
+		WHERE e.result = r.result AND e.created_at < r.cut`, results, cuts)
+	if err != nil {
+		return deleted, fmt.Errorf("events by retention: %w", err)
+	}
+	deleted += tag.RowsAffected()
+	if err := p.cleanupStats(ctx, db, now); err != nil {
+		return deleted, fmt.Errorf("stats: %w", err)
+	}
+	return deleted, nil
 }
 
 // expireWatch removes the expired watch entries, writing their history.

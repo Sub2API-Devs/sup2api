@@ -4,6 +4,7 @@ import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SField, SHint, SInput, SModal, SSegmented, SSelect, STextarea } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import CostBadge from './CostBadge.vue'
+import ImageInput from './ImageInput.vue'
 import ResultBadge from './ResultBadge.vue'
 import TraceView from './TraceView.vue'
 import { enumLabel, enumOptions } from './format'
@@ -28,7 +29,7 @@ const versions = ref<number[]>([])
 const userState = ref<SimUserState>('none')
 const input = ref<'text' | 'event'>('text')
 const text = ref('')
-const images = ref('')
+const images = ref<string[]>([])
 const eventId = ref('')
 const running = ref(false)
 const result = ref<TestResult | null>(null)
@@ -85,13 +86,12 @@ async function run() {
     }
     body.event_id = id
   } else {
-    const imgs = images.value.split('\n').map((s) => s.trim()).filter(Boolean)
-    if (!text.value.trim() && !imgs.length) {
+    if (!text.value.trim() && !images.value.length) {
       failure.value = t('flows.simRequired')
       return
     }
     body.text = text.value
-    if (imgs.length) body.images = imgs
+    if (images.value.length) body.images = images.value
   }
   const my = ++runSeq
   running.value = true
@@ -127,10 +127,9 @@ async function run() {
         </SField>
       </div>
       <template v-if="input === 'text'">
-        <STextarea v-model="text" :rows="5" :placeholder="t('test.placeholder')" :aria-label="t('flows.simInputText')" />
-        <SField :label="t('test.images')" :hint="t('test.imagesHint')" size="sm">
-          <STextarea v-model="images" :rows="2" />
-        </SField>
+        <ImageInput v-model="images" size="sm">
+          <STextarea v-model="text" :rows="5" :placeholder="t('test.placeholder')" :aria-label="t('flows.simInputText')" />
+        </ImageInput>
       </template>
       <SField v-else :label="t('flows.eventId')" :hint="t('flows.eventIdHint')" size="sm">
         <SInput v-model="eventId" inputmode="numeric" size="sm" />

@@ -60,9 +60,13 @@ export function canManage(): boolean {
   return useModHost().can('moderation:manage')
 }
 
+/**
+ * May edit the plugin settings: core plugin:manage, or moderation:manage
+ * (manifest ui.settings.permission, CONTRACTS §74.1).
+ */
 export function canManageSettings(): boolean {
   const h = useModHost()
-  return h.permissions.superuser() || h.permissions.has('plugin:manage')
+  return h.permissions.superuser() || h.permissions.has('plugin:manage') || canManage()
 }
 
 // ------------------------------------------------------------------ API
@@ -139,7 +143,6 @@ export const importConfig = (data: unknown, preview: boolean) => api().post<Impo
 
 // ---- P2 (§72.13)
 
-export const fetchCosts = (range: string) => api().get<Costs>('/costs', { range })
 
 export const fetchUserDetail = (userId: number) => api().get<UserDetail>(`/users/${userId}`)
 export const analyzeWatch = (userId: number) => api().post<Watch>(`${WATCHLIST_PATH}/${userId}/analyze`, {})
@@ -166,6 +169,7 @@ export const simulateFlow = (id: number, body: SimulateBody) => api().post<TestR
 const withTz = <T extends object>(q?: T) => ({ ...q, tz_offset_minutes: -new Date().getTimezoneOffset() })
 
 export const fetchStatus = () => api().get<Status>('/status', withTz())
+export const fetchCosts = (range: string) => api().get<Costs>('/costs', withTz({ range }))
 export const fetchTrend = (q: StatsQuery) => api().get<TrendResult>('/stats/trend', withTz(q))
 export const fetchPerformance = (q: StatsQuery) => api().get<PerformanceResult>('/stats/performance', withTz(q))
 export const fetchCategoryStats = () => api().get<CategoryStats>('/stats/categories', withTz())
@@ -214,6 +218,8 @@ export function useWatchList(query: Query, onMeta: (m: WatchListMeta) => void) {
 // ---- core API (host.api): users, groups and this plugin's settings
 
 export const fetchCoreUser = (id: number) => useModHost().api.get<CoreUser>(`/users/${id}`)
+/** Users by id through the plugin (GET /users, host GetUsers): for moderators without user:read. */
+export const fetchUsers = (ids: number[]) => api().get<CoreUser[]>('/users', { ids: ids.join(',') })
 export const searchCoreUsers = (q: string) => useModHost().api.list<CoreUser>('/users', { q, page_size: 50 })
 
 export const SETTINGS_MASK = '******'
@@ -272,9 +278,11 @@ export function errorDetails<K extends keyof ErrorDetails>(e: unknown, key: K): 
 /** Draft differs from the published version (has_draft_changes, else dirty). */
 export const hasDraftChanges = (f: Pick<Flow, 'dirty' | 'has_draft_changes'>) => f.has_draft_changes ?? f.dirty
 
-/** Path of the plugin's settings page in the console. */
+/** Path of the plugin's settings in the console: its page's tab, or the settings-only page without plugin:read (§74.1). */
 export function settingsPath(): string {
-  return `/plugins/${encodeURIComponent(useModHost().plugin.key)}?tab=settings`
+  const h = useModHost()
+  const key = encodeURIComponent(h.plugin.key)
+  return h.permissions.superuser() || h.permissions.has('plugin:read') ? `/plugins/${key}?tab=settings` : `/plugins/${key}/settings`
 }
 
 /** Queue state of a watch entry: running (claimed), pending (queued) or idle. */

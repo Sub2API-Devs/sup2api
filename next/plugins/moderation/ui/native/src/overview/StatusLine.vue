@@ -33,8 +33,13 @@ const coverage = computed(() => {
 })
 const channelsDown = computed(() => catalog.state.channels.filter((c) => !c.enabled).length)
 const analysisConfigured = computed(() => !!props.status.runtime.analysis?.channel_configured)
+/** why analyses are off: no channel, or the saved one is not a usable llm channel */
+const analysisOff = computed(() => {
+  const problem = props.status.runtime.analysis?.channel_problem
+  return problem ? t(`statusLine.analysisProblem.${problem}`) : t('statusLine.analysisOff')
+})
 
-// Settings links only for plugin managers (core plugin:manage).
+// Settings links only for those who may edit the settings (canManageSettings).
 const settingsLink = computed(() => canManageSettings())
 const notice = computed<{ tone: 'warning' | 'info'; text: string; action: 'flows' | 'settings' | '' } | null>(() => {
   if (!props.status.runtime.configured) return { tone: 'warning', text: t('overview.notConfigured'), action: canManage() ? 'flows' : '' }
@@ -62,8 +67,8 @@ const act = (action: 'flows' | 'settings') => (action === 'settings' ? emit('go-
     <span :class="channelsDown ? 'mod-text-warning' : ''">{{ channelsDown ? t('statusLine.channelsDown', { n: channelsDown }) : t('statusLine.channelsOk') }}</span>
     <span class="mod-sub">·</span>
     <span v-if="analysisConfigured">{{ t('statusLine.analysisOn') }}</span>
-    <SLink v-else-if="settingsLink" as="button" class="mod-text-warning" @click="emit('go-settings')">{{ t('statusLine.analysisOff') }}</SLink>
-    <span v-else class="mod-text-warning">{{ t('statusLine.analysisOff') }}</span>
+    <SLink v-else-if="settingsLink" as="button" class="mod-text-warning" @click="emit('go-settings')">{{ analysisOff }}</SLink>
+    <span v-else class="mod-text-warning">{{ analysisOff }}</span>
   </div>
 
   <SAlert v-if="notice" :tone="notice.tone" class="mod-block">

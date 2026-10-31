@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SChart } from '@sub2api/ui'
+import { SChart, SHint } from '@sub2api/ui'
 import { lineChart } from './charts'
 import { num } from './format'
 import { useModHost } from './host'
 import type { UserDay } from './types'
 
 // A user's last 30 UTC days (user_daily, summed over groups): audited,
-// suspicious and high-severity records, and failed checks.
+// suspicious and high-severity records, and failed checks. The rows are
+// stored per UTC date, so unlike the overview the days are UTC days.
 const props = defineProps<{ daily: UserDay[] }>()
 const t = useModHost().t
 
@@ -27,4 +28,5 @@ const chart = computed(() => {
 
 <template>
   <SChart :option="chart" height="200px" />
+  <SHint size="xs">{{ t('userDaily.utc') }}</SHint>
 </template>

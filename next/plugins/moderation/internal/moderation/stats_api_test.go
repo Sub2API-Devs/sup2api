@@ -178,6 +178,16 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	if resp := h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 77}); resp.GetStatus() != 400 {
 		t.Fatalf("staff watch = %d %s", resp.GetStatus(), resp.GetBody())
 	}
+	// A user the core does not know is neither watched nor banned (new-api
+	// AddModerationWatch); the console gets names of a page in one call.
+	for _, path := range []string{"/watchlist", "/blocks"} {
+		if resp := h.Do("POST", path, nil, map[string]any{"user_id": 999}); resp.GetStatus() != http.StatusNotFound || !strings.Contains(string(resp.GetBody()), "user_not_found") {
+			t.Fatalf("%s unknown user = %d %s", path, resp.GetStatus(), resp.GetBody())
+		}
+	}
+	if us := decodeData[[]CoreUser](t, h.Do("GET", "/users", map[string]string{"ids": "31,999"}, nil)); len(us) != 1 || us[0].ID != 31 || us[0].DisplayName != "user 31" {
+		t.Fatalf("users = %+v", us)
+	}
 }
 
 func TestErrorRateAlertAndNotice(t *testing.T) {
@@ -444,5 +454,37 @@ func TestStaffCheckFailureKeepsDailyCounts(t *testing.T) {
 	q.flushStats(ctx)
 	if n := suspicious(); n != 1 {
 		t.Fatalf("kept counts not written: %d", n)
+	}
+}
+
+// Day buckets of /costs start at the caller's midnight, like the statistics.
+func TestCostDaysFollowCallerOffset(t *testing.T) {
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	ctx := context.Background()
+	db, err := p.db(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 15:00 and 17:00 UTC of yesterday: one UTC day, two days at UTC+8
+	// (whose midnight is 16:00 UTC).
+	y := time.Now().UTC().Truncate(24 * time.Hour).Add(-24 * time.Hour)
+	if _, err := db.Exec(ctx, `INSERT INTO costs (hour, channel_id, source, priced_calls, cost) VALUES ($1, 1, 'audit', 1, 1), ($2, 1, 'audit', 1, 2)`,
+		y.Add(15*time.Hour), y.Add(17*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	days := func(offset string) map[time.Time]string {
+		out := map[time.Time]string{}
+		for _, pt := range decodeData[CostReport](t, h.Do("GET", "/costs", map[string]string{"range": "7d", "tz_offset_minutes": offset}, nil)).Trend {
+			if pt.Cost != formatCost(0) {
+				out[pt.Bucket.UTC()] = pt.Cost
+			}
+		}
+		return out
+	}
+	if utc := days("0"); len(utc) != 1 || utc[y] != "3.00000000" {
+		t.Fatalf("UTC days = %v", utc)
+	}
+	if local := days("480"); len(local) != 2 || local[y.Add(-8*time.Hour)] != "1.00000000" || local[y.Add(16*time.Hour)] != "2.00000000" {
+		t.Fatalf("UTC+8 days = %v", local)
 	}
 }

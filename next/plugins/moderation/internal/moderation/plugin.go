@@ -186,6 +186,21 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 				_ = p.reloadConfig(ctx)
 			}()
 		}
+		// A shortened retention applies at once (new-api schedules a cleanup
+		// on save). Every node gets the change; the deletes are idempotent.
+		if old != nil && p.configured.Load() && c.retentionCut(old) {
+			go func() {
+				ctx, cancel := context.WithTimeout(p.bg, 10*time.Minute)
+				defer cancel()
+				db, err := p.db(ctx)
+				if err == nil {
+					_, err = p.purgeRetention(ctx, db, p.now().UTC())
+				}
+				if err != nil && p.bg.Err() == nil {
+					p.log.Warn("moderation: retention cleanup failed", "error", err.Error())
+				}
+			}()
+		}
 	}
 	if !p.configured.Swap(true) || (c.enabled && (old == nil || !old.enabled)) {
 		p.kickRefresh()

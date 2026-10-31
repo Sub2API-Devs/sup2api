@@ -53,6 +53,9 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 				t.Errorf("no record ids in the tool results: %s", msgs)
 				ids = []string{"0"}
 			}
+			if !strings.Contains(msgs, "session_fp") || !strings.Contains(msgs, "fp-r1") {
+				t.Errorf("list_suspicious_records without the session fingerprint: %s", msgs)
+			}
 			return 200, scriptTurn{Usage: u, Calls: []llmToolCall{{ID: "t3", Name: "get_record", Args: []byte(`{"id":` + ids[0] + `}`)}}}
 		case 3:
 			if !strings.Contains(string(req.Body["messages"]), "text_range") {
@@ -74,7 +77,9 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 	if ch.ID != 2 || ch.Protocol != ProtocolAnthropic || ch.BillingModel != "deepseek-flash" || ch.PriceState == nil || !ch.PriceState.Priced {
 		t.Fatalf("channel = %+v %+v", ch, ch.PriceState)
 	}
-	mustHook(t, h, hookReqAs(3, "r1", "please MOD-HIT-sexual one"))
+	r1 := hookReqAs(3, "r1", "please MOD-HIT-sexual one")
+	r1.Meta.SessionFingerprint = "fp-r1"
+	mustHook(t, h, r1)
 	waitEvents(t, h, map[string]string{"result": "hit", "user_id": "3"}, 1)
 	mustHook(t, h, hookReqAs(3, "r2", "again MOD-HIT-sexual two"))
 	var w Watch
@@ -162,13 +167,24 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 func TestAnalyzeWithoutChannel(t *testing.T) {
 	_, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "analysis_channel_id": 1})
 	decodeData[Watch](t, h.Do("POST", "/watchlist", nil, map[string]any{"user_id": 5}))
+	problem := func() string {
+		return decodeData[Status](t, h.Do("GET", "/status", nil, nil)).Runtime.Analysis.ChannelProblem
+	}
+	if p := problem(); p != "not_found" {
+		t.Fatalf("missing channel problem = %q", p)
+	}
+	// A channel that is not an llm one is not used (new-api refuses it on save).
+	decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": ChannelOpenAI, "name": "o", "base_url": "http://127.0.0.1:1"}))
 	if r := h.Do("POST", "/watchlist/5/analyze", nil, nil); r.GetStatus() != 400 || !strings.Contains(string(r.GetBody()), "no_analysis_channel") {
 		t.Fatalf("analyze = %d %s", r.GetStatus(), r.GetBody())
 	}
-	// The channel exists: with moderation off the runtime still says so,
-	// and an analysis is refused because moderation is off.
+	if p := problem(); p != "not_llm" {
+		t.Fatalf("non-llm channel problem = %q", p)
+	}
+	// An llm channel: with moderation off the runtime still says so, and an
+	// analysis is refused because moderation is off.
 	decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": "llm", "name": "a", "base_url": "http://127.0.0.1:1", "api_key": "k", "model": "m"}))
-	if errs := h.Configure(map[string]any{"mode": ModeOff, "analysis_channel_id": 1}, nil); len(errs) > 0 {
+	if errs := h.Configure(map[string]any{"mode": ModeOff, "analysis_channel_id": 2}, nil); len(errs) > 0 {
 		t.Fatal(errs)
 	}
 	if o := decodeData[Status](t, h.Do("GET", "/status", nil, nil)); !o.Runtime.Analysis.ChannelConfigured {

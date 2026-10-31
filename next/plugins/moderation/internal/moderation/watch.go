@@ -237,6 +237,9 @@ func (p *Plugin) createWatch(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效", errs), nil
 	}
 	uid := v.uid
+	if resp := p.missingUser(ctx, uid); resp != nil {
+		return resp, nil
+	}
 	if p.isStaff(ctx, uid) {
 		return pluginsdk.FieldErrorResponse("invalid watch entry / 名单参数无效",
 			pluginsdk.FieldErrors{}.Add("user_id", "staff", "moderators are not put on the watch list / 审核管理员不进入观察名单")), nil

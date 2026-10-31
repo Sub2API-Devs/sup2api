@@ -109,6 +109,12 @@ const channelOptions = computed(() => [
   { value: 0, label: t('settingsTab.noAnalysis') },
   ...catalog.state.channels.filter((c) => c.type === 'llm').map((c) => ({ value: c.id, label: c.enabled ? c.name : `${c.name} (${t('disabled')})` }))
 ])
+/** The saved analysis channel is not an llm channel (e.g. set on the schema form): the server leaves analyses off. */
+const channelError = computed(() => {
+  const id = Number(form.analysis_channel_id) || 0
+  const listed = !id || !catalog.state.loaded || channelOptions.value.some((o) => o.value === id)
+  return errs.analysis_channel_id || (listed ? '' : t('settingsTab.analysisChannelInvalid', { id }))
+})
 
 const jevMode = computed({
   get: () => (jev.value ? 'custom' : 'builtin'),
@@ -146,7 +152,7 @@ const jevOptions = computed(() => [
       </SCard>
 
       <SCard :title="t('settingsTab.analysis')">
-        <SField :label="t('settingsTab.analysisChannel')" :hint="t('settingsTab.analysisChannelHint')" :error="errs.analysis_channel_id">
+        <SField :label="t('settingsTab.analysisChannel')" :hint="t('settingsTab.analysisChannelHint')" :error="channelError">
           <SSelect v-model="form.analysis_channel_id" :options="channelOptions" />
         </SField>
       </SCard>

@@ -6,6 +6,7 @@ import ResultBadge from './ResultBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import TraceView from './TraceView.vue'
 import CostBadge from './CostBadge.vue'
+import ImageInput from './ImageInput.vue'
 import { useCatalog } from './catalog'
 import { enumLabel } from './format'
 import { errorMessage, runTest, useModHost } from './host'
@@ -20,7 +21,7 @@ const host = useModHost()
 const t = host.t
 
 const text = ref('')
-const images = ref('')
+const images = ref<string[]>([])
 const flowId = ref<number>(0)
 const running = ref(false)
 const result = ref<TestResult | null>(null)
@@ -39,8 +40,7 @@ function useSample(k: (typeof samples)[number]) {
 }
 
 async function run() {
-  const imgs = images.value.split('\n').map((s) => s.trim()).filter(Boolean)
-  if (!text.value.trim() && !imgs.length) {
+  if (!text.value.trim() && !images.value.length) {
     failure.value = t('test.required')
     return
   }
@@ -49,7 +49,7 @@ async function run() {
   notConfigured.value = false
   result.value = null
   try {
-    result.value = await runTest(text.value, imgs, flowId.value)
+    result.value = await runTest(text.value, images.value, flowId.value)
   } catch (e) {
     if (isApiError(e) && e.code === 'not_configured') notConfigured.value = true
     else failure.value = errorMessage(e, t('test.failed'))
@@ -73,15 +73,14 @@ function onKey(e: KeyboardEvent) {
           <SField :label="t('test.flow')">
             <SSelect v-model="flowId" :options="flowOptions" />
           </SField>
-          <STextarea v-model="text" class="mod-textarea" :rows="8" :placeholder="t('test.placeholder')" :aria-label="t('test.title')" @keydown="onKey" />
-          <SField :label="t('test.images')" :hint="t('test.imagesHint')">
-            <STextarea v-model="images" :rows="2" />
-          </SField>
+          <ImageInput v-model="images">
+            <STextarea v-model="text" class="mod-textarea" :rows="8" :placeholder="t('test.placeholder')" :aria-label="t('test.title')" @keydown="onKey" />
+          </ImageInput>
         </div>
         <div class="mod-test-actions">
           <SHint inline size="xs">{{ t('labelColon', { label: t('test.samples') }) }}</SHint>
           <SButton v-for="s in samples" :key="s" variant="ghost" size="sm" @click="useSample(s)">{{ t(`test.sample.${s}`) }}</SButton>
-          <SButton variant="primary" icon="play" class="mod-ml-auto" :loading="running" :disabled="!text.trim() && !images.trim()" @click="run">
+          <SButton variant="primary" icon="play" class="mod-ml-auto" :loading="running" :disabled="!text.trim() && !images.length" @click="run">
             {{ running ? t('test.running') : t('test.run') }}
           </SButton>
         </div>

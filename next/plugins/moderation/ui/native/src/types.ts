@@ -28,10 +28,14 @@ export interface Runtime {
   blocked_users: number
   watched_users: number
   /** P2 (§72.13.4); absent on 0.2 */
-  analysis?: { channel_configured: boolean; pending: number; running: number }
+  /** channel_problem: why a set analysis_channel_id is not used (the core saves settings unchecked) */
+  analysis?: { channel_configured: boolean; channel_problem?: 'not_found' | 'not_llm' | 'unusable'; pending: number; running: number }
 }
 
 /** Row of GET /events (no `text`, has `text_excerpt`). */
+/** Record filters a record detail can set (click-to-filter). */
+export type EventFilter = { endpoint?: string; session_fp?: string }
+
 export interface ModEvent {
   id: number
   created_at: string
@@ -41,6 +45,10 @@ export interface ModEvent {
   group_id: number
   model: string
   protocol: string
+  /** client endpoint path pattern, e.g. /v1/messages ('' on older records) */
+  endpoint: string
+  /** sticky-session fingerprint ('' = no sticky session) */
+  session_fp: string
   mode: string
   timing: 'pre' | 'post' | ''
   result: Result | ''

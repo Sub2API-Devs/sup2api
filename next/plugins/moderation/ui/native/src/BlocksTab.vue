@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { SAlert, SBadge, SButton, SCard, SField, SHint, SInput, STable, type TableColumn } from '@sub2api/ui'
+import UserRef from './UserRef.vue'
 import { dt, enumLabel } from './format'
 import { canManage, createBlock, deleteBlock, fetchBlocks, toastError, useModHost } from './host'
 import type { Block } from './types'
@@ -104,7 +105,7 @@ async function submit() {
 
     <SCard :padded="false">
       <STable :columns="columns" :rows="rows" :loading="loading" row-key="user_id" :empty-text="t('blocks.empty')">
-        <template #cell-user_id="{ row }"><span class="mod-num">#{{ row.user_id }}</span></template>
+        <template #cell-user_id="{ row }"><UserRef :user-id="row.user_id" /></template>
         <template #cell-source="{ row }">
           <SBadge :tone="row.source === 'manual' ? 'accent' : 'warning'">{{ enumLabel('source', row.source) }}</SBadge>
         </template>

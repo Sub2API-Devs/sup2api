@@ -15,7 +15,7 @@ import { useCategoryOptions } from './categories'
 import { applyFilters } from './forms'
 import { dt, enumLabel, enumOptions, isSuspicious, ms, num, withAll } from './format'
 import { canManage, errorMessage, useEventList, useModHost } from './host'
-import type { ReviewStatus } from './types'
+import type { EventFilter, ReviewStatus } from './types'
 import { useBulkReview } from './useBulkReview'
 import { useUserFilter } from './users'
 
@@ -45,6 +45,8 @@ const emptyForm = () => ({
   api_key_id: '',
   user: '',
   request_id: '',
+  endpoint: '',
+  session_fp: '',
   q: ''
 })
 const form = reactive(emptyForm())
@@ -74,6 +76,8 @@ function query() {
     user_id: users.query.value.user_id ?? '',
     user_ids: users.query.value.user_ids ?? '',
     request_id: form.request_id.trim(),
+    endpoint: form.endpoint.trim(),
+    session_fp: form.session_fp.trim(),
     q: form.q.trim(),
     from: from.value,
     to: to.value
@@ -174,6 +178,12 @@ function filterUser(id: number) {
   search()
 }
 
+/** From the record detail: the records of its endpoint or sticky session. */
+function filterBy(q: EventFilter) {
+  Object.assign(form, q)
+  search()
+}
+
 // User detail drawer (GET /users/:user_id), for any user of a record.
 const userOpen = ref(false)
 const userId = ref<number | null>(null)
@@ -235,6 +245,12 @@ watch(() => list.items.value, () => (checked.value = []))
         <SField class="mod-filter" :label="t('events.requestId')">
           <SInput v-model="form.request_id" />
         </SField>
+        <SField class="mod-filter" :label="t('events.endpoint')">
+          <SInput v-model="form.endpoint" placeholder="/v1/messages" />
+        </SField>
+        <SField class="mod-filter" :label="t('events.session')">
+          <SInput v-model="form.session_fp" :placeholder="t('events.sessionPlaceholder')" />
+        </SField>
         <SField class="mod-filter mod-filter-wide" :label="t('events.q')">
           <SInput v-model="form.q" type="search" />
         </SField>
@@ -290,6 +306,10 @@ watch(() => list.items.value, () => (checked.value = []))
           <UserRef :user-id="row.user_id" link :title="t('events.openUser')" @click="openUser" />
           <SButton size="xs" variant="ghost" icon="filter" icon-only :aria-label="t('events.filterUser')" :title="t('events.filterUser')" @click.stop="filterUser(row.user_id)" />
         </template>
+        <template #cell-model="{ row }">
+          <span :title="row.model">{{ row.model || '—' }}</span>
+          <div v-if="row.endpoint" class="mod-sub" :title="row.endpoint">{{ row.endpoint }}</div>
+        </template>
         <template #cell-flow="{ row }"><FlowRef :flow-id="row.flow_id" :version="row.flow_version" /></template>
         <template #cell-latency_ms="{ row }">
           <span class="mod-num">{{ ms(row.latency_ms) }}</span>
@@ -301,7 +321,7 @@ watch(() => list.items.value, () => (checked.value = []))
       </div>
     </SCard>
 
-    <EventDetail v-model:open="detailOpen" :event-id="selected" @deleted="onDeleted" @reviewed="onReviewed" @show-user="filterUser" @open-user="openUser" />
+    <EventDetail v-model:open="detailOpen" :event-id="selected" filterable @deleted="onDeleted" @reviewed="onReviewed" @show-user="filterUser" @open-user="openUser" @filter="filterBy" />
     <WatchDetail v-model:open="userOpen" :user-id="userId" @show-user="filterUser" />
   </div>
 </template>

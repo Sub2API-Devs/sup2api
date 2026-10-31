@@ -11,6 +11,7 @@ import (
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/moderation/internal/moderation"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest/check"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
 )
@@ -52,7 +53,19 @@ func TestManifest(t *testing.T) {
 	if err := dec.Decode(&m); err != nil {
 		t.Fatalf("manifest.json: %v", err)
 	}
-	if m.Key != "moderation" || m.Version != "0.4.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
+	// The host's own manifest rules (sdk/manifest/check), as an install runs them.
+	files := map[string][]byte{"manifest.json": manifestJSON}
+	for _, f := range []string{"forms/settings.schema.json", "forms/settings.ui.json", "migrations/0001_init.sql"} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files[f] = b
+	}
+	if fields, ok := check.Fields(check.Validate(&m, files, check.ValidateOptions{Tooling: true})); ok {
+		t.Fatalf("manifest check: %+v", fields)
+	}
+	if m.Key != "moderation" || m.Version != "0.5.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}
@@ -82,13 +95,13 @@ func TestManifest(t *testing.T) {
 		"POST /flows/:id/rollback": "moderation:manage", "POST /flows/:id/simulate": "moderation:manage", "GET /analysis/prompt": "moderation:read",
 		"GET /status": "moderation:read", "GET /stats/trend": "moderation:read", "GET /stats/performance": "moderation:read",
 		"GET /stats/categories": "moderation:read", "POST /watchlist/:user_id/seen": "moderation:manage", "POST /auditors/try": "moderation:manage",
-		"GET /users/:user_id": "moderation:read",
+		"GET /users/:user_id": "moderation:read", "GET /users": "moderation:read",
 	} {
 		if routes[route] != perm {
 			t.Errorf("route %s: permission %q, want %q", route, routes[route], perm)
 		}
 	}
-	if len(routes) != 53 {
+	if len(routes) != 54 {
 		t.Errorf("routes = %v", routes)
 	}
 	granted := map[string]*manifest.HostPermission{}
@@ -108,6 +121,14 @@ func TestManifest(t *testing.T) {
 	}
 	if n := granted["net"]; n == nil || !n.Optional {
 		t.Error("net must be optional")
+	}
+	// users.read (§74.3) is optional: without it user ids are not checked.
+	if u := granted["users.read"]; u == nil || !u.Optional {
+		t.Error("users.read must be declared and optional")
+	}
+	// moderation:manage may edit the settings (§74.1).
+	if m.UI.Settings == nil || m.UI.Settings.Permission != "moderation:manage" {
+		t.Errorf("ui.settings = %+v", m.UI.Settings)
 	}
 	if len(m.Hooks) != 1 {
 		t.Fatalf("hooks = %+v", m.Hooks)

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { SAlert, SBadge, SButton, SField, SHint, SModal, STextarea } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SHint, SModal, STextarea } from '@sub2api/ui'
 import CategoryChips from './CategoryChips.vue'
 import CostBadge from './CostBadge.vue'
+import ImageInput from './ImageInput.vue'
 import { categoryLabel, enumLabel, ms, score } from './format'
 import { toastError, tryAuditor, useModHost } from './host'
 import type { AuditorTryTarget, TryResult } from './types'
@@ -15,7 +16,7 @@ const host = useModHost()
 const t = host.t
 
 const text = ref('')
-const images = ref('')
+const images = ref<string[]>([])
 const result = ref<TryResult | null>(null)
 const trying = ref(false)
 // Only the latest try writes the result; opening again drops a pending one.
@@ -34,8 +35,7 @@ async function run() {
   trying.value = true
   result.value = null
   try {
-    const urls = images.value.split('\n').map((s) => s.trim()).filter(Boolean)
-    const r = await tryAuditor(a.id, text.value, urls, a.draft)
+    const r = await tryAuditor(a.id, text.value, images.value, a.draft)
     if (my === seq) result.value = r
   } catch (e) {
     if (my === seq) toastError(e)
@@ -55,10 +55,9 @@ const scores = computed(() =>
   <SModal v-model:open="open" :title="t('auditors.tryTitle', { name: target?.name || '' })" width="lg">
     <div class="mod-form">
       <SHint size="xs">{{ t('auditors.tryHint') }}</SHint>
-      <STextarea v-model="text" :rows="5" :placeholder="t('test.placeholder')" />
-      <SField :label="t('test.images')" :hint="t('test.imagesHint')">
-        <STextarea v-model="images" :rows="2" />
-      </SField>
+      <ImageInput v-model="images">
+        <STextarea v-model="text" :rows="5" :placeholder="t('test.placeholder')" />
+      </ImageInput>
       <div v-if="result" class="mod-verdict">
         <div class="mod-verdict-head">
           <SBadge v-if="result.error" tone="warning">{{ enumLabel('err', result.err) }} {{ result.status || '' }}</SBadge>
@@ -77,7 +76,7 @@ const scores = computed(() =>
     </div>
     <template #footer>
       <SButton @click="open = false">{{ host.i18n.t('ui.close') }}</SButton>
-      <SButton variant="primary" icon="play" :loading="trying" :disabled="!text.trim() && !images.trim()" @click="run">{{ t('test.run') }}</SButton>
+      <SButton variant="primary" icon="play" :loading="trying" :disabled="!text.trim() && !images.length" @click="run">{{ t('test.run') }}</SButton>
     </template>
   </SModal>
 </template>

@@ -28,10 +28,10 @@ const channelColumns = computed<TableColumn[]>(() => [
   { key: 'cost', label: t('analysis.cost'), align: 'right', nowrap: true }
 ])
 
-// Day buckets of /costs are UTC days.
+// Day buckets of /costs start at the browser's midnight (tz_offset_minutes).
 const chart = computed(() => {
   const trend = data.value?.trend || []
-  const labels = trend.map((p) => bucketLabel(p.bucket, range.value === '24h' ? 'hour' : 'day', true))
+  const labels = trend.map((p) => bucketLabel(p.bucket, range.value === '24h' ? 'hour' : 'day'))
   return barChart(labels, { name: t('analysis.cost'), data: trend.map((p) => Number(p.cost) || 0) }, money)
 })
 const hasTrend = computed(() => (data.value?.trend || []).some((p) => Number(p.cost) > 0))

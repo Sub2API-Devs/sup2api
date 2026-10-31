@@ -14,7 +14,10 @@ import (
 // array, newest first (missing positions are skipped). CONTRACTS §72.2.
 const tail16 = `|@reverse|[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]`
 
-// tailSize is how many trailing items the hook receives.
+// tailSize is how many trailing items the hook receives. It stays 16: the
+// core ships these items with every hooked request, mostly assistant turns
+// and tool results, while a trailing run of more than 16 user messages is
+// rare and its newest 16 are the ones moderated (CONTRACTS §72.4).
 const tailSize = 16
 
 // Hook fields (manifest hooks[].needs, gjson queries evaluated by the core).

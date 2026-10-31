@@ -9,7 +9,7 @@
     "en": "Moderates gateway requests with flows of auditors (OpenAI moderation, TypeSafe Jev, LLM verdict) bound to groups. Users on the watch list at the enforce level are moderated before the upstream call and refused on a hit; the others are moderated in the background. Suspicious users join the watch list automatically; an AI analysis reviews their records and can adjust the watch level; repeated violations can ban them. The cost of every moderation call is shown with the core model prices.",
     "zh": "按分组绑定的审核流程（OpenAI 内容审核、TypeSafe Jev、大模型判定）审核网关请求。观察名单中拦截级的用户先审后发、命中即拒绝，其余请求在后台审核。可疑用户自动进入观察名单，AI 分析复核其记录并可调整名单级别，多次违规可自动封禁。每次审核调用的费用按核心的模型价格展示。"
   },
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "sub2api",
   "icon": "text:M",
   "runtime": "grpc",
@@ -330,6 +330,12 @@
     },
     {
       "method": "GET",
+      "path": "/users",
+      "scope": "admin",
+      "permission": "moderation:read"
+    },
+    {
+      "method": "GET",
       "path": "/users/:user_id",
       "scope": "admin",
       "permission": "moderation:read"
@@ -466,7 +472,8 @@
     "settings": {
       "mode": "schema",
       "schema": "forms/settings.schema.json",
-      "uiSchema": "forms/settings.ui.json"
+      "uiSchema": "forms/settings.ui.json",
+      "permission": "moderation:manage"
     }
   },
   "resources": {
@@ -522,6 +529,14 @@
         "en": "Read the model and the trailing user messages (text and images) of gateway requests to moderate them, and refuse violating requests",
         "zh": "读取网关请求的模型和末尾连续的用户消息（文字和图片）进行审核，并拒绝违规请求"
       }
+    },
+    {
+      "id": "users.read",
+      "reason": {
+        "en": "Check that a user exists before putting it on the watch list or banning it, and show user names and emails in the moderation pages (without it, any user id is accepted and pages show ids or the names the viewer may read)",
+        "zh": "加入观察名单或封禁前确认用户存在，并在审核页面显示用户名和邮箱（不授予时不校验用户 id，页面显示 id 或查看者自己有权读取的用户名）"
+      },
+      "optional": true
     },
     {
       "id": "jobs",

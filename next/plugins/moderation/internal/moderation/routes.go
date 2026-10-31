@@ -32,6 +32,7 @@ func (p *Plugin) routes() {
 	p.Handle("PATCH", "/watchlist/:user_id", p.updateWatch)
 	p.Handle("DELETE", "/watchlist/:user_id", p.deleteWatch)
 	p.Handle("GET", "/watchlist/:user_id/events", p.listWatchEvents)
+	p.Handle("GET", "/users", p.getUsers)
 	p.Handle("GET", "/users/:user_id", p.getUserDetail)
 	p.Handle("POST", "/watchlist/:user_id/seen", p.markWatchSeen)
 	p.Handle("POST", "/watchlist/:user_id/analyze", p.analyzeWatch)
@@ -140,6 +141,8 @@ type Event struct {
 	GroupID          int64      `json:"group_id"`
 	Model            string     `json:"model"`
 	Protocol         string     `json:"protocol"`
+	Endpoint         string     `json:"endpoint"`   // client endpoint path pattern
+	SessionFp        string     `json:"session_fp"` // sticky-session fingerprint, "" = none
 	Mode             string     `json:"mode"`
 	Timing           string     `json:"timing"`
 	Result           string     `json:"result"`
@@ -221,13 +224,13 @@ type UserState struct {
 	Until   *time.Time `json:"blocked_until"`
 }
 
-const eventColumns = `id, created_at, request_id, user_id, api_key_id, group_id, model, protocol, mode, timing, result,
+const eventColumns = `id, created_at, request_id, user_id, api_key_id, group_id, model, protocol, endpoint, session_fp, mode, timing, result,
 	flow_id, flow_version, severity, hit_categories, highest_category, highest_score, review_status, reviewed_by, reviewed_at,
 	counted, input_format, text_chars, image_count, input_message_size, latency_ms, queue_ms, keep_until,
 	ai_verdict, ai_severity, ai_category, ai_evidence, ai_reason, ai_analysis_id, verdict, reason, error, llm_model`
 
 func (e *Event) scanTargets() []any {
-	return []any{&e.ID, &e.CreatedAt, &e.RequestID, &e.UserID, &e.APIKeyID, &e.GroupID, &e.Model, &e.Protocol, &e.Mode, &e.Timing, &e.Result,
+	return []any{&e.ID, &e.CreatedAt, &e.RequestID, &e.UserID, &e.APIKeyID, &e.GroupID, &e.Model, &e.Protocol, &e.Endpoint, &e.SessionFp, &e.Mode, &e.Timing, &e.Result,
 		&e.FlowID, &e.FlowVersion, &e.Severity, &e.HitCategories, &e.HighestCategory, &e.HighestScore, &e.ReviewStatus, &e.ReviewedBy, &e.ReviewedAt,
 		&e.Counted, &e.InputFormat, &e.TextChars, &e.ImageCount, &e.InputMessageSize, &e.LatencyMs, &e.QueueMs, &e.KeepUntil,
 		&e.AIVerdict, &e.AISeverity, &e.AICategory, &e.AIEvidence, &e.AIReason, &e.AIAnalysisID,
@@ -271,6 +274,8 @@ func eventFilter(req *pluginv1.HTTPRequest) (where string, args []any, errs plug
 	f.enum(req, "mode", ModeObserve, ModeEnforce)
 	f.ids(req)
 	f.text(req, "request_id", "request_id = ")
+	f.text(req, "endpoint", "endpoint = ")
+	f.text(req, "session_fp", "session_fp <> '' AND session_fp = ") // the partial index
 	if v := pluginsdk.Query(req, "category"); v != "" {
 		if !jevCategoryRe.MatchString(v) && !categoryIDRe.MatchString(v) {
 			f.errs = f.errs.Add("category", "invalid", "category is invalid / 分类格式无效")
@@ -742,6 +747,9 @@ func (p *Plugin) createBlock(ctx context.Context, req *pluginv1.HTTPRequest) (*p
 	}
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid block / 封禁参数无效", errs), nil
+	}
+	if resp := p.missingUser(ctx, uid); resp != nil {
+		return resp, nil
 	}
 	db, err := p.db(ctx)
 	if err != nil {

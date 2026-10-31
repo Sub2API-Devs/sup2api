@@ -2,6 +2,7 @@ package moderation
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
@@ -109,13 +110,25 @@ func postNotice(ctx context.Context, client *http.Client, url, secret string, n 
 
 // notifyWatchChange tells administrators about a watch list change the AI
 // analysis made (auto_upgrade, auto_downgrade, auto_remove).
+// The user's name comes from the core when it can tell (users.read).
 func (p *Plugin) notifyWatchChange(uid int64, action, from, to, trend, suggestion string, analysisID int64) {
+	if p.cfg.Load().NotifyWebhookURL == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(p.bg, 3*time.Second)
+	users, _, _ := p.lookupUsers(ctx, []int64{uid})
+	cancel()
+	name, who := "", fmt.Sprintf("#%d", uid)
+	if len(users) > 0 {
+		name = cmp.Or(users[0].GetDisplayName(), users[0].GetEmail())
+		who = name + " " + who
+	}
 	levelName := map[string]string{LevelObserve: "观察 observe", LevelEnforce: "拦截 enforce", "": "移出名单 removed"}
-	title := fmt.Sprintf("提示词审核：AI 分析自动调整了用户 #%d 的观察级别 / Moderation: AI analysis changed the watch level of user #%d", uid, uid)
-	text := fmt.Sprintf("用户 #%d：%s → %s（趋势 %s，建议 %s）。详情见提示词审核 → 观察名单。\nUser #%d: %s → %s (trend %s, suggestion %s). See Moderation → Watch list.",
-		uid, levelName[from], levelName[to], trend, suggestion, uid, levelName[from], levelName[to], trend, suggestion)
+	title := fmt.Sprintf("提示词审核：AI 分析自动调整了用户 %s 的观察级别 / Moderation: AI analysis changed the watch level of user %s", who, who)
+	text := fmt.Sprintf("用户 %s：%s → %s（趋势 %s，建议 %s）。详情见提示词审核 → 观察名单。\nUser %s: %s → %s (trend %s, suggestion %s). See Moderation → Watch list.",
+		who, levelName[from], levelName[to], trend, suggestion, who, levelName[from], levelName[to], trend, suggestion)
 	p.notify(NoticeWatchChanged, title, text, map[string]any{
-		"user_id": uid, "action": action, "from_level": from, "to_level": to, "trend": trend, "suggestion": suggestion,
+		"user_id": uid, "user_name": name, "action": action, "from_level": from, "to_level": to, "trend": trend, "suggestion": suggestion,
 		"analysis_id": analysisID, "path": "/p/moderation/dashboard?tab=watch&user_id=" + strconv.FormatInt(uid, 10),
 	})
 }
