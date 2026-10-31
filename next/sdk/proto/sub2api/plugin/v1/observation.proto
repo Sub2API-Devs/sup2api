@@ -40,6 +40,10 @@ message RequestObservation {
   // the platform plugin's ClassifyError said local_failure, or the response
   // could not be read locally (CONTRACTS §73.1).
   bool local_failure = 27;
+  // HTTP status the upstream answered this attempt with; 0 when it sent no
+  // response (connection failure, timeout before the headers). status_code
+  // is what the client got, which a plugin may have mapped (CONTRACTS §73.1).
+  int32 upstream_status_code = 28;
 }
 
 message ObservationTokens {

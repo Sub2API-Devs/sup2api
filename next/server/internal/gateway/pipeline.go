@@ -139,6 +139,7 @@ type call struct {
 	observationAttemptAt     time.Time
 	observationResponseAt    time.Time
 	observationFirstStreamAt time.Time
+	observationUpstreamCode  int  // status the upstream answered the attempt with, 0 = none yet
 	abortResponse            bool // A committed CCGateway response ended incompletely.
 	errorBodies              []*os.File
 }

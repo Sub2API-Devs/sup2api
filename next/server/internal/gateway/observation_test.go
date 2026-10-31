@@ -54,6 +54,10 @@ func TestObservationGatewayLifecycleAndFailover(t *testing.T) {
 		if event.AccountId == 1 && event.Phase == observation.AttemptFinished {
 			require.False(t, event.Success)
 			require.EqualValues(t, 429, event.StatusCode)
+			require.EqualValues(t, 429, event.UpstreamStatusCode)
+		}
+		if event.AccountId == 2 && event.Phase == observation.AttemptFinished {
+			require.EqualValues(t, 200, event.UpstreamStatusCode)
 		}
 		if event.Phase == observation.UsageFinalized {
 			require.True(t, event.Success)

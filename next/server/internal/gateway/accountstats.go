@@ -1,6 +1,8 @@
 package gateway
 
 import (
+	"cmp"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -24,6 +26,9 @@ func (c *call) publishObservation(phase string, rec *core.UsageRecord, localFail
 	}
 	if phase == observation.ResponseStarted && c.observationResponseAt.IsZero() {
 		c.observationResponseAt = c.g.now()
+		// A WebSocket turn has no status of its own: its first message is
+		// the upstream's answer.
+		c.observationUpstreamCode = cmp.Or(rec.StatusCode, http.StatusOK)
 	}
 	v := &pluginv1.RequestObservation{Id: id, RequestId: rec.RequestID, AttemptId: attempt, Phase: phase, AccountId: *rec.AccountID,
 		AccountPluginKey: rec.PluginKey, Model: truncateUTF8(rec.Model, 256), UpstreamModel: truncateUTF8(rec.UpstreamModel, 256), Protocol: rec.Protocol,
@@ -41,6 +46,7 @@ func (c *call) publishObservation(phase string, rec *core.UsageRecord, localFail
 	}
 	if !c.observationResponseAt.IsZero() {
 		v.ResponseStartedAtUnixMs = c.observationResponseAt.UnixMilli()
+		v.UpstreamStatusCode = int32(c.observationUpstreamCode)
 	}
 	if phase == observation.FirstStreamEvent && c.observationFirstStreamAt.IsZero() {
 		c.observationFirstStreamAt = c.g.now()
@@ -77,7 +83,7 @@ func (c *call) startObservationAttempt(ref *core.AccountRef) {
 		return
 	}
 	c.observationAttemptAt = c.g.now()
-	c.observationResponseAt, c.observationFirstStreamAt = time.Time{}, time.Time{}
+	c.observationResponseAt, c.observationFirstStreamAt, c.observationUpstreamCode = time.Time{}, time.Time{}, 0
 	rec := *c.rec
 	rec.AccountID, rec.PluginKey, rec.UpstreamModel = &ref.ID, ref.PluginKey, ref.MapModel(c.model)
 	c.observeRequest(observation.AttemptStarted, &rec)
