@@ -389,6 +389,10 @@ export function hasCoreSettings(key: string, has: (perm: string) => boolean): bo
 }
 
 export interface PluginSettings {
+  /** schema: the console renders the form; native: the plugin edits them on its own page (ui.settings.page, §75.5). */
+  mode?: string
+  /** The plugin page (ui.pages key) holding native settings. */
+  page?: string
   schema: Record<string, any> | null
   ui_schema?: Record<string, any> | null
   values: Record<string, any> | null
@@ -401,4 +405,15 @@ export const ROLLOUT_DONE = new Set(['active', 'failed', 'cancelled', 'rolled_ba
 
 export function isPendingConsent(s: string | undefined): boolean {
   return s === 'pending' || s === 'awaiting_consent' || s === 'awaiting'
+}
+
+/** Settings the console renders as a schema form; native settings, even with a schema, live on the plugin's page (§75.5). */
+export function consoleSettings(s: PluginSettings | null | undefined): PluginSettings | null {
+  return s && s.schema && (s.mode ?? 'schema') === 'schema' ? s : null
+}
+
+/** The plugin page that edits native settings, as a console path; null when the console edits them. */
+export function nativeSettingsPath(key: string, s: PluginSettings | null | undefined): string | null {
+  if (!s || s.mode !== 'native' || !s.page) return null
+  return `/p/${encodeURIComponent(key)}/${encodeURIComponent(s.page)}?tab=settings`
 }

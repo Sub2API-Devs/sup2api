@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
 import { SButton, SCard, SEmpty, SPageHeader, SSpinner } from '@sub2api/ui'
@@ -8,17 +8,19 @@ import { lt } from '@/i18n'
 import { errorMessage } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
-import { hasCoreSettings, type PluginSettings } from './pluginUtil'
+import { consoleSettings, hasCoreSettings, nativeSettingsPath, type PluginSettings } from './pluginUtil'
 import SettingsTab from './detail/SettingsTab.vue'
 
 // A plugin's settings on their own page, for holders of the permission the
 // plugin names for them (manifest ui.settings.permission) who cannot open the
 // plugin detail page (plugin:read). The core checks the permission. It shows
 // what the detail page's settings tab shows: the core settings view of
-// ccgateway, else the plugin's schema form.
+// ccgateway, else the plugin's schema form; native settings (§75.5) send the
+// user to the plugin page that edits them.
 const CCGatewaySettings = defineAsyncComponent(() => import('@/views/ccgateway/CCGatewayView.vue'))
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const plugins = usePluginStore()
 const key = computed(() => String(route.params.key))
@@ -43,7 +45,13 @@ async function load() {
   try {
     const s = await api.get<PluginSettings>(`/plugins/${encodeURIComponent(key.value)}/settings`)
     if (my !== seq) return
-    settings.value = s && s.schema ? s : null
+    // Native settings live on the plugin's own page (§75.5): go there.
+    const native = nativeSettingsPath(key.value, s)
+    if (native) {
+      router.replace(native)
+      return
+    }
+    settings.value = consoleSettings(s)
   } catch (e) {
     if (my !== seq) return
     settings.value = null

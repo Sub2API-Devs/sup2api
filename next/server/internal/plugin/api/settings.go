@@ -73,7 +73,9 @@ func (a *API) settingsForm(c *gin.Context, key, corePerm string) (*SettingsView,
 		return v, true
 	}
 	v.Mode, v.Page, v.Component = f.Mode, f.Page, f.Component
-	if f.Mode != "schema" {
+	// A schema form, or a native one that carries its schema (edited on the
+	// plugin's own page, §75.5): the schema validates and masks either way.
+	if f.Mode != "schema" && f.Schema == "" {
 		return v, true
 	}
 	p, err := a.d.Install.Package(c.Request.Context(), key, version)
@@ -327,7 +329,7 @@ func (a *API) putSettings(c *gin.Context) {
 			return err
 		}
 		var validate func(map[string]any) error
-		if form.Mode == "schema" && len(form.Schema) > 0 && string(form.Schema) != "null" {
+		if len(form.Schema) > 0 && string(form.Schema) != "null" {
 			validate = func(v map[string]any) error { return validateSettings(form.Schema, v) }
 		}
 		if changed, err = mergeSettings(form.fields, old, in.Values, manager, validate); err != nil {

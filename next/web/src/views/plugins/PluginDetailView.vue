@@ -11,7 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { usePluginStore } from '@/stores/plugins'
 import { consentPath } from './reviewCache'
-import { compareVersions, conflictLines, hasCoreSettings, isPendingConsent, shownStatus, type PluginDetail, type PluginSettings } from './pluginUtil'
+import { compareVersions, conflictLines, consoleSettings, hasCoreSettings, isPendingConsent, shownStatus, type PluginDetail, type PluginSettings } from './pluginUtil'
 import PluginAvatar from './parts/PluginAvatar.vue'
 import StatusBadge from './parts/StatusBadge.vue'
 import TrustBadge from './parts/TrustBadge.vue'
@@ -105,7 +105,7 @@ const moreActions = computed<MenuAction[]>(() => [
 async function loadSettings() {
   try {
     const s = await api.get<PluginSettings>(`/plugins/${encodeURIComponent(key.value)}/settings`)
-    settings.value = s && s.schema ? s : null
+    settings.value = consoleSettings(s)
   } catch {
     settings.value = null
   }

@@ -4,9 +4,9 @@ import { reactive } from 'vue'
 import { i18n } from '@/i18n'
 import PluginSettingsView from './PluginSettingsView.vue'
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), route: null as unknown as { params: { key: string } } }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), replace: vi.fn(), route: null as unknown as { params: { key: string } } }))
 vi.mock('@sub2api/host', async (original) => ({ ...(await original<object>()), api: { get: mocks.get } }))
-vi.mock('vue-router', () => ({ useRoute: () => mocks.route }))
+vi.mock('vue-router', () => ({ useRoute: () => mocks.route, useRouter: () => ({ replace: mocks.replace }) }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ plugin: () => null }) }))
 vi.mock('./detail/SettingsTab.vue', () => ({ default: { name: 'SettingsTab', props: ['pluginKey', 'settings'], template: '<div data-testid="tab">{{ pluginKey }}:{{ settings.values.who }}</div>' } }))
@@ -29,5 +29,14 @@ describe('PluginSettingsView', () => {
     answers['/plugins/alpha/settings'](settingsOf('alpha'))
     await flushPromises()
     expect(w.get('[data-testid="tab"]').text()).toBe('beta:beta')
+  })
+
+  it("sends native settings to the plugin page that edits them", async () => {
+    mocks.route = reactive({ params: { key: "moderation" } })
+    mocks.get.mockResolvedValue({ mode: "native", page: "dashboard", schema: { type: "object" }, values: {} })
+    const w = mount(PluginSettingsView, { global: { plugins: [i18n], stubs: { SPageHeader: true } } })
+    await flushPromises()
+    expect(mocks.replace).toHaveBeenCalledWith("/p/moderation/dashboard?tab=settings")
+    expect(w.find('[data-testid="tab"]').exists()).toBe(false)
   })
 })

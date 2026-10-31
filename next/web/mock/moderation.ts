@@ -438,9 +438,14 @@ on('GET', '/p/moderation/stats/categories', () => ({
 // routes of plugins.ts; secrets come back masked, the mask keeps them.
 const SETTINGS_SCHEMA_FILE = fileURLToPath(new URL('../../plugins/moderation/forms/settings.schema.json', import.meta.url))
 const settingsSchema = existsSync(SETTINGS_SCHEMA_FILE) ? JSON.parse(readFileSync(SETTINGS_SCHEMA_FILE, 'utf8')) : null
+const SETTINGS_UI_FILE = fileURLToPath(new URL('../../plugins/moderation/forms/settings.ui.json', import.meta.url))
+const settingsUI = existsSync(SETTINGS_UI_FILE) ? JSON.parse(readFileSync(SETTINGS_UI_FILE, 'utf8')) : null
+// Native settings edited on the plugin's own page (CONTRACTS §75.5).
 const settingsView = () => ({
-  mode: 'schema',
+  mode: 'native',
+  page: 'dashboard',
   schema: settingsSchema,
+  ui_schema: settingsUI,
   values: Object.fromEntries(Object.entries(settings).map(([k, v]) => [k, SECRET_SETTINGS.includes(k) && v ? MASK : v])),
   secret_fields: SECRET_SETTINGS
 })

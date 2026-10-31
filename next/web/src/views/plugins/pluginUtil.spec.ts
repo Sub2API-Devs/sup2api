@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import en from '@/i18n/locales/en/plugins'
 import zh from '@/i18n/locales/zh/plugins'
-import { HOST_PERMISSION_RISK, accountTypesOf, endpointText, hpKey, platformsOf, settingsFieldErrors } from './pluginUtil'
+import { HOST_PERMISSION_RISK, accountTypesOf, consoleSettings, endpointText, hpKey, nativeSettingsPath, platformsOf, settingsFieldErrors } from './pluginUtil'
 
 describe('plugin endpoint declarations', () => {
   it('preserves the same subset in manifests and installation reviews', () => {
@@ -63,5 +63,20 @@ describe('HOST_PERMISSION_RISK', () => {
       expect(en.hp, id).toHaveProperty(hpKey(id))
       expect(zh.hp, id).toHaveProperty(hpKey(id))
     }
+  })
+})
+
+describe('settings modes (§75.5)', () => {
+  const schema = { type: 'object' }
+  it('renders only schema settings in the console', () => {
+    expect(consoleSettings({ schema, values: {} })).not.toBeNull()
+    expect(consoleSettings({ mode: 'schema', schema, values: {} })).not.toBeNull()
+    expect(consoleSettings({ mode: 'native', page: 'dashboard', schema, values: {} })).toBeNull()
+    expect(consoleSettings({ mode: 'schema', schema: null, values: {} })).toBeNull()
+  })
+  it('points native settings to the plugin page', () => {
+    expect(nativeSettingsPath('moderation', { mode: 'native', page: 'dashboard', schema, values: {} })).toBe('/p/moderation/dashboard?tab=settings')
+    expect(nativeSettingsPath('moderation', { mode: 'native', schema, values: {} })).toBeNull()
+    expect(nativeSettingsPath('guard', { mode: 'schema', schema, values: {} })).toBeNull()
   })
 })

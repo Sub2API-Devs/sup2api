@@ -509,6 +509,22 @@ func (v *validator) form(field string, f manifest.Form, settings bool) {
 		if f.Component == "" && !settings {
 			v.add(field+".component", "required", "component is required for native forms")
 		}
+		// A native settings form may carry the schema: the core validates
+		// and masks the stored values with it while the plugin's own page
+		// edits them (CONTRACTS §75.5).
+		if f.Schema != "" || f.UISchema != "" {
+			if !settings {
+				v.add(field+".schema", "unsupported", "only ui.settings may carry a schema in native mode")
+			} else {
+				v.needFile(field+".schema", f.Schema)
+				if f.UISchema != "" {
+					v.needFile(field+".uiSchema", f.UISchema)
+				}
+			}
+		}
+		if settings && f.Page != "" && (v.m.UI == nil || v.m.UI.Pages[f.Page].Type != "native") {
+			v.add(field+".page", "unknown", "page %q is not a native page of ui.pages", f.Page)
+		}
 	default:
 		v.add(field+".mode", "invalid", "form mode must be schema, iframe or native")
 	}

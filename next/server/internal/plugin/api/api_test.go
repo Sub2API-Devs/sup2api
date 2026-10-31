@@ -502,3 +502,35 @@ func TestEnableAndUpgradeRecheckResources(t *testing.T) {
 		}
 	}
 }
+
+// A native settings form that carries its schema (the plugin edits its
+// settings on its own page, CONTRACTS §75.5) is validated and masked like a
+// schema form.
+func TestNativeSettingsKeepSchemaChecks(t *testing.T) {
+	h, root := newHarness(t)
+	guard := pkgtest.Guard("guard", "0.1.0", "sub2api")
+	guard.UI.Settings.Mode = "native"
+	pkgBytes := pkgtest.Build(guard, root)
+	code, out := h.do("POST", "/plugins/upload", "admin", fileBody(t, pkgBytes))
+	require.Equal(t, http.StatusOK, code, out)
+	consent := install.ConsentRequest{Grants: []install.GrantInput{{Permission: "db.schema"}, {Permission: "gateway.hook"},
+		{Permission: "events"}, {Permission: "jobs"}, {Permission: "routes.admin"}, {Permission: "ui.menu"}, {Permission: "ui.native"}}}
+	code, out = h.do("POST", "/plugins/guard/versions/0.1.0/consent", "admin", consent)
+	require.Equal(t, http.StatusOK, code, out)
+
+	code, out = h.do("PUT", "/plugins/guard/settings", "admin", map[string]any{"values": map[string]any{"threshold": -1}})
+	require.Equal(t, http.StatusBadRequest, code, out)
+	code, out = h.do("PUT", "/plugins/guard/settings", "admin", map[string]any{"values": map[string]any{"threshold": 3, "webhook_secret": "s3cret"}})
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, "native", data(out)["mode"])
+	assert.Equal(t, Mask, data(out)["values"].(map[string]any)["webhook_secret"])
+	assert.Contains(t, data(out)["secret_fields"], "webhook_secret")
+	assert.NotEqual(t, "null", string(mustJSON(t, data(out)["schema"])))
+}
+
+func mustJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	require.NoError(t, err)
+	return b
+}

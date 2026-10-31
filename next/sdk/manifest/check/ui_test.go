@@ -275,6 +275,36 @@ func TestSettingsPermission(t *testing.T) {
 	}
 }
 
+// Native settings edited on the plugin's own page may carry the schema the
+// core validates and masks with (CONTRACTS §75.5); other forms may not, and
+// the page must be one of the plugin's native pages.
+func TestNativeSettingsWithSchema(t *testing.T) {
+	m := uiManifest()
+	m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "ui.native"})
+	m.UI.Native = &manifest.NativeUI{Entry: "ui/native/entry.js"}
+	m.HostUICompat = "^3.3"
+	m.UI.Pages["dash"] = manifest.Page{Type: "native", Component: "Dash"}
+	files := map[string][]byte{"settings.schema.json": []byte("{}"), "ui/native/entry.js": []byte("")}
+	m.UI.Settings = &manifest.Form{Mode: "native", Page: "dash", Schema: "settings.schema.json"}
+	if c := codes(Validate(m, files, ValidateOptions{Tooling: true})); len(c) > 0 {
+		t.Fatalf("native settings with a schema on a native page are valid: %v", c)
+	}
+	m.UI.Settings.Schema = "missing.json"
+	if c := codes(Validate(m, files, ValidateOptions{Tooling: true})); c["ui.settings.schema"] == "" {
+		t.Fatalf("the schema file must exist: %v", c)
+	}
+	m.UI.Settings.Schema = "settings.schema.json"
+	m.UI.Settings.Page = "assets"
+	if c := codes(Validate(m, files, ValidateOptions{Tooling: true})); c["ui.settings.page"] != "unknown" {
+		t.Fatalf("the page must be a native page: %v", c)
+	}
+	m.UI.Settings = nil
+	m.AccountTypes = []manifest.AccountType{{Form: manifest.Form{Mode: "native", Component: "X", Schema: "settings.schema.json"}}}
+	if c := codes(Validate(m, files, ValidateOptions{Tooling: true})); c["accountTypes[0].form.schema"] != "unsupported" {
+		t.Fatalf("only ui.settings may carry a schema in native mode: %v", c)
+	}
+}
+
 // page.search is what makes the host render a search box at all.
 func TestPageSearchDeclaration(t *testing.T) {
 	set := func(m *manifest.Manifest, mutate func(*manifest.Page)) {
