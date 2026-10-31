@@ -138,6 +138,31 @@ func storedOAuthIn(env []string) storedOAuth {
 	return storedOAuth{access: strings.TrimSpace(o.AccessToken), expiresAt: o.ExpiresAt, refreshable: strings.TrimSpace(o.RefreshToken) != ""}
 }
 
+// storedLoginCleared reports a stored Claude login whose access and refresh
+// tokens are both gone while no other credential is configured: CC clears
+// them once the refresh token is refused, and the runtime stays signed out
+// until a new authorization (2026-11-01, account 50). A missing file is not
+// this: it is no Claude login at all.
+func storedLoginCleared(env []string) bool {
+	if environmentValue(env, "ANTHROPIC_API_KEY") != "" || environmentValue(env, "CLAUDE_CODE_OAUTH_TOKEN") != "" {
+		return false
+	}
+	f, err := os.Open(credentialsPathIn(env))
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, maxCredentialsBytes))
+	if err != nil {
+		return false
+	}
+	var c oauthCredentials
+	if json.Unmarshal(raw, &c) != nil || c.ClaudeAiOauth == nil {
+		return false
+	}
+	return strings.TrimSpace(c.ClaudeAiOauth.AccessToken) == "" && strings.TrimSpace(c.ClaudeAiOauth.RefreshToken) == ""
+}
+
 // parseProxyURL parses one proxy URL of the shapes the management transport
 // accepts. It never reports the URL itself: it may contain a password.
 func parseProxyURL(raw string) (*url.URL, bool) {

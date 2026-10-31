@@ -175,6 +175,16 @@ func (b *resourceBroker) verifiedIdentity(w http.ResponseWriter, ctx context.Con
 	id, err := b.identity(ctx)
 	if err != nil {
 		d.trace("resource_identity_failed", Object{"error": err.Error()})
+		// The account's own verdict on its login goes out as such, so the
+		// core fails over and disables the account (resourceLoginRefusal).
+		var refusal *resourceLoginRefusal
+		if errors.As(err, &refusal) {
+			if refusal.frame.Status == http.StatusUnauthorized {
+				noteAuthenticationRefused(b.g.Runner.baseEnv())
+			}
+			refusal.frame.write(w)
+			return resources.Identity{}, false
+		}
 		typ := "api_error"
 		if errors.Is(err, errManagedResourceIssuerMissing) {
 			typ = resources.IdentityUnsupportedErrorType

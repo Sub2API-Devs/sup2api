@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/requestfailure"
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/resources"
 )
 
@@ -46,6 +47,32 @@ type identityFailure struct {
 	fingerprint string
 	at          time.Time
 	err         error
+}
+
+// resourceLoginRefusal is the account's own verdict on its login, found while
+// verifying the identity: CC cleared the stored login, or the provider
+// refused the token. The Worker answers it as such (verifiedIdentity), not as
+// its own 503, so the core treats it like a model request's 401: fail over
+// and disable the account (2026-11-01).
+type resourceLoginRefusal struct{ frame *requestErrorFrame }
+
+func (e *resourceLoginRefusal) Error() string { return e.frame.Error.Message }
+
+func loginClearedRefusal() *resourceLoginRefusal {
+	return &resourceLoginRefusal{frame: &requestErrorFrame{Protocol: requestErrorProtocol, Source: requestfailure.SourceInput, Status: http.StatusUnauthorized,
+		Error: requestErrorDetail{Type: "authentication_error", Code: "not_logged_in", Message: "Claude Code has cleared its stored login (no access or refresh token); reauthorization is required"}}}
+}
+
+// profileRefusal is the provider's own 401 for the profile call, passed on
+// with its body and content type.
+func profileRefusal(resp *resourceResponse) *resourceLoginRefusal {
+	raw, _ := io.ReadAll(io.LimitReader(resp.body, 64<<10)) // An upstream error body bound.
+	frame := &requestErrorFrame{Protocol: requestErrorProtocol, Source: requestfailure.SourceHTTP, Status: resp.status, Body: string(raw),
+		Error: requestErrorDetail{Type: "authentication_error", Code: "authentication_error", Message: "resource OAuth token rejected after CLI verification; reauthorization is required"}}
+	if ct := resp.header.Get("Content-Type"); ct != "" {
+		frame.Headers = map[string]string{"Content-Type": ct}
+	}
+	return &resourceLoginRefusal{frame: frame}
 }
 
 type verifiedResourceIdentity struct {
@@ -124,6 +151,11 @@ func (b *resourceBroker) verifyIdentity(ctx context.Context, refresh bool) (id r
 	if (probe.issuer == "" || probe.epoch == "") && apiKeyOnly(env) {
 		return resources.Identity{}, errManagedResourceIssuerMissing
 	}
+	// A login CC already cleared cannot verify anything: say so at once, as
+	// the account's verdict, instead of starting a CLI to find out.
+	if storedLoginCleared(env) {
+		return resources.Identity{}, loginClearedRefusal()
+	}
 	if cached := b.cachedIdentity(env); cached != nil && !refresh {
 		bindResourceAuthorization(ctx, cached.auth)
 		return cached.identity, nil
@@ -176,7 +208,7 @@ func (b *resourceBroker) verifyIdentity(ctx context.Context, refresh bool) (id r
 	}
 	defer resp.body.Close()
 	if resp.status == http.StatusUnauthorized {
-		return resources.Identity{}, fmt.Errorf("resource OAuth token rejected after CLI verification; reauthorization is required")
+		return resources.Identity{}, profileRefusal(resp)
 	}
 	if resp.status != http.StatusOK {
 		return resources.Identity{}, fmt.Errorf("authenticated provider profile unavailable")

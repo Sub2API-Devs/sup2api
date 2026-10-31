@@ -108,3 +108,33 @@ func TestIdentityFailureBackoff(t *testing.T) {
 	_, err = broker.identity(context.Background())
 	require.NotErrorIs(t, err, sentinel)
 }
+
+// A stored login CC already cleared (both tokens gone after a refused refresh,
+// account 50 on 2026-11-01) is answered at once as the account's verdict: 401
+// authentication_error with a CLI source, so the core fails over and the
+// auto-disable rules apply, instead of a 503 "no verified resource issuer".
+func TestResourceIdentityClearedLogin(t *testing.T) {
+	g, _ := identityTestGateway(t)
+	g.resources.verified.Store(nil)
+	g.Runner.Env = envWith(g.Runner.Env, nil, "ANTHROPIC_API_KEY", "CCG_RESOURCE_ISSUER_ID", "CCG_RESOURCE_ISSUER_GENERATION")
+	g.Runner.CLI = "must-not-execute"
+	config := environmentValue(g.Runner.Env, "CLAUDE_SECURESTORAGE_CONFIG_DIR")
+	require.NoError(t, os.WriteFile(filepath.Join(config, ".credentials.json"),
+		[]byte(`{"claudeAiOauth":{"accessToken":"","refreshToken":"","expiresAt":0,"refreshTokenExpiresAt":1795868588935,"subscriptionType":"max"}}`), 0600))
+	require.True(t, storedLoginCleared(g.Runner.baseEnv()))
+
+	request := httptest.NewRequest("GET", resources.IdentityPath, nil)
+	request.Header.Set("x-api-key", "fixture")
+	response := httptest.NewRecorder()
+	g.resources.ServeHTTP(response, request)
+	require.Equal(t, http.StatusUnauthorized, response.Code)
+	require.Equal(t, "input", response.Header().Get("X-CCGateway-Error-Source"))
+	require.JSONEq(t, `{"type":"error","error":{"type":"authentication_error","code":"not_logged_in","message":"Claude Code has cleared its stored login (no access or refresh token); reauthorization is required"}}`, response.Body.String())
+
+	// A login that still holds a token, or no Claude login at all, is not this.
+	require.NoError(t, os.WriteFile(filepath.Join(config, ".credentials.json"), []byte(`{"claudeAiOauth":{"accessToken":"","refreshToken":"r"}}`), 0600))
+	require.False(t, storedLoginCleared(g.Runner.baseEnv()))
+	require.NoError(t, os.Remove(filepath.Join(config, ".credentials.json")))
+	require.False(t, storedLoginCleared(g.Runner.baseEnv()))
+	require.False(t, storedLoginCleared(envWith(g.Runner.baseEnv(), map[string]string{"CLAUDE_CODE_OAUTH_TOKEN": "t"})))
+}
