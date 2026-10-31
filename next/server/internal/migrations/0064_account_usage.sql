@@ -48,19 +48,32 @@ CREATE TABLE IF NOT EXISTS account_usage_limits (
     updated_at      timestamptz   NOT NULL DEFAULT now(),
     CONSTRAINT account_usage_limits_amount_chk CHECK (amount >= 0),
     CONSTRAINT account_usage_limits_period_chk CHECK (period IN ('hour', 'day', 'week', 'month', 'none')),
-    CONSTRAINT account_usage_limits_count_chk CHECK (period_count BETWEEN 1 AND 1000)
+    CONSTRAINT account_usage_limits_count_chk CHECK (period_count BETWEEN 1 AND 8784)
 );
+
+-- period_count: at most 8784 (366 days of hours, the longest period of any
+-- unit); the per-unit caps (day 366, week 52, month 12, none 1) are the
+-- core's. Re-added so a replay over an older table gets the same bound.
+ALTER TABLE account_usage_limits DROP CONSTRAINT IF EXISTS account_usage_limits_count_chk;
+ALTER TABLE account_usage_limits ADD CONSTRAINT account_usage_limits_count_chk CHECK (period_count BETWEEN 1 AND 8784);
 
 CREATE OR REPLACE FUNCTION account_usage_cost(status text, cost numeric) RETURNS numeric
     LANGUAGE sql IMMUTABLE AS $$ SELECT CASE WHEN status IN ('billed', 'reserved') THEN cost ELSE 0 END $$;
 
--- Cost before the group multiplier: billing_detail.cost when it is a number,
--- else the charged cost divided by the multiplier, else the charged cost.
+-- Cost before the group multiplier: billing_detail.cost when it is a
+-- non-negative number (any decimals, rounded to 8), else the charged cost
+-- divided by the multiplier, else the charged cost. A negative
+-- billing_detail.cost would credit the limit, so it falls back like a missing
+-- one. The backfill below and every later trigger run use this one function:
+-- the trigger takes a row's old contribution back with the function current
+-- at that time, so a backfill under another definition would leave a
+-- residual on every refund or account move. Do not redefine it in a later
+-- migration without recomputing the sums.
 CREATE OR REPLACE FUNCTION account_usage_raw_cost(status text, cost numeric, detail jsonb, rate numeric) RETURNS numeric
     LANGUAGE sql IMMUTABLE AS $$
     SELECT CASE
         WHEN status NOT IN ('billed', 'reserved') THEN 0
-        WHEN jsonb_typeof(detail) = 'object' AND (detail->>'cost') ~ '^-?[0-9]{1,12}(\.[0-9]{1,8})?$' THEN (detail->>'cost')::numeric
+        WHEN jsonb_typeof(detail) = 'object' AND (detail->>'cost') ~ '^[0-9]{1,12}(\.[0-9]+)?$' THEN round((detail->>'cost')::numeric, 8)
         WHEN rate > 0 THEN round(cost / rate, 8)
         ELSE cost
     END $$;
@@ -108,12 +121,24 @@ BEGIN
 END;
 $$;
 
--- Backfill from the existing rows once (the tables are empty only on the first
--- run), with writers held off so no row is counted twice or missed.
+-- Backfill from the existing rows once, with writers held off so no row is
+-- counted twice or missed. Rows are counted once anywhere: in the sums, or
+-- (after 0068) still in the journal waiting to be folded, so a replay finding
+-- either backfills nothing.
+--
+-- The lock blocks every usage_logs insert and update (settlement) until this
+-- migration commits; reads go on. It lasts one aggregate over the table: at
+-- the ~17,500 rows production had when this was written, well under a
+-- second. Count the rows before deploying on a larger table.
 DO $$
 BEGIN
+    LOCK TABLE usage_logs IN SHARE ROW EXCLUSIVE MODE;
+    IF to_regclass('account_usage_deltas') IS NOT NULL THEN
+        IF EXISTS (SELECT 1 FROM account_usage_deltas) THEN
+            RETURN;
+        END IF;
+    END IF;
     IF NOT EXISTS (SELECT 1 FROM account_usage_totals) AND NOT EXISTS (SELECT 1 FROM account_usage_hourly) THEN
-        LOCK TABLE usage_logs IN SHARE ROW EXCLUSIVE MODE;
         INSERT INTO account_usage_hourly (account_id, hour, cost, raw_cost, requests, tokens)
         SELECT account_id, to_timestamp(floor(extract(epoch FROM created_at) / 3600) * 3600) AS hour,
                sum(account_usage_cost(billing_status, total_cost)),

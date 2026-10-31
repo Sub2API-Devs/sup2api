@@ -2,13 +2,18 @@ package account
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/shopspring/decimal"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
@@ -54,10 +59,12 @@ const (
 )
 
 // maxPeriodCount caps period_count so that one period lasts at most 366
-// days, the longest automatic disable (maxAutomaticDisableDuration); a
-// lifetime limit ignores it.
+// days, the longest automatic disable (maxAutomaticDisableDuration). A
+// lifetime limit has no periods: its period_count is always stored as 1
+// (normalizeUsageLimit), whatever was submitted. The database checks only
+// the widest bound (1-8784, 0064).
 var maxPeriodCount = map[string]int{
-	usagePeriodHour: 366 * 24, usagePeriodDay: 366, usagePeriodWeek: 52, usagePeriodMonth: 12, usagePeriodNone: 1000,
+	usagePeriodHour: 366 * 24, usagePeriodDay: 366, usagePeriodWeek: 52, usagePeriodMonth: 12, usagePeriodNone: 1,
 }
 
 // Anchors are accepted in [2000, 2100) so window math never nears the
@@ -80,14 +87,18 @@ type UsageLimit struct {
 	// Timezone. Floored to the hour (anchorStart).
 	Anchor *time.Time `json:"anchor"`
 	// Timezone (IANA) is the wall clock the periods follow: days start at its
-	// midnight and keep it across daylight saving.
+	// midnight and keep it across daylight saving. Required on save; empty
+	// in GET /usage-limit until a configuration is saved (configured=false),
+	// so the console knows to fill in the browser's zone (CONTRACTS §73.3).
 	Timezone string `json:"timezone"`
 
 	waived *time.Time
 }
 
+// defaultUsageLimit is the configuration of an account that never saved
+// one: off, monthly, no time zone yet (periods of an unset zone read as UTC).
 func defaultUsageLimit() UsageLimit {
-	return UsageLimit{Period: usagePeriodMonth, PeriodCount: 1, Amount: decimal.Zero, Timezone: "UTC"}
+	return UsageLimit{Period: usagePeriodMonth, PeriodCount: 1, Amount: decimal.Zero}
 }
 
 func (l UsageLimit) active() bool { return l.Enabled && l.Amount.IsPositive() }
@@ -447,6 +458,14 @@ func (s *Service) usageDetail(ctx context.Context, id int64, now time.Time) (*Us
 		Total: totals[id], Limit: states[id]}, nil
 }
 
+// usageLimitView is GET /accounts/:id/usage-limit. Configured is false
+// until a configuration is saved: the defaults then carry an empty time
+// zone, for the console to fill in the browser's (CONTRACTS §73.3).
+type usageLimitView struct {
+	UsageLimit
+	Configured bool `json:"configured"`
+}
+
 // getUsageLimit is GET /accounts/:id/usage-limit: the configuration, with
 // the defaults when none was saved.
 func (s *Service) getUsageLimit(c *gin.Context) {
@@ -468,13 +487,49 @@ func (s *Service) getUsageLimit(c *gin.Context) {
 	if !found {
 		l = defaultUsageLimit()
 	}
-	httpapi.OK(c, l)
+	httpapi.OK(c, usageLimitView{UsageLimit: l, Configured: found})
+}
+
+// usageLimitInput is the PUT body. amount is read by hand: a limit being
+// turned off may come with the field cleared ("" or null, stored as 0).
+type usageLimitInput struct {
+	UsageLimit
+	Amount json.RawMessage `json:"amount"`
+}
+
+// limit returns the submitted configuration, normalised: a lifetime limit
+// has period_count 1, an empty amount is 0 (enabling then fails validation).
+// An amount that is not a number is a field error.
+func (in usageLimitInput) limit(ctx context.Context) (UsageLimit, []core.FieldError) {
+	l := in.UsageLimit
+	if l.Period == usagePeriodNone {
+		l.PeriodCount = 1
+	}
+	raw := strings.TrimSpace(string(in.Amount))
+	empty := raw == "" || raw == "null"
+	var err error
+	if strings.HasPrefix(raw, `"`) {
+		if raw, err = strconv.Unquote(raw); err == nil {
+			raw = strings.TrimSpace(raw)
+			empty = raw == ""
+		}
+	}
+	l.Amount = decimal.Zero
+	if err == nil && !empty {
+		l.Amount, err = decimal.NewFromString(raw)
+	}
+	if err != nil {
+		return l, []core.FieldError{{Field: "amount", Code: "invalid", Message: t(ctx, "amount must be a number", "限额必须是数字")}}
+	}
+	return l, nil
 }
 
 // validateUsageLimit checks a submitted configuration.
-func validateUsageLimit(ctx context.Context, l UsageLimit) error {
-	var fields []core.FieldError
+func validateUsageLimit(ctx context.Context, l UsageLimit, fields ...core.FieldError) error {
 	add := func(field, en, zh string) {
+		if slices.ContainsFunc(fields, func(f core.FieldError) bool { return f.Field == field }) {
+			return
+		}
 		fields = append(fields, core.FieldError{Field: field, Code: "invalid", Message: t(ctx, en, zh)})
 	}
 	maxCount, ok := maxPeriodCount[l.Period]
@@ -494,12 +549,31 @@ func validateUsageLimit(ctx context.Context, l UsageLimit) error {
 		add("anchor", "anchor must be between 2000 and 2100", "周期起点必须在 2000 年到 2100 年之间")
 	}
 	if _, ok := core.LoadTimeZone(l.Timezone); !ok {
-		add("timezone", "timezone must be an IANA time zone name", "时区必须是 IANA 时区名")
+		add("timezone", "timezone is required and must be an IANA time zone name", "时区必填，且必须是 IANA 时区名")
 	}
 	if len(fields) > 0 {
 		return core.InvalidFields(fields...)
 	}
 	return nil
+}
+
+// usageLimitWriteError turns a check constraint of account_usage_limits that
+// a save still broke (validation drifting from the schema) into the field
+// error it is, instead of a 500.
+func usageLimitWriteError(ctx context.Context, err error) error {
+	var pg *pgconn.PgError
+	if !errors.As(err, &pg) || pg.Code != "23514" {
+		return err
+	}
+	field := map[string]string{
+		"account_usage_limits_amount_chk": "amount",
+		"account_usage_limits_period_chk": "period",
+		"account_usage_limits_count_chk":  "period_count",
+	}[pg.ConstraintName]
+	if field == "" {
+		return core.ErrInvalidArgument.WithMessage(t(ctx, "invalid usage limit", "用量限制配置无效"))
+	}
+	return core.InvalidFields(core.FieldError{Field: field, Code: "invalid", Message: t(ctx, "value out of range", "取值超出范围")})
 }
 
 // putUsageLimit is PUT /accounts/:id/usage-limit. Saving clears an early
@@ -512,11 +586,12 @@ func (s *Service) putUsageLimit(c *gin.Context) {
 	if !ok {
 		return
 	}
-	in := defaultUsageLimit()
-	if !httpapi.BindJSON(c, &in) {
+	body := usageLimitInput{UsageLimit: defaultUsageLimit()}
+	if !httpapi.BindJSON(c, &body) {
 		return
 	}
-	if err := validateUsageLimit(ctx, in); err != nil {
+	in, fields := body.limit(ctx)
+	if err := validateUsageLimit(ctx, in, fields...); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -531,12 +606,12 @@ func (s *Service) putUsageLimit(c *gin.Context) {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO account_usage_limits (account_id, `+usageLimitColumns+`, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, now())
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, clock_timestamp())
 			ON CONFLICT (account_id) DO UPDATE SET raw_cost = EXCLUDED.raw_cost, enabled = EXCLUDED.enabled, amount = EXCLUDED.amount,
 				period = EXCLUDED.period, period_count = EXCLUDED.period_count, anchor = EXCLUDED.anchor, timezone = EXCLUDED.timezone,
-				waived_window = NULL, updated_at = now()`,
+				waived_window = NULL, updated_at = clock_timestamp()`,
 			id, in.RawCost, in.Enabled, in.Amount, in.Period, in.PeriodCount, in.Anchor, in.Timezone); err != nil {
-			return err
+			return usageLimitWriteError(ctx, err)
 		}
 		return audit.Audit(ctx, tx, uid, "account.usage_limit", "account", itoa(id), map[string]any{
 			"raw_cost_accounting": in.RawCost, "enabled": in.Enabled, "amount": in.Amount.String(), "period": in.Period,
@@ -617,13 +692,16 @@ func (s *Service) runUsageLimits(ctx context.Context) error {
 	return s.EnforceUsageLimits(ctx, nil)
 }
 
-// usageCandidate is an account EnforceUsageLimits may change.
+// usageCandidate is an account EnforceUsageLimits may change, as it read it.
 type usageCandidate struct {
 	id                     int64
 	name, pluginKey, typ   string
 	status, reason, source string
 	until                  *time.Time
 	limit                  UsageLimit
+	// limitSaved is account_usage_limits.updated_at (nil: no row). The
+	// change is written only while the configuration is still this one.
+	limitSaved *time.Time
 }
 
 // EnforceUsageLimits applies the usage limits of the given accounts (nil =
@@ -631,10 +709,16 @@ type usageCandidate struct {
 // over its limit is auto-disabled until its period ends (no release time for
 // a lifetime limit), one still over a changed limit gets the new reason and
 // release time, and one the limit disabled that is now under it (limit
-// raised, turned off, or released early) is enabled again. The release at
-// the end of a period is the automatic-state sweep's. One account's failure
-// does not hold up the others. Periods follow the database clock, the one
-// the sweep releases by.
+// raised, turned off, or released early) is enabled again, or passes to the
+// plugin's or failure policy's disable the limit held back while that one
+// still runs. The release at the end of a period is the automatic-state
+// sweep's. One account's failure does not hold up the others. Periods follow
+// the database clock, the one the sweep releases by.
+//
+// Limits and usage are read outside any transaction; each change is written
+// only if the account and its limit configuration are still what was read
+// (writeUsageLimitState), so a save on another node in between is never
+// enforced with the configuration it replaced.
 func (s *Service) EnforceUsageLimits(ctx context.Context, ids []int64) error {
 	if s.d.DB == nil {
 		return nil
@@ -645,7 +729,7 @@ func (s *Service) EnforceUsageLimits(ctx context.Context, ids []int64) error {
 	}
 	def := defaultUsageLimit()
 	rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id, a.name, a.plugin_key, a.type, a.status, a.status_reason, a.auto_disabled_source, a.auto_disabled_until,
-			coalesce(l.raw_cost, false), coalesce(l.enabled, false), coalesce(l.amount, 0), coalesce(l.period, $3), coalesce(l.period_count, 1),
+			l.updated_at, coalesce(l.raw_cost, false), coalesce(l.enabled, false), coalesce(l.amount, 0), coalesce(l.period, $3), coalesce(l.period_count, 1),
 			l.anchor, coalesce(l.timezone, $4), l.waived_window
 		FROM accounts a LEFT JOIN account_usage_limits l ON l.account_id = a.id
 		WHERE a.deleted_at IS NULL AND ($1::bigint[] IS NULL OR a.id = ANY($1))
@@ -656,7 +740,8 @@ func (s *Service) EnforceUsageLimits(ctx context.Context, ids []int64) error {
 	}
 	cands, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (usageCandidate, error) {
 		var c usageCandidate
-		err := r.Scan(append([]any{&c.id, &c.name, &c.pluginKey, &c.typ, &c.status, &c.reason, &c.source, &c.until}, c.limit.scanTargets()...)...)
+		err := r.Scan(append([]any{&c.id, &c.name, &c.pluginKey, &c.typ, &c.status, &c.reason, &c.source, &c.until, &c.limitSaved},
+			c.limit.scanTargets()...)...)
 		return c, err
 	})
 	if err != nil || len(cands) == 0 {
@@ -698,7 +783,7 @@ func (s *Service) EnforceUsageLimits(ctx context.Context, ids []int64) error {
 func (s *Service) enforceUsageLimit(ctx context.Context, c usageCandidate, st *UsageLimitState) error {
 	over := st.reached()
 	limited := limitDisabled(c.status, c.source)
-	ch := automaticChange{id: c.id, name: c.name, pluginKey: c.pluginKey, typ: c.typ, from: c.status, fromReason: c.reason}
+	ch := automaticChange{id: c.id, name: c.name, pluginKey: c.pluginKey, typ: c.typ, from: c.status}
 	switch {
 	case over && (c.status == "active" || limited && !sameLimitDisable(c, st)):
 		ch.to, ch.until, ch.source = "auto_disabled", st.WindowEnd, usageLimitSource
@@ -708,13 +793,68 @@ func (s *Service) enforceUsageLimit(ctx context.Context, c usageCandidate, st *U
 	default:
 		return nil
 	}
-	return s.setAutomaticStatus(ctx, "account.usage_limit_state", ch)
+	return s.writeUsageLimitState(ctx, c, ch)
+}
+
+// writeUsageLimitState writes a change of the usage limit in a transaction
+// that locks the account, then its limit row (the order saves and early
+// releases lock them in), and goes ahead only if both are still what c was
+// read with: the account's status, reason, source and release time, the
+// limit's saved configuration and early release. A save in between (another
+// node, an administrator raising the limit) is thus never enforced with the
+// configuration it replaced; the save applies its own.
+//
+// A disable of a plugin or failure policy the limit held back (deferred,
+// CONTRACTS §73.3) takes over when it outlasts the limit's: a release finds
+// it still running, or a changed limit now ends before it.
+func (s *Service) writeUsageLimitState(ctx context.Context, c usageCandidate, ch automaticChange) error {
+	changed := false
+	err := s.d.DB.Tx(ctx, func(tx pgx.Tx) error {
+		var status, reason, source, deferredReason string
+		var until, deferredUntil, saved, waived *time.Time
+		var deferred bool
+		var now time.Time
+		err := tx.QueryRow(ctx, `SELECT status, status_reason, auto_disabled_source, auto_disabled_until,
+				deferred_auto_disable, deferred_auto_disable_reason, deferred_auto_disabled_until, clock_timestamp()
+			FROM accounts WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, c.id).
+			Scan(&status, &reason, &source, &until, &deferred, &deferredReason, &deferredUntil, &now)
+		if store.IsNoRows(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if status != c.status || reason != c.reason || source != c.source || !sameTime(until, c.until) {
+			return nil
+		}
+		err = tx.QueryRow(ctx, `SELECT updated_at, waived_window FROM account_usage_limits WHERE account_id = $1 FOR SHARE`, c.id).Scan(&saved, &waived)
+		if err != nil && !store.IsNoRows(err) {
+			return err
+		}
+		if !sameTime(saved, c.limitSaved) || !sameTime(waived, c.limit.waived) {
+			return nil
+		}
+		running := deferred && (deferredUntil == nil || deferredUntil.After(now))
+		if running && (ch.to == "active" || ch.until != nil && (deferredUntil == nil || deferredUntil.After(*ch.until))) {
+			ch.to, ch.reason, ch.until, ch.source, ch.eventReason = "auto_disabled", deferredReason, deferredUntil, "", ""
+			ch.audit = map[string]any{"deferred_disable": true}
+		}
+		changed = true
+		return s.writeAutomaticStatus(ctx, tx, "account.usage_limit_state", ch)
+	})
+	if err == nil && changed {
+		s.afterStatusChange(ctx, ch.id, ch.pluginKey, ch.typ)
+	}
+	return err
+}
+
+func sameTime(a, b *time.Time) bool {
+	return a == nil && b == nil || a != nil && b != nil && a.Equal(*b)
 }
 
 // sameLimitDisable reports whether an account the limit disabled already
 // carries the current limit and release time (the used figure may move).
 func sameLimitDisable(c usageCandidate, st *UsageLimitState) bool {
 	tail := fmt.Sprintf(" / $%s (%s)", st.Amount.StringFixed(2), c.limit.periodText())
-	sameUntil := c.until == nil && st.WindowEnd == nil || c.until != nil && st.WindowEnd != nil && c.until.Equal(*st.WindowEnd)
-	return sameUntil && strings.HasSuffix(c.reason, tail)
+	return sameTime(c.until, st.WindowEnd) && strings.HasSuffix(c.reason, tail)
 }

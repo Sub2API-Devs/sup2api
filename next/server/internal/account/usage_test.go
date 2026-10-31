@@ -80,6 +80,9 @@ func TestUsageLimitDisablesAndRecovers(t *testing.T) {
 	}
 	putLimit := func(body map[string]any) map[string]any {
 		t.Helper()
+		if _, ok := body["timezone"]; !ok {
+			body["timezone"] = "UTC" // required on save (§73.3)
+		}
 		code, out := e.do("PUT", "/accounts/"+itoa(id)+"/usage-limit", body)
 		require.Equal(t, 200, code, out)
 		return data(out)
@@ -148,15 +151,15 @@ func TestUsageLimitDisablesAndRecovers(t *testing.T) {
 	assert.Equal(t, "active", account()["status"], "enabled by hand: released for the rest of the period")
 
 	for _, bad := range []map[string]any{
-		{"enabled": true, "amount": "0", "period": "year", "period_count": 0},
-		{"enabled": true, "amount": "1", "period": "month", "period_count": 13},
-		{"enabled": true, "amount": "1", "period": "day", "period_count": 1, "anchor": "1900-01-01T00:00:00Z"},
+		{"enabled": true, "amount": "0", "period": "year", "period_count": 0, "timezone": "UTC"},
+		{"enabled": true, "amount": "1", "period": "month", "period_count": 13, "timezone": "UTC"},
+		{"enabled": true, "amount": "1", "period": "day", "period_count": 1, "anchor": "1900-01-01T00:00:00Z", "timezone": "UTC"},
 		{"enabled": true, "amount": "1", "period": "day", "period_count": 1, "timezone": "Local"},
 	} {
 		code, out = e.do("PUT", "/accounts/"+itoa(id)+"/usage-limit", bad)
 		assert.Equal(t, 400, code, out)
 	}
-	code, out = e.do("PUT", "/accounts/"+itoa(id)+"/usage-limit", map[string]any{"enabled": false, "amount": "5.000000000", "period": "day", "period_count": 1})
+	code, out = e.do("PUT", "/accounts/"+itoa(id)+"/usage-limit", map[string]any{"enabled": false, "amount": "5.000000000", "period": "day", "period_count": 1, "timezone": "UTC"})
 	assert.Equal(t, 200, code, "trailing zeros are not decimals: %s", out)
 
 	_, err = e.db.Pool.Exec(ctx, `UPDATE accounts SET status = 'auto_disabled', status_reason = 'upstream says no' WHERE id = $1`, id)
@@ -186,6 +189,9 @@ func TestUsageLimitOwnsItsDisable(t *testing.T) {
 	}
 	putLimit := func(body map[string]any) map[string]any {
 		t.Helper()
+		if _, ok := body["timezone"]; !ok {
+			body["timezone"] = "UTC" // required on save (§73.3)
+		}
 		code, out := e.do("PUT", "/accounts/"+itoa(id)+"/usage-limit", body)
 		require.Equal(t, 200, code, out)
 		return data(out)

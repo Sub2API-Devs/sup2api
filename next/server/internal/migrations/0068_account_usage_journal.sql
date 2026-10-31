@@ -9,9 +9,8 @@
 -- journal into the hourly and totals tables every few seconds
 -- (account_usage_fold), so the figures trail the writes by that much.
 --
--- Also: raw cost takes billing_detail.cost with any number of decimals
--- (rounded to 8) instead of falling back when it had more than 8, and a usage
--- limit carries the time zone its periods follow.
+-- Also: a usage limit carries the time zone its periods follow. The raw cost
+-- function stays 0064's (one definition for the backfill and the trigger).
 
 CREATE TABLE IF NOT EXISTS account_usage_deltas (
     id          bigserial     PRIMARY KEY,
@@ -22,15 +21,6 @@ CREATE TABLE IF NOT EXISTS account_usage_deltas (
     requests    bigint        NOT NULL,
     tokens      bigint        NOT NULL
 );
-
-CREATE OR REPLACE FUNCTION account_usage_raw_cost(status text, cost numeric, detail jsonb, rate numeric) RETURNS numeric
-    LANGUAGE sql IMMUTABLE AS $$
-    SELECT CASE
-        WHEN status NOT IN ('billed', 'reserved') THEN 0
-        WHEN jsonb_typeof(detail) = 'object' AND (detail->>'cost') ~ '^-?[0-9]{1,12}(\.[0-9]+)?$' THEN round((detail->>'cost')::numeric, 8)
-        WHEN rate > 0 THEN round(cost / rate, 8)
-        ELSE cost
-    END $$;
 
 CREATE OR REPLACE FUNCTION account_usage_add(account bigint, at timestamptz, d_cost numeric, d_raw numeric, d_req bigint, d_tok bigint) RETURNS void
     LANGUAGE plpgsql AS $$
