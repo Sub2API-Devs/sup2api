@@ -265,6 +265,11 @@ html.dark {
   flex-direction: column;
   gap: 0.875rem;
 }
+/* a form page (the settings tab) limits its own width, as the plugin
+   settings form of the console does (max-w-4xl); the console main is full width */
+.mod-form-page {
+  max-width: 56rem;
+}
 /* a read-only form: disables the native controls, keeps the form layout */
 .mod-fieldset {
   display: contents;

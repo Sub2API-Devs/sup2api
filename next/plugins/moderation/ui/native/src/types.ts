@@ -882,11 +882,16 @@ export interface AuditorTryTarget {
   draft?: AuditorDraft
 }
 
-/** A record source of a user: group → flow@version (the drawer timeline filter). */
+/**
+ * A record source of a user: group → flow@version (the drawer timeline
+ * filter). from (RFC 3339) limits the records to the window the source was
+ * counted in (the summary's sources are of the last 30 days).
+ */
 export interface SourceFilter {
   group_id: number
   flow_id: number
   flow_version: number
+  from?: string
 }
 export interface SimulateBody {
   text?: string

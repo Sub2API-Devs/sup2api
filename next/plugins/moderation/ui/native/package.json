@@ -5,7 +5,9 @@
   "type": "module",
   "description": "Native console UI of the moderation plugin (built to dist/entry.js, packed as ui/native/).",
   "scripts": {
-    "build": "vite build"
+    "build": "vite build",
+    "typecheck": "node ../../../../web/node_modules/vue-tsc/bin/vue-tsc.js -p tsconfig.json --noEmit",
+    "test": "node ../../../../web/node_modules/vitest/vitest.mjs run --root . --config ../../../../web/vitest.config.ts"
   },
   "devDependencies": {
     "@sub2api/vite-preset": "file:../../../../web/packages/vite-preset",

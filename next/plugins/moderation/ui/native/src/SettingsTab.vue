@@ -4,8 +4,9 @@ import { SAlert, SButton, SCard, SCode, SField, SHint, SInput, SLink, SSegmented
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
 import { BLOCK_FORMATS, blockResponse, type BlockFormat } from './blockPreview'
 import { useCatalog } from './catalog'
-import { enumOptions } from './format'
+import { enumOptions, joinList } from './format'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
+import { mergeSettings, type PageValues } from './settingsMerge'
 import { useAsync } from './useAsync'
 import { fetchDefaults, fetchPluginSettings, jevPayload, savePluginSettings, SETTINGS_MASK, settingsPath, useModHost } from './host'
 import type { JevQuestions } from './types'
@@ -14,10 +15,13 @@ import type { JevQuestions } from './types'
 // response with a preview per API format, the AI analysis channel, the
 // error-rate alert, statistics retention, the notification webhook and the
 // Jev default question set. The other settings stay on the plugin's schema
-// form; a save re-reads the stored values and writes them back with only
-// this page's keys changed, so a change made elsewhere meanwhile is kept
-// (the core settings API has no version to compare). A key left empty is
-// not stored, so the schema default (shown as placeholder) applies.
+// form; a save re-reads the stored values and writes back only the keys of
+// this page edited since it loaded (settingsMerge.ts), so a change made
+// elsewhere meanwhile is kept, also to a key of this page left alone (the
+// core settings API has no version to compare). A key someone else changed
+// that this page changed too is confirmed first, then this page's value
+// wins. A key left empty is not stored, so the schema default (shown as
+// placeholder) applies.
 const host = useModHost()
 const t = host.t
 const catalog = useCatalog()
@@ -28,6 +32,17 @@ const NUMBERS: readonly Key[] = ['block_status', 'analysis_channel_id', 'error_r
 const SECRETS: readonly Key[] = ['notify_webhook_url', 'notify_webhook_secret']
 /** Keys with an input here; errors on other keys are toasted. */
 const SHOWN = [...KEYS, 'jev_default_set']
+/** The label of a key of this page (conflict confirmation). */
+const LABEL: Record<string, string> = {
+  block_status: 'settingsTab.blockStatus',
+  block_message: 'settingsTab.blockMessage',
+  analysis_channel_id: 'settingsTab.analysisChannel',
+  error_rate_alert_percent: 'settingsTab.errorRateAlert',
+  stats_retention_days: 'settingsTab.statsRetention',
+  notify_webhook_url: 'settingsTab.webhookUrl',
+  notify_webhook_secret: 'settingsTab.webhookSecret',
+  jev_default_set: 'settingsTab.jev'
+}
 /** The settings key of an API field path: "values.<key>[.<path>]", "values/<key>/…" or "<key>". */
 const settingsKey = (path: string) =>
   path
@@ -44,6 +59,9 @@ const errs = reactive<FieldErrors>({})
 const saving = ref(false)
 
 const copyQuestions = (q: JevQuestions): JevQuestions => ({ preamble: q.preamble || '', items: q.items.map((x) => ({ ...x })) })
+/** The stored values and this page's values when it loaded (what a save compares with). */
+let loaded: Record<string, unknown> = {}
+let initial: PageValues = {}
 
 const { data, loading, error, reload } = useAsync(() => Promise.all([fetchPluginSettings(), fetchDefaults()]), () => t('settingsTab.loadFailed'))
 const defaults = computed(() => data.value?.[1] ?? null)
@@ -65,6 +83,8 @@ watch(data, (v) => {
   if (form.analysis_channel_id === '') form.analysis_channel_id = Number(schemaDefault('analysis_channel_id')) || 0
   const set = stored.jev_default_set as JevQuestions | null | undefined
   jev.value = set ? copyQuestions(set) : null
+  loaded = { ...stored }
+  initial = pageValues()
 })
 onMounted(reload)
 defineExpose({ reload })
@@ -72,13 +92,12 @@ defineExpose({ reload })
 /** A secret as sent: the new value, the mask to keep the stored one, or '' to clear it. */
 const secretValue = (k: Key) => (form[k] ? String(form[k]) : kept[k] ? SETTINGS_MASK : '')
 
-/** The stored values base with the keys of this page; an empty key is removed (its default applies). */
-function values(base: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...base, jev_default_set: jev.value && jevPayload(jev.value) }
+/** The keys of this page as sent; an empty key is undefined (removed, its default applies). */
+function pageValues(): PageValues {
+  const out: PageValues = { jev_default_set: jev.value && jevPayload(jev.value) }
   for (const k of KEYS) {
     const v = SECRETS.includes(k) ? secretValue(k) : String(form[k] ?? '').trim()
-    if (v === '') delete out[k]
-    else out[k] = NUMBERS.includes(k) ? Number(v) : v
+    out[k] = v === '' ? undefined : NUMBERS.includes(k) ? Number(v) : v
   }
   return out
 }
@@ -88,7 +107,16 @@ async function save() {
   saving.value = true
   try {
     const latest = await fetchPluginSettings()
-    await savePluginSettings(values(latest.values || {}))
+    const m = mergeSettings(SHOWN, loaded, latest.values || {}, initial, pageValues())
+    if (!m.changed.length) {
+      host.toast(t('settingsTab.noChanges'), 'info')
+      return
+    }
+    if (m.conflicts.length) {
+      const keys = joinList(m.conflicts.map((k) => t(LABEL[k] || k)))
+      if (!(await host.confirm({ message: t('settingsTab.conflictConfirm', { keys }), confirmText: t('settingsTab.overwrite') }))) return
+    }
+    await savePluginSettings(m.values)
     host.toast(t('saved'), 'success')
     await reload()
   } catch (e) {
@@ -137,7 +165,7 @@ const jevOptions = computed(() => [
     </SHint>
     <SSpinner v-if="loading && !defaults" block />
     <SAlert v-else-if="error" tone="danger">{{ error }}</SAlert>
-    <form v-else class="mod-form" @submit.prevent="save">
+    <form v-else class="mod-form mod-form-page" @submit.prevent="save">
       <SCard :title="t('settingsTab.block')" :subtitle="t('settingsTab.blockHint')">
         <div class="mod-form">
           <div class="mod-form-row">

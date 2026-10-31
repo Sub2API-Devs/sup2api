@@ -3,22 +3,32 @@ import type { SelectOption } from '@sub2api/ui'
 import { useCatalog } from './catalog'
 import { categoryLabel } from './format'
 import { fetchCategoryStats, fetchDefaults } from './host'
+import { onSessionEnd } from './session'
 
 // Categories the record and watch list filters offer: the OpenAI and LLM
 // categories and the built-in / default Jev questions (GET
 // /jev/default-questions), today's categories (GET /stats/categories) and
-// the questions and categories of the auditors. Loaded once per page.
+// the questions and categories of the auditors. Loaded once per login (a
+// session end drops them, session.ts).
 
 /** category id → Jev label ('' when the category has none) */
 const loaded = ref(new Map<string, string>())
 let loading: Promise<void> | null = null
+let gen = 0
+onSessionEnd(() => {
+  gen++
+  loaded.value = new Map()
+  loading = null
+})
 
 const addTo = (m: Map<string, string>, id: string | undefined, label = '') => {
   if (id && !m.get(id)) m.set(id, label)
 }
 
 async function load() {
+  const my = gen
   const [d, s] = await Promise.all([fetchDefaults().catch(() => null), fetchCategoryStats().catch(() => null)])
+  if (my !== gen) return
   const m = new Map<string, string>()
   for (const id of d?.openai_categories || []) addTo(m, id)
   for (const q of [...(d?.builtin.items || []), ...(d?.default.items || [])]) addTo(m, q.category, q.label)

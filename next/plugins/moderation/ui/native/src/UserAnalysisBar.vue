@@ -42,10 +42,21 @@ async function analyze() {
 }
 
 const SUGGESTED_LEVEL: Record<Suggestion, WatchLevel | null> = { block: 'enforce', observe: 'observe', release: null }
+/**
+ * The latest analysis finished but was not applied (status ok, error stale,
+ * §72.13.4): the entry changed meanwhile. It is shown as stale and offers no
+ * "按 AI 建议执行". A stale or failed latest analysis shows the entry's trend
+ * (that of the last applied analysis), as the watch list row does.
+ */
+const stale = computed(() => latest.value?.error === 'stale')
+const trend = computed(() => {
+  const a = latest.value
+  return a?.status === 'ok' && !stale.value ? a.trend || '' : entry.value?.latest_trend || ''
+})
 const suggestion = computed(() => {
   const d = props.detail
   const a = latest.value
-  if (!manage.value || d.staff || d.exempt || a?.status !== 'ok' || !a.suggestion) return null
+  if (!manage.value || d.staff || d.exempt || stale.value || a?.status !== 'ok' || !a.suggestion) return null
   const level = SUGGESTED_LEVEL[a.suggestion]
   return level === (d.watch?.level ?? null) ? null : { key: a.suggestion, level, analysisId: a.id }
 })
@@ -85,9 +96,10 @@ async function applySuggestion() {
     <template v-if="latest">
       <span class="mod-sub">{{ t('watch.latest') }}</span>
       <SBadge v-if="latest.status !== 'ok'" :tone="latest.status === 'failed' ? 'danger' : 'warning'">{{ enumLabel('analysisStatus', latest.status) }}</SBadge>
-      <SBadge v-if="latest.trend" :tone="trendTone(latest.trend)">{{ enumLabel('trend', latest.trend) }}</SBadge>
-      <SBadge v-if="latest.suggestion" :tone="suggestionTone(latest.suggestion)">{{ t('analysis.suggestion') }}: {{ enumLabel('suggestion', latest.suggestion) }}</SBadge>
-      <SHint inline size="xs">{{ dt(latest.created_at) }}</SHint>
+      <SBadge v-else-if="stale" tone="warning" :title="enumLabel('analysisErr', 'stale')">{{ enumLabel('analysisStatus', 'stale') }}</SBadge>
+      <SBadge v-if="trend" :tone="trendTone(trend)">{{ enumLabel('trend', trend) }}</SBadge>
+      <SBadge v-if="latest.suggestion && !stale" :tone="suggestionTone(latest.suggestion)">{{ t('analysis.suggestion') }}: {{ enumLabel('suggestion', latest.suggestion) }}</SBadge>
+      <SHint inline size="xs">{{ dt(latest.created_at) }}<template v-if="stale"> · {{ enumLabel('analysisErr', 'stale') }}</template></SHint>
     </template>
     <SHint v-else-if="state === 'idle'" inline size="xs">{{ t('watch.neverAnalyzed') }}</SHint>
     <span class="mod-ml-auto mod-inline mod-gap">

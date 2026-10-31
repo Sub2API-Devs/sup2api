@@ -5,14 +5,15 @@ import CategoryChips from './CategoryChips.vue'
 import FlowRef from './FlowRef.vue'
 import { useCatalog } from './catalog'
 import { joinList, num } from './format'
-import { useModHost } from './host'
+import { recentFrom, useModHost } from './host'
 import type { AIVerdictCounts, SourceFilter, UserDetail, WatchItem } from './types'
 
 // Summary of a user (new-api user-detail-summary and context bar): all
 // suspicious records by severity, handling status and AI verdict, the group
 // and flow now, and the group → flow@version sources of the last 30 days.
 // Main categories come from the watch list row when there is one. A source
-// picks the timeline filter (pick-source).
+// picks the timeline filter (pick-source), limited to the same last 30 days
+// so the timeline matches the count.
 const props = defineProps<{ detail: UserDetail; item?: WatchItem | null }>()
 const emit = defineEmits<{ (e: 'pick-source', s: SourceFilter): void }>()
 const t = useModHost().t
@@ -68,7 +69,7 @@ const fields = computed<DescItem[]>(() => {
             type="button"
             class="mod-source"
             :title="t('watchSummary.pickSource')"
-            @click="emit('pick-source', { group_id: src.group_id, flow_id: src.flow_id, flow_version: src.version })"
+            @click="emit('pick-source', { group_id: src.group_id, flow_id: src.flow_id, flow_version: src.version, from: recentFrom() })"
           >
             <span>{{ catalog.groupName(src.group_id) }}</span>
             <span class="mod-sub">→</span>

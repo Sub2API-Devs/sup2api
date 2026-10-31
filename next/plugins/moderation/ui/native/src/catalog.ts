@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import { fetchAuditors, fetchChannels, fetchFlows, fetchGroups, useModHost } from './host'
+import { onSessionEnd } from './session'
 import type { Auditor, Channel, Flow, Group } from './types'
 
 // Flows, auditors, channels and groups, shared by every tab: the CRUD tabs
@@ -7,7 +8,9 @@ import type { Auditor, Channel, Flow, Group } from './types'
 // names and filters from them. useCatalog() loads what is missing (ensure);
 // the header refresh and the overview's auto refresh reload them. A list
 // that fails to load keeps its previous rows and records the error
-// (errors.<list>) for its tab.
+// (errors.<list>) for its tab. The lists belong to one login: they are
+// dropped when the session ends (session.ts), and answers of a load started
+// before are ignored.
 
 export type ListKey = 'flows' | 'auditors' | 'channels' | 'groups'
 const ALL: readonly ListKey[] = ['flows', 'auditors', 'channels', 'groups']
@@ -27,9 +30,12 @@ const loadedKeys = new Set<ListKey>()
 const queued = new Set<ListKey>()
 let inflight = new Set<ListKey>()
 let loading: Promise<void> | null = null
+/** Bumped by a session end: loads of the previous session write nothing. */
+let gen = 0
 
-async function load(keys: ListKey[]) {
+async function load(keys: ListKey[], my: number) {
   const results = await Promise.allSettled(keys.map((k) => FETCH[k]()))
+  if (my !== gen) return
   keys.forEach((k, i) => {
     const r = results[i]
     state.errors[k] = r.status === 'rejected' ? r.reason : null
@@ -48,19 +54,33 @@ function refresh(keys: readonly ListKey[] = ALL): Promise<void> {
   for (const k of keys) queued.add(k)
   if (loading) return loading
   state.loading = true
+  const my = gen
   loading = (async () => {
-    while (queued.size) {
+    while (queued.size && my === gen) {
       inflight = new Set(queued)
       queued.clear()
-      await load([...inflight])
+      await load([...inflight], my)
     }
   })().finally(() => {
+    if (my !== gen) return
     inflight = new Set()
     loading = null
     state.loading = false
   })
   return loading
 }
+
+/** Drops every list (session end); the next useCatalog() loads them again. */
+function reset() {
+  gen++
+  Object.assign(state, { flows: [], auditors: [], channels: [], groups: [], loaded: false, loading: false })
+  state.errors = { flows: null, auditors: null, channels: null, groups: null }
+  loadedKeys.clear()
+  queued.clear()
+  inflight = new Set()
+  loading = null
+}
+onSessionEnd(reset)
 
 /** Loads the lists neither loaded nor loading yet. */
 function ensure(): Promise<void> {

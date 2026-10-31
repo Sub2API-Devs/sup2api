@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { SField, SHint, SInput, SRadio } from '@sub2api/ui'
-import { TOTAL_TIMEOUT_MAX_MS, TOTAL_TIMEOUT_MIN_MS } from './flowOps'
+import { manualTimeoutMs, TOTAL_TIMEOUT_MAX_MS, TOTAL_TIMEOUT_MIN_MS } from './flowOps'
 import { ms } from './format'
 import { useModHost } from './host'
 
@@ -13,11 +13,14 @@ const props = defineProps<{ modelValue: number; autoMs: number; disabled: boolea
 const emit = defineEmits<{ (e: 'update:modelValue', v: number): void }>()
 const t = useModHost().t
 
-// Text being typed; null = show the stored value. An empty entry stays here
-// instead of being stored as 0 (which means automatic).
+// Text being typed; null = show the stored value. An entry that cannot be a
+// manual value (empty, 0 or less; 0 means automatic) is not stored: it shows
+// an error, and leaving the box shows the stored value again, so what the
+// box shows on publish is what gets published.
 const typing = ref<string | null>(null)
 const manual = computed(() => props.modelValue > 0)
 const autoText = computed(() => ms(props.autoMs))
+const invalid = computed(() => typing.value !== null && manualTimeoutMs(typing.value) === null)
 
 function setMode(mode: unknown) {
   typing.value = null
@@ -28,13 +31,13 @@ function setMode(mode: unknown) {
 function onSeconds(v: unknown) {
   const raw = String(v ?? '')
   typing.value = raw
-  const ms = Math.round(Number(raw) * 1000)
-  if (raw.trim() !== '' && ms > 0) emit('update:modelValue', ms)
+  const n = manualTimeoutMs(raw)
+  if (n !== null) emit('update:modelValue', n)
 }
 </script>
 
 <template>
-  <SField :label="t('flows.timeoutTitle')" class="mod-config-wide">
+  <SField :label="t('flows.timeoutTitle')" class="mod-config-wide" :error="invalid ? t('flows.timeoutInvalid', { value: modelValue / 1000 }) : ''">
     <div class="mod-timeout" role="radiogroup" :aria-label="t('flows.timeoutTitle')">
       <SRadio :model-value="manual ? 'manual' : 'auto'" value="auto" :label="t('flows.timeoutAuto', { value: autoText })" :disabled="disabled" @update:model-value="setMode" />
       <div class="mod-timeout-manual">

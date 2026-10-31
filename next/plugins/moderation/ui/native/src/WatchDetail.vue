@@ -104,8 +104,10 @@ function onDeleted(id: number) {
 <template>
   <SDrawer :open="open" :title="t('watch.detailTitle', { id: userId ?? '' })" width="xl" @update:open="emit('update:open', $event)">
     <SSpinner v-if="loading && !detail" block />
-    <SAlert v-else-if="error" tone="warning">{{ error }}</SAlert>
+    <SAlert v-else-if="error && !detail" tone="warning">{{ error }}</SAlert>
     <div v-else-if="detail && userId" class="mod-detail">
+      <!-- a failed reload (polling, refresh) keeps the user shown; the next load clears it -->
+      <SAlert v-if="error" tone="warning" dense>{{ t('watch.refreshFailed', { error }) }}</SAlert>
       <UserStateSection :user-id="detail.user_id" :state="detail" @watch-changed="refreshWatch" @show-user="emit('show-user', $event)" />
 
       <div v-if="entry">

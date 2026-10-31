@@ -21,14 +21,18 @@ const items = computed(() => data.value?.items || [])
 const details = ref<Record<number, FlowVersionDetail>>({})
 const expanded = ref<number | null>(null)
 const viewLoading = ref<number | null>(null)
+/** Bumped when the drawer opens or shows another flow: version answers of an older one are dropped. */
+let gen = 0
 
 watch(
   () => [props.open, props.flow?.id] as const,
   ([open, id]) => {
     if (!open || !id) return
+    gen++
     data.value = null
     details.value = {}
     expanded.value = null
+    viewLoading.value = null
     void load()
   },
   { immediate: true }
@@ -43,14 +47,19 @@ async function view(v: number) {
   }
   expanded.value = v
   if (details.value[v]) return
+  const my = gen
   viewLoading.value = v
   try {
-    details.value = { ...details.value, [v]: await fetchFlowVersion(f.id, v) }
+    const d = await fetchFlowVersion(f.id, v)
+    // the drawer moved to another flow (or reopened) meanwhile
+    if (my !== gen || props.flow?.id !== f.id) return
+    details.value = { ...details.value, [v]: d }
   } catch (e) {
+    if (my !== gen) return
     toastError(e)
-    expanded.value = null
+    if (expanded.value === v) expanded.value = null
   } finally {
-    viewLoading.value = null
+    if (my === gen && viewLoading.value === v) viewLoading.value = null
   }
 }
 

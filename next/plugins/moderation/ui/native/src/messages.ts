@@ -72,6 +72,8 @@ export default {
     yes: '是',
     no: '否',
     actionFailed: '操作失败',
+    bodyTooLarge: '请求约 {kb} KiB，超过控制台转发给插件的上限 {max} KiB：请缩短文本、减少图片或改用图片地址。',
+    bodyTooLargeServer: '请求超过控制台转发给插件的上限 {max} KiB：请缩短文本、减少图片或改用图片地址。',
     retry: '重试',
     labelColon: '{label}：',
     view: '查看',
@@ -148,7 +150,9 @@ export default {
       upstream_error: '上游错误',
       network: '网络错误',
       bad_response: '响应异常',
-      canceled: '已取消'
+      canceled: '已取消',
+      panic: '分析时插件内部出错',
+      auditor_missing: '审核器不存在'
     },
     noteKind: {
       verdict_dropped: '结论被丢弃',
@@ -367,6 +371,7 @@ export default {
       daysHint: '0 表示不过期。',
       empty: '观察名单为空',
       loadFailed: '加载观察名单失败',
+      refreshFailed: '刷新失败，显示的是上次加载的内容：{error}',
       saved: '已保存',
       remove: '移出',
       removed: '已移出用户 #{id}',
@@ -461,6 +466,7 @@ export default {
       kind: { read: '读取', end: '提交' },
       col: { name: '名称', purpose: '用途', args: '参数', returns: '返回', kind: '类型', category: '类别', from: '来源', definition: '定义' },
       noFlow: '这个分组没有绑定流程，只带内置类别。',
+      noPublishedFlow: '还没有已发布的流程，无法按流程预览。',
       loadFailed: '加载提示词失败'
     },
     blocks: {
@@ -615,6 +621,7 @@ export default {
       timeoutManual: '手动',
       timeoutSeconds: '秒（1–120）',
       timeoutSecondsAria: '总超时（秒）',
+      timeoutInvalid: '手动超时须大于 0（1–120 秒）；没有保存这个值，离开输入框后恢复为 {value} 秒。要按自动计算请选"自动"。',
       timeoutTruncate: '小于自动值（{value}）：最后一级可能被截断，按审核出错放行。',
       timeoutHint: '流程超时时，当前级没有结论，请求放行（审核出错）。单次调用的超时在渠道里设置。',
       // canvas
@@ -908,6 +915,7 @@ export default {
       review: '处理状态',
       ai: 'AI 结论',
       sources: '近 30 天来源',
+      recentDays: '近 {n} 天',
       pickSource: '只看这个来源的可疑记录',
       allSources: '全部来源',
     },
@@ -1135,6 +1143,9 @@ export default {
       jevBuiltin: '内置（{v}）',
       jevCustom: '自定义',
       jevCopyBuiltin: '重置为内置内容',
+      noChanges: '没有改动',
+      conflictConfirm: '打开本页后，别人也改过这些设置：{keys}。保存会用本页的值覆盖它们，其余设置保持不变。',
+      overwrite: '仍然保存',
     },
   },
   en: {
@@ -1153,6 +1164,8 @@ export default {
     yes: 'Yes',
     no: 'No',
     actionFailed: 'Action failed',
+    bodyTooLarge: 'The request is about {kb} KiB, over the {max} KiB the console forwards to a plugin: shorten the text, remove images or use image URLs.',
+    bodyTooLargeServer: 'The request is over the {max} KiB the console forwards to a plugin: shorten the text, remove images or use image URLs.',
     retry: 'Retry',
     labelColon: '{label}:',
     view: 'View',
@@ -1229,7 +1242,9 @@ export default {
       upstream_error: 'Upstream error',
       network: 'Network error',
       bad_response: 'Bad response',
-      canceled: 'Canceled'
+      canceled: 'Canceled',
+      panic: 'Internal plugin error during the analysis',
+      auditor_missing: 'Auditor missing'
     },
     noteKind: {
       verdict_dropped: 'Verdict dropped',
@@ -1434,6 +1449,7 @@ export default {
       daysHint: '0 = no expiry.',
       empty: 'The watch list is empty',
       loadFailed: 'Failed to load the watch list',
+      refreshFailed: 'Refresh failed; showing the last loaded data: {error}',
       saved: 'Saved',
       remove: 'Remove',
       removed: 'User #{id} removed',
@@ -1508,6 +1524,7 @@ export default {
       kind: { read: 'Read', end: 'Submit' },
       col: { name: 'Name', purpose: 'Purpose', args: 'Arguments', returns: 'Returns', kind: 'Kind', category: 'Category', from: 'Source', definition: 'Definition' },
       noFlow: 'No flow is bound to this group; only the built-in categories are included.',
+      noPublishedFlow: 'No flow has been published yet, so there is nothing to preview by flow.',
       loadFailed: 'Failed to load the prompt'
     },
     blocks: {
@@ -1662,6 +1679,7 @@ export default {
       timeoutManual: 'Manual',
       timeoutSeconds: 's (1–120)',
       timeoutSecondsAria: 'Total timeout (seconds)',
+      timeoutInvalid: 'A manual timeout must be above 0 (1–120 s). This value was not kept; leaving the box shows {value} s again. Choose "Automatic" for the computed value.',
       timeoutTruncate: 'Less than the automatic value ({value}): the last stage may be cut off and allowed as a moderation error.',
       timeoutHint: 'When the flow runs out of time the current stage has no verdict and the request is allowed (moderation error). The single-call timeout is set per channel.',
       // canvas
@@ -1955,6 +1973,7 @@ export default {
       review: 'Handling',
       ai: 'AI verdicts',
       sources: 'Sources, last 30 days',
+      recentDays: 'last {n} days',
       pickSource: 'Show only the suspicious records from this source',
       allSources: 'All sources',
     },
@@ -2182,6 +2201,9 @@ export default {
       jevBuiltin: 'Built-in ({v})',
       jevCustom: 'Custom',
       jevCopyBuiltin: 'Reset to the built-in set',
+      noChanges: 'Nothing changed',
+      conflictConfirm: 'Someone else changed these settings after this page opened: {keys}. Saving overwrites them with the values here; the other settings are kept.',
+      overwrite: 'Save anyway',
     },
   }
 }

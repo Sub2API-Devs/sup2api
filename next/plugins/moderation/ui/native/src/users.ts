@@ -1,6 +1,7 @@
 import { reactive, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { fetchCoreUser, fetchUsers, searchCoreUsers, useModHost } from './host'
+import { onSessionEnd } from './session'
 import type { CoreUser } from './types'
 
 // Users of the core, cached for the page. The ids a render asks for are
@@ -18,6 +19,19 @@ const pending = new Set<number>()
 let viaPlugin = true
 let denied = false
 const RETRY_MS = 30_000
+/** Bumped by a session end: lookups of the previous session write nothing. */
+let gen = 0
+
+// The cache and the permission findings (viaPlugin, denied) are of one
+// login: a session end drops them (session.ts).
+onSessionEnd(() => {
+  gen++
+  users.clear()
+  inflight.clear()
+  pending.clear()
+  viaPlugin = true
+  denied = false
+})
 
 const nameOf = (u: CoreUser | null | undefined) => u?.display_name || u?.email || ''
 
@@ -39,14 +53,15 @@ function loadUser(id: number) {
 
 /** Looks the pending ids up, at most 500 per plugin call (its limit). */
 async function loadPending() {
+  const my = gen
   const ids = [...pending]
   pending.clear()
   for (const id of ids) inflight.add(id)
-  for (let i = 0; i < ids.length; i += 500) {
+  for (let i = 0; i < ids.length && my === gen; i += 500) {
     const batch = ids.slice(i, i + 500)
-    if (!viaPlugin || !(await loadViaPlugin(batch))) await Promise.all(batch.map(loadCoreUser))
+    if (!viaPlugin || !(await loadViaPlugin(batch, my))) await Promise.all(batch.map((id) => loadCoreUser(id, my)))
   }
-  for (const id of ids) inflight.delete(id)
+  if (my === gen) for (const id of ids) inflight.delete(id)
 }
 
 /**
@@ -54,30 +69,36 @@ async function loadPending() {
  * (users_unavailable), and the core is asked from then on. Other errors
  * leave the batch unknown for RETRY_MS.
  */
-async function loadViaPlugin(batch: number[]): Promise<boolean> {
+async function loadViaPlugin(batch: number[], my: number): Promise<boolean> {
   try {
-    for (const u of await fetchUsers(batch)) users.set(u.id, u)
+    const found = await fetchUsers(batch)
+    if (my !== gen) return true
+    for (const u of found) users.set(u.id, u)
     for (const id of batch) if (!users.has(id)) users.set(id, null)
     return true
   } catch (e) {
+    if (my !== gen) return true
     if (isApiError(e) && e.code === 'users_unavailable') {
       viaPlugin = false
       return false
     }
     for (const id of batch) users.set(id, null)
-    setTimeout(() => batch.forEach((id) => users.get(id) === null && users.delete(id)), RETRY_MS)
+    setTimeout(() => my === gen && batch.forEach((id) => users.get(id) === null && users.delete(id)), RETRY_MS)
     return true
   }
 }
 
-async function loadCoreUser(id: number) {
+async function loadCoreUser(id: number, my: number) {
+  if (my !== gen) return
   if (denied) {
     users.set(id, null)
     return
   }
   try {
-    users.set(id, await fetchCoreUser(id))
+    const u = await fetchCoreUser(id)
+    if (my === gen) users.set(id, u)
   } catch (e) {
+    if (my !== gen) return
     if (isApiError(e) && (e.status === 401 || e.status === 403)) denied = true
     users.set(id, null)
   }
@@ -94,12 +115,13 @@ export async function resolveUserIds(q: string): Promise<number[] | null> {
   const v = q.trim()
   if (/^\d+$/.test(v)) return [Number(v)]
   if (denied) return null
+  const my = gen
   try {
     const r = await searchCoreUsers(v)
-    for (const u of r.items) users.set(u.id, u)
+    if (my === gen) for (const u of r.items) users.set(u.id, u)
     return r.items.length ? r.items.map((u) => u.id) : [NO_USER]
   } catch (e) {
-    if (isApiError(e) && (e.status === 401 || e.status === 403)) denied = true
+    if (my === gen && isApiError(e) && (e.status === 401 || e.status === 403)) denied = true
     return null
   }
 }

@@ -4,7 +4,7 @@ import { SAlert, SBadge, SButton, SField, SHint, SInput, SModal, SSegmented, SSe
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
 import { useCatalog } from './catalog'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
-import { THRESHOLD_PRESETS, presetThresholds, thresholdPresetOf } from './thresholdPresets'
+import { THRESHOLD_PRESETS, presetThresholds, thresholdOverrides, thresholdPresetOf } from './thresholdPresets'
 import { categoryLabel, enumLabel, enumOptions } from './format'
 import { fetchAuditor, jevPayload, saveAuditor, useModHost } from './host'
 import type { Auditor, AuditorConfig, AuditorDraft, AuditorTryTarget, AuditorType, Defaults, JevQuestions } from './types'
@@ -29,7 +29,8 @@ const form = reactive({
   name: '',
   type: 'openai_moderation' as AuditorType,
   channel_id: 0 as number,
-  thresholds: {} as Record<string, string>,
+  /** per category: the typed value (SInput type=number gives a number, null when cleared) */
+  thresholds: {} as Record<string, string | number | null>,
   ownQuestions: false,
   questions: { preamble: '', items: [] } as JevQuestions,
   review_images: true,
@@ -94,14 +95,12 @@ function copyDefault() {
   form.questions = { preamble: d.preamble, items: d.items.map((q) => ({ ...q })) }
 }
 
-/** The OpenAI overrides of the form (empty inputs keep the default). */
-const formThresholds = computed(() =>
-  Object.fromEntries(
-    Object.entries(form.thresholds)
-      .filter(([, v]) => String(v).trim() !== '')
-      .map(([k, v]) => [k, Number(v)])
-  )
-)
+/**
+ * The OpenAI overrides of the form. A cleared input (null or '') is not
+ * sent, so its default applies (engine.go compileAuditor starts from the
+ * default thresholds and only overrides the categories given).
+ */
+const formThresholds = computed(() => thresholdOverrides(form.thresholds))
 const presetOptions = computed(() => enumOptions('auditors.preset', THRESHOLD_PRESETS.map((p) => p.id)))
 const formPreset = computed(() => (props.defaults ? thresholdPresetOf(props.defaults, formThresholds.value) : null))
 function applyPreset(id: unknown) {

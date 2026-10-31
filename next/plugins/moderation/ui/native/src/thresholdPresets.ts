@@ -27,3 +27,19 @@ export function thresholdPresetOf(base: Base, overrides: Record<string, number>)
   })
   return match?.id ?? null
 }
+
+/**
+ * The overrides of threshold inputs as sent. An input left empty or cleared
+ * (SInput type=number gives null) is dropped, so the category keeps its
+ * default; String(null) would otherwise become "null" and send 0, which the
+ * backend rejects (a threshold must be > 0).
+ */
+export function thresholdOverrides(inputs: Record<string, string | number | null | undefined>): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [k, v] of Object.entries(inputs)) {
+    if (v === null || v === undefined || String(v).trim() === '') continue
+    const n = Number(v)
+    if (Number.isFinite(n)) out[k] = n
+  }
+  return out
+}

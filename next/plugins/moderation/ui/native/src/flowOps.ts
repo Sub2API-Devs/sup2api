@@ -22,6 +22,18 @@ export const MAX_STAGE_AUDITORS = 8
 export const TOTAL_TIMEOUT_MIN_MS = 1000
 export const TOTAL_TIMEOUT_MAX_MS = 120_000
 export const NAME_MAX = 64
+
+/**
+ * A manual total timeout typed in seconds, as ms; null when it cannot be a
+ * manual value (empty, not a number, 0 or less: 0 means automatic). Values
+ * out of 1–120 s are returned, the publish check reports them.
+ */
+export function manualTimeoutMs(raw: unknown): number | null {
+  const s = String(raw ?? '').trim()
+  if (s === '') return null
+  const ms = Math.round(Number(s) * 1000)
+  return Number.isFinite(ms) && ms > 0 ? ms : null
+}
 export const COMBINES: readonly Combine[] = ['any', 'all', 'at_least']
 
 /** Channel timeout used when a channel stores 0 (§72.6 defaults by type). */

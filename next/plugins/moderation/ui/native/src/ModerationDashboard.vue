@@ -108,10 +108,18 @@ function openWatch(userId: number) {
 
 <template>
   <div>
+    <!-- The mode badges sit in #filters, not #title-extra: #title-extra keeps
+         SPageHeader's own title block, so the description can never move into
+         the top bar. Plugin pages (route p/:plugin/:page) have no route title
+         yet, so the host draws title and description here for now; once the
+         top bar shows the plugin page title, the header becomes one toolbar
+         row (badges left, actions right) without a change here. -->
     <SPageHeader :title="t('title')" :description="t('subtitle')">
-      <template #title-extra>
-        <SBadge v-if="runtime" :tone="modeTone(runtime.mode)" dot>{{ t(`mode.${runtime.mode || 'off'}`) }}</SBadge>
-        <SBadge v-if="runtime && !runtime.configured" tone="warning">{{ t('notConfiguredBadge') }}</SBadge>
+      <template #filters>
+        <span v-if="runtime" class="mod-inline mod-gap">
+          <SBadge :tone="modeTone(runtime.mode)" dot>{{ t(`mode.${runtime.mode || 'off'}`) }}</SBadge>
+          <SBadge v-if="!runtime.configured" tone="warning">{{ t('notConfiguredBadge') }}</SBadge>
+        </span>
       </template>
       <template #actions>
         <SButton v-if="manageSettings" icon="settings" @click="host.router.push(settingsPath())">{{ t('settingsAll') }}</SButton>

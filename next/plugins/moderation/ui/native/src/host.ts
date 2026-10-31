@@ -73,6 +73,32 @@ export function canManageSettings(): boolean {
 
 const api = () => useModHost().pluginApi
 
+// ---- request body size: the core forwards at most 1 MiB per plugin request
+// (server internal/plugin/routes MaxBodyBytes) and answers 413
+// payload_too_large past it. Images may take 900 KiB of data URL
+// (ImageInput.vue), so the text and a draft share what is left.
+
+export const MAX_PLUGIN_BODY_BYTES = 1 << 20
+/** Bytes of a JSON body as sent (UTF-8). */
+export const jsonBytes = (body: unknown): number => new TextEncoder().encode(JSON.stringify(body) ?? '').length
+
+/** True when the error is the core's 413 for a body over MAX_PLUGIN_BODY_BYTES. */
+export const isBodyTooLarge = (e: unknown): boolean => isApiError(e) && (e.status === 413 || e.code === 'payload_too_large')
+
+/** The message of a body too large: its size against the cap, in KiB. */
+export function bodyTooLargeText(bytes?: number): string {
+  const h = useModHost()
+  const max = MAX_PLUGIN_BODY_BYTES >> 10
+  return bytes ? h.t('bodyTooLarge', { kb: Math.ceil(bytes / 1024), max }) : h.t('bodyTooLargeServer', { max })
+}
+
+/** POST with the size checked first: a body the core would refuse fails here with bodyTooLargeText. */
+async function postChecked<T>(path: string, body: object): Promise<T> {
+  const n = jsonBytes(body)
+  if (n > MAX_PLUGIN_BODY_BYTES) throw new Error(bodyTooLargeText(n))
+  return api().post<T>(path, body)
+}
+
 /** List paths of useList (records and watch list). */
 export const EVENTS_PATH = '/events'
 export const WATCHLIST_PATH = '/watchlist'
@@ -120,7 +146,7 @@ export const saveAuditor = (id: number | null, body: AuditorDraft) =>
 export const deleteAuditor = (id: number) => api().del(`/auditors/${id}`)
 /** Tries a stored auditor (id), optionally with unsaved edits, or an unsaved one (id null + draft). */
 export const tryAuditor = (id: number | null, text: string, images: string[], draft?: AuditorDraft) =>
-  api().post<TryResult>(id ? `/auditors/${id}/try` : '/auditors/try', { text, images, draft })
+  postChecked<TryResult>(id ? `/auditors/${id}/try` : '/auditors/try', { text, images, draft })
 export const fetchDefaults = () => api().get<Defaults>('/jev/default-questions')
 
 /** A question table as sent: thresholds edited as text become numbers. */
@@ -136,7 +162,7 @@ export const publishFlow = (id: number, expected: number) => api().post<Flow>(`/
 export const setFlowEnabled = (id: number, enabled: boolean) => api().put<Flow>(`/flows/${id}/enabled`, { enabled })
 
 export const runTest = (text: string, images: string[], flowId?: number) =>
-  api().post<TestResult>('/test', { text, images, flow_id: flowId || undefined })
+  postChecked<TestResult>('/test', { text, images, flow_id: flowId || undefined })
 
 /** Imports a new-api export (§72.12); preview only counts and validates. */
 export const importConfig = (data: unknown, preview: boolean) => api().post<ImportResult>('/import', { data, preview })
@@ -157,11 +183,16 @@ export async function fetchAnalysisTools(): Promise<AnalysisTool[]> {
 export const fetchUserEvents = (userId: number, source?: SourceFilter | null, pageSize = 50) =>
   api().list<ModEvent>(EVENTS_PATH, { user_id: userId, result: 'suspicious', ...source, page: 1, page_size: pageSize })
 
+/** The window of a user's recent sources (backend user_detail.go recentDays). */
+export const RECENT_DAYS = 30
+/** Start of the last RECENT_DAYS as RFC 3339 (the `from` of a source's records). */
+export const recentFrom = (now = Date.now()) => new Date(now - RECENT_DAYS * 86_400_000).toISOString().replace(/\.\d+Z$/, 'Z')
+
 export const fetchFlowVersions = (id: number) => api().get<{ current_version: number; items: FlowVersionItem[] }>(`/flows/${id}/versions`)
 export const fetchFlowVersion = (id: number, version: number) => api().get<FlowVersionDetail>(`/flows/${id}/versions/${version}`)
 export const rollbackFlow = (id: number, version: number, expected: number) =>
   api().post<Flow>(`/flows/${id}/rollback`, { version, expected_version: expected })
-export const simulateFlow = (id: number, body: SimulateBody) => api().post<TestResult>(`/flows/${id}/simulate`, body)
+export const simulateFlow = (id: number, body: SimulateBody) => postChecked<TestResult>(`/flows/${id}/simulate`, body)
 
 // ---- statistics; every call carries the caller's time zone so "today" is local.
 
@@ -239,8 +270,9 @@ export async function fetchGroups(): Promise<Group[]> {
 
 // ------------------------------------------------------------------ helpers
 
-/** Human-readable message of a failed call (ApiError is an Error), else `fallback`. */
+/** Human-readable message of a failed call (ApiError is an Error), else `fallback`. A 413 gets its own text. */
 export function errorMessage(e: unknown, fallback: string): string {
+  if (isBodyTooLarge(e)) return bodyTooLargeText()
   return e instanceof Error && e.message ? e.message : fallback
 }
 

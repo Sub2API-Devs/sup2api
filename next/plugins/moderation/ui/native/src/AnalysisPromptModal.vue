@@ -37,19 +37,34 @@ async function init() {
   if (!flowId.value && flows.value.length) flowId.value = flows.value[0].id
 }
 
+/** By flow without a published flow: nothing to ask (flow_id=0 is a 400). */
+const noFlow = computed(() => by.value === 'flow' && !flowId.value)
+function loadPrompt() {
+  if (noFlow.value) prompt.reset()
+  else void prompt.reload()
+}
+
 watch(
   () => props.open,
   async (open) => {
     if (!open) return
     await init()
-    void prompt.reload()
+    loadPrompt()
   },
   { immediate: true }
 )
-watch([by, groupId, flowId], () => props.open && prompt.reload())
+watch([by, groupId, flowId], () => props.open && loadPrompt())
+// flows published (or the catalog loaded) while the modal is open
+watch(flows, (list) => {
+  if (!list.some((f) => f.id === flowId.value)) flowId.value = list[0]?.id ?? 0
+})
 
 const groupOptions = computed(() => [{ value: 0, label: t('flows.defaultGroup') }, ...catalog.state.groups.map((g) => ({ value: g.id, label: g.name }))])
 const flowOptions = computed(() => flows.value.map((f) => ({ value: f.id, label: `${f.name} v${f.version}` })))
+const byOptions = computed(() => [
+  { value: 'group', label: t('prompt.byGroup') },
+  { value: 'flow', label: t('prompt.byFlow'), disabled: catalog.state.loaded && !flows.value.length && by.value !== 'flow' }
+])
 
 const toolColumns = computed<TableColumn[]>(() => [
   { key: 'name', label: t('prompt.col.name'), nowrap: true },
@@ -72,17 +87,18 @@ const promptBytes = computed(() => data.value?.bytes ?? new TextEncoder().encode
       <SHint size="xs">{{ t('prompt.hint') }}</SHint>
       <div class="mod-form-row">
         <SField :label="t('prompt.by')" size="sm">
-          <SSegmented v-model="by" size="sm" :options="[{ value: 'group', label: t('prompt.byGroup') }, { value: 'flow', label: t('prompt.byFlow') }]" />
+          <SSegmented v-model="by" size="sm" :options="byOptions" />
         </SField>
         <SField v-if="by === 'group'" :label="t('prompt.group')" size="sm" class="mod-grow">
           <SSelect v-model="groupId" :options="groupOptions" size="sm" />
         </SField>
         <SField v-else :label="t('prompt.flow')" size="sm" class="mod-grow">
-          <SSelect v-model="flowId" :options="flowOptions" size="sm" />
+          <SSelect v-model="flowId" :options="flowOptions" size="sm" :disabled="!flowOptions.length" />
         </SField>
       </div>
 
-      <SSpinner v-if="loading && !data" block />
+      <SAlert v-if="noFlow" tone="info" dense>{{ t('prompt.noPublishedFlow') }}</SAlert>
+      <SSpinner v-else-if="loading && !data" block />
       <SAlert v-else-if="error" tone="danger" dense>{{ error }}</SAlert>
       <template v-else-if="data">
         <div class="mod-history-head">

@@ -8,7 +8,7 @@ import ReviewActions from './ReviewActions.vue'
 import VerdictBadge from './VerdictBadge.vue'
 import { useCatalog } from './catalog'
 import { dt } from './format'
-import { canManage, fetchUserEvents, useModHost } from './host'
+import { canManage, fetchUserEvents, RECENT_DAYS, useModHost } from './host'
 import type { ReviewStatus, SourceFilter } from './types'
 import { useAsync } from './useAsync'
 import { useBulkReview } from './useBulkReview'
@@ -64,7 +64,7 @@ const toggle = (id: number, on: boolean) => (checked.value = on ? [...checked.va
   <div class="mod-stack">
     <div v-if="source" class="mod-counts">
       <SBadge tone="info">
-        {{ catalog.groupName(source.group_id) }} → <FlowRef :flow-id="source.flow_id" :version="source.flow_version" />
+        {{ catalog.groupName(source.group_id) }} → <FlowRef :flow-id="source.flow_id" :version="source.flow_version" /><template v-if="source.from"> · {{ t('watchSummary.recentDays', { n: RECENT_DAYS }) }}</template>
       </SBadge>
       <SButton size="xs" variant="ghost" icon="x" @click="emit('clear-source')">{{ t('watchSummary.allSources') }}</SButton>
     </div>
