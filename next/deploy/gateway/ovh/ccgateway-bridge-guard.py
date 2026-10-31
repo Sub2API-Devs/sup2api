@@ -2,7 +2,10 @@
 """Allow an account's TCP frames to its proxy peer through Docker's internal bridge.
 
 DOCKER-INTERNAL checks the original IP destination even for frames bridged to
-the account proxy. Scope the exception to both physical veth endpoints and the
+the account proxy. The proxy peer is the controller's shared Xray gateway
+(<prefix>-shared-egress, CONTRACTS §57; per-account egress containers are gone
+since ccgateway 0.1.118), recognized by its owner label, not by account state.
+Scope the exception to both physical veth endpoints and the
 account address. The proxy namespace still owns interception and fail-closed
 forwarding. No host route, Docker isolation chain, or global sysctl is changed.
 Run as root on the Docker host; controller state is never logged.
@@ -16,6 +19,7 @@ import subprocess
 import time
 
 LABEL = 'io.sup2api.ccgateway.account'
+SHARED_OWNER = 'io.sup2api.ccgateway.shared'
 CHAIN = 'CCG-PROXY-BRIDGE'
 COMMENT = 'ccgateway-managed-proxy-bridge'
 KEY = re.compile(r'(?:[1-9][0-9]*|d[0-9a-f]{16})')
@@ -26,7 +30,7 @@ def run(args, **kwargs):
     return subprocess.check_output(args, text=True, timeout=15, stderr=subprocess.PIPE, **kwargs).strip()
 
 
-def rules_for_account(aid, state, app, gateway, network, app_veth, gateway_veth):
+def rules_for_account(aid, state, app, gateway, network, app_veth, gateway_veth, prefix='ccg'):
     """Pure validation: no exception for an unrelated, stopped or public network."""
     if not KEY.fullmatch(aid) or state.get('status') == 'blocked':
         return []
@@ -38,7 +42,7 @@ def rules_for_account(aid, state, app, gateway, network, app_veth, gateway_veth)
         return []
     if not network.get('Internal') or network.get('Labels', {}).get(LABEL) != aid:
         return []
-    if state.get('egress_backend') != 'shared_xray' and gateway['Config'].get('Labels', {}).get(LABEL) != aid:
+    if gateway['Config'].get('Labels', {}).get(SHARED_OWNER) != prefix:
         return []
     name, identity = network['Name'], network['Id']
     app_nets = app['NetworkSettings']['Networks']
@@ -91,8 +95,7 @@ def discover(root, prefix):
             continue
         try:
             state = json.loads(path.read_text())
-            gateway_name = prefix + '-shared-egress' if state.get('egress_backend') == 'shared_xray' else prefix + '-' + aid + '-egress'
-            gateway = containers.get(gateway_name)
+            gateway = containers.get(prefix + '-shared-egress')
             if gateway is None or state.get('status') == 'blocked':
                 continue
             network = json.loads(run(['docker', 'network', 'inspect', prefix + '-' + aid + '-net']))[0]
@@ -100,7 +103,7 @@ def discover(root, prefix):
             if len(routes) != 1 or routes[0].get('gateway') != state.get('gateway_ip'):
                 continue
             result.extend(rules_for_account(aid, state, app, gateway, network,
-                                           host_peer(app, state['app_ip']), host_peer(gateway, state['gateway_ip'])))
+                                           host_peer(app, state['app_ip']), host_peer(gateway, state['gateway_ip']), prefix))
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
             # An endpoint may disappear between inspect and nsenter during a
             # rebuild. Remove only that account's exception, not healthy peers'.
@@ -109,14 +112,14 @@ def discover(root, prefix):
     return result
 
 
-def apply(rules):
+def apply(rules, chain=CHAIN):
     # --noflush and this explicitly named chain leave all Docker/user rules intact.
-    script = '*filter\n:' + CHAIN + ' - [0:0]\n-F ' + CHAIN + '\n'
-    script += ''.join('-A ' + CHAIN + ' ' + ' '.join(rule) + '\n' for rule in rules)
+    script = '*filter\n:' + chain + ' - [0:0]\n-F ' + chain + '\n'
+    script += ''.join('-A ' + chain + ' ' + ' '.join(rule) + '\n' for rule in rules)
     script += 'COMMIT\n'
     subprocess.run(['iptables-restore', '--wait', '5', '--noflush'], input=script, text=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=15, check=True)
-    jump = ['-m', 'comment', '--comment', COMMENT, '-j', CHAIN]
+    jump = ['-m', 'comment', '--comment', COMMENT if chain == CHAIN else COMMENT + '-' + chain.lower(), '-j', chain]
     exists = subprocess.run(['iptables', '-w', '5', '-C', 'DOCKER-USER', *jump],
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
     if exists.returncode:
@@ -127,22 +130,27 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=pathlib.Path, default=pathlib.Path('/opt/ccgateway-runtime'))
     parser.add_argument('--prefix', default='ccg')
+    # A separate instance (an isolated test controller) needs its own chain:
+    # every pass flushes the chain it owns.
+    parser.add_argument('--chain', default=CHAIN)
     parser.add_argument('--once', action='store_true')
     args = parser.parse_args()
     if not re.fullmatch(r'[a-z][a-z0-9-]{0,32}', args.prefix):
         parser.error('invalid prefix')
+    if not re.fullmatch(r'[A-Z][A-Z0-9-]{0,27}', args.chain):
+        parser.error('invalid chain')
     previous = None
     while True:
         try:
             rules = discover(args.root, args.prefix)
-            apply(rules)
+            apply(rules, args.chain)
             if rules != previous:
                 print(json.dumps({'event': 'bridge_rules_applied', 'accounts': len(rules) // 2}), flush=True)
             previous = rules
         except Exception as error:
             # Discovery uncertainty removes exceptions rather than widening access.
             try:
-                apply([])
+                apply([], args.chain)
             except Exception:
                 pass
             print(json.dumps({'event': 'bridge_guard_error', 'type': type(error).__name__}), flush=True)

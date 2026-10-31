@@ -19,6 +19,7 @@ class BridgeRules(unittest.TestCase):
         self.app = {'State': {'Status': 'running'}, 'Config': {'Labels': {guard.LABEL: '21'}},
                     'NetworkSettings': {'Networks': {'ccg-21-net': {'NetworkID': 'netid', 'IPAddress': '10.1.0.3'}}}}
         self.gateway = copy.deepcopy(self.app)
+        self.gateway['Config']['Labels'] = {guard.SHARED_OWNER: 'ccg'}
         self.gateway['NetworkSettings']['Networks']['ccg-21-net']['IPAddress'] = '10.1.0.2'
 
     def rules(self):
@@ -52,12 +53,27 @@ class BridgeRules(unittest.TestCase):
         self.app['NetworkSettings']['Networks']['public'] = {}
         self.assertEqual(self.rules(), [])
 
-    def test_legacy_proxy_requires_same_owner(self):
-        self.state['egress_backend'] = 'legacy'
-        self.gateway['Config']['Labels'][guard.LABEL] = '22'
-        self.assertEqual(self.rules(), [])
-        self.gateway['Config']['Labels'][guard.LABEL] = '21'
+    def test_peer_must_be_this_controllers_shared_gateway(self):
+        # The account state's egress_backend no longer decides anything.
+        del self.state['egress_backend']
         self.assertEqual(len(self.rules()), 2)
+        self.gateway['Config']['Labels'] = {guard.SHARED_OWNER: 'ccg-other'}
+        self.assertEqual(self.rules(), [])
+        # A leftover per-account egress (account label only) is no peer.
+        self.gateway['Config']['Labels'] = {guard.LABEL: '21'}
+        self.assertEqual(self.rules(), [])
+        self.gateway['Config']['Labels'] = {guard.SHARED_OWNER: 'ccg-np-test'}
+        self.assertEqual(len(guard.rules_for_account('21', self.state, self.app, self.gateway, self.network,
+                                                     'vethabc', 'vethdef', 'ccg-np-test')), 2)
+
+    def test_separate_chain_flushes_only_itself(self):
+        with mock.patch.object(guard.subprocess, 'run') as run, mock.patch.object(guard, 'run') as check:
+            run.return_value.returncode = 1
+            guard.apply([['-s', '10.1.0.3/32', '-j', 'ACCEPT']], 'CCG-NPTEST-BRIDGE')
+        script = run.call_args_list[0].kwargs['input']
+        self.assertIn(':CCG-NPTEST-BRIDGE - [0:0]\n-F CCG-NPTEST-BRIDGE\n-A CCG-NPTEST-BRIDGE ', script)
+        self.assertNotIn('CCG-PROXY-BRIDGE', script)
+        self.assertIn('CCG-NPTEST-BRIDGE', check.call_args.args[0])
 
     def test_disappearing_account_does_not_remove_other_accounts(self):
         app = copy.deepcopy(self.app)
