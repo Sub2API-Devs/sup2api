@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SHint, STable, type TableColumn } from '@sub2api/ui'
+import { SDateTime, SBadge, SHint, STable, type TableColumn } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
-import TimeText from '@/components/TimeText.vue'
 import { formatDelta, formatNumber } from '@/utils/format'
 import { useOptionalT } from '@/composables/optionalText'
 import { KIND_TONE } from './kinds'
@@ -42,7 +41,7 @@ function deltaCls(v: string) {
     <template v-if="$slots.toolbar" #toolbar><slot name="toolbar" /></template>
     <template v-if="$slots.footer" #footer><slot name="footer" /></template>
     <template #cell-created_at="{ row }">
-      <TimeText :value="row.created_at" mode="time" :muted="false" class="text-xs" />
+      <SDateTime :value="row.created_at" mode="time" class="text-xs" />
     </template>
     <template #cell-user="{ row }">
       <span class="text-sm">{{ row.user_email || row.user_name || '#' + row.user_id }}</span>

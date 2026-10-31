@@ -3,6 +3,8 @@ import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import {
+  SStatusBadge,
+  SDateTime,
   SBadge,
   SButton,
   SCode,
@@ -31,8 +33,6 @@ import { PROXY_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
 import { fieldErrors, notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
-import StatusBadge from '@/components/StatusBadge.vue'
-import TimeText from '@/components/TimeText.vue'
 import { parseProxyURL, type ProxySpec } from '@/utils/proxyUrl'
 
 const { t } = useI18n()
@@ -282,12 +282,12 @@ function onAction(p: Proxy, key: string) {
       <template #cell-real_ip="{ row }">
         <div v-if="row.real_ip" class="text-xs">
           <SCode inline :text="row.real_ip" />
-          <TimeText v-if="row.real_ip_updated_at" :value="row.real_ip_updated_at" mode="relative" class="block" />
+          <SDateTime muted v-if="row.real_ip_updated_at" :value="row.real_ip_updated_at" mode="relative" class="block" />
         </div>
         <SHint v-else inline>—</SHint>
       </template>
       <template #cell-status="{ row }">
-        <StatusBadge :status="row.status" />
+        <SStatusBadge :status="row.status" />
       </template>
       <template #cell-test="{ row }">
         <SSpinner v-if="testing[row.id]" size="sm" />
@@ -311,7 +311,7 @@ function onAction(p: Proxy, key: string) {
         <SHint v-else inline>—</SHint>
       </template>
       <template #cell-created_at="{ row }">
-        <TimeText :value="row.created_at" />
+        <SDateTime mode="absolute" muted :value="row.created_at" />
       </template>
       <template #cell-actions="{ row }">
         <div v-if="canEditRow(row)" class="flex items-center justify-end gap-1">

@@ -3,8 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SCode, SEmpty, SField, SHint, SPageHeader, SSectionTitle, SSelect, STable, confirm, type TableColumn, type Tone } from '@sub2api/ui'
-import TimeText from '@/components/TimeText.vue'
+import { SDateTime, SAlert, SBadge, SButton, SCard, SCode, SEmpty, SField, SHint, SPageHeader, SSectionTitle, SSelect, STable, confirm, type TableColumn, type Tone } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import TopologyGraph from '../nodes/TopologyGraph.vue'
@@ -107,7 +106,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
         <template #cell-cpu_percent="{ row }">{{ row.cpu_percent == null ? '—' : row.cpu_percent.toFixed(1) + '%' }}</template>
         <template #cell-offloading="{ row }"><SBadge :tone="row.offloading ? 'warning' : 'gray'">{{ t(row.offloading ? 'observe.offloading' : 'observe.notOffloading') }}</SBadge></template>
         <template #cell-ready="{ row }"><SBadge :tone="row.ready ? 'success' : 'warning'">{{ t(!row.enabled ? 'upgrades.disabled' : row.ready ? 'upgrades.serving' : row.stopped ? 'upgrades.stopped' : 'upgrades.waiting') }}</SBadge></template>
-        <template #cell-last_seen="{ row }"><TimeText :value="row.last_seen" :muted="false" /></template>
+        <template #cell-last_seen="{ row }"><SDateTime mode="absolute" :value="row.last_seen" /></template>
         <template #cell-manage="{ row }"><SButton size="sm" :disabled="busy || stale" @click="setNodeEnabled(row, !row.enabled)">{{ t(row.enabled ? 'upgrades.disableNode' : 'upgrades.enableNode') }}</SButton></template>
       </STable>
       <SCard v-if="canExecute" :title="t('upgrades.newPlan')">
@@ -132,7 +131,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
         <div v-if="plans.length" class="mb-4 flex flex-wrap gap-2"><SButton v-for="plan in plans" :key="plan.id" size="sm" :variant="selectedID === plan.id ? 'primary' : 'secondary'" @click="selectPlan(plan.id)">{{ version(plan.release_digest) }} · {{ label('states', plan.status) }}</SButton></div>
         <SEmpty v-else :text="t('upgrades.noPlans')" />
         <div v-if="selected" class="space-y-4">
-          <div class="flex flex-wrap items-center gap-3"><SBadge :tone="tone(selected.status)">{{ label('states', selected.status) }}</SBadge><TimeText :value="selected.created_at" :muted="false" class="text-sm" /><SCode inline :text="selected.id" /></div>
+          <div class="flex flex-wrap items-center gap-3"><SBadge :tone="tone(selected.status)">{{ label('states', selected.status) }}</SBadge><SDateTime mode="absolute" :value="selected.created_at" class="text-sm" /><SCode inline :text="selected.id" /></div>
           <SHint v-if="selected.error" tone="warning">{{ selected.error }}</SHint>
           <StepLanes :steps="selected.steps || []" :events="events" :cursor="selected.cursor" />
           <SHint v-if="selected.status === 'paused'">{{ t('upgrades.recovery') }}</SHint>
@@ -143,7 +142,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
             <SButton v-if="['running', 'paused'].includes(selected.status)" :loading="busy" :disabled="stale" @click="action('cancel')">{{ t('upgrades.cancel') }}</SButton>
           </div>
           <STable :columns="stepColumns" :rows="selected.steps || []" row-key="step_id"><template #cell-action="{ row }">{{ label('actions', row.action) }}</template><template #cell-status="{ row }"><SBadge :tone="tone(row.status)">{{ label('states', row.status) }}</SBadge></template></STable>
-          <ol class="space-y-2 text-sm"><li v-for="event in events" :key="event.id" class="flex flex-wrap gap-2"><TimeText :value="event.created_at" /><span>{{ event.message }}</span></li></ol>
+          <ol class="space-y-2 text-sm"><li v-for="event in events" :key="event.id" class="flex flex-wrap gap-2"><SDateTime mode="absolute" muted :value="event.created_at" /><span>{{ event.message }}</span></li></ol>
           <ReleaseHistory v-if="auth.has('plugin:read')" :since="selected.created_at" />
         </div>
       </SCard>

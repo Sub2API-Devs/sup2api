@@ -187,12 +187,26 @@ describe('SSteps', () => {
 describe('SDateTime', () => {
   it('shows relative times recently, absolute ones otherwise, with the full time as title', () => {
     const recent = mount(SDateTime, { props: { value: new Date(Date.now() - 3 * 60_000).toISOString() } })
-    expect(recent.text()).toMatch(/3 minutes ago/)
+    expect(recent.text()).toBe('3m ago')
     expect(recent.attributes('title')).toMatch(/\d{2}:\d{2}:\d{2}/)
     const old = mount(SDateTime, { props: { value: '2020-01-02T03:04:05Z', mode: 'auto' } })
     expect(old.text()).toMatch(/2020/)
     expect(old.get('time').attributes('datetime')).toBe('2020-01-02T03:04:05.000Z')
     expect(mount(SDateTime, { props: { value: 'nope' } }).text()).toBe('—')
+  })
+
+  it('absolute mode uses a fixed format without a tooltip; time mode drops today\'s date; muted dims', () => {
+    const local = new Date(2020, 0, 2, 3, 4, 5)
+    const abs = mount(SDateTime, { props: { value: local, mode: 'absolute', muted: true } })
+    expect(abs.text()).toBe('2020-01-02 03:04:05')
+    expect(abs.attributes('title')).toBeUndefined()
+    expect(abs.classes()).toContain('text-fg-muted')
+    expect(mount(SDateTime, { props: { value: local, mode: 'absolute', dateOnly: true } }).text()).toBe('2020-01-02')
+    expect(mount(SDateTime, { props: { value: local, mode: 'time' } }).text()).toBe('01-02 03:04:05')
+    const today = new Date()
+    today.setHours(8, 9, 10)
+    expect(mount(SDateTime, { props: { value: today, mode: 'time' } }).text()).toBe('08:09:10')
+    expect(mount(SDateTime, { props: { value: new Date(Date.now() - 5000), mode: 'relative' } }).text()).toBe('5s ago')
   })
 })
 

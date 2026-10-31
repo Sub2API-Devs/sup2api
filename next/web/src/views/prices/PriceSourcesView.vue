@@ -3,12 +3,11 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCode, SDropdown, SHint, SLink, SPageHeader, SSwitch, STable, type TableColumn, type Tone } from '@sub2api/ui'
+import { SDateTime, SBadge, SButton, SCode, SDropdown, SHint, SLink, SPageHeader, SSwitch, STable, type TableColumn, type Tone } from '@sub2api/ui'
 import type { PriceSource } from '@/api/types'
 import { deleteWithConfirm, useRowSwitch } from '@/composables/crud'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
-import TimeText from '@/components/TimeText.vue'
 import PriceSourceModal from './PriceSourceModal.vue'
 
 const { t } = useI18n()
@@ -116,7 +115,7 @@ function viewPrices(s: PriceSource) {
         <SSwitch :model-value="row.enabled" :disabled="!canManage || toggling.has(row.id)" :aria-label="t('common.enabled') + ' · ' + row.name" @update:model-value="toggle(row, $event)" />
       </template>
       <template #cell-last_synced_at="{ row }">
-        <TimeText :value="row.last_synced_at" mode="relative" :empty="t('prices.sources.never')" class="text-xs" />
+        <SDateTime muted :value="row.last_synced_at" mode="relative" :empty="t('prices.sources.never')" class="text-xs" />
       </template>
       <template #cell-last_error="{ row }">
         <SHint v-if="row.last_error" tone="danger" size="xs" class="max-w-[11rem] truncate" :title="row.last_error" data-testid="price-source-error">{{ row.last_error }}</SHint>

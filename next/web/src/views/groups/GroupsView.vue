@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SModal, SPageHeader, SPagination, SSelect, SSettingsGroup, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
+import { SStatusBadge, SBadge, SButton, SCode, SDescItem, SDescriptions, SDropdown, SField, SGrid, SHint, SInput, SLink, SModal, SPageHeader, SPagination, SSelect, SSettingsGroup, STable, STextarea, toast, type TableColumn } from '@sub2api/ui'
 import type { EnvironmentValues, Group } from '@/api/types'
 import { deleteWithConfirm, toggleStatus, useStatusOptions } from '@/composables/crud'
 import { useList } from '@/composables/useList'
@@ -10,7 +10,6 @@ import { useGroupsLookup } from '@/composables/lookups'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
-import StatusBadge from '@/components/StatusBadge.vue'
 import { formatNumber } from '@/utils/format'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
@@ -238,7 +237,7 @@ function onAction(g: Group, key: string) {
       <template #cell-account_count="{ row }">{{ formatNumber(row.account_count) }}</template>
       <template #cell-key_count="{ row }">{{ formatNumber(keyCount(row)) }}</template>
       <template #cell-status="{ row }">
-        <StatusBadge :status="row.status" />
+        <SStatusBadge :status="row.status" />
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-1">
@@ -308,7 +307,7 @@ function onAction(g: Group, key: string) {
         <SDescriptions data-testid="group-detail" dense>
           <SDescItem :label="t('common.id')" :value="detail.id" />
           <SDescItem v-if="detail.description" :label="t('common.description')" :value="detail.description" />
-          <SDescItem :label="t('common.status')"><StatusBadge :status="detail.status" /></SDescItem>
+          <SDescItem :label="t('common.status')"><SStatusBadge :status="detail.status" /></SDescItem>
           <SDescItem :label="t('groups.visibility')">{{ detail.visibility === 'public' ? t('groups.public') : t('groups.restricted') }}</SDescItem>
           <SDescItem :label="t('groups.rateMultiplier')"><span class="font-mono">×{{ multiplier(detail.rate_multiplier) }}</span></SDescItem>
           <SDescItem><template #label>{{ t('groups.modelRules') }} · {{ t(detail.model_filter_mode === 'blacklist' ? 'groups.blacklist' : 'groups.whitelist') }}</template>{{ detail.model_allowlist?.length ? detail.model_allowlist.join(', ') : t('common.unlimited') }}</SDescItem>

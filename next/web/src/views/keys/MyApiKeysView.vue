@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SCode, SCopyButton, SEmpty, SIcon, SModal, SPageHeader, SPagination, SRowAction, SSwitch, STable, STooltip, toast, type TableColumn } from '@sub2api/ui'
+import { SStatusBadge, SDateTime, SAlert, SButton, SCode, SCopyButton, SEmpty, SIcon, SModal, SPageHeader, SPagination, SRowAction, SSwitch, STable, STooltip, toast, type TableColumn } from '@sub2api/ui'
 import type { ApiKey, Group } from '@/api/types'
 import { deleteWithConfirm } from '@/composables/crud'
 import { useList } from '@/composables/useList'
@@ -10,8 +10,6 @@ import { fetchMyGroups } from '@/composables/lookups'
 import { usePlatforms } from '@/composables/platforms'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
-import StatusBadge from '@/components/StatusBadge.vue'
-import TimeText from '@/components/TimeText.vue'
 import ApiKeyCell from './ApiKeyCell.vue'
 import KeyCcSwitchButton from './KeyCcSwitchButton.vue'
 import KeyEditor from './KeyEditor.vue'
@@ -165,16 +163,16 @@ function remove(k: ApiKey) {
       <template #cell-limits="{ row }"><KeyLimitsCell :api-key="row" /></template>
       <template #cell-quota="{ row }"><KeyQuotaCell :api-key="row" /></template>
       <template #cell-status="{ row }">
-        <StatusBadge :status="statusOf(row)" :tone="statusOf(row) === 'expired' ? 'warning' : undefined" :labels="{ expired: 'apikeys.expired' }" />
+        <SStatusBadge :status="statusOf(row)" />
       </template>
       <template #cell-expires_at="{ row }">
-        <TimeText :value="row.expires_at" :empty="t('apikeys.noExpiry')" :muted="!isExpired(row)" :class="{ 'text-red-600 dark:text-red-400': isExpired(row) }" />
+        <SDateTime mode="absolute" :value="row.expires_at" :empty="t('apikeys.noExpiry')" :muted="!isExpired(row)" :class="{ 'text-red-600 dark:text-red-400': isExpired(row) }" />
       </template>
       <template #cell-last_used_at="{ row }">
-        <TimeText :value="row.last_used_at" mode="relative" :empty="t('common.never')" />
+        <SDateTime muted :value="row.last_used_at" mode="relative" :empty="t('common.never')" />
       </template>
       <template #cell-created_at="{ row }">
-        <TimeText :value="row.created_at" />
+        <SDateTime mode="absolute" muted :value="row.created_at" />
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center justify-end gap-0.5">

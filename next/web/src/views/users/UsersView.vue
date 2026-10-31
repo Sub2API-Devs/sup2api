@@ -5,19 +5,23 @@ import { useRoute, useRouter } from 'vue-router'
 import { api } from '@sub2api/host'
 import { fetchFirstPage } from '@/composables/lookups'
 import {
+  SStatusBadge,
+  SDateTime,
   SBadge,
   SButton,
   SCheckbox,
+  SChoiceCards,
   SDropdown,
   SField,
   SHint,
   SInput,
-  SModal,
+  SFormModal,
   SPageHeader,
   SPagination,
   SSelect,
   STable,
   toast,
+  type ChoiceOption,
   type MenuAction,
   type TableColumn
 } from '@sub2api/ui'
@@ -30,8 +34,6 @@ import { notifyError } from '@/utils/errors'
 import { applyFormError } from '@/utils/formErrors'
 import { formatMoney } from '@/utils/format'
 import GroupPicker from '@/components/GroupPicker.vue'
-import StatusBadge from '@/components/StatusBadge.vue'
-import TimeText from '@/components/TimeText.vue'
 import AdjustBalanceModal from '@/views/ledger/AdjustBalanceModal.vue'
 
 const { t } = useI18n()
@@ -81,6 +83,8 @@ const columns = computed<TableColumn[]>(() => {
 
 const statusFilterOptions = useStatusOptions(true)
 const statusOptions = useStatusOptions()
+
+const roleChoices = computed<ChoiceOption[]>(() => roles.value.map((r) => ({ value: r.key, label: lt(r.name) || r.key, description: lt(r.description) || undefined })))
 
 const roleOptions = computed(() => [
   { value: '', label: t('users.allRoles') },
@@ -197,7 +201,7 @@ async function submitEdit() {
 
 const rolesOpen = ref(false)
 const rolesUser = ref<User | null>(null)
-const rolesSel = ref<string[]>([])
+const rolesSel = ref<ChoiceOption['value'][]>([])
 
 function openRoles(u: User) {
   rolesUser.value = u
@@ -210,7 +214,7 @@ async function submitRoles() {
   if (!rolesUser.value) return
   saving.value = true
   try {
-    await api.put(`/users/${rolesUser.value.id}/roles`, { role_keys: rolesSel.value })
+    await api.put(`/users/${rolesUser.value.id}/roles`, { role_keys: rolesSel.value.map(String) })
     toast(t('common.updated'), 'success')
     rolesOpen.value = false
     list.reload()
@@ -296,13 +300,13 @@ function remove(u: User) {
         <span class="font-mono">{{ formatMoney(row.balance) }}</span>
       </template>
       <template #cell-status="{ row }">
-        <StatusBadge :status="row.status" />
+        <SStatusBadge :status="row.status" />
       </template>
       <template #cell-last_login_at="{ row }">
-        <TimeText :value="row.last_login_at" :empty="t('common.never')" />
+        <SDateTime mode="absolute" muted :value="row.last_login_at" :empty="t('common.never')" />
       </template>
       <template #cell-created_at="{ row }">
-        <TimeText :value="row.created_at" />
+        <SDateTime mode="absolute" muted :value="row.created_at" />
       </template>
       <template #cell-actions="{ row }">
         <SDropdown v-if="hasAnyAction(row)" :actions="rowActions(row)" @select="onAction(row, $event)" />
@@ -313,8 +317,7 @@ function remove(u: User) {
     </STable>
 
     <!-- create -->
-    <SModal v-model:open="createOpen" :title="t('users.create')">
-      <form class="space-y-4" @submit.prevent="submitCreate">
+    <SFormModal v-model:open="createOpen" :title="t('users.create')" :loading="creating" :submit-text="t('common.create')" @submit="submitCreate">
         <SField :label="t('users.email')" required :error="createErrors.email">
           <SInput v-model="createForm.email" type="email" autocomplete="off" />
         </SField>
@@ -337,65 +340,37 @@ function remove(u: User) {
           </div>
           <SHint v-else>{{ t('users.rolesUnavailable') }}</SHint>
         </SField>
-      </form>
-      <template #footer>
-        <SButton @click="createOpen = false">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" :loading="creating" @click="submitCreate">{{ t('common.create') }}</SButton>
-      </template>
-    </SModal>
+    </SFormModal>
 
     <!-- edit -->
-    <SModal v-model:open="editOpen" :title="t('users.editTitle', { name: editUser?.email || '' })">
-      <form class="space-y-4" @submit.prevent="submitEdit">
+    <SFormModal v-model:open="editOpen" :title="t('users.editTitle', { name: editUser?.email || '' })" :loading="saving" @submit="submitEdit">
         <SField :label="t('users.displayName')" :error="editErrors.display_name">
           <SInput v-model="editForm.display_name" />
         </SField>
         <SField :label="t('common.status')" :error="editErrors.status">
           <SSelect v-model="editForm.status" :options="statusOptions" />
         </SField>
-      </form>
-      <template #footer>
-        <SButton @click="editOpen = false">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" :loading="saving" @click="submitEdit">{{ t('common.save') }}</SButton>
-      </template>
-    </SModal>
+    </SFormModal>
 
     <!-- roles -->
-    <SModal v-model:open="rolesOpen" :title="t('users.assignRolesTitle', { name: rolesUser?.email || '' })">
-      <div v-if="roles.length" class="space-y-2">
-        <label
-          v-for="r in roles"
-          :key="r.key"
-          class="flex cursor-pointer items-start gap-3 rounded-xl border border-line px-3 py-2.5 hover:bg-surface-2"
-        >
-          <SCheckbox bare class="mt-0.5" :model-value="rolesSel.includes(r.key)" @update:model-value="toggleKey(rolesSel, r.key)" />
-          <div class="min-w-0">
-            <div class="flex items-center gap-2 text-sm font-medium">
-              {{ lt(r.name) || r.key }}
-              <SHint inline size="xs" class="font-mono">{{ r.key }}</SHint>
-              <SBadge v-if="r.superuser" tone="accent">{{ t('users.superuser') }}</SBadge>
-            </div>
-            <SHint v-if="lt(r.description)" size="xs" class="mt-0.5">{{ lt(r.description) }}</SHint>
-          </div>
-        </label>
-      </div>
+    <SFormModal v-model:open="rolesOpen" :title="t('users.assignRolesTitle', { name: rolesUser?.email || '' })" :loading="saving" @submit="submitRoles">
+      <SChoiceCards v-if="roles.length" v-model="rolesSel" multiple :cols="1" :options="roleChoices" :aria-label="t('users.roles')">
+        <template v-for="r in roles" :key="r.key" #[`option-${r.key}`]>
+          <span class="mt-1 flex items-center gap-2">
+            <SHint inline size="xs" class="font-mono">{{ r.key }}</SHint>
+            <SBadge v-if="r.superuser" size="xs" tone="accent">{{ t('users.superuser') }}</SBadge>
+          </span>
+        </template>
+      </SChoiceCards>
       <SHint v-else>{{ t('users.rolesUnavailable') }}</SHint>
-      <template #footer>
-        <SButton @click="rolesOpen = false">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" :loading="saving" @click="submitRoles">{{ t('common.save') }}</SButton>
-      </template>
-    </SModal>
+    </SFormModal>
 
     <!-- groups -->
-    <SModal v-model:open="groupsOpen" :title="t('users.assignGroupsTitle', { name: groupsUser?.email || '' })">
+    <SFormModal v-model:open="groupsOpen" :title="t('users.assignGroupsTitle', { name: groupsUser?.email || '' })" :loading="saving" @submit="submitGroups">
       <SField :hint="t('users.groupsHint')">
         <GroupPicker :model-value="groupsSel" multiple @update:model-value="onGroupsPicked" />
       </SField>
-      <template #footer>
-        <SButton @click="groupsOpen = false">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" :loading="saving" @click="submitGroups">{{ t('common.save') }}</SButton>
-      </template>
-    </SModal>
+    </SFormModal>
 
     <!-- balance -->
     <AdjustBalanceModal v-model:open="balanceOpen" :user-id="balanceUser?.id ?? null" :current-balance="balanceUser?.balance" @done="list.reload()" />
