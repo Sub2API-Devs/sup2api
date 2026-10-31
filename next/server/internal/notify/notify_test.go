@@ -111,17 +111,45 @@ func due(t *testing.T, db *store.DB) {
 func TestNotifyValidation(t *testing.T) {
 	s, _, _ := setup(t)
 	ctx := context.Background()
-	for name, n := range map[string]core.Notification{
-		"unknown channel": {Channel: "sms", Recipients: []string{"x"}, Subject: "s"},
-		"no recipient":    {Channel: "email", Recipients: []string{" "}, Subject: "s"},
-		"bad email":       {Channel: "email", Recipients: []string{"Ops <ops@example.com>"}, Subject: "s"},
-		"two lines":       {Channel: "email", Recipients: []string{"a@b.co"}, Subject: "a\nb"},
-		"severity":        {Channel: "email", Recipients: []string{"a@b.co"}, Subject: "s", Severity: "panic"},
-		"dedupe window":   {Channel: "email", Recipients: []string{"a@b.co"}, Subject: "s", DedupeKey: "k", DedupeSeconds: 86401},
+	// Each problem has its own stable code for clients to translate.
+	many := make([]string, MaxRecipients+1)
+	for i := range many {
+		many[i] = fmt.Sprintf("u%d@b.co", i)
+	}
+	for name, c := range map[string]struct {
+		n           core.Notification
+		field, code string
+	}{
+		"unknown channel": {core.Notification{Channel: "sms", Recipients: []string{"x"}, Subject: "s"}, "channel", CodeUnknownChannel},
+		"no recipient":    {core.Notification{Channel: "email", Recipients: []string{" "}, Subject: "s"}, "recipients", CodeRecipientsCount},
+		"too many":        {core.Notification{Channel: "email", Recipients: many, Subject: "s"}, "recipients", CodeRecipientsCount},
+		"long recipient":  {core.Notification{Channel: "email", Recipients: []string{strings.Repeat("a", MaxRecipientLen) + "@b.co"}, Subject: "s"}, "recipients", CodeRecipientTooLong},
+		"bad email":       {core.Notification{Channel: "email", Recipients: []string{"Ops <ops@example.com>"}, Subject: "s"}, "recipients", CodeInvalidRecipient},
+		"no subject":      {core.Notification{Channel: "email", Recipients: []string{"a@b.co"}, Subject: " "}, "subject", CodeSubjectRequired},
+		"long subject":    {core.Notification{Channel: "email", Recipients: []string{"a@b.co"}, Subject: strings.Repeat("字", MaxSubjectRunes+1)}, "subject", CodeSubjectTooLong},
+		"two lines":       {core.Notification{Channel: "email", Recipients: []string{"a@b.co"}, Subject: "a\nb"}, "subject", CodeSubjectMultiline},
+		"large body":      {core.Notification{Channel: "email", Recipients: []string{"a@b.co"}, Subject: "s", Body: strings.Repeat("x", MaxBodyBytes+1)}, "body", CodeBodyTooLarge},
+		"NUL in body":     {core.Notification{Channel: "email", Recipients: []string{"a@b.co"}, Subject: "s", Body: "a\x00b"}, "body", CodeBodyNUL},
+		"severity":        {core.Notification{Channel: "email", Recipients: []string{"a@b.co"}, Subject: "s", Severity: "panic"}, "severity", CodeInvalidSeverity},
+		"long dedupe key": {core.Notification{Channel: "email", Recipients: []string{"a@b.co"}, Subject: "s", DedupeKey: strings.Repeat("k", MaxDedupeKey+1)}, "dedupe_key", CodeDedupeKeyTooLong},
+		"dedupe window":   {core.Notification{Channel: "email", Recipients: []string{"a@b.co"}, Subject: "s", DedupeKey: "k", DedupeSeconds: 86401}, "dedupe_seconds", CodeDedupeWindowRange},
+		"negative window": {core.Notification{Channel: "email", Recipients: []string{"a@b.co"}, Subject: "s", DedupeSeconds: -1}, "dedupe_seconds", CodeDedupeWindowRange},
 	} {
-		if _, err := s.Notify(ctx, "dynweight", n); core.AsError(err).Code != "invalid_argument" {
+		_, err := s.Notify(ctx, "dynweight", c.n)
+		e := core.AsError(err)
+		if e.Code != "invalid_argument" {
 			t.Errorf("%s: %v", name, err)
+			continue
 		}
+		fields, _ := e.Details["fields"].([]core.FieldError)
+		if len(fields) != 1 || fields[0].Field != c.field || fields[0].Code != c.code || fields[0].Message == "" {
+			t.Errorf("%s: fields %+v, want %s %s", name, fields, c.field, c.code)
+		}
+	}
+	// Several problems are reported together.
+	_, err := s.Notify(ctx, "dynweight", core.Notification{Channel: "sms", Subject: ""})
+	if fields, _ := core.AsError(err).Details["fields"].([]core.FieldError); len(fields) != 3 {
+		t.Errorf("several problems: %+v", fields)
 	}
 }
 
@@ -269,6 +297,183 @@ func TestDeliveryLeaseAndMissingChannel(t *testing.T) {
 	s.purge(ctx)
 	if st, attempts, e := status(t, db, last.ID); st != "failed" || attempts != 3 || e != "the last attempt did not finish" {
 		t.Fatalf("expired last attempt: %s %d %q", st, attempts, e)
+	}
+}
+
+// notRunningErr stands in for grpcruntime's refusal of an instance that is
+// starting, restarting or draining.
+type notRunningErr struct{}
+
+func (notRunningErr) Error() string          { return "plugin_unavailable: plugin mailer@0.1.1: draining" }
+func (notRunningErr) PluginNotRunning() bool { return true }
+
+// A provider refusing the call before it reached the plugin process does not
+// use an attempt; it is retried until UnboundFor like an unbound channel.
+// Any other error of the provider, plugin_unavailable from a process that
+// answered included, uses one.
+func TestDeliveryProviderNotRunning(t *testing.T) {
+	s, p, db := setup(t)
+	ctx := context.Background()
+	r, _ := s.Notify(ctx, "dynweight", email("upgrade"))
+	p.outcomes = []error{fmt.Errorf("wrapped: %w", notRunningErr{}), notRunningErr{}, core.ErrPluginUnavailable, nil}
+	for i := 0; i < 2; i++ {
+		due(t, db)
+		if !s.step(ctx) {
+			t.Fatalf("step %d claimed nothing", i)
+		}
+		if st, attempts, e := status(t, db, r.ID); st != "pending" || attempts != 0 || !strings.Contains(e, "draining") {
+			t.Fatalf("not running %d: %s %d %q", i, st, attempts, e)
+		}
+	}
+	due(t, db)
+	s.step(ctx)
+	if st, attempts, _ := status(t, db, r.ID); st != "pending" || attempts != 1 {
+		t.Fatalf("plugin_unavailable from the process: %s %d", st, attempts)
+	}
+	due(t, db)
+	s.step(ctx)
+	if st, attempts, _ := status(t, db, r.ID); st != "sent" || attempts != 2 {
+		t.Fatalf("delivered: %s %d", st, attempts)
+	}
+	// Bounded: past UnboundFor the row fails.
+	old, _ := s.Notify(ctx, "dynweight", email("dead plugin"))
+	if _, err := db.Pool.Exec(ctx, `UPDATE notifications SET created_at = now() - interval '25 hours' WHERE id = $1`, old.ID); err != nil {
+		t.Fatal(err)
+	}
+	p.outcomes = []error{notRunningErr{}}
+	due(t, db)
+	s.step(ctx)
+	if st, _, e := status(t, db, old.ID); st != "failed" || !strings.Contains(e, "draining") {
+		t.Fatalf("not running for too long: %s %q", st, e)
+	}
+}
+
+// blockingProvider holds a delivery until released or its context ends.
+type blockingProvider struct {
+	entered  chan struct{}
+	release  chan struct{}
+	mu       sync.Mutex
+	canceled bool
+}
+
+func (p *blockingProvider) DeliverNotification(ctx context.Context, _ *pluginv1.DeliverNotificationRequest) (*pluginv1.DeliverNotificationResponse, error) {
+	p.entered <- struct{}{}
+	select {
+	case <-p.release:
+		return &pluginv1.DeliverNotificationResponse{}, nil
+	case <-ctx.Done():
+		p.mu.Lock()
+		p.canceled = true
+		p.mu.Unlock()
+		return nil, ctx.Err()
+	}
+}
+
+func setupBlocking(t *testing.T, drain time.Duration) (*Service, *blockingProvider, *store.DB) {
+	db := testutil.DB(t)
+	p := &blockingProvider{entered: make(chan struct{}, 10), release: make(chan struct{})}
+	gen := fakeGen{channels: []core.NotificationChannelBinding{{
+		Plugin:  core.PluginInfo{Key: "mailer"},
+		Channel: manifest.NotificationChannel{ID: "email", Recipient: manifest.RecipientEmail},
+		Client:  p,
+	}}}
+	s := New(db, fakeRegistry{gen: gen}, Options{PollInterval: 10 * time.Millisecond, DrainTimeout: drain})
+	return s, p, db
+}
+
+func waitEntered(t *testing.T, p *blockingProvider) {
+	t.Helper()
+	select {
+	case <-p.entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the delivery did not start")
+	}
+}
+
+// Shutdown (the process context ends, then Stop) lets the delivery in
+// progress finish instead of cancelling it: a provider that already sent
+// must not have its attempt given back and the row sent again after the
+// restart. No new row is claimed meanwhile.
+func TestStopLetsDeliveryFinish(t *testing.T) {
+	s, p, db := setupBlocking(t, 10*time.Second)
+	ctx, sigterm := context.WithCancel(context.Background())
+	inFlight, _ := s.Notify(context.Background(), "dynweight", email("in flight"))
+	s.Start(ctx)
+	waitEntered(t, p)
+	next, _ := s.Notify(context.Background(), "dynweight", email("next"))
+
+	sigterm()
+	stopped := make(chan struct{})
+	go func() {
+		s.Stop(context.Background())
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+		t.Fatal("Stop returned before the delivery finished")
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(p.release)
+	select {
+	case <-stopped:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Stop did not return after the delivery finished")
+	}
+	p.mu.Lock()
+	canceled := p.canceled
+	p.mu.Unlock()
+	if canceled {
+		t.Fatal("the delivery in progress was cancelled")
+	}
+	if st, attempts, _ := status(t, db, inFlight.ID); st != "sent" || attempts != 1 {
+		t.Fatalf("in flight: %s %d", st, attempts)
+	}
+	if st, attempts, _ := status(t, db, next.ID); st != "pending" || attempts != 0 {
+		t.Fatalf("claimed after shutdown began: %s %d", st, attempts)
+	}
+}
+
+// Past DrainTimeout (or the caller's budget) the delivery is cancelled and
+// gives its attempt back.
+func TestStopCancelsPastDrainTimeout(t *testing.T) {
+	s, p, db := setupBlocking(t, 100*time.Millisecond)
+	r, _ := s.Notify(context.Background(), "dynweight", email("slow"))
+	s.Start(context.Background())
+	waitEntered(t, p)
+	start := time.Now()
+	s.Stop(context.Background())
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("Stop took %v", d)
+	}
+	if st, attempts, _ := status(t, db, r.ID); st != "pending" || attempts != 0 {
+		t.Fatalf("cut off: %s %d", st, attempts)
+	}
+}
+
+// The caller's budget ending first cuts the delivery off too.
+func TestStopCancelsPastCallerBudget(t *testing.T) {
+	s2, p2, db2 := setupBlocking(t, time.Hour)
+	r2, _ := s2.Notify(context.Background(), "dynweight", email("slow"))
+	s2.Start(context.Background())
+	waitEntered(t, p2)
+	budget, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	s2.Stop(budget)
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("Stop ignored the budget: %v", d)
+	}
+	// The cut-off delivery records its outcome right after.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		st, attempts, _ := status(t, db2, r2.ID)
+		if st == "pending" && attempts == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("cut off by the budget: %s %d", st, attempts)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

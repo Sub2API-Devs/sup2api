@@ -329,7 +329,9 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 	// call, so the close order is unchanged.
 	b.stopper.add("settler", b.settler.Stop)
 	// Delivery starts once the plugin runtime does, so the providers can
-	// bind their channels first.
+	// bind their channels first. The end of b.ctx only stops claiming; Stop
+	// lets the delivery in progress finish (at most notify DrainTimeout, 35s,
+	// of the 90s teardown budget) before rollout stops the plugin instances.
 	b.ntf.Start(b.ctx)
 	b.stopper.add("notifications", b.ntf.Stop)
 	b.stopper.add("helper-history", stopHelperHistory)

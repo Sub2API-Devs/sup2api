@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -26,10 +29,14 @@ func (fakeTokens) VerifyAccessToken(_ context.Context, tok string) (int64, error
 	return strconv.ParseInt(strings.TrimPrefix(tok, "u"), 10, 64)
 }
 
-type fakeAuthz struct{ admin int64 }
+type fakeAuthz struct {
+	admin int64
+	// perms are the keys held by other users.
+	perms map[int64][]string
+}
 
-func (a fakeAuthz) Can(_ context.Context, uid int64, _ string) (bool, error) {
-	return uid == a.admin, nil
+func (a fakeAuthz) Can(_ context.Context, uid int64, key string) (bool, error) {
+	return uid == a.admin || slices.Contains(a.perms[uid], key), nil
 }
 func (a fakeAuthz) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{}, nil
@@ -58,6 +65,8 @@ type env struct {
 	h     http.Handler
 	admin int64
 	user  int64
+	// ownRead holds account:own:read, ownCreate account:own:create only.
+	ownRead, ownCreate int64
 }
 
 func setup(t *testing.T) *env {
@@ -66,9 +75,14 @@ func setup(t *testing.T) *env {
 	e := &env{t: t, db: db, bus: &fakeBus{}}
 	e.admin = mkUser(t, db, "admin@x.com")
 	e.user = mkUser(t, db, "user@x.com")
+	e.ownRead = mkUser(t, db, "own-read@x.com")
+	e.ownCreate = mkUser(t, db, "own-create@x.com")
 	engine := gin.New()
 	e.svc = New(db, e.bus, core.EnvironmentValues{core.EnvVarRelayTimeoutSeconds: 900, core.EnvVarStreamingIdleTimeoutSeconds: 45})
-	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{admin: e.admin}))
+	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{admin: e.admin, perms: map[int64][]string{
+		e.ownRead:   {"account:own:read", "account:own:update"},
+		e.ownCreate: {"account:own:create"},
+	}}))
 	e.h = engine
 	return e
 }
@@ -104,6 +118,16 @@ func TestGlobalLayerRoutes(t *testing.T) {
 	code, out := e.do(e.admin, "GET", "/environment/variables", nil)
 	if code != 200 || len(out["data"].(map[string]any)["variables"].([]any)) != len(core.EnvironmentVariables) {
 		t.Fatalf("variables: %d %v", code, out)
+	}
+	// The account editor of a user with the own-account permissions only
+	// shows the declarations too (they may edit the account layer).
+	for _, uid := range []int64{e.ownRead, e.ownCreate} {
+		if code, out := e.do(uid, "GET", "/environment/variables", nil); code != 200 {
+			t.Fatalf("variables for own-account user %d: %d %v", uid, code, out)
+		}
+		if code, _ := e.do(uid, "GET", "/settings/environment", nil); code != 403 {
+			t.Fatalf("global layer for own-account user %d: %d", uid, code)
+		}
 	}
 	if code, _ = e.do(e.user, "GET", "/settings/environment", nil); code != 403 {
 		t.Fatalf("perm: %d", code)
@@ -191,5 +215,216 @@ func TestGlobalEnvironmentIgnoresCallerCancel(t *testing.T) {
 	}
 	if got := e.svc.GlobalEnvironment(context.Background()); got[core.EnvVarMaxRequestBodyMB] != 64 {
 		t.Fatalf("cached after a cancelled caller: %v", got)
+	}
+}
+
+// fakeLoader stands in for the database read of the global layer.
+type fakeLoader struct {
+	mu    sync.Mutex
+	value int64 // max_request_body_mb returned
+	err   error
+	gate  chan struct{} // when set, a read waits for it
+	calls chan struct{} // receives one value per read started
+}
+
+func newFakeLoader(value int64) *fakeLoader {
+	return &fakeLoader{value: value, calls: make(chan struct{}, 100)}
+}
+
+func (f *fakeLoader) load(ctx context.Context) (core.EnvironmentValues, error) {
+	f.mu.Lock()
+	value, err, gate := f.value, f.err, f.gate
+	f.mu.Unlock()
+	f.calls <- struct{}{}
+	if gate != nil {
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return core.EnvironmentValues{core.EnvVarMaxRequestBodyMB: value}, nil
+}
+
+func (f *fakeLoader) set(value int64, err error, gate chan struct{}) {
+	f.mu.Lock()
+	f.value, f.err, f.gate = value, err, gate
+	f.mu.Unlock()
+}
+
+func (f *fakeLoader) waitCall(t *testing.T) {
+	t.Helper()
+	select {
+	case <-f.calls:
+	case <-time.After(5 * time.Second):
+		t.Fatal("no read of the global layer")
+	}
+}
+
+func (f *fakeLoader) noCall(t *testing.T) {
+	t.Helper()
+	select {
+	case <-f.calls:
+		t.Fatal("unexpected read of the global layer")
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// expire makes the cached layer stale and lifts the hold after a failure.
+func expire(s *Service) {
+	s.mu.Lock()
+	if !s.lastAt.IsZero() {
+		s.lastAt = time.Now().Add(-globalTTL - time.Second)
+	}
+	s.retryAt = time.Time{}
+	s.mu.Unlock()
+}
+
+func waitBody(t *testing.T, s *Service, want int64) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got := s.GlobalEnvironment(context.Background())[core.EnvVarMaxRequestBodyMB]
+		if got == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("max_request_body_mb = %d, want %d", got, want)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// A failed read past the TTL keeps the last good layer instead of falling
+// back to the process layer (audit 2026-10-31: max_request_body_mb=100 fell
+// back to 32 MB for 2 seconds on a database hiccup), and the database is
+// left alone for errorTTL.
+func TestGlobalEnvironmentKeepsLastGoodOnReadError(t *testing.T) {
+	ctx := context.Background()
+	s := New(nil, nil, core.EnvironmentValues{core.EnvVarRelayTimeoutSeconds: 900})
+	f := newFakeLoader(100)
+	s.load = f.load
+	if got := s.GlobalEnvironment(ctx); got[core.EnvVarMaxRequestBodyMB] != 100 || got[core.EnvVarRelayTimeoutSeconds] != 900 {
+		t.Fatalf("first read: %v", got)
+	}
+	f.waitCall(t)
+
+	f.set(0, errors.New("database hiccup"), nil)
+	expire(s)
+	if got := s.GlobalEnvironment(ctx); got[core.EnvVarMaxRequestBodyMB] != 100 {
+		t.Fatalf("stale: %v", got)
+	}
+	f.waitCall(t) // the background refresh, which fails
+	waitRetryHold(t, s)
+	for range 3 {
+		if got := s.GlobalEnvironment(ctx); got[core.EnvVarMaxRequestBodyMB] != 100 || got[core.EnvVarRelayTimeoutSeconds] != 900 {
+			t.Fatalf("after a failed read: %v", got)
+		}
+	}
+	f.noCall(t) // held back for errorTTL
+
+	// Once the hold is over, the next stale read refreshes the layer.
+	f.set(64, nil, nil)
+	expire(s)
+	waitBody(t, s, 64)
+}
+
+func waitRetryHold(t *testing.T, s *Service) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s.mu.Lock()
+		held := !s.retryAt.IsZero()
+		s.mu.Unlock()
+		if held {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the failed read did not hold back the next one")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// A stale layer is served at once while one background read refreshes it:
+// gateway requests do not wait for the database every globalTTL.
+func TestGlobalEnvironmentStaleWhileRevalidate(t *testing.T) {
+	ctx := context.Background()
+	s := New(nil, nil, nil)
+	f := newFakeLoader(100)
+	s.load = f.load
+	s.GlobalEnvironment(ctx)
+	f.waitCall(t)
+
+	gate := make(chan struct{})
+	f.set(64, nil, gate)
+	expire(s)
+	start := time.Now()
+	for range 20 {
+		if got := s.GlobalEnvironment(ctx); got[core.EnvVarMaxRequestBodyMB] != 100 {
+			t.Fatalf("stale value while the refresh runs: %v", got)
+		}
+	}
+	if d := time.Since(start); d > 500*time.Millisecond {
+		t.Fatalf("callers waited for the refresh: %v", d)
+	}
+	f.waitCall(t)
+	f.noCall(t) // one refresh for all callers
+	close(gate)
+	waitBody(t, s, 64)
+}
+
+// Before the first read succeeds there is nothing to keep: the process
+// layer alone, and a later read is used once it succeeds.
+func TestGlobalEnvironmentFirstReadFails(t *testing.T) {
+	ctx := context.Background()
+	s := New(nil, nil, core.EnvironmentValues{core.EnvVarRelayTimeoutSeconds: 900})
+	f := newFakeLoader(0)
+	f.set(0, errors.New("down"), nil)
+	s.load = f.load
+	if got := s.GlobalEnvironment(ctx); len(got) != 1 || got[core.EnvVarRelayTimeoutSeconds] != 900 {
+		t.Fatalf("process layer alone: %v", got)
+	}
+	f.waitCall(t)
+	s.GlobalEnvironment(ctx)
+	f.noCall(t) // held back for errorTTL
+	f.set(64, nil, nil)
+	expire(s)
+	if got := s.GlobalEnvironment(ctx); got[core.EnvVarMaxRequestBodyMB] != 64 {
+		t.Fatalf("after recovery: %v", got)
+	}
+}
+
+// After invalidate (a PUT here or config:changed) callers wait for the new
+// layer; if that read fails they keep the last good one.
+func TestGlobalEnvironmentInvalidate(t *testing.T) {
+	ctx := context.Background()
+	s := New(nil, nil, nil)
+	f := newFakeLoader(100)
+	s.load = f.load
+	s.GlobalEnvironment(ctx)
+	f.waitCall(t)
+
+	f.set(64, nil, nil)
+	s.invalidate()
+	if got := s.GlobalEnvironment(ctx); got[core.EnvVarMaxRequestBodyMB] != 64 {
+		t.Fatalf("read after invalidate: %v", got)
+	}
+	f.waitCall(t)
+
+	f.set(0, errors.New("down"), nil)
+	s.invalidate()
+	if got := s.GlobalEnvironment(ctx); got[core.EnvVarMaxRequestBodyMB] != 64 {
+		t.Fatalf("failed read after invalidate: %v", got)
+	}
+	f.waitCall(t)
+	// Still outdated: the next read after the hold waits again and succeeds.
+	f.set(32, nil, nil)
+	expire(s)
+	if got := s.GlobalEnvironment(ctx); got[core.EnvVarMaxRequestBodyMB] != 32 {
+		t.Fatalf("read after the hold: %v", got)
 	}
 }

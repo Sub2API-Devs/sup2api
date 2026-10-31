@@ -45,9 +45,14 @@ type Options struct {
 	RateWindow   time.Duration // (5min)
 	Retention    time.Duration // sent and failed rows are kept this long (30d)
 	// UnboundFor is how long a row waits for the plugin that provided its
-	// channel to be bound again (24h from created_at); meanwhile it is
-	// retried every BackoffMin without using an attempt.
+	// channel to be bound and running again (24h from created_at);
+	// meanwhile it is retried every BackoffMin without using an attempt.
 	UnboundFor time.Duration
+	// DrainTimeout is how long Stop lets the delivery in progress finish
+	// before cancelling it (35s: the 30s deadline of a delivery call plus
+	// recording its outcome). The app's teardown shares a 90s budget
+	// (app.run); the plugin instances are stopped after this service.
+	DrainTimeout time.Duration
 	// Locker elects the node that purges; nil purges on every node.
 	Locker core.Locker
 }
@@ -65,6 +70,7 @@ func (o *Options) defaults() {
 	def(&o.RateWindow, 5*time.Minute)
 	def(&o.Retention, 30*24*time.Hour)
 	def(&o.UnboundFor, 24*time.Hour)
+	def(&o.DrainTimeout, 35*time.Second)
 	if o.MaxAttempts <= 0 {
 		o.MaxAttempts = 8
 	}
@@ -81,7 +87,8 @@ type Service struct {
 	wake chan struct{}
 
 	mu     sync.Mutex
-	cancel context.CancelFunc
+	cancel context.CancelFunc // ends claiming
+	abort  context.CancelFunc // cancels the delivery in progress
 	done   chan struct{}
 }
 
@@ -152,15 +159,34 @@ func (s *Service) Notify(ctx context.Context, source string, n core.Notification
 	return out, err
 }
 
+// Field error codes of a notification (details.fields[].code), stable for
+// clients to translate; the messages stay English (CONTRACTS §74.4).
+const (
+	CodeUnknownChannel    = "unknown_channel"     // channel: no channel with this id
+	CodeRecipientsCount   = "recipients_count"    // recipients: none, or more than MaxRecipients
+	CodeRecipientTooLong  = "recipient_too_long"  // recipients: one longer than MaxRecipientLen bytes
+	CodeInvalidRecipient  = "invalid_recipient"   // recipients: one not in the channel's recipient format
+	CodeSubjectRequired   = "subject_required"    // subject: empty after trimming
+	CodeSubjectTooLong    = "subject_too_long"    // subject: more than MaxSubjectRunes characters
+	CodeSubjectMultiline  = "subject_multiline"   // subject: a line break or NUL
+	CodeBodyTooLarge      = "body_too_large"      // body: more than MaxBodyBytes
+	CodeBodyNUL           = "body_nul"            // body: a NUL byte
+	CodeInvalidSeverity   = "invalid_severity"    // severity: not info, warning or critical
+	CodeDedupeKeyTooLong  = "dedupe_key_too_long" // dedupe_key: more than MaxDedupeKey bytes
+	CodeDedupeWindowRange = "dedupe_window_range" // dedupe_seconds: below 0 or above MaxDedupeSeconds
+)
+
 // validate checks n and returns it normalized (trimmed recipients, default
 // severity and dedupe window) with the key of the plugin providing its
 // channel, the only one that may deliver it.
 func (s *Service) validate(n core.Notification) (core.Notification, string, error) {
 	var fe []core.FieldError
-	bad := func(field, msg string) { fe = append(fe, core.FieldError{Field: field, Code: "invalid", Message: msg}) }
+	bad := func(field, code, msg string) {
+		fe = append(fe, core.FieldError{Field: field, Code: code, Message: msg})
+	}
 	b, ok := s.channel(n.Channel)
 	if !ok {
-		bad("channel", "unknown notification channel")
+		bad("channel", CodeUnknownChannel, "unknown notification channel")
 	}
 	recipients := make([]string, 0, len(n.Recipients))
 	for _, r := range n.Recipients {
@@ -170,30 +196,45 @@ func (s *Service) validate(n core.Notification) (core.Notification, string, erro
 	}
 	n.Recipients = recipients
 	if len(recipients) == 0 || len(recipients) > MaxRecipients {
-		bad("recipients", fmt.Sprintf("between 1 and %d recipients", MaxRecipients))
+		bad("recipients", CodeRecipientsCount, fmt.Sprintf("between 1 and %d recipients", MaxRecipients))
 	}
 	for _, r := range recipients {
-		if len(r) > MaxRecipientLen || (ok && !manifest.ValidRecipient(b.Channel.RecipientFormat(), r)) {
-			bad("recipients", "invalid recipient "+r)
+		if len(r) > MaxRecipientLen {
+			bad("recipients", CodeRecipientTooLong, fmt.Sprintf("a recipient of at most %d bytes", MaxRecipientLen))
+			break
+		}
+		if ok && !manifest.ValidRecipient(b.Channel.RecipientFormat(), r) {
+			bad("recipients", CodeInvalidRecipient, "invalid recipient "+r)
 			break
 		}
 	}
 	n.Subject = strings.TrimSpace(n.Subject)
-	if n.Subject == "" || utf8.RuneCountInString(n.Subject) > MaxSubjectRunes || strings.ContainsAny(n.Subject, "\r\n\x00") {
-		bad("subject", fmt.Sprintf("1 to %d characters on one line", MaxSubjectRunes))
+	switch {
+	case n.Subject == "":
+		bad("subject", CodeSubjectRequired, "a subject is required")
+	case utf8.RuneCountInString(n.Subject) > MaxSubjectRunes:
+		bad("subject", CodeSubjectTooLong, fmt.Sprintf("at most %d characters", MaxSubjectRunes))
+	case strings.ContainsAny(n.Subject, "\r\n\x00"):
+		bad("subject", CodeSubjectMultiline, "one line, without NUL")
 	}
-	if len(n.Body) > MaxBodyBytes || strings.ContainsRune(n.Body, 0) {
-		bad("body", fmt.Sprintf("at most %d KiB, without NUL", MaxBodyBytes>>10))
+	switch {
+	case len(n.Body) > MaxBodyBytes:
+		bad("body", CodeBodyTooLarge, fmt.Sprintf("at most %d KiB", MaxBodyBytes>>10))
+	case strings.ContainsRune(n.Body, 0):
+		bad("body", CodeBodyNUL, "without NUL")
 	}
 	switch n.Severity {
 	case "":
 		n.Severity = core.SeverityInfo
 	case core.SeverityInfo, core.SeverityWarning, core.SeverityCritical:
 	default:
-		bad("severity", "info, warning or critical")
+		bad("severity", CodeInvalidSeverity, "info, warning or critical")
 	}
-	if len(n.DedupeKey) > MaxDedupeKey || n.DedupeSeconds < 0 || n.DedupeSeconds > MaxDedupeSeconds {
-		bad("dedupe_key", fmt.Sprintf("a key of at most %d bytes and a window of 0 to %d seconds", MaxDedupeKey, MaxDedupeSeconds))
+	if len(n.DedupeKey) > MaxDedupeKey {
+		bad("dedupe_key", CodeDedupeKeyTooLong, fmt.Sprintf("a key of at most %d bytes", MaxDedupeKey))
+	}
+	if n.DedupeSeconds < 0 || n.DedupeSeconds > MaxDedupeSeconds {
+		bad("dedupe_seconds", CodeDedupeWindowRange, fmt.Sprintf("a window of 0 to %d seconds", MaxDedupeSeconds))
 	}
 	if n.DedupeSeconds == 0 {
 		n.DedupeSeconds = DefaultDedupeSeconds

@@ -2,8 +2,10 @@ package grpcruntime
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -29,9 +31,34 @@ func (i *Instance) Notifier() core.NotificationChannelPlugin {
 
 type notificationAdapter struct{ i *Instance }
 
+// DeliverNotification marks the refusals of an instance that cannot take the
+// call (starting, waiting to restart after a crash, draining for an upgrade
+// or a stop) with notRunningError: the call never reached the plugin process,
+// so notify does not count it as a delivery attempt (CONTRACTS §74.4). An
+// error after the call reached the process, a crash in the middle included,
+// stays an ordinary failure: it may have been delivered, and a notification
+// that crashes the plugin must still run out of attempts.
 func (a notificationAdapter) DeliverNotification(ctx context.Context, in *pluginv1.DeliverNotificationRequest) (*pluginv1.DeliverNotificationResponse, error) {
-	return invoke(a.i, ctx, classBackground, TimeoutNotification, notifierOf, pluginv1.NotificationServiceClient.DeliverNotification, in)
+	reached := false
+	out, err := invoke(a.i, ctx, classBackground, TimeoutNotification, notifierOf,
+		func(c pluginv1.NotificationServiceClient, ctx context.Context, in *pluginv1.DeliverNotificationRequest, opts ...grpc.CallOption) (*pluginv1.DeliverNotificationResponse, error) {
+			reached = true
+			return c.DeliverNotification(ctx, in, opts...)
+		}, in)
+	var ce *core.Error
+	if err != nil && !reached && errors.As(err, &ce) && ce.Code == core.ErrPluginUnavailable.Code {
+		return nil, notRunningError{err}
+	}
+	return out, err
 }
+
+// notRunningError wraps core.ErrPluginUnavailable for a call the instance
+// refused before it reached the plugin process. Notify recognizes it by the
+// PluginNotRunning method, without depending on this package.
+type notRunningError struct{ error }
+
+func (e notRunningError) Unwrap() error        { return e.error }
+func (notRunningError) PluginNotRunning() bool { return true }
 
 func (h *hostServer) notifier(ctx context.Context) (core.Notifier, error) {
 	if err := h.require(ctx, "notify.send"); err != nil {

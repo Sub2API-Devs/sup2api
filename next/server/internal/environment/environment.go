@@ -26,9 +26,10 @@ import (
 const SettingsKey = "environment"
 
 // globalTTL bounds how stale the cached global layer gets on a node that
-// missed the config:changed broadcast; errorTTL is how long a failed read is
-// answered with an empty layer before the database is asked again;
-// loadTimeout bounds the read, which no caller can cancel.
+// missed the config:changed broadcast; past it the cached layer is still
+// served while one background read refreshes it. errorTTL is how long after a
+// failed read the database is left alone; loadTimeout bounds the read, which
+// no caller can cancel.
 const (
 	globalTTL   = 10 * time.Second
 	errorTTL    = 2 * time.Second
@@ -42,20 +43,30 @@ type Service struct {
 	// process is the process layer (config.Config.Environment), the
 	// fallback of the global one.
 	process core.EnvironmentValues
+	// load reads the global layer; tests replace it.
+	load func(context.Context) (core.EnvironmentValues, error)
 
 	unsubscribe func()
 
-	mu       sync.Mutex
-	global   core.EnvironmentValues
-	globalAt time.Time
-	ttl      time.Duration
-	epoch    uint64 // bumped by invalidate, so a read in flight is not cached
-	refill   singleflight.Group
+	mu sync.Mutex
+	// last is the global layer over the process layer from the last read
+	// that succeeded, nil before the first one. A failed read never
+	// replaces it: a database hiccup must not put max_request_body_mb or
+	// the timeouts back to their defaults.
+	last core.EnvironmentValues
+	// lastAt is when last was read; zero once invalidate marked it outdated,
+	// which makes the next caller wait for a read (a PUT is seen at once).
+	lastAt time.Time
+	// retryAt holds back reads after a failure until errorTTL passed.
+	retryAt time.Time
+	epoch   uint64 // bumped by invalidate, so a read in flight is not cached
+	refill  singleflight.Group
 }
 
 // New wires the service; bus may be nil (single node, tests).
 func New(db *store.DB, bus core.Bus, process core.EnvironmentValues) *Service {
 	s := &Service{db: db, bus: bus, process: process}
+	s.load = func(ctx context.Context) (core.EnvironmentValues, error) { return loadGlobal(ctx, s.db.Pool) }
 	if bus != nil {
 		s.unsubscribe = bus.Subscribe(core.ChannelConfigChanged, func(payload []byte) {
 			var msg struct{ Key string }
@@ -76,51 +87,89 @@ func (s *Service) Close(context.Context) {
 
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	// The editors of all three layers show the declarations and the process
-	// layer they fall back to.
-	r.PermAny("GET", "/environment/variables", s.variables, "settings:read", "group:read", "account:read")
+	// layer they fall back to; the account editor is open to the holders of
+	// the own-account permissions too, who may edit the account layer
+	// (PATCH /accounts/:id with account:own:update, create with
+	// account:own:create).
+	r.PermAny("GET", "/environment/variables", s.variables,
+		"settings:read", "group:read", "account:read", "account:own:read", "account:own:create")
 	r.Perm("GET", "/settings/environment", "settings:read", s.get)
 	r.Perm("PUT", "/settings/environment", "settings:manage", s.put)
 }
 
 func (s *Service) invalidate() {
 	s.mu.Lock()
-	s.global, s.globalAt = nil, time.Time{}
+	s.lastAt, s.retryAt = time.Time{}, time.Time{}
 	s.epoch++
 	s.mu.Unlock()
 }
 
 // GlobalEnvironment returns the cached global layer over the process layer.
-// A read error yields the process layer alone for errorTTL. One read refills
-// the cache for all callers, detached from theirs: a client that went away
-// must not leave the fallback cached for everyone.
+//
+//   - Fresh (read less than globalTTL ago): the cached layer.
+//   - Stale: the cached layer at once, while one background read refreshes
+//     it (stale-while-revalidate), so gateway requests never wait for the
+//     database once a layer was read.
+//   - Nothing read yet, or outdated by invalidate: callers wait for one read.
+//
+// A failed read keeps the last good layer (the process layer alone when
+// there is none) and holds back the next read for errorTTL. One read serves
+// all callers, detached from theirs: a client that went away must not
+// fail it for everyone.
 func (s *Service) GlobalEnvironment(ctx context.Context) core.EnvironmentValues {
+	now := time.Now()
 	s.mu.Lock()
-	cached, at, ttl, epoch := s.global, s.globalAt, s.ttl, s.epoch
+	last, at, retryAt, epoch := s.last, s.lastAt, s.retryAt, s.epoch
 	s.mu.Unlock()
-	if cached != nil && time.Since(at) < ttl {
-		return cached
+	switch {
+	case last != nil && !at.IsZero() && now.Sub(at) < globalTTL:
+		return last
+	case now.Before(retryAt):
+		return s.fallback(last)
+	case last != nil && !at.IsZero():
+		s.refill.DoChan(strconv.FormatUint(epoch, 10), func() (any, error) {
+			return s.read(context.WithoutCancel(ctx), epoch), nil
+		})
+		return last
 	}
 	// Keyed by epoch: a caller after invalidate does not join an older read.
 	v, _, _ := s.refill.Do(strconv.FormatUint(epoch, 10), func() (any, error) {
-		lctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), loadTimeout)
-		defer cancel()
-		global, err := loadGlobal(lctx, s.db.Pool)
-		ttl := globalTTL
-		if err != nil {
-			slog.WarnContext(ctx, "environment: read global layer", "err", err)
-			ttl = errorTTL
-		}
-		values := core.EnvironmentValues{}
-		maps.Copy(values, s.process)
-		maps.Copy(values, global)
-		s.mu.Lock()
-		if s.epoch == epoch {
-			s.global, s.globalAt, s.ttl = values, time.Now(), ttl
-		}
-		s.mu.Unlock()
-		return values, nil
+		return s.read(context.WithoutCancel(ctx), epoch), nil
 	})
 	return v.(core.EnvironmentValues)
+}
+
+// read loads the global layer and caches the merge unless invalidate ran
+// meanwhile. It returns what callers should use: the new layer, or after a
+// failure the last good one.
+func (s *Service) read(ctx context.Context, epoch uint64) core.EnvironmentValues {
+	lctx, cancel := context.WithTimeout(ctx, loadTimeout)
+	defer cancel()
+	global, err := s.load(lctx)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err != nil {
+		slog.WarnContext(ctx, "environment: read global layer; keeping the last one read", "err", err, "have_last", s.last != nil)
+		if s.epoch == epoch {
+			s.retryAt = time.Now().Add(errorTTL)
+		}
+		return s.fallback(s.last)
+	}
+	values := core.EnvironmentValues{}
+	maps.Copy(values, s.process)
+	maps.Copy(values, global)
+	if s.epoch == epoch {
+		s.last, s.lastAt, s.retryAt = values, time.Now(), time.Time{}
+	}
+	return values
+}
+
+// fallback is last, or the process layer alone before any read succeeded.
+func (s *Service) fallback(last core.EnvironmentValues) core.EnvironmentValues {
+	if last != nil {
+		return last
+	}
+	return maps.Clone(s.process)
 }
 
 // ResolveEnvironment reads the group and account layers and merges them with

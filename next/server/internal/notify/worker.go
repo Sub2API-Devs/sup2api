@@ -10,57 +10,87 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
-// Start runs the delivery loop until Stop. Every node may run it: rows are
-// claimed with SKIP LOCKED and held for the lease.
+// Start runs the delivery loop until ctx ends or Stop. Every node may run it:
+// rows are claimed with SKIP LOCKED and held for the lease.
+//
+// The end of ctx (the process got SIGTERM) or Stop only ends claiming: the
+// delivery in progress runs on a context of its own and finishes within its
+// deadline (30 s, grpcruntime.TimeoutNotification). Cancelling it would give
+// the attempt back although the provider may already have sent it (an SMTP
+// server that accepted DATA before the answer reached the core), and the row
+// would be sent again after the restart. Only a drain past DrainTimeout
+// cancels it.
 func (s *Service) Start(ctx context.Context) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cancel != nil {
 		return
 	}
-	ctx, s.cancel = context.WithCancel(ctx)
+	var claim, deliver context.Context
+	claim, s.cancel = context.WithCancel(ctx)
+	deliver, s.abort = context.WithCancel(context.WithoutCancel(ctx))
 	s.done = make(chan struct{})
-	go s.loop(ctx, s.done)
+	go s.loop(claim, deliver, s.done)
 }
 
-// Stop ends the loop and waits for the step in progress.
+// abortWait bounds the wait for a delivery cut off by Stop to record its
+// outcome (one UPDATE).
+const abortWait = 5 * time.Second
+
+// Stop ends claiming, lets the delivery in progress finish for up to
+// DrainTimeout (or until ctx ends, the caller's shutdown budget), and only
+// then cancels it.
 func (s *Service) Stop(ctx context.Context) {
 	s.mu.Lock()
-	cancel, done := s.cancel, s.done
+	cancel, abort, done := s.cancel, s.abort, s.done
 	s.mu.Unlock()
 	if cancel == nil {
 		return
 	}
+	defer abort()
 	cancel()
+	drain := time.NewTimer(s.opts.DrainTimeout)
+	defer drain.Stop()
 	select {
 	case <-done:
+		return
+	case <-drain.C:
+	case <-ctx.Done():
+	}
+	abort()
+	wait := time.NewTimer(abortWait)
+	defer wait.Stop()
+	select {
+	case <-done:
+	case <-wait.C:
 	case <-ctx.Done():
 	}
 }
 
-func (s *Service) loop(ctx context.Context, done chan struct{}) {
+// loop claims rows while claim lasts and delivers them on deliver.
+func (s *Service) loop(claim, deliver context.Context, done chan struct{}) {
 	defer close(done)
 	tick := time.NewTicker(s.opts.PollInterval)
 	defer tick.Stop()
 	nextPurge := time.Now()
 	for {
 		if s.opts.CanRun == nil || s.opts.CanRun() {
-			for s.step(ctx) {
+			for claim.Err() == nil && s.step(deliver) {
 			}
-			if time.Now().After(nextPurge) {
+			if claim.Err() == nil && time.Now().After(nextPurge) {
 				// One node per period: the lock is left to expire.
 				held := s.opts.Locker == nil
 				if !held {
-					_, held, _ = s.opts.Locker.TryLock(ctx, "notify:purge", time.Hour-time.Hour/10)
+					_, held, _ = s.opts.Locker.TryLock(claim, "notify:purge", time.Hour-time.Hour/10)
 				}
 				if held {
-					s.purge(ctx)
+					s.purge(claim)
 				}
 				nextPurge = time.Now().Add(time.Hour)
 			}
 		}
 		select {
-		case <-ctx.Done():
+		case <-claim.Done():
 			return
 		case <-tick.C:
 		case <-s.wake:
@@ -108,10 +138,20 @@ type errRejected struct{ reason string }
 func (e errRejected) Error() string { return e.reason }
 
 // errUnbound: the plugin that provided the channel is not bound to it now
-// (not loaded yet at startup, restarting, upgrading, disabled, uninstalled,
-// or the channel went to another plugin). Not a delivery attempt: the row
-// waits for it until UnboundFor.
+// (not loaded yet at startup, disabled, uninstalled, or the channel went to
+// another plugin). Not a delivery attempt: the row waits for it until
+// UnboundFor.
 var errUnbound = errors.New("the plugin providing the notification channel is not available (it is starting, restarting, disabled or uninstalled)")
+
+// providerNotRunning reports an error of a provider call the plugin instance
+// refused before it reached the plugin process: it is starting, waiting to
+// restart after a crash, or draining for an upgrade or a stop (grpcruntime
+// marks these with a PluginNotRunning method). Like errUnbound, not a
+// delivery attempt.
+func providerNotRunning(err error) bool {
+	var m interface{ PluginNotRunning() bool }
+	return errors.As(err, &m) && m.PluginNotRunning()
+}
 
 func (s *Service) deliver(ctx context.Context, q queued) error {
 	b, ok := s.channel(q.channel)
@@ -130,7 +170,8 @@ func (s *Service) deliver(ctx context.Context, q queued) error {
 }
 
 // finish records the outcome unless the lease ran out and another worker
-// claimed the row again (attempts moved on).
+// claimed the row again (attempts moved on). ctx is the delivery context:
+// it ends only when Stop gave up waiting for the delivery.
 func (s *Service) finish(ctx context.Context, q queued, err error) {
 	stopping := ctx.Err() != nil
 	ctx = context.WithoutCancel(ctx)
@@ -145,13 +186,14 @@ func (s *Service) finish(ctx context.Context, q queued, err error) {
 	case err == nil:
 		_, exec = s.db.Pool.Exec(ctx, `UPDATE notifications SET status = 'sent', sent_at = now(), last_error = ''
 			WHERE id = $1 AND status = 'sending' AND attempts = $2`, q.id, q.attempt)
-	case errors.Is(err, errUnbound):
-		// The attempt is given back; the row fails only once it waited
-		// UnboundFor since it was queued.
+	case errors.Is(err, errUnbound) || providerNotRunning(err):
+		// The attempt is given back and the row is tried again after
+		// BackoffMin; it fails only once it waited UnboundFor since it was
+		// queued, so a plugin that never comes back does not keep it forever.
 		_, exec = s.db.Pool.Exec(ctx, `UPDATE notifications SET attempts = attempts - 1, last_error = $3,
 				status = CASE WHEN created_at < now() - make_interval(secs => $4) THEN 'failed' ELSE 'pending' END,
 				next_attempt_at = now() + make_interval(secs => $5)
-			WHERE id = $1 AND status = 'sending' AND attempts = $2`, q.id, q.attempt, err.Error(), s.opts.UnboundFor.Seconds(), s.opts.BackoffMin.Seconds())
+			WHERE id = $1 AND status = 'sending' AND attempts = $2`, q.id, q.attempt, truncate(err.Error()), s.opts.UnboundFor.Seconds(), s.opts.BackoffMin.Seconds())
 	case errors.As(err, &rejected) || int(q.attempt) >= s.opts.MaxAttempts:
 		_, exec = s.db.Pool.Exec(ctx, `UPDATE notifications SET status = 'failed', last_error = $3
 			WHERE id = $1 AND status = 'sending' AND attempts = $2`, q.id, q.attempt, truncate(err.Error()))
