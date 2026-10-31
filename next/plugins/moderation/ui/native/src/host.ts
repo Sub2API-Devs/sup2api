@@ -61,8 +61,9 @@ export function canManage(): boolean {
 }
 
 /**
- * May edit the plugin settings: core plugin:manage, or moderation:manage
- * (manifest ui.settings.permission, CONTRACTS §75.1).
+ * May edit the plugin settings (the settings tab of this page, §72.15):
+ * core plugin:manage, or moderation:manage (manifest ui.settings.permission,
+ * CONTRACTS §75.1).
  */
 export function canManageSettings(): boolean {
   const h = useModHost()
@@ -312,13 +313,6 @@ interface ErrorDetails {
 export function errorDetails<K extends keyof ErrorDetails>(e: unknown, key: K): ErrorDetails[K] {
   const v: unknown = isApiError(e) ? e.details[key] : undefined
   return (Array.isArray(v) ? v : []) as ErrorDetails[K]
-}
-
-/** Path of the plugin's settings in the console: its page's tab, or the settings-only page without plugin:read (§75.1). */
-export function settingsPath(): string {
-  const h = useModHost()
-  const key = encodeURIComponent(h.plugin.key)
-  return h.permissions.superuser() || h.permissions.has('plugin:read') ? `/plugins/${key}?tab=settings` : `/plugins/${key}/settings`
 }
 
 /** Queue state of a watch entry: running (claimed), pending (queued) or idle. */

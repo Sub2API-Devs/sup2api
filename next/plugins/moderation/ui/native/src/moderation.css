@@ -265,10 +265,19 @@ html.dark {
   flex-direction: column;
   gap: 0.875rem;
 }
-/* a form page (the settings tab) limits its own width, as the plugin
-   settings form of the console does (max-w-4xl); the console main is full width */
+/* a form page (the settings tab) limits its own width, as the console's
+   schema settings forms do (max-w-4xl); the console main is full width */
 .mod-form-page {
   max-width: 56rem;
+}
+/* settings rows (SSettingRow): a small control at the right, as the schema
+   widgets' w-full sm:w-64; a wide editor below its label takes the row */
+.mod-setting-control {
+  width: 16rem;
+  max-width: 100%;
+}
+.mod-setting-wide {
+  width: 100%;
 }
 /* a read-only form: disables the native controls, keeps the form layout */
 .mod-fieldset {

@@ -9,9 +9,6 @@
     "ban_threshold",
     "ban_window_hours",
     "ban_duration_hours",
-    "error_rate_alert_percent",
-    "notify_webhook_url",
-    "notify_webhook_secret",
     "analysis_channel_id",
     "analysis_every_violations",
     "analysis_allow_upgrade",
@@ -26,6 +23,7 @@
     "record_overturned",
     "record_errors",
     "store_text",
+    "error_text_max_chars",
     "hit_retention_days",
     "overturned_retention_days",
     "error_retention_days",
@@ -33,16 +31,18 @@
     "stats_retention_days",
     "max_concurrency",
     "queue_size",
+    "max_inflight_mb",
     "ttft_timeout_ms",
     "cache_ttl_seconds",
     "cache_entries",
+    "min_chars",
     "input_max_chars",
     "input_max_chunks",
     "input_overflow",
     "input_max_images",
-    "max_inflight_mb",
-    "error_text_max_chars",
-    "min_chars",
+    "error_rate_alert_percent",
+    "notify_webhook_url",
+    "notify_webhook_secret",
     "jev_default_set",
     "base_url",
     "api_key",
@@ -63,12 +63,12 @@
   "mode": {
     "ui:section": {
       "title": {
-        "en": "General",
-        "zh": "通用"
+        "en": "Mode and exemptions",
+        "zh": "运行模式与豁免"
       },
       "description": {
-        "en": "Channels, auditors and flows are configured on the Prompt Moderation page; a flow bound to a group (or the default group 0) decides what is moderated.",
-        "zh": "渠道、审核器和流程在“提示词审核”页面配置；绑定到分组（或默认分组 0）的流程决定审核哪些请求。"
+        "en": "Channels, auditors and flows are configured on their tabs of this page; a flow bound to a group (or the default group 0) decides what is moderated.",
+        "zh": "渠道、审核器和流程在本页对应的标签里配置；绑定到分组（或默认分组 0）的流程决定审核哪些请求。"
       }
     },
     "ui:widget": "segmented",
@@ -112,6 +112,16 @@
     }
   },
   "block_status": {
+    "ui:section": {
+      "title": {
+        "en": "Block response",
+        "zh": "拦截响应"
+      },
+      "description": {
+        "en": "What a refused request gets back, in the error format of its API.",
+        "zh": "请求被拒绝时返回的内容，按请求所用 API 的错误格式返回。"
+      }
+    },
     "ui:title": {
       "en": "Block HTTP status",
       "zh": "拦截状态码"
@@ -226,19 +236,19 @@
       }
     },
     "ui:title": {
-      "en": "Analysis channel ID",
-      "zh": "分析渠道 ID"
+      "en": "AI analysis channel",
+      "zh": "AI 分析渠道"
     },
     "ui:help": {
-      "en": "An llm channel (any protocol) of the Channels tab. 0 = no analysis.",
-      "zh": "在「渠道」页查看大模型渠道的 ID（三种协议都可以）。0 表示不做 AI 分析。"
+      "en": "An llm channel (any protocol) of the Channels tab; none = no AI analysis.",
+      "zh": "只能选「渠道」页的大模型渠道（三种协议都可以）；不使用则不做 AI 分析。"
     }
   },
   "record_pass": {
     "ui:section": {
       "title": {
-        "en": "Records",
-        "zh": "记录"
+        "en": "Records and retention",
+        "zh": "记录与保留"
       }
     },
     "ui:widget": "switch",
@@ -339,9 +349,14 @@
     },
     "ui:section": {
       "title": {
-        "en": "Performance",
-        "zh": "性能"
-      }
+        "en": "Performance and cache",
+        "zh": "性能与缓存"
+      },
+      "description": {
+        "en": "Per node. The defaults suit most deployments.",
+        "zh": "按节点计算，默认值适合大多数部署。"
+      },
+      "collapsed": true
     }
   },
   "queue_size": {
@@ -488,6 +503,17 @@
     }
   },
   "min_chars": {
+    "ui:section": {
+      "title": {
+        "en": "Input scope",
+        "zh": "输入范围"
+      },
+      "description": {
+        "en": "How much of each request is moderated.",
+        "zh": "每个请求审核多少内容。"
+      },
+      "collapsed": true
+    },
     "ui:title": {
       "en": "Min length",
       "zh": "最少字数"
@@ -508,8 +534,7 @@
       "title": {
         "en": "Jev default question set",
         "zh": "Jev 默认题集"
-      },
-      "collapsed": true
+      }
     },
     "ui:widget": "json",
     "ui:title": {
@@ -522,6 +547,7 @@
     }
   },
   "base_url": {
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "Base URL",
       "zh": "接口地址"
@@ -540,18 +566,18 @@
     },
     "ui:section": {
       "title": {
-        "en": "0.1 settings (converted)",
-        "zh": "0.1 旧版配置（已转换）"
+        "en": "0.1 settings (converted, not shown)",
+        "zh": "0.1 旧版配置（已转换，不显示）"
       },
       "description": {
-        "en": "Read only, except that the API key can be cleared. On the first start of 0.2 they were turned into a channel, an LLM auditor and a flow.",
-        "zh": "只读（API Key 可以清空）。0.2 首次启动时已转换成渠道、LLM 审核器和流程。"
+        "en": "On the first start of 0.2 they were turned into a channel, an LLM auditor and a flow. They stay in the stored settings as they are; the settings page sends them back unchanged and only offers to clear a stored 0.1 API key.",
+        "zh": "0.2 首次启动时已转换成渠道、LLM 审核器和流程。它们原样留在已保存的设置里；设置页保存时原样回传，只提供清除仍保存着的 0.1 API Key。"
       },
       "collapsed": true
     }
   },
   "api_key": {
-    "ui:widget": "secret",
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "API key",
       "zh": "API Key"
@@ -562,6 +588,7 @@
     }
   },
   "model": {
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "Model",
       "zh": "模型"
@@ -576,7 +603,7 @@
     }
   },
   "system_prompt": {
-    "ui:widget": "textarea",
+    "ui:widget": "hidden",
     "ui:options": {
       "rows": 8
     },
@@ -594,6 +621,7 @@
     }
   },
   "categories": {
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "Categories",
       "zh": "审核分类"
@@ -640,7 +668,7 @@
     }
   },
   "tool_choice": {
-    "ui:widget": "select",
+    "ui:widget": "hidden",
     "ui:enumNames": [
       {
         "en": "required (must call the tool)",
@@ -661,24 +689,28 @@
     }
   },
   "max_turns": {
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "Max turns",
       "zh": "最大轮数"
     }
   },
   "temperature": {
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "Temperature",
       "zh": "温度"
     }
   },
   "max_tokens": {
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "Max output tokens",
       "zh": "最大输出 Token"
     }
   },
   "timeout_ms": {
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "Timeout",
       "zh": "超时"
@@ -691,7 +723,7 @@
     }
   },
   "on_error": {
-    "ui:widget": "segmented",
+    "ui:widget": "hidden",
     "ui:enumNames": [
       {
         "en": "Allow",
@@ -712,6 +744,7 @@
     }
   },
   "sample_rate": {
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "Sample rate",
       "zh": "抽样比例"
@@ -725,7 +758,7 @@
     }
   },
   "group_ids": {
-    "ui:widget": "group-select",
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "Groups",
       "zh": "分组"
@@ -736,7 +769,7 @@
     }
   },
   "model_patterns": {
-    "ui:widget": "tags",
+    "ui:widget": "hidden",
     "ui:placeholder": "claude-*",
     "ui:title": {
       "en": "Model patterns",
@@ -748,6 +781,7 @@
     }
   },
   "retention_days": {
+    "ui:widget": "hidden",
     "ui:title": {
       "en": "Retention",
       "zh": "记录保留"

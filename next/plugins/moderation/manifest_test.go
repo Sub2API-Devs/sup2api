@@ -65,7 +65,7 @@ func TestManifest(t *testing.T) {
 	if fields, ok := check.Fields(check.Validate(&m, files, check.ValidateOptions{Tooling: true})); ok {
 		t.Fatalf("manifest check: %+v", fields)
 	}
-	if m.Key != "moderation" || m.Version != "0.6.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
+	if m.Key != "moderation" || m.Version != "0.6.1" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}
@@ -126,8 +126,11 @@ func TestManifest(t *testing.T) {
 	if u := granted["users.read"]; u == nil || !u.Optional {
 		t.Error("users.read must be declared and optional")
 	}
-	// moderation:manage may edit the settings (§75.1).
-	if m.UI.Settings == nil || m.UI.Settings.Permission != "moderation:manage" {
+	// moderation:manage may edit the settings (§75.1), all of them on the
+	// plugin's own page (§72.15): native mode on the dashboard, with the
+	// schema the core validates and masks with.
+	if s := m.UI.Settings; s == nil || s.Permission != "moderation:manage" || s.Mode != "native" || s.Page != "dashboard" ||
+		s.Schema != "forms/settings.schema.json" || s.UISchema != "forms/settings.ui.json" {
 		t.Errorf("ui.settings = %+v", m.UI.Settings)
 	}
 	if len(m.Hooks) != 2 {
@@ -231,6 +234,25 @@ func TestSettingsForms(t *testing.T) {
 		if schema.Properties[k]["writeOnly"] != true {
 			t.Errorf("%s must be writeOnly", k)
 		}
+	}
+	// The 0.1 fields stay in the schema (api_key above all: without it the
+	// core would no longer mask it) but the settings page does not show
+	// them (§72.15); every other field is shown.
+	legacy := []string{"base_url", "api_key", "model", "system_prompt", "categories", "tool_choice", "max_turns", "temperature",
+		"max_tokens", "timeout_ms", "on_error", "sample_rate", "group_ids", "model_patterns", "retention_days"}
+	for _, k := range order {
+		var fu struct {
+			Widget string `json:"ui:widget"`
+		}
+		_ = json.Unmarshal(ui[k], &fu)
+		if hidden := fu.Widget == "hidden"; hidden != slices.Contains(legacy, k) {
+			t.Errorf("field %s: hidden = %v", k, hidden)
+		}
+	}
+	// The first field carries a section, so no field falls into an untitled group.
+	var first map[string]json.RawMessage
+	if json.Unmarshal(ui[order[0]], &first) != nil || first["ui:section"] == nil {
+		t.Errorf("first field %s starts no ui:section", order[0])
 	}
 	if schema.Properties["notify_webhook_url"]["x-sensitive"] != true {
 		t.Error("notify_webhook_url must be x-sensitive (chat webhooks embed a token)")

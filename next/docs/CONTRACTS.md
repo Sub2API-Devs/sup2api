@@ -5273,9 +5273,17 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 72.15 界面（插件 `ui/native`，只用 `@sub2api/ui` 和 `@sub2api/host`）
 
-**标签页**：概览、记录、观察名单、封禁、流程、审核器、渠道、测试、设置。设置标签页对核心 `plugin:manage` 或 `moderation:manage`（§75.1）可见；没有核心 `plugin:read` 的人，"完整设置"链接打开 `/plugins/moderation/settings`；它只编辑本插件常用的几项（拦截状态码和提示、AI 分析渠道、错误率告警、统计保留天数、通知 Webhook 地址和密钥、Jev 默认题集），完整设置仍然在插件详情页的 schema 表单里。设置标签页是表单页，自己限宽（与插件详情页的设置表单一样约 56rem），页头的模式徽标放在 `#filters`，不用 `#title-extra`（后者会让页面说明留在页内）。
+**标签页**：概览、记录、观察名单、封禁、流程、审核器、渠道、测试、设置。设置标签页对核心 `plugin:manage` 或 `moderation:manage`（§75.1）可见，没有设置权限的人看不到设置入口（标签页、概览里的设置链接都不显示）。设置标签页是表单页，自己限宽（约 56rem），页头的模式徽标放在 `#filters`，不用 `#title-extra`（后者会让页面说明留在页内）。
 
-**设置的保存**（核心设置接口没有版本号，PUT 整体替换 values）：页面加载时记下已存的值和本页各项的初始值；保存时重新读取已存的设置，只把本页**相对加载时改过的项**写进最新值再写回，本页没动过的项（包括本页的项）和其他设置都保持最新值，不会被打开页面时的旧值覆盖。没有改动时不发请求。本页改过的项如果别人在此期间也改过（加载时的值 ≠ 最新值），先确认，确认后以本页的值为准，只覆盖这些项。限制：密钥类的项读到的是掩码，别人改了密钥看不出来；两次读取之间仍有很短的竞争窗口，要彻底解决需要核心设置接口支持版本号或按键 PATCH。
+**设置全部在这里编辑**（0.6.1 起，2026-10-31 用户要求；manifest `ui.settings` 为 `{"mode":"native","page":"dashboard",…}` 并带 schema 和 uiSchema，§75.5）。插件详情页不再有设置标签，`/plugins/moderation/settings` 转到本页 `?tab=settings`；插件页也不再有"完整设置"按钮或链接。存储不变：仍是核心的 `GET/PUT /plugins/moderation/settings`（核心加密保存、按 schema 校验并掩码密钥、改动后通知插件）。
+
+- **分组**：按 `forms/settings.ui.json` 的 `ui:order` 和 `ui:section` 分成：运行模式与豁免、拦截响应、观察名单与封禁、AI 分析、记录与保留、性能与缓存（默认折叠）、输入范围（默认折叠）、告警与通知、Jev 默认题集。每组一个 `SSettingsGroup`，每项一个 `SSettingRow`；有错误的折叠组自动展开。
+- **渲染**：一般的项用 `@sub2api/ui` 的 `SchemaField`（settings 布局）按 schema / uiSchema 渲染，显示值为已存值，没有存过的显示 schema 默认值。以下几项用本页自己的编辑器：拦截提示下面的拦截响应预览（OpenAI / Claude / Gemini 三种格式）、AI 分析渠道（只能选大模型渠道的下拉框，已存渠道不是可用的大模型渠道时提示）、通知 Webhook 地址和签名密钥（已设置时显示"已设置，留空保持不变"，可单独清除）、Jev 默认题集（内置 / 自定义，题集编辑器）。
+- **0.1 旧字段**（`base_url`、`api_key`、`model`、`system_prompt`、`categories`、`tool_choice`、`max_turns`、`temperature`、`max_tokens`、`timeout_ms`、`on_error`、`sample_rate`、`group_ids`、`model_patterns`、`retention_days`）在 uiSchema 里是 `ui:widget: hidden`，不在界面出现，但留在 schema 里（`api_key` 必须留，否则核心不再把它当密钥掩码），保存时原样回传。仍存着 0.1 的 `api_key` 时页面顶部提示并提供"清除"（只持有 `moderation:manage` 的人在它存在时任何保存都会被要求重填它，§75.1，而它已无法重填）。
+- **密钥**：Webhook 地址（`x-sensitive`）和签名密钥（`writeOnly`）读到 `******`；输入框留空回传 `******` 表示沿用，点清除后回传时去掉该键；核心要求重填已存密钥（字段错误码 `reenter`）时在对应输入框下提示。
+- **校验与错误**：保存前按 schema 校验本页改过的项；核心返回的字段错误（`values/<key>/…`）显示在该项下面，不属于本页任何项的错误弹提示。数字项清空表示不保存，用 schema 默认值。
+
+**设置的保存**（核心设置接口没有版本号，PUT 整体替换 values）：页面加载时记下已存的值和本页各项的初始值；保存时重新读取已存的设置，只把本页**相对加载时改过的项**写进最新值再写回，本页没动过的项（包括本页显示的项、隐藏的 0.1 旧字段）和其他设置都保持最新值，不会被打开页面时的旧值覆盖。没有改动时不发请求；有未保存的改动时保存栏提示。本页改过的项如果别人在此期间也改过（加载时的值 ≠ 最新值），先确认，确认后以本页的值为准，只覆盖这些项。限制：密钥类的项读到的是掩码，别人改了密钥看不出来；两次读取之间仍有很短的竞争窗口，要彻底解决需要核心设置接口支持版本号或按键 PATCH。
 
 - **概览**：数据来自 `/status` 和 `/stats/*`。内容包括：状态行、KPI、需关注用户、AI 复核、今日费用、性能、分类、漏斗、趋势、健康度、队列。
 - **流程**：拖拽画布，与 new-api 一致。支持模板、发布、版本与回滚、模拟（可选用户状态），分组单元格遇到 409 时可以强制覆盖。手动总超时填 0、负数或留空时显示错误，不改动已有值（0 表示自动），离开输入框后显示回已有值，发布的就是框里显示的值。版本抽屉切换流程后丢弃旧流程的版本详情响应。
@@ -5669,3 +5677,12 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 ### 75.4 已有的 `account.status_changed` 事件
 
 插件通过 `app.events.v1` 订阅即可收到，载荷是 `{account_id, plugin_key, type, name, status（新状态）, reason, cooldown_until?, auto_disabled_until?}`。载荷里没有旧状态。
+
+### 75.5 插件自己页面里编辑的设置（`ui.settings.mode = "native"` 带 schema）
+
+2026-10-31 用户要求：提示词审核的设置全部放到插件自己的「设置」标签里，插件详情页不再有设置。
+
+- manifest：`ui.settings` 写 `{"mode":"native","page":"<ui.pages 中的 native 页面>","schema":"…","uiSchema":"…","permission":"…"}`。`schema` / `uiSchema` 只有 `ui.settings` 在 native 模式下可以带，其它表单带了报 `unsupported`；`page` 必须是 `ui.pages` 里的 native 页面。
+- 核心：只要表单带 schema，不论模式，`GET/PUT /plugins/:key/settings` 都按它掩码密钥（§75.1）并校验；存储、通知插件、权限都与 schema 模式相同。不带 schema 的 native/iframe 设置仍不掩码，所以有密钥的插件必须带 schema。
+- 控制台：插件详情页只在 `mode` 为 `schema` 时显示设置标签；`/plugins/:key/settings`（只有插件权限的人用）遇到 native 设置时转到 `/p/:key/<page>?tab=settings`。插件页面自己用 `GET/PUT /plugins/:key/settings` 读写，回传 `******` 表示沿用密钥。
+- 兼容：0.1.222 及更早的核心对 native 设置不读 schema，GET 会把密钥明文返回，所以用这种写法的插件 `hostCompat` 要求 ≥ 0.1.223（moderation 0.6.1 起）。

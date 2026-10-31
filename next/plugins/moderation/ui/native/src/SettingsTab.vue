@@ -1,131 +1,209 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { SAlert, SButton, SCard, SCode, SField, SHint, SInput, SLink, SSegmented, SSelect, SSpinner } from '@sub2api/ui'
+import { isApiError } from '@sub2api/host'
+import {
+  SAlert,
+  SButton,
+  SchemaField,
+  SCode,
+  SHint,
+  SInput,
+  SSegmented,
+  SSelect,
+  SSettingRow,
+  SSettingsGroup,
+  SSpinner,
+  childUI,
+  fieldHelp,
+  fieldLabel,
+  validateSchema
+} from '@sub2api/ui'
 import JevQuestionsEditor from './JevQuestionsEditor.vue'
 import { BLOCK_FORMATS, blockResponse, type BlockFormat } from './blockPreview'
 import { useCatalog } from './catalog'
 import { enumOptions, joinList } from './format'
 import { applyErrorsOrToast, clearErrors, type FieldErrors } from './forms'
 import { mergeSettings, type PageValues } from './settingsMerge'
+import { displayValues, editableKeys, LEGACY_KEY, schemaKeys, sentValue, settingSections, settingsKey, type SettingSection } from './settingsForm'
 import { useAsync } from './useAsync'
-import { fetchDefaults, fetchPluginSettings, jevPayload, savePluginSettings, SETTINGS_MASK, settingsPath, useModHost } from './host'
+import { fetchDefaults, fetchPluginSettings, jevPayload, savePluginSettings, SETTINGS_MASK, useModHost } from './host'
 import type { JevQuestions } from './types'
 
-// The moderation settings of the console (new-api settings page): the block
-// response with a preview per API format, the AI analysis channel, the
-// error-rate alert, statistics retention, the notification webhook and the
-// Jev default question set. The other settings stay on the plugin's schema
-// form; a save re-reads the stored values and writes back only the keys of
-// this page edited since it loaded (settingsMerge.ts), so a change made
-// elsewhere meanwhile is kept, also to a key of this page left alone (the
-// core settings API has no version to compare). A key someone else changed
-// that this page changed too is confirmed first, then this page's value
-// wins. A key left empty is not stored, so the schema default (shown as
-// placeholder) applies.
+// All the moderation settings (CONTRACTS §72.15; the plugin page is where
+// they are edited, ui.settings mode native, §75.5): the fields of
+// forms/settings.schema.json in the ui:section groups of
+// forms/settings.ui.json, rendered by the schema widgets, except a few with
+// their own editor here: the block response preview per API format, the AI
+// analysis channel picker, the webhook address and secret ("set" / clear)
+// and the Jev default question set. The converted 0.1 fields are hidden and
+// go back as stored; a stored 0.1 API key can only be cleared.
+//
+// A save re-reads the stored values and writes back only the keys of this
+// page edited since it loaded (settingsMerge.ts), so a change made elsewhere
+// meanwhile is kept, also to a key of this page left alone (the core
+// settings API has no version to compare). A key someone else changed that
+// this page changed too is confirmed first, then this page's value wins. A
+// number left empty is not stored, so the schema default applies.
 const host = useModHost()
 const t = host.t
+const text = (v: unknown) => (v ? host.i18n.text(v as never) : '')
 const catalog = useCatalog()
 
-const KEYS = ['block_status', 'block_message', 'analysis_channel_id', 'error_rate_alert_percent', 'stats_retention_days', 'notify_webhook_url', 'notify_webhook_secret'] as const
-type Key = (typeof KEYS)[number]
-const NUMBERS: readonly Key[] = ['block_status', 'analysis_channel_id', 'error_rate_alert_percent', 'stats_retention_days']
-const SECRETS: readonly Key[] = ['notify_webhook_url', 'notify_webhook_secret']
-/** Keys with an input here; errors on other keys are toasted. */
-const SHOWN = [...KEYS, 'jev_default_set']
-/** The label of a key of this page (conflict confirmation). */
-const LABEL: Record<string, string> = {
-  block_status: 'settingsTab.blockStatus',
-  block_message: 'settingsTab.blockMessage',
-  analysis_channel_id: 'settingsTab.analysisChannel',
-  error_rate_alert_percent: 'settingsTab.errorRateAlert',
-  stats_retention_days: 'settingsTab.statsRetention',
-  notify_webhook_url: 'settingsTab.webhookUrl',
-  notify_webhook_secret: 'settingsTab.webhookSecret',
-  jev_default_set: 'settingsTab.jev'
-}
-/** The settings key of an API field path: "values.<key>[.<path>]", "values/<key>/…" or "<key>". */
-const settingsKey = (path: string) =>
-  path
-    .replace(/^values(?=[./]|$)/, '')
-    .replace(/^[./]/, '')
-    .replace(/\//g, '.')
-    .split(/[.[]/)[0]
+const WEBHOOK = ['notify_webhook_url', 'notify_webhook_secret'] as const
+type WebhookKey = (typeof WEBHOOK)[number]
 
-const form = reactive(Object.fromEntries(KEYS.map((k) => [k, ''])) as Record<Key, string | number | null>)
-/** secret keys with a stored value, kept while their input stays empty */
-const kept = reactive<Partial<Record<Key, boolean>>>({})
+/** Values shown by the schema widgets. */
+const form = reactive<Record<string, unknown>>({})
+/** The AI analysis channel picker (0 = none). */
+const channelId = ref(0)
+/** Webhook inputs: what is typed; kept = the stored value is kept while its input stays empty. */
+const webhook = reactive<Record<WebhookKey, string>>({ notify_webhook_url: '', notify_webhook_secret: '' })
+const kept = reactive<Record<string, boolean>>({})
 const jev = ref<JevQuestions | null>(null)
 const errs = reactive<FieldErrors>({})
 const saving = ref(false)
+/** Collapsed groups opened by the user. */
+const opened = reactive<Record<string, boolean>>({})
 
 const copyQuestions = (q: JevQuestions): JevQuestions => ({ preamble: q.preamble || '', items: q.items.map((x) => ({ ...x })) })
-/** The stored values and this page's values when it loaded (what a save compares with). */
+/** The stored values when the page loaded, and this page's values then (what a save compares with). */
 let loaded: Record<string, unknown> = {}
-let initial: PageValues = {}
+const initial = ref<PageValues>({})
 
 const { data, loading, error, reload } = useAsync(() => Promise.all([fetchPluginSettings(), fetchDefaults()]), () => t('settingsTab.loadFailed'))
+const settings = computed(() => data.value?.[0] ?? null)
 const defaults = computed(() => data.value?.[1] ?? null)
-/** The schema default of a key, as the placeholder of its empty input. */
-const schemaDefault = (k: Key) => {
-  const v = data.value?.[0].schema?.properties?.[k]?.default
+const schema = computed(() => settings.value?.schema ?? null)
+const ui = computed(() => settings.value?.ui_schema ?? null)
+const sections = computed<SettingSection[]>(() => settingSections(schema.value, ui.value))
+/** The keys of this page (errors on other keys are toasted). */
+const keys = computed(() => editableKeys(sections.value, settings.value?.values || {}))
+const widgetKeys = computed(() => schemaKeys(keys.value))
+
+const prop = (k: string) => schema.value?.properties?.[k] ?? {}
+const fieldUI = (k: string) => childUI(ui.value || undefined, k)
+const locale = () => host.i18n.locale.value
+const label = (k: string) => fieldLabel(k, prop(k), fieldUI(k), locale())
+const help = (k: string) => fieldHelp(prop(k), fieldUI(k), locale())
+/** The schema default of a key, for an empty input. */
+const schemaDefault = (k: string) => {
+  const v = prop(k).default
   return typeof v === 'number' || typeof v === 'string' ? v : ''
 }
+
 watch(data, (v) => {
   if (!v) return
   const stored = v[0].values || {}
-  for (const k of KEYS) kept[k] = stored[k] === SETTINGS_MASK
-  const value = (k: Key) => {
+  for (const k of Object.keys(form)) delete form[k]
+  Object.assign(form, displayValues(v[0].schema, stored, widgetKeys.value))
+  // the picker has no empty choice: an unset channel shows its default
+  const ch = stored.analysis_channel_id
+  channelId.value = typeof ch === 'number' ? ch : Number(schemaDefault('analysis_channel_id')) || 0
+  for (const k of [...WEBHOOK, LEGACY_KEY]) kept[k] = stored[k] === SETTINGS_MASK
+  for (const k of WEBHOOK) {
     const x = stored[k]
-    return kept[k] || (typeof x !== 'number' && typeof x !== 'string') ? '' : x
+    webhook[k] = kept[k] || typeof x !== 'string' ? '' : x
   }
-  Object.assign(form, Object.fromEntries(KEYS.map((k) => [k, value(k)])))
-  // the select has no empty choice: an unset channel shows its default
-  if (form.analysis_channel_id === '') form.analysis_channel_id = Number(schemaDefault('analysis_channel_id')) || 0
   const set = stored.jev_default_set as JevQuestions | null | undefined
   jev.value = set ? copyQuestions(set) : null
+  clearErrors(errs)
   loaded = { ...stored }
-  initial = pageValues()
+  initial.value = pageValues()
 })
 onMounted(reload)
 defineExpose({ reload })
 
-/** A secret as sent: the new value, the mask to keep the stored one, or '' to clear it. */
-const secretValue = (k: Key) => (form[k] ? String(form[k]) : kept[k] ? SETTINGS_MASK : '')
+/** A webhook value as sent: the new value, the mask to keep the stored one, or undefined to clear it (a secret is sent as typed). */
+function webhookValue(k: WebhookKey) {
+  const v = k === 'notify_webhook_url' ? webhook[k].trim() : webhook[k]
+  return v || (kept[k] ? SETTINGS_MASK : undefined)
+}
 
-/** The keys of this page as sent; an empty key is undefined (removed, its default applies). */
+/** The keys of this page as sent; undefined = removed (its default applies). */
 function pageValues(): PageValues {
-  const out: PageValues = { jev_default_set: jev.value && jevPayload(jev.value) }
-  for (const k of KEYS) {
-    const v = SECRETS.includes(k) ? secretValue(k) : String(form[k] ?? '').trim()
-    out[k] = v === '' ? undefined : NUMBERS.includes(k) ? Number(v) : v
-  }
+  const out: PageValues = {}
+  for (const k of widgetKeys.value) out[k] = sentValue(prop(k), form[k])
+  if (keys.value.includes('analysis_channel_id')) out.analysis_channel_id = Number(channelId.value) || 0
+  for (const k of WEBHOOK) if (keys.value.includes(k)) out[k] = webhookValue(k)
+  if (keys.value.includes('jev_default_set')) out.jev_default_set = jev.value ? jevPayload(jev.value) : null
+  if (keys.value.includes(LEGACY_KEY)) out[LEGACY_KEY] = kept[LEGACY_KEY] ? SETTINGS_MASK : undefined
   return out
+}
+const dirty = computed(() => !!settings.value && JSON.stringify(pageValues()) !== JSON.stringify(initial.value))
+
+function setField(k: string, v: unknown) {
+  form[k] = v
+  delete errs[k]
+}
+const clearError = (k: string) => delete errs[k]
+function toggleLegacyKey() {
+  kept[LEGACY_KEY] = !kept[LEGACY_KEY]
+  clearError(LEGACY_KEY)
+}
+
+/** Schema checks of the changed keys before the request (the core checks again). */
+function validate(current: PageValues): boolean {
+  if (!schema.value) return true
+  const v = (key: string, params?: Record<string, unknown>) => host.i18n.t(`ui.schema.v.${key}`, params)
+  const found = validateSchema(schema.value, ui.value || undefined, current, {
+    required: v('required'),
+    minLength: (n) => v('minLength', { n }),
+    maxLength: (n) => v('maxLength', { n }),
+    pattern: v('pattern'),
+    minimum: (n) => v('minimum', { n }),
+    maximum: (n) => v('maximum', { n }),
+    integer: v('integer'),
+    url: v('url'),
+    email: v('email'),
+    minItems: (n) => v('minItems', { n }),
+    maxItems: (n) => v('maxItems', { n }),
+    text
+  })
+  const changed = keys.value.filter((k) => JSON.stringify(initial.value[k] ?? null) !== JSON.stringify(current[k] ?? null))
+  for (const [path, msg] of Object.entries(found)) {
+    const k = settingsKey(path)
+    if (changed.includes(k)) errs[k] ||= msg
+  }
+  return !Object.keys(errs).length
 }
 
 async function save() {
   clearErrors(errs)
+  const current = pageValues()
+  if (!validate(current)) return
   saving.value = true
   try {
     const latest = await fetchPluginSettings()
-    const m = mergeSettings(SHOWN, loaded, latest.values || {}, initial, pageValues())
+    const m = mergeSettings(keys.value, loaded, latest.values || {}, initial.value, current)
     if (!m.changed.length) {
       host.toast(t('settingsTab.noChanges'), 'info')
       return
     }
     if (m.conflicts.length) {
-      const keys = joinList(m.conflicts.map((k) => t(LABEL[k] || k)))
-      if (!(await host.confirm({ message: t('settingsTab.conflictConfirm', { keys }), confirmText: t('settingsTab.overwrite') }))) return
+      const names = joinList(m.conflicts.map((k) => (k === LEGACY_KEY ? t('settingsTab.legacyKey') : label(k))))
+      if (!(await host.confirm({ message: t('settingsTab.conflictConfirm', { keys: names }), confirmText: t('settingsTab.overwrite') }))) return
     }
     await savePluginSettings(m.values)
     host.toast(t('saved'), 'success')
     await reload()
   } catch (e) {
-    // The first error of a key is shown at its input; others are toasted.
-    applyErrorsOrToast(errs, e, SHOWN, settingsKey)
+    // The first error of a key is shown at its input; others are toasted. A
+    // kept secret the core asks to re-enter (§75.1) says so in the plugin's
+    // words; the hidden 0.1 key cannot be re-entered, only cleared.
+    applyErrorsOrToast(errs, e, keys.value, settingsKey)
+    if (isApiError(e)) {
+      for (const [path, code] of Object.entries(e.fieldCodes)) {
+        const k = settingsKey(path)
+        if (code === 'reenter') errs[k] = k === LEGACY_KEY ? t('settingsTab.legacyKeyReenter') : t('settingsTab.reenter')
+      }
+    }
   } finally {
     saving.value = false
   }
 }
+
+/** A collapsed group is open while the user keeps it open or one of its fields has an error. */
+const isOpen = (g: SettingSection) => !g.collapsed || !!opened[g.id] || g.keys.some((k) => errs[k])
 
 const format = ref<BlockFormat>('openai')
 const formatOptions = computed(() => enumOptions('settingsTab.format', BLOCK_FORMATS))
@@ -140,7 +218,7 @@ const channelOptions = computed(() => [
 ])
 /** The analysis channel is not a usable llm channel (status channel_problem): the server leaves analyses off. */
 const channelError = computed(() => {
-  const id = Number(form.analysis_channel_id) || 0
+  const id = Number(channelId.value) || 0
   if (errs.analysis_channel_id || !id || !catalog.state.loaded) return errs.analysis_channel_id || ''
   const ch = catalog.state.channels.find((c) => c.id === id && c.type === 'llm')
   if (!ch) return t('settingsTab.analysisChannelInvalid', { id })
@@ -159,71 +237,88 @@ const jevOptions = computed(() => [
 
 <template>
   <div>
-    <SHint class="mod-hint">
-      {{ t('settingsTab.hint') }}
-      <SLink as="button" @click="host.router.push(settingsPath())">{{ t('settingsAll') }}</SLink>
-    </SHint>
-    <SSpinner v-if="loading && !defaults" block />
+    <SSpinner v-if="loading && !data" block />
     <SAlert v-else-if="error" tone="danger">{{ error }}</SAlert>
+    <SAlert v-else-if="!sections.length" tone="danger">{{ t('settingsTab.noSchema') }}</SAlert>
     <form v-else class="mod-form mod-form-page" @submit.prevent="save">
-      <SCard :title="t('settingsTab.block')" :subtitle="t('settingsTab.blockHint')">
-        <div class="mod-form">
-          <div class="mod-form-row">
-            <SField :label="t('settingsTab.blockStatus')" :error="errs.block_status">
-              <SInput v-model="form.block_status" type="number" min="400" max="599" :placeholder="String(schemaDefault('block_status'))" />
-            </SField>
-            <SField :label="t('settingsTab.blockMessage')" :error="errs.block_message">
-              <SInput v-model="form.block_message" :maxlength="500" :placeholder="String(schemaDefault('block_message'))" />
-            </SField>
-          </div>
-          <SSegmented v-model="format" :options="formatOptions" size="sm" />
-          <SCode :text="`HTTP ${preview.status}\n${preview.body}`" class="mod-text-block" />
-          <SHint size="xs">{{ t('settingsTab.streamNote') }}</SHint>
-        </div>
-      </SCard>
+      <SAlert v-if="keys.includes(LEGACY_KEY)" :tone="kept[LEGACY_KEY] ? 'warning' : 'info'" data-testid="mod-legacy-key">
+        {{ kept[LEGACY_KEY] ? t('settingsTab.legacyKeyKept') : t('settingsTab.legacyKeyCleared') }}
+        <template v-if="errs[LEGACY_KEY]">
+          <br />
+          <span class="mod-text-danger">{{ errs[LEGACY_KEY] }}</span>
+        </template>
+        <template #actions>
+          <SButton size="sm" @click="toggleLegacyKey">{{ kept[LEGACY_KEY] ? t('settingsTab.legacyKeyClear') : t('settingsTab.legacyKeyUndo') }}</SButton>
+        </template>
+      </SAlert>
 
-      <SCard :title="t('settingsTab.analysis')">
-        <SField :label="t('settingsTab.analysisChannel')" :hint="t('settingsTab.analysisChannelHint')" :error="channelError">
-          <SSelect v-model="form.analysis_channel_id" :options="channelOptions" />
-        </SField>
-      </SCard>
+      <SSettingsGroup
+        v-for="g in sections"
+        :key="g.id"
+        :title="text(g.title) || undefined"
+        :description="text(g.description) || undefined"
+        :collapsible="g.collapsed"
+        :open="isOpen(g)"
+        @update:open="opened[g.id] = $event"
+      >
+        <template v-for="k in g.keys" :key="k">
+          <SSettingRow v-if="k === 'analysis_channel_id'" :label="label(k)" :description="help(k) || undefined" :error="channelError || undefined">
+            <SSelect v-model="channelId" class="mod-setting-control" :options="channelOptions" />
+          </SSettingRow>
+          <SSettingRow
+            v-else-if="k === 'notify_webhook_url' || k === 'notify_webhook_secret'"
+            :label="label(k)"
+            :description="(kept[k] ? t('settingsTab.secretKept') : help(k)) || undefined"
+            :error="errs[k]"
+            stacked
+          >
+            <SInput
+              v-model="webhook[k]"
+              class="mod-grow"
+              :type="k === 'notify_webhook_secret' ? 'password' : 'text'"
+              :maxlength="k === 'notify_webhook_secret' ? 200 : 1000"
+              :placeholder="kept[k] ? SETTINGS_MASK : k === 'notify_webhook_url' ? 'https://' : ''"
+              autocomplete="new-password"
+              @update:model-value="clearError(k)"
+            />
+            <SButton v-if="kept[k]" size="sm" variant="ghost" @click="kept[k] = false">
+              {{ k === 'notify_webhook_url' ? t('settingsTab.clearUrl') : t('settingsTab.clearSecret') }}
+            </SButton>
+          </SSettingRow>
+          <SSettingRow v-else-if="k === 'jev_default_set'" :label="label(k)" :description="help(k) || undefined" :error="errs[k]" stacked>
+            <div class="mod-form mod-setting-wide">
+              <SSegmented v-model="jevMode" :options="jevOptions" size="sm" />
+              <JevQuestionsEditor v-if="jev" v-model="jev">
+                <template #toolbar>
+                  <SButton size="sm" @click="jevMode = 'custom'">{{ t('settingsTab.jevCopyBuiltin') }}</SButton>
+                </template>
+              </JevQuestionsEditor>
+            </div>
+          </SSettingRow>
+          <SchemaField
+            v-else
+            :name="k"
+            :path="k"
+            :schema="prop(k)"
+            :ui="fieldUI(k)"
+            :model-value="form[k]"
+            :root="form"
+            :errors="errs"
+            layout="settings"
+            @update:model-value="setField(k, $event)"
+          />
+          <SSettingRow v-if="k === 'block_message'" :label="t('settingsTab.preview')" stacked>
+            <div class="mod-form mod-setting-wide">
+              <SSegmented v-model="format" :options="formatOptions" size="sm" />
+              <SCode :text="`HTTP ${preview.status}\n${preview.body}`" class="mod-text-block" />
+              <SHint size="xs">{{ t('settingsTab.streamNote') }}</SHint>
+            </div>
+          </SSettingRow>
+        </template>
+      </SSettingsGroup>
 
-      <SCard :title="t('settingsTab.alerts')">
-        <div class="mod-form">
-          <div class="mod-form-row">
-            <SField :label="t('settingsTab.errorRateAlert')" :hint="t('settingsTab.errorRateAlertHint')" :error="errs.error_rate_alert_percent">
-              <SInput v-model="form.error_rate_alert_percent" type="number" min="0" max="100" :placeholder="String(schemaDefault('error_rate_alert_percent'))" />
-            </SField>
-            <SField :label="t('settingsTab.statsRetention')" :hint="t('settingsTab.statsRetentionHint')" :error="errs.stats_retention_days">
-              <SInput v-model="form.stats_retention_days" type="number" min="7" max="3650" :placeholder="String(schemaDefault('stats_retention_days'))" />
-            </SField>
-          </div>
-          <SField :label="t('settingsTab.webhookUrl')" :hint="kept.notify_webhook_url ? t('settingsTab.secretKept') : t('settingsTab.webhookUrlHint')" :error="errs.notify_webhook_url">
-            <SInput v-model="form.notify_webhook_url" :maxlength="1000" placeholder="https://" />
-          </SField>
-          <SField :label="t('settingsTab.webhookSecret')" :hint="kept.notify_webhook_secret ? t('settingsTab.secretKept') : t('settingsTab.webhookSecretHint')" :error="errs.notify_webhook_secret">
-            <SInput v-model="form.notify_webhook_secret" type="password" :maxlength="200" autocomplete="new-password" />
-          </SField>
-          <div v-if="kept.notify_webhook_url || kept.notify_webhook_secret" class="mod-toolbar">
-            <SButton v-if="kept.notify_webhook_url" size="sm" variant="ghost" @click="kept.notify_webhook_url = false">{{ t('settingsTab.clearUrl') }}</SButton>
-            <SButton v-if="kept.notify_webhook_secret" size="sm" variant="ghost" @click="kept.notify_webhook_secret = false">{{ t('settingsTab.clearSecret') }}</SButton>
-          </div>
-        </div>
-      </SCard>
-
-      <SCard :title="t('settingsTab.jev')" :subtitle="t('settingsTab.jevHint')">
-        <div class="mod-form">
-          <SSegmented v-model="jevMode" :options="jevOptions" size="sm" />
-          <SAlert v-if="errs.jev_default_set" tone="danger" dense>{{ errs.jev_default_set }}</SAlert>
-          <JevQuestionsEditor v-if="jev" v-model="jev">
-            <template #toolbar>
-              <SButton size="sm" @click="jevMode = 'custom'">{{ t('settingsTab.jevCopyBuiltin') }}</SButton>
-            </template>
-          </JevQuestionsEditor>
-        </div>
-      </SCard>
-
-      <div class="mod-toolbar">
+      <div class="mod-editor-footer">
+        <SHint v-if="dirty" size="xs" tone="warning" class="mod-mr-auto">{{ t('settingsTab.unsaved') }}</SHint>
         <SButton type="submit" variant="primary" :loading="saving">{{ t('save') }}</SButton>
       </div>
     </form>

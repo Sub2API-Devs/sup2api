@@ -11,15 +11,17 @@ import ChannelsTab from './ChannelsTab.vue'
 import TestTab from './TestTab.vue'
 import SettingsTab from './SettingsTab.vue'
 import { useCatalog } from './catalog'
-import { canManage, canManageSettings, settingsPath, useModHost } from './host'
+import { canManage, canManageSettings, useModHost } from './host'
 import { useStatus } from './status'
 import { modeTone } from './tones'
 import type { TabKey } from './types'
 
 // Prompt moderation page (CONTRACTS §72.15): overview, records, watch list,
 // bans, flows, auditors, channels, playground and, for those who may edit
-// the settings (plugin:manage or moderation:manage, §75.1), the
-// moderation settings (the full schema form stays on the plugin page).
+// the settings (plugin:manage or moderation:manage, §75.1), all the
+// moderation settings. The plugin has no settings of its own on the plugin
+// page any more (ui.settings mode native, §75.5): the console sends
+// /plugins/moderation/settings here with ?tab=settings.
 const host = useModHost()
 const t = host.t
 
@@ -85,9 +87,9 @@ function goTab(k: TabKey) {
   if (isTab(k)) tab.value = k
 }
 
+/** The settings tab; links to it are only shown to those who may edit the settings. */
 function goSettings() {
   if (manageSettings.value) tab.value = 'settings'
-  else host.router.push(settingsPath())
 }
 
 // "Show records of this user" from the overview and the watch list.
@@ -122,7 +124,6 @@ function openWatch(userId: number) {
         </span>
       </template>
       <template #actions>
-        <SButton v-if="manageSettings" icon="settings" @click="host.router.push(settingsPath())">{{ t('settingsAll') }}</SButton>
         <SButton icon="refresh" icon-only :aria-label="t('refresh')" :title="t('refresh')" :loading="refreshing" @click="refresh" />
       </template>
     </SPageHeader>
