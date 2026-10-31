@@ -17,13 +17,24 @@ import (
 // severityPrefix marks the subject of urgent notifications.
 var severityPrefix = map[string]string{protocol.SeverityWarning: "[Warning] ", protocol.SeverityCritical: "[Critical] "}
 
+// undisclosedRecipients is the To header of a message to several recipients:
+// an empty group (RFC 5322 §3.6.3).
+const undisclosedRecipients = "undisclosed-recipients:;"
+
 // compose builds the RFC 5322 message: UTF-8 plain text, base64 encoded.
+// The recipients are in the envelope (RCPT TO) only; the To header names a
+// single recipient, and an empty group for several, so a notification sent
+// to several end users does not show them each other's addresses (as Bcc).
 func compose(s *Settings, in *pluginv1.DeliverNotificationRequest, now time.Time) []byte {
 	var b bytes.Buffer
 	header := func(k, v string) { fmt.Fprintf(&b, "%s: %s\r\n", k, v) }
 	from := mail.Address{Name: s.FromName, Address: s.FromAddress}
 	header("From", from.String())
-	header("To", strings.Join(in.GetRecipients(), ",\r\n "))
+	to := undisclosedRecipients
+	if r := in.GetRecipients(); len(r) == 1 {
+		to = r[0]
+	}
+	header("To", to)
 	header("Subject", encodeSubject(severityPrefix[in.GetSeverity()]+in.GetSubject()))
 	header("Date", now.Format(time.RFC1123Z))
 	header("Message-ID", fmt.Sprintf("<sub2api-notification-%d@%s>", in.GetId(), domainOf(s.FromAddress)))

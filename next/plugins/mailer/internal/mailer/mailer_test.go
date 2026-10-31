@@ -146,15 +146,37 @@ func TestDeliver(t *testing.T) {
 		t.Fatalf("envelope: %s %v", srv.from, srv.to)
 	}
 	head, body, _ := strings.Cut(srv.data, "\r\n\r\n")
-	for _, want := range []string{`From: "Ops" <noreply@example.com>`, "To: ops@example.com,\r\n dev@example.com",
+	// Several recipients: they are in the envelope only, not shown to each
+	// other (as Bcc).
+	for _, want := range []string{`From: "Ops" <noreply@example.com>`, "To: undisclosed-recipients:;\r\n",
 		"Message-ID: <sub2api-notification-42@example.com>", "X-Sub2API-Source: dynweight", "Subject: =?utf-8?b?"} {
 		if !strings.Contains(head, want) {
 			t.Errorf("header %q missing in\n%s", want, head)
 		}
 	}
+	if strings.Contains(srv.data, "ops@example.com") || strings.Contains(srv.data, "dev@example.com") || strings.Contains(head, "Cc:") {
+		t.Errorf("recipients disclosed in the message:\n%s", head)
+	}
 	plain, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(body, "\r\n", ""))
 	if err != nil || string(plain) != "account 7 / group 2 / claude-sonnet-5" {
 		t.Fatalf("body: %q %v", plain, err)
+	}
+}
+
+// A single recipient is named in To as usual.
+func TestDeliverSingleRecipient(t *testing.T) {
+	srv := startSMTP(t, "")
+	in := request()
+	in.Recipients = []string{"ops@example.com"}
+	resp, err := configured(t, srv, nil).DeliverNotification(context.Background(), in)
+	if err != nil || resp.GetRejected() != "" {
+		t.Fatalf("deliver: %v %v", resp, err)
+	}
+	srv.mu.Lock()
+	defer srv.mu.Unlock()
+	head, _, _ := strings.Cut(srv.data, "\r\n\r\n")
+	if strings.Join(srv.to, ",") != "ops@example.com" || !strings.Contains(head, "\r\nTo: ops@example.com\r\n") {
+		t.Fatalf("single recipient: %v\n%s", srv.to, head)
 	}
 }
 
