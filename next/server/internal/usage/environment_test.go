@@ -14,9 +14,9 @@ type fakeEnvironment struct{}
 
 func (fakeEnvironment) ResolveEnvironment(_ context.Context, _, accountID int64) (core.Environment, error) {
 	if accountID == 0 {
-		return core.Environment{core.EnvTaskTimeoutMinutes: 7}, nil
+		return core.Environment{core.EnvVarTaskTimeoutMinutes: 7}, nil
 	}
-	return core.Environment{core.EnvTaskTimeoutMinutes: 5, core.EnvTaskPollMaxFailures: 3}, nil
+	return core.Environment{core.EnvVarTaskTimeoutMinutes: 5, core.EnvVarTaskPollMaxFailures: 3}, nil
 }
 
 func (fakeEnvironment) GlobalEnvironment(context.Context) core.EnvironmentValues { return nil }

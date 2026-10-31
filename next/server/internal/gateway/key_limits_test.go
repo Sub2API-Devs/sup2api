@@ -69,6 +69,25 @@ func TestAPIKeyCaps(t *testing.T) {
 		e.record()
 		limited(t, e, e.messages(body(testModel, false)), "")
 	})
+	// The caps run before the hooks, and a hook's deny still frees the slot.
+	t.Run("before hooks", func(t *testing.T) {
+		e := setup(t, core.KeyLimits{Concurrency: 1})
+		h := &fakeHook{fn: denyIf("forbidden")}
+		e.addHook(guardHook(300, "open"), []string{"prompt_text"}, h)
+		e.slots.inUse[core.KeySlots+":5"] = 1
+		limited(t, e, e.messages(promptBody("please say forbidden", false)), "5")
+		if h.count() != 0 {
+			t.Fatal("a capped request reached a hook")
+		}
+		e.slots.inUse[core.KeySlots+":5"] = 0
+		if r := e.messages(promptBody("please say forbidden", false)); r.status != 403 {
+			t.Fatalf("hook deny: %d %s", r.status, r.body)
+		}
+		e.record()
+		if e.slots.inUse[core.KeySlots+":5"] != 0 {
+			t.Fatal("a denied request kept the key's slot")
+		}
+	})
 	t.Run("uncapped keys are counted", func(t *testing.T) {
 		e := setup(t, core.KeyLimits{})
 		for range 3 {

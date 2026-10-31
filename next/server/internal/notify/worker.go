@@ -81,8 +81,8 @@ func (s *Service) step(ctx context.Context) bool {
 	err := s.db.Pool.QueryRow(ctx, `UPDATE notifications SET status = 'sending', attempts = attempts + 1,
 			next_attempt_at = now() + make_interval(secs => $1)
 		WHERE id = (SELECT id FROM notifications WHERE status IN ('pending', 'sending') AND next_attempt_at <= now()
-			ORDER BY next_attempt_at, id LIMIT 1 FOR UPDATE SKIP LOCKED)
-		RETURNING id, source, channel, recipients, subject, body, severity, attempts`, s.opts.Lease.Seconds()).
+			AND attempts < $2 ORDER BY next_attempt_at, id LIMIT 1 FOR UPDATE SKIP LOCKED)
+		RETURNING id, source, channel, recipients, subject, body, severity, attempts`, s.opts.Lease.Seconds(), s.opts.MaxAttempts).
 		Scan(&q.id, &q.source, &q.channel, &q.recipients, &q.subject, &q.body, &q.severity, &q.attempt)
 	if err != nil {
 		if !store.IsNoRows(err) && ctx.Err() == nil {
@@ -153,7 +153,14 @@ func (s *Service) backoff(attempt int) time.Duration {
 	return min(d, s.opts.BackoffMax)
 }
 
+// purge fails the rows whose last attempt never finished (the lease ran out:
+// its node died mid-delivery), which step no longer claims, and deletes the
+// finished rows past the retention.
 func (s *Service) purge(ctx context.Context) {
+	if _, err := s.db.Pool.Exec(ctx, `UPDATE notifications SET status = 'failed', last_error = 'the last attempt did not finish'
+		WHERE status = 'sending' AND attempts >= $1 AND next_attempt_at <= now()`, s.opts.MaxAttempts); err != nil && ctx.Err() == nil {
+		slog.WarnContext(ctx, "notify: fail expired rows", "err", err)
+	}
 	if _, err := s.db.Pool.Exec(ctx, `DELETE FROM notifications WHERE status IN ('sent', 'failed')
 		AND created_at < now() - make_interval(secs => $1)`, s.opts.Retention.Seconds()); err != nil && ctx.Err() == nil {
 		slog.WarnContext(ctx, "notify: purge", "err", err)

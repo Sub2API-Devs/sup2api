@@ -555,7 +555,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	uctx, ucancel := context.WithCancel(ctx)
 	defer ucancel()
 	var relayTimedOut atomic.Bool
-	if total := c.env.Duration(core.EnvRelayTimeoutSeconds); total > 0 {
+	if total := c.env.Duration(core.EnvVarRelayTimeoutSeconds); total > 0 {
 		relayTimer := time.AfterFunc(total, func() {
 			relayTimedOut.Store(true)
 			ucancel()
@@ -630,7 +630,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	}
 
 	headerWait := c.g.headerWait(c.stream)
-	if d := c.env.Duration(core.EnvResponseHeaderTimeoutSeconds); d > 0 {
+	if d := c.env.Duration(core.EnvVarResponseHeaderTimeoutSeconds); d > 0 {
 		headerWait = d
 	}
 	timer := time.AfterFunc(headerWait, ucancel)
@@ -668,7 +668,7 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 		}
 		return c.classify(ctx, rt, pacct, 0, nil, nil, msg)
 	}
-	if idle := c.env.Duration(core.EnvStreamingIdleTimeoutSeconds); idle > 0 && c.stream {
+	if idle := c.env.Duration(core.EnvVarStreamingIdleTimeoutSeconds); idle > 0 && c.stream {
 		resp.Body = newIdleBody(resp.Body, idle, ucancel)
 	}
 	defer resp.Body.Close()

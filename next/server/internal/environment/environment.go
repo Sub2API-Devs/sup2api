@@ -9,11 +9,13 @@ import (
 	"encoding/json"
 	"log/slog"
 	"maps"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
@@ -25,10 +27,12 @@ const SettingsKey = "environment"
 
 // globalTTL bounds how stale the cached global layer gets on a node that
 // missed the config:changed broadcast; errorTTL is how long a failed read is
-// answered with an empty layer before the database is asked again.
+// answered with an empty layer before the database is asked again;
+// loadTimeout bounds the read, which no caller can cancel.
 const (
-	globalTTL = 10 * time.Second
-	errorTTL  = 2 * time.Second
+	globalTTL   = 10 * time.Second
+	errorTTL    = 2 * time.Second
+	loadTimeout = time.Second
 )
 
 // Service serves the routes and implements core.EnvironmentResolver.
@@ -46,6 +50,7 @@ type Service struct {
 	globalAt time.Time
 	ttl      time.Duration
 	epoch    uint64 // bumped by invalidate, so a read in flight is not cached
+	refill   singleflight.Group
 }
 
 // New wires the service; bus may be nil (single node, tests).
@@ -85,7 +90,9 @@ func (s *Service) invalidate() {
 }
 
 // GlobalEnvironment returns the cached global layer over the process layer.
-// A read error yields the process layer alone for errorTTL.
+// A read error yields the process layer alone for errorTTL. One read refills
+// the cache for all callers, detached from theirs: a client that went away
+// must not leave the fallback cached for everyone.
 func (s *Service) GlobalEnvironment(ctx context.Context) core.EnvironmentValues {
 	s.mu.Lock()
 	cached, at, ttl, epoch := s.global, s.globalAt, s.ttl, s.epoch
@@ -93,21 +100,27 @@ func (s *Service) GlobalEnvironment(ctx context.Context) core.EnvironmentValues 
 	if cached != nil && time.Since(at) < ttl {
 		return cached
 	}
-	global, err := loadGlobal(ctx, s.db.Pool)
-	ttl = globalTTL
-	if err != nil {
-		slog.WarnContext(ctx, "environment: read global layer", "err", err)
-		ttl = errorTTL
-	}
-	values := core.EnvironmentValues{}
-	maps.Copy(values, s.process)
-	maps.Copy(values, global)
-	s.mu.Lock()
-	if s.epoch == epoch {
-		s.global, s.globalAt, s.ttl = values, time.Now(), ttl
-	}
-	s.mu.Unlock()
-	return values
+	// Keyed by epoch: a caller after invalidate does not join an older read.
+	v, _, _ := s.refill.Do(strconv.FormatUint(epoch, 10), func() (any, error) {
+		lctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), loadTimeout)
+		defer cancel()
+		global, err := loadGlobal(lctx, s.db.Pool)
+		ttl := globalTTL
+		if err != nil {
+			slog.WarnContext(ctx, "environment: read global layer", "err", err)
+			ttl = errorTTL
+		}
+		values := core.EnvironmentValues{}
+		maps.Copy(values, s.process)
+		maps.Copy(values, global)
+		s.mu.Lock()
+		if s.epoch == epoch {
+			s.global, s.globalAt, s.ttl = values, time.Now(), ttl
+		}
+		s.mu.Unlock()
+		return values, nil
+	})
+	return v.(core.EnvironmentValues)
 }
 
 // ResolveEnvironment reads the group and account layers and merges them with

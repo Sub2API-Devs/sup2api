@@ -11,31 +11,31 @@ import (
 func TestResolveEnvironmentNearestLayerWins(t *testing.T) {
 	env := ResolveEnvironment(
 		// The async task variables have no global layer (the reconcile settings are).
-		EnvironmentValues{EnvRelayTimeoutSeconds: 60, EnvMaxRequestBodyMB: 8, EnvTaskTimeoutMinutes: 30, EnvTaskPollMaxFailures: 5},
-		EnvironmentValues{EnvRelayTimeoutSeconds: 120, EnvMaxRequestBodyMB: 16, EnvTaskTimeoutMinutes: 30},
+		EnvironmentValues{EnvVarRelayTimeoutSeconds: 60, EnvVarMaxRequestBodyMB: 8, EnvVarTaskTimeoutMinutes: 30, EnvVarTaskPollMaxFailures: 5},
+		EnvironmentValues{EnvVarRelayTimeoutSeconds: 120, EnvVarMaxRequestBodyMB: 16, EnvVarTaskTimeoutMinutes: 30},
 		// An account cannot hold the body limit; a value left from elsewhere is ignored.
-		EnvironmentValues{EnvRelayTimeoutSeconds: 600, EnvMaxRequestBodyMB: 64, EnvStreamingIdleTimeoutSeconds: 999999},
+		EnvironmentValues{EnvVarRelayTimeoutSeconds: 600, EnvVarMaxRequestBodyMB: 64, EnvVarStreamingIdleTimeoutSeconds: 999999},
 	)
-	require.EqualValues(t, 600, env[EnvRelayTimeoutSeconds])
-	require.EqualValues(t, 16, env[EnvMaxRequestBodyMB])
-	require.EqualValues(t, 30, env[EnvTaskTimeoutMinutes])
-	_, set := env[EnvStreamingIdleTimeoutSeconds]
+	require.EqualValues(t, 600, env[EnvVarRelayTimeoutSeconds])
+	require.EqualValues(t, 16, env[EnvVarMaxRequestBodyMB])
+	require.EqualValues(t, 30, env[EnvVarTaskTimeoutMinutes])
+	_, set := env[EnvVarStreamingIdleTimeoutSeconds]
 	require.False(t, set, "out of range values are skipped")
-	_, set = env[EnvTaskPollMaxFailures]
+	_, set = env[EnvVarTaskPollMaxFailures]
 	require.False(t, set, "a value on a layer the variable lacks is skipped")
-	require.Equal(t, 10*time.Minute, env.Duration(EnvRelayTimeoutSeconds))
-	require.Equal(t, 30*time.Minute, env.Duration(EnvTaskTimeoutMinutes))
-	require.EqualValues(t, 16<<20, env.Bytes(EnvMaxRequestBodyMB))
-	require.Zero(t, env.Duration(EnvResponseHeaderTimeoutSeconds))
+	require.Equal(t, 10*time.Minute, env.Duration(EnvVarRelayTimeoutSeconds))
+	require.Equal(t, 30*time.Minute, env.Duration(EnvVarTaskTimeoutMinutes))
+	require.EqualValues(t, 16<<20, env.Bytes(EnvVarMaxRequestBodyMB))
+	require.Zero(t, env.Duration(EnvVarResponseHeaderTimeoutSeconds))
 }
 
 func TestValidateEnvironmentValues(t *testing.T) {
 	ctx := context.Background()
-	out, fe := ValidateEnvironmentValues(ctx, EnvLayerGroup, "environment", EnvironmentValues{EnvRelayTimeoutSeconds: 30, EnvMaxRequestBodyMB: 0})
+	out, fe := ValidateEnvironmentValues(ctx, EnvLayerGroup, "environment", EnvironmentValues{EnvVarRelayTimeoutSeconds: 30, EnvVarMaxRequestBodyMB: 0})
 	require.Empty(t, fe)
-	require.Equal(t, EnvironmentValues{EnvRelayTimeoutSeconds: 30}, out, "0 follows the next layer and is dropped")
+	require.Equal(t, EnvironmentValues{EnvVarRelayTimeoutSeconds: 30}, out, "0 follows the next layer and is dropped")
 
-	_, fe = ValidateEnvironmentValues(ctx, EnvLayerAccount, "environment", EnvironmentValues{EnvMaxRequestBodyMB: 8, "nope": 1, EnvRelayTimeoutSeconds: 86401})
+	_, fe = ValidateEnvironmentValues(ctx, EnvLayerAccount, "environment", EnvironmentValues{EnvVarMaxRequestBodyMB: 8, "nope": 1, EnvVarRelayTimeoutSeconds: 86401})
 	fields := map[string]bool{}
 	for _, f := range fe {
 		fields[f.Field] = true

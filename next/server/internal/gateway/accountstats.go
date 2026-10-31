@@ -87,12 +87,13 @@ func (c *call) observeAttemptResult(ref *core.AccountRef, result attemptResult) 
 	}
 	rec := *c.rec
 	rec.AccountID, rec.PluginKey = &ref.ID, ref.PluginKey
-	local := false
+	flagged := false
 	if result.err != nil {
 		rec.Success, rec.StatusCode, rec.ErrorType = false, result.err.Status, result.err.RecordType
-		local = isLocalFailure(result.err.LocalFailure, result.err.RecordType)
+		flagged = result.err.LocalFailure
 	}
-	c.publishObservation(observation.AttemptFinished, &rec, local)
+	// A done attempt can still have failed locally (forward's credit storage).
+	c.publishObservation(observation.AttemptFinished, &rec, !rec.Success && isLocalFailure(flagged, rec.ErrorType))
 }
 
 // isLocalFailure tells whether a failed attempt is not the account's fault

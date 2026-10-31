@@ -337,17 +337,9 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 	if e := cl.checkModel(ctx); e != nil {
 		return reject(cl, e)
 	}
-	if e := cl.runHooks(ctx); e != nil {
-		return reject(cl, e)
-	}
-	if e := cl.checkModel(ctx); e != nil {
-		return reject(cl, e)
-	}
-	if e := cl.prepareBilling(ctx); e != nil {
-		return reject(cl, e)
-	}
 	p := cl.principal
-	// Each turn is one request of the API key (CONTRACTS §60).
+	// Each turn is one request of the API key (CONTRACTS §60), capped
+	// before the hooks run, as on HTTP.
 	_, releaseKey, ke := s.g.admitKey(ctx, p, cl.rid)
 	if ke != nil {
 		return reject(cl, ke)
@@ -362,6 +354,15 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 			releaseKey()
 		}
 	}()
+	if e := cl.runHooks(ctx); e != nil {
+		return reject(cl, e)
+	}
+	if e := cl.checkModel(ctx); e != nil {
+		return reject(cl, e)
+	}
+	if e := cl.prepareBilling(ctx); e != nil {
+		return reject(cl, e)
+	}
 	var e *gwError
 	if s.up == nil {
 		releaseAccount, e = s.connect(ctx, cl)

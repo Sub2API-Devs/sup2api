@@ -131,10 +131,10 @@ func (s *Service) withEnvironment(ctx context.Context, cfg resolved, groupID int
 		slog.WarnContext(ctx, "usage: resolve environment", "group", groupID, "account", account, "err", err)
 		return cfg
 	}
-	if d := env.Duration(core.EnvTaskTimeoutMinutes); d > 0 {
+	if d := env.Duration(core.EnvVarTaskTimeoutMinutes); d > 0 {
 		cfg.maxAge = d
 	}
-	if n := env[core.EnvTaskPollMaxFailures]; n > 0 {
+	if n := env[core.EnvVarTaskPollMaxFailures]; n > 0 {
 		cfg.maxPollFailures = int(n)
 	}
 	return cfg

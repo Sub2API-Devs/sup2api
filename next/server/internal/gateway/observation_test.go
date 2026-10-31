@@ -100,3 +100,38 @@ func TestObservationPluginLocalFailure(t *testing.T) {
 		})
 	}
 }
+
+// A failed attempt is local unless it is an upstream failure (CONTRACTS
+// §73.1), also when the attempt finished with a failed record instead of an
+// error (forward's credit storage).
+func TestObservationAttemptLocalFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		success bool
+		errType string
+		err     *gwError
+		local   bool
+	}{
+		{"success", true, "", nil, false},
+		{"done upstream failure", false, errTypeUpstream, nil, false},
+		{"done credit storage", false, "gateway_credit_storage", nil, true},
+		{"done client canceled", false, errTypeClientCanceled, nil, true},
+		{"upstream error", false, "", &gwError{RecordType: errTypeUpstream}, false},
+		{"upstream error flagged", false, "", &gwError{RecordType: errTypeUpstream, LocalFailure: true}, true},
+		{"no account", false, "", &gwError{RecordType: errTypeNoAccount}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			capture := observationCapture{events: make(chan *pluginv1.RequestObservation, 1)}
+			c := &call{g: &Gateway{d: Deps{Observations: capture}, now: time.Now}, start: time.Now(),
+				rec: &core.UsageRecord{RequestID: "request", Attempts: 1, Success: tc.success, ErrorType: tc.errType}}
+			kind := attemptDone
+			if tc.err != nil {
+				kind = attemptFailover
+			}
+			c.observeAttemptResult(&core.AccountRef{ID: 1}, attemptResult{kind: kind, err: tc.err})
+			v := <-capture.events
+			require.Equal(t, observation.AttemptFinished, v.Phase)
+			require.Equal(t, tc.local, v.LocalFailure)
+		})
+	}
+}

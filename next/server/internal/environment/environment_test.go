@@ -67,7 +67,7 @@ func setup(t *testing.T) *env {
 	e.admin = mkUser(t, db, "admin@x.com")
 	e.user = mkUser(t, db, "user@x.com")
 	engine := gin.New()
-	e.svc = New(db, e.bus, core.EnvironmentValues{core.EnvRelayTimeoutSeconds: 900, core.EnvStreamingIdleTimeoutSeconds: 45})
+	e.svc = New(db, e.bus, core.EnvironmentValues{core.EnvVarRelayTimeoutSeconds: 900, core.EnvVarStreamingIdleTimeoutSeconds: 45})
 	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, fakeAuthz{admin: e.admin}))
 	e.h = engine
 	return e
@@ -116,7 +116,7 @@ func TestGlobalLayerRoutes(t *testing.T) {
 	if code, out = e.do(e.admin, "PUT", "/settings/environment", map[string]any{"values": map[string]int64{"nope": 1}}); code != 400 {
 		t.Fatalf("unknown: %d %v", code, out)
 	}
-	if got := e.svc.GlobalEnvironment(context.Background()); len(got) != 2 || got[core.EnvMaxRequestBodyMB] != 0 {
+	if got := e.svc.GlobalEnvironment(context.Background()); len(got) != 2 || got[core.EnvVarMaxRequestBodyMB] != 0 {
 		t.Fatalf("cached before put, the process layer alone: %v", got)
 	}
 	code, out = e.do(e.admin, "PUT", "/settings/environment", map[string]any{"values": map[string]int64{
@@ -128,7 +128,7 @@ func TestGlobalLayerRoutes(t *testing.T) {
 		t.Fatalf("broadcast: %v", e.bus.msgs)
 	}
 	// The put invalidated the cached (empty) layer.
-	if got := e.svc.GlobalEnvironment(context.Background()); got[core.EnvMaxRequestBodyMB] != 64 {
+	if got := e.svc.GlobalEnvironment(context.Background()); got[core.EnvVarMaxRequestBodyMB] != 64 {
 		t.Fatalf("global: %v", got)
 	}
 	_, out = e.do(e.admin, "GET", "/settings/environment", nil)
@@ -158,20 +158,38 @@ func TestResolveEnvironment(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The account's max_request_body_mb is not on its layer and is skipped.
-	if got[core.EnvRelayTimeoutSeconds] != 60 || got[core.EnvTaskPollMaxFailures] != 3 || got[core.EnvMaxRequestBodyMB] != 50 {
+	if got[core.EnvVarRelayTimeoutSeconds] != 60 || got[core.EnvVarTaskPollMaxFailures] != 3 || got[core.EnvVarMaxRequestBodyMB] != 50 {
 		t.Fatalf("resolved: %v", got)
 	}
 	got, err = e.svc.ResolveEnvironment(ctx, groupID, 0)
-	if err != nil || got[core.EnvRelayTimeoutSeconds] != 120 {
+	if err != nil || got[core.EnvVarRelayTimeoutSeconds] != 120 {
 		t.Fatalf("group alone: %v %v", got, err)
 	}
 	// The global layer wins over the process layer, which fills what it leaves unset.
 	got, err = e.svc.ResolveEnvironment(ctx, 0, 0)
-	if err != nil || got[core.EnvRelayTimeoutSeconds] != 300 || got[core.EnvStreamingIdleTimeoutSeconds] != 45 {
+	if err != nil || got[core.EnvVarRelayTimeoutSeconds] != 300 || got[core.EnvVarStreamingIdleTimeoutSeconds] != 45 {
 		t.Fatalf("global alone: %v %v", got, err)
 	}
 	// The async task variables have no global layer: the reconcile settings are.
 	if code, _ := e.do(e.admin, "PUT", "/settings/environment", map[string]any{"values": map[string]int64{"task_poll_max_failures": 9}}); code != 400 {
 		t.Fatalf("task variable on the global layer: %d", code)
+	}
+}
+
+// The refill does not run on the caller's context: a cancelled client must
+// not leave the process-only fallback cached for everyone.
+func TestGlobalEnvironmentIgnoresCallerCancel(t *testing.T) {
+	e := setup(t)
+	if code, out := e.do(e.admin, "PUT", "/settings/environment", map[string]any{"values": map[string]int64{
+		"max_request_body_mb": 64}}); code != 200 {
+		t.Fatalf("put: %d %v", code, out)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if got := e.svc.GlobalEnvironment(ctx); got[core.EnvVarMaxRequestBodyMB] != 64 {
+		t.Fatalf("cancelled caller: %v", got)
+	}
+	if got := e.svc.GlobalEnvironment(context.Background()); got[core.EnvVarMaxRequestBodyMB] != 64 {
+		t.Fatalf("cached after a cancelled caller: %v", got)
 	}
 }

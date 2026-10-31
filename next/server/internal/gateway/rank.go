@@ -66,16 +66,14 @@ func clampRank(ctx context.Context, plugin, field string, id int64, v, max int32
 // rankOverrides returns the priority/weight the scheduler.rank plugins gave
 // the candidates of this request (CONTRACTS §24), nil when nothing changed.
 //
-// The plugins are called once per request, only when the request did not hit
-// a sticky binding, and the result is reused by every failover attempt. They
+// The plugins are called once per request, at the first pick the sticky
+// binding does not serve (including the failover after a failed bound
+// attempt), and the result is reused by every later failover attempt. They
 // run serially in binding order, each seeing the values left by the previous
 // one. Every failure is fail open: a plugin that times out, errors or answers
 // nonsense is skipped, and a run that excluded every candidate is discarded
 // entirely, back to the accounts' own priority and weight.
 func (c *call) rankOverrides(ctx context.Context, cands []core.AccountRef) map[int64]rankValues {
-	if s := c.sticky; s != nil && s.hit {
-		return nil // the binding served this request: never call the plugins
-	}
 	if c.rankDone {
 		return c.ranked
 	}

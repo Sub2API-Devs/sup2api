@@ -209,6 +209,7 @@ func TestDeliveryLeaseAndMissingChannel(t *testing.T) {
 	s, _, db := setup(t)
 	ctx := context.Background()
 	r, _ := s.Notify(ctx, "dynweight", email("lease"))
+	last, _ := s.Notify(ctx, "dynweight", email("last"))
 	// A worker that outlived its lease does not overwrite the next claim.
 	q := queued{id: r.ID, attempt: 1}
 	if _, err := db.Pool.Exec(ctx, `UPDATE notifications SET status = 'sending', attempts = 2 WHERE id = $1`, r.ID); err != nil {
@@ -224,6 +225,19 @@ func TestDeliveryLeaseAndMissingChannel(t *testing.T) {
 	s.step(ctx)
 	if st, _, e := status(t, db, r.ID); st != "failed" || !strings.Contains(e, "not available") {
 		t.Fatalf("missing channel: %s %q", st, e)
+	}
+
+	// A last attempt whose lease ran out is not claimed again: purge fails it.
+	if _, err := db.Pool.Exec(ctx, `UPDATE notifications SET status = 'sending', attempts = 3 WHERE id = $1`, last.ID); err != nil {
+		t.Fatal(err)
+	}
+	due(t, db)
+	if s.step(ctx) {
+		t.Fatal("claimed a row past MaxAttempts")
+	}
+	s.purge(ctx)
+	if st, attempts, e := status(t, db, last.ID); st != "failed" || attempts != 3 || e != "the last attempt did not finish" {
+		t.Fatalf("expired last attempt: %s %d %q", st, attempts, e)
 	}
 }
 

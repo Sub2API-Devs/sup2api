@@ -220,7 +220,20 @@ func (c *call) run(ctx context.Context) {
 		return
 	}
 
-	// 3. Hooks (may deny or patch the body).
+	// 3. The caps of the API key. They depend on the key alone, so a capped
+	// request is refused before any hook runs (as new-api rate-limits before
+	// moderation); a task snapshot is read locally and is not capped.
+	if !c.ep.TaskQuery() {
+		admitted, releaseKey, e := c.g.admitKey(ctx, p, c.rid)
+		if e != nil {
+			c.fail(e)
+			return
+		}
+		defer releaseKey()
+		ctx = admitted
+	}
+
+	// 4. Hooks (may deny or patch the body).
 	if e := c.runHooks(ctx); e != nil {
 		c.fail(e)
 		return
@@ -250,20 +263,12 @@ func (c *call) run(ctx context.Context) {
 		c.fail(e)
 		return
 	}
-	// 4. Account types serving the protocol.
+	// 5. Account types serving the protocol.
 	c.planRoutes()
 	if len(c.routeKeys) == 0 {
 		c.fail(errEndpointNotServed)
 		return
 	}
-
-	// 5. The caps of the API key.
-	ctx, releaseKey, e := c.g.admitKey(ctx, p, c.rid)
-	if e != nil {
-		c.fail(e)
-		return
-	}
-	defer releaseKey()
 
 	// 6. Schedule, forward, fail over.
 	c.dispatch(ctx)
@@ -322,7 +327,7 @@ func (c *call) newRecord() *core.UsageRecord {
 // bodyLimit is the largest client request body (or WebSocket message):
 // max_request_body_mb, else what the endpoint declares, else the default.
 func (c *call) bodyLimit() int64 {
-	if env := c.environment(nil).Bytes(core.EnvMaxRequestBodyMB); env > 0 {
+	if env := c.environment(nil).Bytes(core.EnvVarMaxRequestBodyMB); env > 0 {
 		return env
 	}
 	if c.ep.Request.MaxBodyBytes > 0 {

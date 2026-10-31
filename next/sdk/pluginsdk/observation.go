@@ -5,8 +5,6 @@ import (
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/protocol"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type Observer interface {
@@ -23,11 +21,8 @@ func (s observationServer) OnObservations(ctx context.Context, in *pluginv1.Obse
 }
 
 func ReadObservationMetrics(ctx context.Context, h Host, in *pluginv1.ReadObservationMetricsRequest) (*pluginv1.ReadObservationMetricsResponse, error) {
-	if h == nil || h.Client() == nil {
-		return nil, ErrHostNotReady
-	}
-	if h.Info().HostAPIVersion < protocol.ObservationHostAPIVersion {
-		return nil, status.Error(codes.Unimplemented, "host does not support observations")
+	if err := requireHostAPI(h, protocol.ObservationHostAPIVersion, "observation metrics"); err != nil {
+		return nil, err
 	}
 	return h.Client().ReadObservationMetrics(ctx, in)
 }

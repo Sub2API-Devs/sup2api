@@ -20,12 +20,12 @@ import (
 
 // Environment variable keys, shared with plugins through the SDK.
 const (
-	EnvRelayTimeoutSeconds          = protocol.EnvRelayTimeoutSeconds
-	EnvResponseHeaderTimeoutSeconds = protocol.EnvResponseHeaderTimeoutSeconds
-	EnvStreamingIdleTimeoutSeconds  = protocol.EnvStreamingIdleTimeoutSeconds
-	EnvMaxRequestBodyMB             = protocol.EnvMaxRequestBodyMB
-	EnvTaskTimeoutMinutes           = protocol.EnvTaskTimeoutMinutes
-	EnvTaskPollMaxFailures          = protocol.EnvTaskPollMaxFailures
+	EnvVarRelayTimeoutSeconds          = protocol.EnvVarRelayTimeoutSeconds
+	EnvVarResponseHeaderTimeoutSeconds = protocol.EnvVarResponseHeaderTimeoutSeconds
+	EnvVarStreamingIdleTimeoutSeconds  = protocol.EnvVarStreamingIdleTimeoutSeconds
+	EnvVarMaxRequestBodyMB             = protocol.EnvVarMaxRequestBodyMB
+	EnvVarTaskTimeoutMinutes           = protocol.EnvVarTaskTimeoutMinutes
+	EnvVarTaskPollMaxFailures          = protocol.EnvVarTaskPollMaxFailures
 )
 
 // EnvironmentLayer is a layer an environment variable can be set on.
@@ -62,27 +62,27 @@ var (
 
 // EnvironmentVariables is the declared set, in display order.
 var EnvironmentVariables = []EnvironmentVariable{
-	{Key: EnvRelayTimeoutSeconds, Unit: "seconds", Min: 1, Max: 86400, Layers: allLayers, ProcessEnv: "SUB2API_RELAY_TIMEOUT_SECONDS",
+	{Key: EnvVarRelayTimeoutSeconds, Unit: "seconds", Min: 1, Max: 86400, Layers: allLayers, ProcessEnv: "SUB2API_RELAY_TIMEOUT_SECONDS",
 		Name: LocalizedText{"en": "Upstream timeout", "zh": "上游整体超时"},
 		Help: LocalizedText{"en": "Longest time one upstream attempt may take, including reading a streamed response. Unset: no limit.",
 			"zh": "一次上游尝试的最长耗时，包含读取流式响应。未设置：不限。"}},
-	{Key: EnvResponseHeaderTimeoutSeconds, Unit: "seconds", Min: 1, Max: 86400, Layers: allLayers, ProcessEnv: "SUB2API_RESPONSE_HEADER_TIMEOUT_SECONDS",
+	{Key: EnvVarResponseHeaderTimeoutSeconds, Unit: "seconds", Min: 1, Max: 86400, Layers: allLayers, ProcessEnv: "SUB2API_RESPONSE_HEADER_TIMEOUT_SECONDS",
 		Name: LocalizedText{"en": "Response header timeout", "zh": "响应头超时"},
 		Help: LocalizedText{"en": "Longest wait for the upstream response headers. Unset: 180 s for streams, 600 s otherwise.",
 			"zh": "等待上游响应头的最长时间。未设置：流式 180 秒，非流式 600 秒。"}},
-	{Key: EnvStreamingIdleTimeoutSeconds, Unit: "seconds", Min: 1, Max: 86400, Layers: allLayers, ProcessEnv: "SUB2API_STREAMING_IDLE_TIMEOUT_SECONDS",
+	{Key: EnvVarStreamingIdleTimeoutSeconds, Unit: "seconds", Min: 1, Max: 86400, Layers: allLayers, ProcessEnv: "SUB2API_STREAMING_IDLE_TIMEOUT_SECONDS",
 		Name: LocalizedText{"en": "Stream idle timeout", "zh": "流式空闲超时"},
 		Help: LocalizedText{"en": "Longest gap between two reads of a streamed response. Unset: no limit.",
 			"zh": "流式响应两次读到数据之间的最长间隔。未设置：不限。"}},
-	{Key: EnvMaxRequestBodyMB, Unit: "mb", Min: 1, Max: 1024, Layers: []EnvironmentLayer{EnvLayerGlobal, EnvLayerGroup}, ProcessEnv: "SUB2API_MAX_REQUEST_BODY_MB",
+	{Key: EnvVarMaxRequestBodyMB, Unit: "mb", Min: 1, Max: 1024, Layers: []EnvironmentLayer{EnvLayerGlobal, EnvLayerGroup}, ProcessEnv: "SUB2API_MAX_REQUEST_BODY_MB",
 		Name: LocalizedText{"en": "Request body limit", "zh": "请求体上限"},
 		Help: LocalizedText{"en": "Largest client request body. Unset: what the endpoint declares, else 32 MB.",
 			"zh": "客户端请求体的上限。未设置：端点声明的值，否则 32 MB。"}},
-	{Key: EnvTaskTimeoutMinutes, Unit: "minutes", Min: 1, Max: 43200, Layers: taskLayers,
+	{Key: EnvVarTaskTimeoutMinutes, Unit: "minutes", Min: 1, Max: 43200, Layers: taskLayers,
 		Name: LocalizedText{"en": "Async task timeout", "zh": "异步任务超时"},
 		Help: LocalizedText{"en": "How long the core keeps observing an async task (image, video). Unset: the reconcile settings.",
 			"zh": "核心观测一个异步任务（画图、视频）的最长时间。未设置：沿用对账设置。"}},
-	{Key: EnvTaskPollMaxFailures, Unit: "count", Min: 1, Max: 1000, Layers: taskLayers,
+	{Key: EnvVarTaskPollMaxFailures, Unit: "count", Min: 1, Max: 1000, Layers: taskLayers,
 		Name: LocalizedText{"en": "Task query failure limit", "zh": "任务查询失败上限"},
 		Help: LocalizedText{"en": "Consecutive failed queries after which an async task is given up. Unset: the reconcile settings.",
 			"zh": "异步任务连续查询失败多少次后放弃。未设置：沿用对账设置。"}},

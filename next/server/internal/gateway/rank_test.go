@@ -103,6 +103,39 @@ func TestRankNotCalledOnStickyHit(t *testing.T) {
 	}
 }
 
+// The binding serves only its own attempt: when the bound account fails, the
+// failover pick consults the plugins like any other unbound pick.
+func TestRankCalledOnStickyFailover(t *testing.T) {
+	e := newEnv(t)
+	e.enableSticky(onFailureFailover)
+	r := e.addRanker("guard", manifest.SchedulerRank{}, &fakeRanker{})
+
+	sess := withSession(body(testModel, false), "rank-sess")
+	if res := e.messages(sess); res.status != 200 {
+		t.Fatalf("status %d %s", res.status, res.body)
+	}
+	e.record()
+	r.mu.Lock()
+	r.fn = func(context.Context, *pluginv1.RankAccountsRequest) ([]*pluginv1.RankedAccount, error) {
+		return []*pluginv1.RankedAccount{rank(3, 0, 1)}, nil
+	}
+	r.mu.Unlock()
+	e.up.set("acc-1", &upstreamRule{status: 500})
+
+	if res := e.messages(sess); res.status != 200 {
+		t.Fatalf("status %d %s", res.status, res.body)
+	}
+	if rec := e.record(); !rec.StickyHit || rec.Attempts != 2 {
+		t.Fatalf("expected a failed sticky hit then a failover: %+v", rec)
+	}
+	if k := strings.Join(e.up.keys(), ","); k != "acc-1,acc-1,acc-3" {
+		t.Fatalf("upstream order %s, want the bound acc-1 then the ranked acc-3", k)
+	}
+	if n := r.count(); n != 2 {
+		t.Fatalf("RankAccounts called %d times, want 2 (the failover of the second request asks)", n)
+	}
+}
+
 // One call per request, reused by every failover attempt; the request it
 // builds carries the candidates with normalized weights.
 func TestRankCalledOncePerRequest(t *testing.T) {
