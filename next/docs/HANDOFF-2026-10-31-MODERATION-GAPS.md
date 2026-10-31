@@ -3,7 +3,8 @@
 > **进度（2026-10-30 更新）**：
 > - 本清单的缺口已在插件 0.4.0 补齐（`feat/next-platform`，提交 952a65803 至 afac307a6），并做过两轮 agent 审核（代码规范、迁移完整度）及修复。
 > - 实现情况、有意保留的差异、仍缺的核心接口，见 CONTRACTS §72.14；界面见 §72.15。
-> - 仍未做（需要核心支持）：`users.read`、按权限通知管理员、插件审计日志、按 endpoint 或会话筛选记录、设置页权限。
+> - 2026-10-31 合并动态权重后，核心有了通知（§73.4 `Notify`，按渠道 + 接收人发送）。moderation 仍发自己的签名 webhook，是否迁到核心通知等用户决定；剩下的缺口只是"按权限通知管理员、各管理员自己订阅"。
+> - 仍未做（需要核心支持）：`users.read`、按权限通知管理员（及各管理员自己的订阅）、插件审计日志、按 endpoint 或会话筛选记录、设置页权限。
 
 > 本清单由只读 agent 对照两边源码生成，主控没有逐条核实，只作待办来源用，动手前请对照源码确认。
 >
@@ -346,7 +347,7 @@
 
 ## 4. 通知
 
-**收件人**：启用中、角色为管理员及以上、订阅了渠道通知、并且有内容审核读或写权限的人。通过 `service.NotifyUser` 发邮件或 webhook，用收件人设置的语言。插件里没有对应的宿主接口，改为插件自己发 webhook，做法参照 `next/plugins/guard/internal/guard/hook.go` 的 alertSender。
+**收件人**：启用中、角色为管理员及以上、订阅了渠道通知、并且有内容审核读或写权限的人。通过 `service.NotifyUser` 发邮件或 webhook，用收件人设置的语言。核心通知（§73.4）只按渠道 + 接收人发送，不能按权限找收件人，所以插件仍自己发签名 webhook（是否迁到核心通知等用户决定），做法参照 `next/plugins/guard/internal/guard/hook.go` 的 alertSender。
 
 **名单自动变更**（auto_block、auto_downgrade、auto_remove 各发一条）：
 - 内容：用户名、原级别、新级别、趋势、建议和跳转链接。
@@ -367,7 +368,7 @@
 | 识别管理员 | 名单、统计 | 已用 `AuthzCheck(moderation:read)` 实现（`staff.go`） |
 | 用户当前所在的分组 | 上下文条 | 取该用户最近一条记录的分组 |
 | 全部分组列表 | 找出未绑定流程的分组、已失效的分组 | 界面调 `/groups`（需要 group:read 权限） |
-| 给管理员发通知 | 第 4 节 | 改为插件自己发 webhook |
+| 按权限给管理员发通知 | 第 4 节 | 核心已有 `Notify`（§73.4），但只按渠道 + 接收人发送；按权限找收件人、各管理员订阅仍缺。插件继续发自己的 webhook |
 | 管理操作审计 | recordManageAudit | 核心没有给插件写审计的接口 |
 | 请求端点路径、粘性会话指纹 | 记录的 endpoint 和 session_fp 筛选 | RequestMeta 里没有这两个字段 |
 | 渠道代理 | 渠道 proxy 字段 | 自定义的 Transport 要从 SDK 装好之后的 `http.DefaultTransport` Clone 出来，才会继续走出口隧道 |

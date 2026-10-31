@@ -70,6 +70,8 @@ export default {
 
   hp: {
     kv: 'KV storage',
+    secrets: 'Secret storage',
+    prices: 'Read model prices',
     config: 'Configuration',
     log: 'Logging',
     broadcast: 'Cluster broadcast',
@@ -80,6 +82,7 @@ export default {
     ui_menu: 'Console menus',
     ui_iframe: 'Sandboxed iframe pages',
     accounts_read: 'Read accounts',
+    accounts_auto_state: 'Change account automatic state',
     lock: 'Cross-node lock',
     db_schema: 'Dedicated database schema',
     net: 'External network access',
@@ -91,6 +94,7 @@ export default {
     scheduler_rank: 'Rewrite account scheduling',
     notify_send: 'Send notifications',
     sticky_clear: 'Clear sticky session bindings',
+    gateway_observe: 'Observe gateway requests',
     users_read: 'Read users',
     accounts_credentials: 'Account credentials',
     ledger_credit: 'Credit user balances',

@@ -847,7 +847,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 候选账号 = 分组内 `active` 且 `schedulable` 的账号 ∩ 账号类型能服务该端点（原生或经转换） ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm 上限。粘性绑定的账号仍然优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机；逐个获取并发槽位，失败切换时跳过已试过的账号。
 
-排序用的 `priority` / `weight` **可能已被插件为本次请求改写**（§24：未命中粘性绑定的请求会先过一遍 `SchedulerService.RankAccounts`，`weight=0` 的账号本次不用）。候选集合的筛选、并发槽位、限流、冷却仍完全由核心把关，插件改不到。
+排序用的 `priority` / `weight` **可能已被插件为本次请求改写**（§24：粘性绑定不服务的挑选（未命中，或绑定账号失败后的切换）会先过一遍 `SchedulerService.RankAccounts`，`weight=0` 的账号本次不用）。候选集合的筛选、并发槽位、限流、冷却仍完全由核心把关，插件改不到。
 
 ### 18.3 接口变化
 
@@ -1390,7 +1390,7 @@ message RankedAccount {
 
 ### 24.3 调用时机与边界
 
-1. **只对未命中粘性绑定的请求调用**。命中粘性绑定的请求直接用绑定账号，完全不调插件——热路径不为这个扩展点付代价。这里取严：**只要绑定账号在本次请求里被返回过，后续的失败切换重试一律不再调用插件**（不会因为绑定账号失败、转入普通调度就补调一次）。
+1. **只在粘性绑定不服务的那次挑选时调用**。命中粘性绑定的请求直接用绑定账号，完全不调插件——热路径不为这个扩展点付代价。绑定账号失败、转入普通调度时补调一次（2026-10-31 修订，原先取严不补调；动态权重 §73 需要在这时避开已降权的账号，与 new-api 亲和失败后的重试一致），结果供后续失败切换复用。
 2. **每个请求只调一次**；失败切换重试时复用同一次的结果，不重新调用，结果也不跨请求缓存。
 3. **故障一律 fail open**：超时、报错、插件不可用、应答非法（含响应对象为空）、或把所有候选的 `weight` 都置 0 —— 全部回退到账号自身的 `priority` / `weight`，并记一条警告日志。插件不能让网关无账号可用。（`accounts` 为空数组不算故障，见 §24.2。）
 4. **插件只能改写核心已经筛出的候选，不能凭空加账号**：响应里出现不在 `candidates` 中的 `account_id` 一律忽略（记警告）。
@@ -4292,7 +4292,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ### 60.2 网关
 
-- 认证结果 `core.APIKeyPrincipal.KeyLimits` 携带这三个上限。HTTP、WebSocket 每一轮、资源请求都在选账号之前调用 `admitKey`：先占 `apikey` 类并发槽（`core.KeySlots`，与账号的并发槽同一套 Valkey 有序集合，节点宕机由心跳回收），再在 `apikey` 作用域的分钟窗口里原子地检查并计入一次请求（`ratelimit.Minute.Admit`，Redis `TIME` 取窗口）。
+- 认证结果 `core.APIKeyPrincipal.KeyLimits` 携带这三个上限。HTTP、WebSocket 每一轮、资源请求都在请求钩子（§20，如内容审核）之前调用 `admitKey`（与 new-api 先限速后审核一致；只读本地的任务查询不调用），所以被钩子、计费或路由拒绝的请求也计入一次 RPM：先占 `apikey` 类并发槽（`core.KeySlots`，与账号的并发槽同一套 Valkey 有序集合，节点宕机由心跳回收），再在 `apikey` 作用域的分钟窗口里原子地检查并计入一次请求（`ratelimit.Minute.Admit`，Redis `TIME` 取窗口）。
 - 不设上限的 Key 也计数（槽与分钟窗口），供列表显示当前用量；Valkey 不可用时请求失败（503），与账号限速一致。
 - 超限返回 429（`rate_limited`，消息含 "API key"），并发超限 `Retry-After: 5`，RPM/TPM 超限 `Retry-After` 为到下一分钟的秒数；不会选账号、不会请求上游，用量记录的 `error_type` 为 `rate_limited`。
 - TPM 与账号 TPM（§18）相同：响应结束、知道 token 数后由 `countTokens` 同时计入账号与 Key 的窗口，同一分钟内同时进行的大请求可能超出，超出后本分钟剩余的请求被拒。
@@ -4733,7 +4733,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 1. **取结尾的消息不改核心**：gjson 自带的多路径写法 `messages|@reverse|[0,1,…,15]` 就能取到倒数 16 条（倒序；数组不足 16 条时缺的位置自动跳过，2026-10-30 用 gjson v1.19.0 实测）。插件把结果倒回正序，再算出结尾连续的 user 消息，不必把整段历史传过去。下文用 `TAIL16` 代指 `|@reverse|[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]`。
 2. **宿主调用 `SecretSeal` / `SecretOpen`**（HostService，宿主权限 `secrets`，风险 low，即无需管理员额外同意，插件升级时自动授予）：用核心的主密钥做 AES-256-GCM（`secret.Cipher`），AAD = `plugin-secret:{插件 key}:{context}`，context 由插件指定（≤128 字节，例如 `channel:3`），明文 ≤64 KiB。插件 A 封存的数据插件 B 解不开，同一插件换了 context 也解不开；解不开时一律返回 `InvalidArgument "ciphertext does not open"`，不区分原因。SDK：`Host.SealSecret` / `Host.OpenSecret`；`pluginsdktest.FakeHost` 用公开的测试密钥实现同样的绑定。审核渠道的 API Key 和代理地址密文存在插件表里（new-api 存明文；我们的账号凭证都加密，这里不降级）。旧核心没有这两个调用，返回 Unimplemented。
-3. **钩子请求的消息大小，只改 SDK、不改核心**：插件侧 gRPC 默认只收 4 MiB，带图片的请求会超过。SDK 加选项 `pluginsdk.WithMaxRecvMsgSize(n)`（编译进插件），moderation 设成 64 MiB。核心作为客户端的发送上限是 gRPC 默认值（不限），请求体本身上限 32 MiB（`defaultMaxBodyBytes`，现有端点都没有调大），钩子字段只是请求体的片段，所以 64 MiB 下不会因超大而失败，也就不会因此触发钩子熔断。
+3. **钩子请求的消息大小，只改 SDK、不改核心**：插件侧 gRPC 默认只收 4 MiB，带图片的请求会超过。SDK 加选项 `pluginsdk.WithMaxRecvMsgSize(n)`（编译进插件）。核心作为客户端的发送上限是 gRPC 默认值（不限），钩子字段只是请求体的片段。**不变量：插件的接收上限 ≥ 核心可配置的最大请求体 + 请求元数据**，超大的钩子调用会以 `RESOURCE_EXHAUSTED` 失败、按 failure open 放行并计入熔断，连续 10 次就会让整个集群暂停审核。请求体上限原先固定为 32 MiB，moderation 设 64 MiB；§73.3 的 `max_request_body_mb` 最大可设 1024 MB（`core.EnvironmentVariables` 里的 Max），所以 moderation 改为 1025 MiB（`main.go` 的 `maxRecvMsgSize`，多出的 1 MiB 给元数据），核心调大这个 Max 时要同步改。代价：这么大的单次调用在插件里要临时占用约两倍于消息的内存，超过 manifest 的 512 MB（GOMEMLIMIT 是软上限，资源监控连续 3 次采样超标才报 `memory_exceeded`）。
 4. `moderation` 的 `hostCompat` 改为 `>=` 本次核心版本（因为要用 `secrets`）；**发布顺序是先核心、后插件**。
 5. 不改：钩子点（仍然只有 `gateway.request`）、`usage_logs`、权限目录。插件权限在 manifest 里声明。
 
@@ -4741,6 +4741,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - 版本 0.2.0；能力不变（`gateway.hook.v1`、`app.jobs.v1`、`app.broadcast.v1`、`http.routes.v1`），宿主权限加 `secrets`。
 - 钩子 `needs` 改为：`model`、`messagesTAIL16`、`inputTAIL16`、`[input]|#(%"*")`、`contentsTAIL16`（`TAIL16` 见 72.2 第 1 条，manifest 里写展开后的原文）。`scope.fields` 照抄。
+- 钩子 `match.protocols`：`anthropic.messages`、`openai.chat`、`openai.responses`、`openai.responses_ws`、`gemini.generate`、`gemini.stream_generate`。`openai.responses_ws`（2026-10-31 补上）：核心对 WebSocket 的每条 `response.create` 单独跑钩子，字段从这条消息本身取（`model`、`input` 在顶层，与 HTTP Responses 相同），漏掉它时拦截级用户和被封禁用户走 WebSocket 就完全不经审核。`*.count_tokens` 和 `openai.embeddings` 不生成内容，new-api 也不审（`gate.go` 的 `auditedFormats`），不加。
 - 权限：保留 `moderation:read`、`moderation:manage`，和 new-api 的 read / write 一一对应。read 能看全部页面，包括原文；manage 负责所有修改和要花钱的调用（试跑、测试、手动分析）。
 - 任务：`cleanup` 保留（72.10）；P2 加 `analysis`（`@every 1m`，处理分析队列，72.13）。
 
@@ -4803,6 +4804,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - 改 `base_url` 的 scheme 或 host、或者改了代理时，必须重新填 key（new-api `channel.go:147-159`）。
 - 代理：P1 不做（`proxy_enc` 列已建好但不用），渠道都走插件默认出口（SDK 隧道，`net` 权限）。
+- **`llm` 渠道指回本网关**时，审核调用就是普通的网关流量（只是钩子按自身请求标记跳过审核）：dynweight（§73.5）照常给这些账号计数、调权。moderation 的 `ttft_timeout_ms`（72.14）到点后取消请求，核心看到的是客户端取消，dynweight 不计入，所以学不到这类慢。建议给审核用的 Key 单独建一个分组，并让 `ttft_timeout_ms` 与该分组 dynweight 规则里的首字（`ttfb`）阈值一致。
 
 **审核器**（表 `auditors`）有名称、类型、`channel_id`（只能绑同类型的渠道）、`config` jsonb、软删除。
 
@@ -5115,7 +5117,8 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 **告警与通知**：
 - `alerts` 任务每分钟检查一次：近 1 小时内某个流程至少有 20 次运行，且异常率超过 `error_rate_alert_percent` 时告警。告警状态存在 KV 里，TTL 2 小时；只要仍然超标，每次检查都刷新 TTL，所以一段连续超标只发一次通知。`error_rate_alert_percent` 设为 0 表示关闭告警。
 - AI 分析自动调整名单级别时也会发通知。
-- 核心没有"通知管理员"的接口，所以通知发到 `notify_webhook_url`：JSON POST，中英双语，可以用 `notify_webhook_secret` 做 HMAC 签名（请求头 `X-Signature: sha256=…`）。通知里不带被审核的原文。设置表单里，密钥是 `writeOnly`，URL 是 `x-sensitive`。
+- 通知发到 `notify_webhook_url`：JSON POST，中英双语，可以用 `notify_webhook_secret` 做 HMAC 签名（请求头 `X-Signature: sha256=…`）。通知里不带被审核的原文。设置表单里，密钥是 `writeOnly`，URL 是 `x-sensitive`。
+- 核心现在有通知（§73.4 `Notify`），但它按"渠道 + 接收人"发送，不按权限找管理员。是否把 moderation 的签名 webhook 迁到核心通知，等用户决定；在此之前继续用 webhook。
 
 **用户信息**：
 - `GET /users/:user_id`：任意用户 id 都能查，不要求在名单上。返回以下内容：
@@ -5145,7 +5148,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **仍缺核心支持**：
 - `users.read`：批量取用户名和角色。有了它，通知可以带用户名，手动加入名单时可以校验用户是否存在。
-- 按权限通知管理员：可以支持各管理员自己的订阅、邮件和语言。
+- 按权限通知管理员、各管理员自己订阅：核心通知（§73.4）只按渠道和接收人发送，还不能发给"持有 `moderation:read` 的管理员"，也没有各管理员的订阅和语言。
 - 插件写审计日志：目前只有名单历史有记录，其他管理操作都不留审计。
 - `RequestMeta` 增加 endpoint 和粘性会话指纹：记录才能按 endpoint、会话筛选。
 - manifest 增加 `ui.settings.permission`：让 `moderation:manage` 的用户也能编辑设置，目前要求核心的 `plugin:manage`。
@@ -5204,7 +5207,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 ### 73.1 请求观测的新字段（`RequestObservation`）
 
 - `group_id`（26）：请求所在分组。
-- `local_failure`（27）：这次失败不怪账号。来源是平台插件的 `ClassifyError` 判为 local_failure，核心在本地转交响应时出错（例如缓冲响应的临时文件写失败），或者失败不是上游失败（错误类型不是 `upstream_error`，例如账号不可用、资源准备失败）。上游的错误响应读不完整（连接被重置、卡住）仍算上游失败。WebSocket 会话的每一轮同样按这三条判断。健康统计应把它排除。
+- `local_failure`（27）：这次失败不怪账号。来源是平台插件的 `ClassifyError` 判为 local_failure，核心在本地转交响应时出错（例如缓冲响应的临时文件写失败），或者失败不是上游失败（错误类型不是 `upstream_error`，例如账号不可用、资源准备失败）。上游的错误响应读不完整（连接被重置、卡住）仍算上游失败。判断看的是这次尝试最终记下的错误类型：转发完成但在本地出错的尝试（例如额度写入失败）同样算本地失败。WebSocket 会话的每一轮同样按这三条判断。健康统计应把它排除。
 - `upstream_status_code`（28）：上游对这次尝试回的状态码。上游没有响应时为 0。客户端看到的 `status_code` 可能经过映射，也可能是合成的 502，所以健康统计按这个字段算。流式响应开始时就记下，上游回 200 以外的状态也照记。
 
 ### 73.2 清理粘性会话（`HostService.ClearStickyBindings`，Host API 8，授权 `sticky.clear`）
@@ -5233,7 +5236,8 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **插件**：
   - 网关请求的解析结果在 `RequestMeta.environment`。
   - 后台任务调用 `HostService.GetEnvironment(group_id, account_id)`，总是授权。
-  - 变量名常量在 SDK 的 `protocol` 包（`protocol.EnvRelayTimeoutSeconds` 等），核心复用同一组常量。
+  - 变量名常量在 SDK 的 `protocol` 包（`protocol.EnvVarRelayTimeoutSeconds` 等），核心复用同一组常量。
+  - 目前没有插件读这两处：转发由核心完成，变量也由核心应用。它们是留给自己向上游转发的插件（自带 HTTP 客户端、后台任务直接调上游）的扩展点，这类插件应按同样的变量设超时和上限。
 - **读声明的接口** `GET /environment/variables` 需要 `settings:read`、`group:read` 或 `account:read` 之一（三层编辑器都要用）。
 
 ### 73.4 通知
@@ -5269,6 +5273,8 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 客户端取消和 `local_failure` 不算。
   - 失败按 `upstream_status_code` 分桶。传输失败落在 0 桶，任何豁免都不覆盖它。
   - 只有成功的尝试有耗时（与 new-api 一致，失败只计入错误率）：成功流式请求的首字耗时 = 首个流事件 − 尝试开始，成功请求的整次耗时 = 结束 − 开始。
+- **异步任务端点不计数**：task-submit / task-query 端点不发观测（`server/internal/gateway/accountstats.go`），所以只服务异步任务的账号不会被 dynweight 降权。这是与 new-api 的差别：new-api 记录任务提交的尝试。
+- **画图模型**：非流式的画图调用没有首字样本，整次耗时就是整个生成时间。默认规则的阈值（例如"首字挂死"的整次耗时 p100 ≥ 120 秒）按分组配置，画图模型应放在单独的分组，按生成时间另设阈值，否则正常的长生成会被当成挂死。
 - **汇总**：各节点先在内存里聚合，每秒按键排序批量 upsert 到 `obs`（排序避免多节点互相死锁）。写失败的计数放回内存，下次再写。内存中待写的键最多 50000 个，超出的样本丢弃并计数。
 
 #### 判定与调权（`internal/rules`，从 new-api 内核忠实移植）
@@ -5290,7 +5296,8 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 先 flush，再逐键运行 `rules.Evaluate`。
   - 状态写回时用 `gen` 做 CAS：重叠的运行或并发的重置只有一方写入，输掉的一方不记事件、不通知、不清理粘性会话，所以每个（键、窗口）恰好生效一次。正确性靠 CAS，不靠任务锁。
   - 全局关闭时照常运行：已降权的键按"不调整"钉回基准（规则历史清空，消费截止保留），重新开启后从基准开始，已评估过的窗口不再消费。
-  - 记录事件，发送通知，按动作清理粘性会话。某个键失败不影响其他键，已写入状态的键的事件照常记录，任务最后报告失败数。
+  - 记录事件，按动作清理粘性会话，所有键评估完后发一条通知摘要。某个键失败不影响其他键，已写入状态的键的事件照常记录，任务最后报告失败数。
+  - 同一个键有多个策略要清理时只调用一次，取最大比例：同一个 `salt` 下，大比例选中的绑定包含小比例选中的。
   - 有效权重有变化时广播 `dynweight.weights`，各节点重新加载快照。快照里只有不在基准上的键。
 - **基准权重**：从 `RankCandidate` 学到（账号、分组）的权重，写入 `bases`。
   - 账号权重被修改后，键的历史重置，事件原因记为 `base_mismatch`。
@@ -5309,8 +5316,9 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 
 - **何时发送**：降权、开始回升、恢复到基准、从 0 复活。
 - **配置**：在 dynweight 的配置里选渠道和接收人，语言可选 zh 或 en。保存时会校验渠道确实存在。
-- **级别**：降到 0 为 critical，其他降权为 warning，其余为 info。
-- **去重**：去重键是 sha1(账号|分组|模型|类型|窗口起点)，窗口 3600 秒。
+- **合并**：一次评估运行的全部转折点合并成一条摘要（只有一处时标题直接写这一处），最严重的在前，最多列 50 处，其余写"另有 N 处"。核心按来源限速（每 5 分钟 20 条），逐键发送会在大批降权时丢掉大部分通知。评估每 10 秒一次、各账号窗口相位错开，持续大面积波动时摘要本身仍可能被限速。
+- **级别**：取摘要中最严重的一处：降到 0 为 critical，其他降权为 warning，其余为 info。
+- **去重**：去重键是摘要中各处 账号|分组|模型|类型|窗口起点 排序后的 sha1，窗口 3600 秒，重试的运行报告同样的转折点不会再发。
 - **失败处理**：发送失败只写日志，不影响评估。
 
 #### 接口（`/api/v1/p/dynweight/*`，读需要 `dynweight:read`，写需要 `dynweight:manage`）
@@ -5333,3 +5341,8 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 权重事件。
   - 配置：全局层、分组层、账号覆盖、通知，规则和策略都可以可视化编辑。
 - **账号列表**：`account.list.weight` 插槽在权重下方显示"动态 N"。同一帧内所有行的请求合并成一次 `/weights`。
+
+### 73.6 发布
+
+- 带迁移 `0064_environment`、`0065_notifications` 和 Host API 8 的核心改变了 schema 契约，不能滚动更新（§33：v1 只滚动 schema 和 Host API 不变的版本）。按 primary-first（§34）发布：从节点停止、主节点迁移，期间入口 503，要预留维护窗口；签名时传旧的 schema 契约。
+- 所有节点都是新核心后，再由管理员启用 `dynweight`。

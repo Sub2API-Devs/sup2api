@@ -12,7 +12,7 @@ if (process.env.SUB2API_MOCK_TOPOLOGY) {
     body: { data: { version: '0.1.11', managed: true, core_node_id: routing || legacy ? 'sup2api-1' : 'sup2api-2', core_boot_id: routing || legacy ? 'core-0' : 'core-1' } }
   }))
   const count = 4
-  const versions: Record<string, string> = { anthropic: '0.2.1', gemini: '0.2.0', moderation: '0.1.6', openai: '0.3.0', volcengine: '0.10.1' }
+  const versions: Record<string, string> = { anthropic: '0.2.1', gemini: '0.2.0', moderation: '0.4.0', openai: '0.3.0', volcengine: '0.10.1' }
   on('GET', '/nodes', () => Array.from({ length: count }, (_, i) => ({
     node_id: `sup2api-${i + 1}`, boot_id: `core-${i}`, addr: `127.0.0.1:${3130 + i}`, host_version: '0.1.9',
     started_at: now(-3600), last_heartbeat: now(-1),

@@ -1,5 +1,9 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { accountTypesOf, endpointText, platformsOf, settingsFieldErrors } from './pluginUtil'
+import en from '@/i18n/locales/en/plugins'
+import zh from '@/i18n/locales/zh/plugins'
+import { HOST_PERMISSION_RISK, accountTypesOf, endpointText, hpKey, platformsOf, settingsFieldErrors } from './pluginUtil'
 
 describe('plugin endpoint declarations', () => {
   it('preserves the same subset in manifests and installation reviews', () => {
@@ -40,5 +44,24 @@ describe('endpointText', () => {
   it('joins method, path and protocol', () => {
     expect(endpointText({ method: 'POST', path: '/v1/messages', protocol: 'anthropic' })).toBe('POST /v1/messages (anthropic)')
     expect(endpointText({ route: '/x' })).toBe('/x')
+  })
+})
+
+describe('HOST_PERMISSION_RISK', () => {
+  // Vitest runs from next/web; the SDK's table is the source of truth.
+  const goTable = readFileSync('../sdk/manifest/manifest.go', 'utf8').match(/var HostPermissionRisk = map\[string\]string\{([^}]*)\}/)
+  const sdkRisk = Object.fromEntries(
+    [...(goTable?.[1] ?? '').matchAll(/"([^"]+)":\s*Risk(\w+)/g)].map((m) => [m[1], m[2].toLowerCase()])
+  )
+
+  it('matches sdk/manifest HostPermissionRisk', () => {
+    expect(Object.keys(sdkRisk).length).toBeGreaterThan(0)
+    expect(HOST_PERMISSION_RISK).toEqual(sdkRisk)
+  })
+  it('labels every permission in en and zh', () => {
+    for (const id of Object.keys(sdkRisk)) {
+      expect(en.hp, id).toHaveProperty(hpKey(id))
+      expect(zh.hp, id).toHaveProperty(hpKey(id))
+    }
   })
 })

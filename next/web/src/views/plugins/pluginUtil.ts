@@ -9,6 +9,8 @@ export type Risk = 'low' | 'medium' | 'high' | 'critical'
 /** Copy of sdk/manifest.HostPermissionRisk. */
 export const HOST_PERMISSION_RISK: Record<string, Risk> = {
   kv: 'low',
+  secrets: 'low',
+  prices: 'low',
   config: 'low',
   log: 'low',
   broadcast: 'low',
@@ -28,8 +30,10 @@ export const HOST_PERMISSION_RISK: Record<string, Risk> = {
   'gateway.hook': 'high',
   'gateway.endpoint': 'high',
   'platform.register': 'high',
+  'accounts.auto_state': 'high',
   'scheduler.rank': 'high',
   'sticky.clear': 'high',
+  'gateway.observe': 'high',
   'users.read': 'high',
   'accounts.credentials': 'critical',
   'ledger.credit': 'critical',

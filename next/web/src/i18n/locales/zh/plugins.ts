@@ -70,6 +70,8 @@ export default {
 
   hp: {
     kv: 'KV 存储',
+    secrets: '密钥存储',
+    prices: '读取模型价格',
     config: '读取配置',
     log: '日志',
     broadcast: '集群广播',
@@ -80,6 +82,7 @@ export default {
     ui_menu: '控制台菜单',
     ui_iframe: '沙箱 iframe 页面',
     accounts_read: '读取账号',
+    accounts_auto_state: '修改账号自动状态',
     lock: '跨节点锁',
     db_schema: '独立数据库 schema',
     net: '外部网络访问',
@@ -91,6 +94,7 @@ export default {
     scheduler_rank: '改写账号调度参数',
     notify_send: '发送通知',
     sticky_clear: '清除粘性会话绑定',
+    gateway_observe: '观测网关请求',
     users_read: '读取用户',
     accounts_credentials: '账号凭证',
     ledger_credit: '余额入账',
