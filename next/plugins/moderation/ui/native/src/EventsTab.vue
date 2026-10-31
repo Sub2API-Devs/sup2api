@@ -1,19 +1,12 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useList } from '@sub2api/host'
-import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SHint, SInput, SPagination, SSelect, STable, STimeRange, type RangeKey, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SBulkBar, SButton, SCard, SField, SHint, SInput, SLink, SPagination, SSelect, STable, STimeRange, type RangeKey, type TableColumn } from '@sub2api/ui'
 import ResultBadge from './ResultBadge.vue'
 import CategoryChips from './CategoryChips.vue'
 import EventDetail from './EventDetail.vue'
 import VerdictBadge from './VerdictBadge.vue'
-import FlowLabel from './pages/FlowLabel.vue'
-import ScoreChips from './pages/ScoreChips.vue'
-import StagePath from './pages/StagePath.vue'
-import UserCell from './pages/UserCell.vue'
-import { topScores } from './pages/scores'
-import { loadAuditors, loadFlows } from './pages/catalog'
 import { canManage, enumLabel, errorMessage, reviewEvents, score, useModHost, type ModEvent, type ReviewStatus } from './host'
-import { groupList, groupName, loadGroups } from './directory'
 
 // Records: filters + paginated table (useList); a row opens the detail modal,
 // selected rows can be reviewed in bulk.
@@ -22,7 +15,7 @@ const host = useModHost()
 const t = host.t
 const manage = computed(() => canManage())
 
-const emptyForm = () => ({ result: 'suspicious', timing: '', review_status: '', ai_verdict: '', verdict: '', severity: '', watch_level: '', group_id: '' as string | number, flow_id: '', user_id: '', request_id: '', q: '' })
+const emptyForm = () => ({ result: 'suspicious', timing: '', review_status: '', ai_verdict: '', verdict: '', severity: '', watch_level: '', flow_id: '', user_id: '', request_id: '', q: '' })
 const form = reactive(emptyForm())
 if (props.preset) form.user_id = String(props.preset.user_id)
 const range = ref<RangeKey>('all')
@@ -39,7 +32,6 @@ function query() {
     verdict: form.verdict,
     severity: form.severity,
     watch_level: form.watch_level,
-    group_id: String(form.group_id).trim(),
     flow_id: form.flow_id.trim(),
     user_id: form.user_id.trim(),
     request_id: form.request_id.trim(),
@@ -80,26 +72,20 @@ const severityOptions = computed(() => withAll(opts('severity', ['high', 'medium
 const watchOptions = computed(() => withAll([{ value: 'any', label: t('events.watched') }, ...opts('level', ['observe', 'enforce'])]))
 const aiVerdictOptions = computed(() => withAll(opts('aiVerdict', ['violation', 'false_positive', 'unsure', 'none'])))
 const verdictOptions = computed(() => withAll([{ value: 'needs_review', label: t('events.needsReview') }, { value: 'disagree', label: t('events.disagree') }]))
-// Groups come from the core (group:read); without it the filter takes an id.
-loadGroups()
-const groupOptions = computed(() => withAll([0, ...(groupList() || []).map((g) => g.id)].map((id) => ({ value: String(id), label: groupName(id) }))))
-const hasGroups = computed(() => !!groupList()?.length)
 
-watch(() => [form.result, form.timing, form.review_status, form.ai_verdict, form.verdict, form.severity, form.watch_level, form.group_id, from.value, to.value], apply)
+watch(() => [form.result, form.timing, form.review_status, form.ai_verdict, form.verdict, form.severity, form.watch_level, from.value, to.value], apply)
 watch(
   () => props.preset,
   (p) => p && reset(String(p.user_id))
 )
 
-// The header refresh also refreshes the flow names and current versions.
-defineExpose({ reload: () => Promise.all([list.reload(), loadFlows(true), loadAuditors(true)]) })
+defineExpose({ reload: list.reload })
 
 const columns = computed<TableColumn[]>(() => [
   { key: 'created_at', label: t('events.col.time'), width: '10.5rem', nowrap: true },
   { key: 'result', label: t('events.col.result'), nowrap: true },
   { key: 'hit_categories', label: t('events.col.categories') },
-  { key: 'scores', label: t('pagesP3.events.scores') },
-  { key: 'path', label: t('pagesP3.events.path'), nowrap: true },
+  { key: 'highest_score', label: t('events.col.score'), align: 'right', nowrap: true },
   { key: 'verdict', label: t('events.col.verdict'), nowrap: true },
   { key: 'text_excerpt', label: t('events.col.text'), ellipsis: '22rem' },
   { key: 'user_id', label: t('events.col.user') },
@@ -177,10 +163,6 @@ async function review(status: ReviewStatus) {
         <SField class="mod-filter" :label="t('events.watch')">
           <SSelect v-model="form.watch_level" :options="watchOptions" />
         </SField>
-        <SField class="mod-filter" :label="t('pagesP3.events.group')">
-          <SSelect v-if="hasGroups" v-model="form.group_id" :options="groupOptions" searchable />
-          <SInput v-else v-model="form.group_id" inputmode="numeric" :placeholder="t('pagesP3.events.groupId')" />
-        </SField>
         <SField class="mod-filter" :label="t('events.userId')">
           <SInput v-model="form.user_id" inputmode="numeric" />
         </SField>
@@ -228,14 +210,9 @@ async function review(status: ReviewStatus) {
           <div class="mod-sub">{{ enumLabel('timing', row.timing) }}</div>
         </template>
         <template #cell-hit_categories="{ row }"><CategoryChips :categories="row.hit_categories" /></template>
-        <template #cell-scores="{ row }">
-          <ScoreChips v-if="topScores(row.trace).length" :scores="topScores(row.trace)" />
-          <span v-else class="mod-num">{{ row.highest_category ? score(row.highest_score) : '—' }}</span>
+        <template #cell-highest_score="{ row }">
+          <span class="mod-num">{{ row.highest_category ? score(row.highest_score) : '—' }}</span>
           <div v-if="row.severity" class="mod-sub">{{ enumLabel('severity', row.severity) }}</div>
-        </template>
-        <template #cell-path="{ row }">
-          <StagePath v-if="row.trace" :trace="row.trace" :result="row.result" compact />
-          <SHint v-else inline>—</SHint>
         </template>
         <template #cell-verdict="{ row }"><VerdictBadge :event="row" /></template>
         <template #cell-text_excerpt="{ row }">
@@ -243,13 +220,15 @@ async function review(status: ReviewStatus) {
           <SBadge v-if="row.image_count" size="xs" tone="gray" class="mod-ml">{{ t('events.images', { n: row.image_count }) }}</SBadge>
         </template>
         <template #cell-user_id="{ row }">
-          <UserCell :id="row.user_id" link :title="t('events.filterUser')" @open="filterUser" />
-          <div v-if="row.group_id || hasGroups" class="mod-sub">{{ groupName(row.group_id) }}</div>
+          <SLink v-if="row.user_id" as="button" class="mod-num" :title="t('events.filterUser')" @click.stop="filterUser(row.user_id)">#{{ row.user_id }}</SLink>
+          <SHint v-else inline>—</SHint>
         </template>
-        <template #cell-flow="{ row }"><FlowLabel :flow-id="row.flow_id" :version="row.flow_version" /></template>
+        <template #cell-flow="{ row }">
+          <span v-if="row.flow_id" class="mod-num">#{{ row.flow_id }} v{{ row.flow_version }}</span>
+          <SHint v-else inline>{{ t('events.legacy') }}</SHint>
+        </template>
         <template #cell-latency_ms="{ row }">
           <span class="mod-num">{{ t('ms', { n: host.i18n.formatNumber(row.latency_ms) }) }}</span>
-          <div v-if="row.queue_ms" class="mod-sub mod-num" :title="t('pagesP3.events.queueHint')">{{ t('detail.queued', { n: host.i18n.formatNumber(row.queue_ms) }) }}</div>
         </template>
       </STable>
       <div class="mod-pager">

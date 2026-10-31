@@ -292,8 +292,11 @@ func (p *Plugin) simulateFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*
 	if err != nil || len(spec.Stages) == 0 {
 		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_flow", "the flow spec has no stages / 流程没有审核级"), nil
 	}
-	snap := p.snap.Load()
-	f := &liveFlow{ID: id, Name: name, Version: version, Spec: spec, timeout: snap.flowTimeout(spec)}
-	m := &moderation{cfg: c, flow: f, snap: snap, in: input, timing: TimingPre, source: SourceSimulate}
+	timeout := time.Duration(spec.TotalTimeoutMs) * time.Millisecond
+	if timeout <= 0 {
+		timeout = maxTotalTimeoutMs * time.Millisecond
+	}
+	f := &liveFlow{ID: id, Name: name, Version: version, Spec: spec, timeout: timeout}
+	m := &moderation{cfg: c, flow: f, snap: p.snap.Load(), in: input, timing: TimingPre, source: SourceSimulate}
 	return pluginsdk.DataResponse(p.testResult(ctx, m)), nil
 }

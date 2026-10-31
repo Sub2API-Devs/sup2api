@@ -1,7 +1,6 @@
 package moderation
 
 import (
-	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -28,12 +27,6 @@ const (
 	AuditorOpenAI     = ChannelOpenAI
 	AuditorTypeSafe   = ChannelTypeSafe
 	AuditorLLMVerdict = "llm_verdict"
-)
-
-// Upstream paths of the scored engines.
-const (
-	pathModerations = "/v1/moderations"
-	pathSystemOne   = "/v1/systemone"
 )
 
 // channelTypeOf is the channel type an auditor type binds to.
@@ -201,15 +194,12 @@ type Outcome struct {
 	TopCategory string        `json:"top_category,omitempty"`
 	TopScore    float64       `json:"top_score"`
 	Hits        []HitCategory `json:"hits,omitempty"`
-	// Top lists the categories closest to their thresholds (score /
-	// threshold), hits or not; scored auditors only.
-	Top       []HitCategory `json:"top,omitempty"`
-	LatencyMs int64         `json:"latency_ms"`
-	Skipped   bool          `json:"skipped,omitempty"`
-	Err       error         `json:"-"`
-	ErrType   string        `json:"err,omitempty"`
-	Status    int           `json:"status,omitempty"`
-	Cost      *CallCost     `json:"cost,omitempty"` // console paths only
+	LatencyMs   int64         `json:"latency_ms"`
+	Skipped     bool          `json:"skipped,omitempty"`
+	Err         error         `json:"-"`
+	ErrType     string        `json:"err,omitempty"`
+	Status      int           `json:"status,omitempty"`
+	Cost        *CallCost     `json:"cost,omitempty"` // console paths only
 }
 
 // audit calls the engine once through the bound channel and judges the
@@ -247,7 +237,7 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool,
 	}
 	out.LatencyMs = p.now().Sub(start).Milliseconds()
 	if source == SourceAudit {
-		// Priced from the trace once the run is counted (countCalls).
+		// Priced from the trace once the run is counted (countRun).
 		p.countCall(source, ch, out.Calls, out.Err, out.LatencyMs)
 	} else {
 		out.Cost = p.priceNow(ctx, source, ch, out.EngineResult, out.Err)
@@ -268,7 +258,6 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool,
 		return out
 	}
 	out.Hit = len(out.Hits) > 0
-	out.Top = a.nearest(out.Scores, 3)
 	for _, c := range a.order {
 		if s, ok := out.Scores[c]; ok && (out.TopCategory == "" || s > out.TopScore) {
 			out.TopCategory, out.TopScore = c, s
@@ -283,21 +272,6 @@ func (p *Plugin) audit(ctx context.Context, a *liveAuditor, in *Input, pre bool,
 		}
 	}
 	return out
-}
-
-// nearest returns the n categories with the highest score / threshold.
-func (a *liveAuditor) nearest(scores map[string]float64, n int) []HitCategory {
-	if a.Type == AuditorLLMVerdict {
-		return nil
-	}
-	out := make([]HitCategory, 0, len(a.order))
-	for _, c := range a.order {
-		if th := a.thresholds[c]; th > 0 {
-			out = append(out, HitCategory{Category: c, Label: a.labels[c], Score: scores[c], Threshold: th})
-		}
-	}
-	slices.SortStableFunc(out, func(x, y HitCategory) int { return cmp.Compare(y.Score/y.Threshold, x.Score/x.Threshold) })
-	return out[:min(n, len(out))]
 }
 
 // judge compares every expected category with its threshold; a missing or
@@ -373,7 +347,7 @@ func callModerations(ctx context.Context, ch *liveChannel, text, img string) (ma
 			CategoryScores map[string]float64 `json:"category_scores"`
 		} `json:"results"`
 	}
-	if err := callJSON(ctx, ch, pathModerations, nil, map[string]any{"model": ch.Model, "input": input}, &out); err != nil {
+	if err := callJSON(ctx, ch, "/v1/moderations", nil, map[string]any{"model": ch.Model, "input": input}, &out); err != nil {
 		return nil, "", err
 	}
 	if len(out.Results) == 0 {
@@ -497,7 +471,7 @@ func callSystemOne(ctx context.Context, ch *liveChannel, qs *JevQuestions, text 
 		header = map[string]string{jevImagesHeader: "true"}
 	}
 	var out systemOneAnswers
-	err := callJSON(ctx, ch, pathSystemOne, header, body, &out)
+	err := callJSON(ctx, ch, "/v1/systemone", header, body, &out)
 	return out, err
 }
 

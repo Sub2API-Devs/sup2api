@@ -1,11 +1,8 @@
 package moderation
 
 import (
-	"cmp"
 	"context"
 	"errors"
-	"maps"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -204,7 +201,6 @@ type statsAcc struct {
 	users    map[userKey]*userRow
 	queue    chan priceItem
 	dropped  atomic.Int64
-	freshAt  atomic.Int64 // unix ns of the last read-triggered flush
 }
 
 func newStatsAcc() *statsAcc {
@@ -269,10 +265,6 @@ func (p *Plugin) hour() time.Time { return p.now().UTC().Truncate(time.Hour) }
 
 func (p *Plugin) day() time.Time { return p.now().UTC().Truncate(24 * time.Hour) }
 
-// healthSource reports whether calls of a source count toward a channel's
-// health: hook and analysis calls do, manual ones (test, try, simulate) not.
-func healthSource(source string) bool { return source == SourceAudit || source == SourceAnalysis }
-
 // countCall counts one upstream call of a channel (audit and analysis only:
 // manual calls do not change a channel's health).
 func (p *Plugin) countCall(source string, ch *liveChannel, calls int, err error, ms int64) {
@@ -308,15 +300,7 @@ func (p *Plugin) priceNow(ctx context.Context, source string, ch *liveChannel, r
 	qctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	c := p.quote(qctx, ch, res.Usage)
-	it := priceItem{key: costKey{hour: p.hour(), channel: ch.ID, source: source}, calls: int64(max(res.Calls, 1))}
-	p.addCost(it, c)
-	if !healthSource(source) {
-		// Manual calls skip countCall (they do not change a channel's
-		// health) but still count on their cost row.
-		p.hourly.mu.Lock()
-		p.hourly.channel(it.key).calls += it.calls
-		p.hourly.mu.Unlock()
-	}
+	p.addCost(priceItem{key: costKey{hour: p.hour(), channel: ch.ID, source: source}, calls: int64(max(res.Calls, 1))}, c)
 	return &c
 }
 
@@ -329,44 +313,16 @@ func (p *Plugin) addCost(it priceItem, c CallCost) {
 	}
 }
 
-// countCalls counts the upstream work of one hook run, once however many
-// requests share it: each auditor's calls, tokens and latency, and queues
-// the pricing of the metered calls (CONTRACTS §72.14).
-func (p *Plugin) countCalls(m *moderation, tr Trace) {
-	k := statKey{hour: p.hour(), group: m.rec.GroupID, flow: m.flow.ID, timing: m.timing}
-	var items []priceItem
-	p.hourly.mu.Lock()
-	for i, st := range tr.Stages {
-		for _, o := range st.Outcomes {
-			ak := k
-			ak.stage, ak.auditor = i+1, o.AuditorID
-			ac := p.hourly.row(ak)
-			ac.calls += int64(o.Calls)
-			ac.tokensIn += o.Usage.InputTokens
-			ac.tokensOut += o.Usage.OutputTokens
-			ac.observe(o.LatencyMs)
-			if ch := m.snap.channels[o.ChannelID]; ch != nil && metered(o.EngineResult, o.Err) {
-				items = append(items, priceItem{key: costKey{hour: k.hour, channel: ch.ID, source: SourceAudit}, auditor: ak, ch: ch,
-					usage: o.Usage, calls: int64(max(o.Calls, 1))})
-			}
-		}
-	}
-	p.hourly.mu.Unlock()
-	for _, it := range items {
-		p.priceLater(it)
-	}
-}
-
-// countRun counts one moderated request: the flow row with its latency,
-// each executed stage and the verdict of each auditor that returned, and the
-// user's day. refused is what happened to the request (a pre hit that timed
-// out was let through).
-func (p *Plugin) countRun(m *moderation, tr Trace, refused bool) {
+// countRun counts one hook run: the flow row, each executed stage and each
+// auditor that returned, the user's day, and queues the pricing of the
+// metered calls (CONTRACTS §72.14).
+func (p *Plugin) countRun(m *moderation, tr Trace) {
+	refused := tr.Final == Hit && m.timing == TimingPre
 	var rec eventRec
 	rec.fillFromTrace(tr, refused)
 	k := statKey{hour: p.hour(), group: m.rec.GroupID, flow: m.flow.ID, timing: m.timing}
+	var items []priceItem
 	p.hourly.mu.Lock()
-	defer p.hourly.mu.Unlock()
 	fc := p.hourly.row(k)
 	fc.audited++
 	switch rec.Result {
@@ -397,6 +353,10 @@ func (p *Plugin) countRun(m *moderation, tr Trace, refused bool) {
 			ak.auditor = o.AuditorID
 			ac := p.hourly.row(ak)
 			ac.audited++
+			ac.calls += int64(o.Calls)
+			ac.tokensIn += o.Usage.InputTokens
+			ac.tokensOut += o.Usage.OutputTokens
+			ac.observe(o.LatencyMs)
 			switch {
 			case o.Skipped:
 				ac.cacheSkipped++ // nothing to send: neither a hit nor an error
@@ -405,9 +365,17 @@ func (p *Plugin) countRun(m *moderation, tr Trace, refused bool) {
 			case o.Hit:
 				ac.hit++
 			}
+			if ch := m.snap.channels[o.ChannelID]; ch != nil && metered(o.EngineResult, o.Err) {
+				items = append(items, priceItem{key: costKey{hour: k.hour, channel: ch.ID, source: SourceAudit}, auditor: ak, ch: ch,
+					usage: o.Usage, calls: int64(max(o.Calls, 1))})
+			}
 		}
 	}
 	p.countUserLocked(m.rec.UserID, m.rec.GroupID, rec.Result, rec.Severity)
+	p.hourly.mu.Unlock()
+	for _, it := range items {
+		p.priceLater(it)
+	}
 }
 
 func (p *Plugin) countUserLocked(uid, group int64, result, severity string) {
@@ -479,21 +447,6 @@ func (p *Plugin) statsLoop(ctx context.Context) {
 	}
 }
 
-// freshStats flushes this node's counters before a read that shows them, at
-// most once a second; other nodes' counts follow within flushEvery.
-func (p *Plugin) freshStats(ctx context.Context) {
-	now := p.now().UnixNano()
-	last := p.hourly.freshAt.Load()
-	if now-last < int64(time.Second) || !p.hourly.freshAt.CompareAndSwap(last, now) {
-		return
-	}
-	p.flushStats(ctx)
-}
-
-// staffLookups caps the host AuthzCheck calls of one flush; the users not
-// looked up wait for the next round.
-const staffLookups = 50
-
 // flushStats upserts the counters; on failure they are kept for the next
 // round. Users who are moderators (moderation:read) are left out of
 // user_daily like new-api leaves out administrators.
@@ -502,28 +455,10 @@ func (p *Plugin) flushStats(ctx context.Context) {
 	if len(rows)+len(chans)+len(users) == 0 {
 		return
 	}
-	lookups := 0
-	var later map[userKey]*userRow
-	for k, u := range users {
-		staff, cached := p.staffCached(k.user)
-		if !cached {
-			if lookups == staffLookups {
-				if later == nil {
-					later = map[userKey]*userRow{}
-				}
-				later[k] = u
-				delete(users, k)
-				continue
-			}
-			lookups++
-			staff = p.isStaff(ctx, k.user)
-		}
-		if staff {
+	for k := range users {
+		if p.isStaff(ctx, k.user) {
 			delete(users, k)
 		}
-	}
-	if later != nil {
-		p.hourly.restore(nil, nil, later)
 	}
 	if err := p.writeStats(ctx, rows, chans, users); err != nil {
 		if !errors.Is(err, context.Canceled) {
@@ -531,21 +466,6 @@ func (p *Plugin) flushStats(ctx context.Context) {
 		}
 		p.hourly.restore(rows, chans, users)
 	}
-}
-
-// Upserts take row locks in primary key order, so two flushes of the same
-// hour (two nodes, or the loop and a read) cannot deadlock.
-func compareStatKeys(a, b statKey) int {
-	return cmp.Or(a.hour.Compare(b.hour), cmp.Compare(a.group, b.group), cmp.Compare(a.flow, b.flow), cmp.Compare(a.stage, b.stage),
-		cmp.Compare(a.auditor, b.auditor), cmp.Compare(a.timing, b.timing))
-}
-
-func compareCostKeys(a, b costKey) int {
-	return cmp.Or(a.hour.Compare(b.hour), cmp.Compare(a.channel, b.channel), cmp.Compare(a.source, b.source))
-}
-
-func compareUserKeys(a, b userKey) int {
-	return cmp.Or(a.day.Compare(b.day), cmp.Compare(a.user, b.user))
 }
 
 // latAdd sums two latency arrays elementwise in an upsert.
@@ -559,8 +479,7 @@ func (p *Plugin) writeStats(ctx context.Context, rows map[statKey]*counters, cha
 		return err
 	}
 	b := &pgx.Batch{}
-	for _, k := range slices.SortedFunc(maps.Keys(rows), compareStatKeys) {
-		c := rows[k]
+	for k, c := range rows {
 		b.Queue(`INSERT INTO stats_hourly (hour, group_id, flow_id, stage, auditor_id, timing, audited, hit, blocked, overturned, errors,
 				cache_skipped, calls, tokens_in, tokens_out, latency_ms_sum, lat, cost)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18::numeric)
@@ -574,8 +493,7 @@ func (p *Plugin) writeStats(ctx context.Context, rows map[statKey]*counters, cha
 			k.hour, k.group, k.flow, k.stage, k.auditor, k.timing, c.audited, c.hit, c.blocked, c.overturned, c.errors,
 			c.cacheSkipped, c.calls, c.tokensIn, c.tokensOut, c.latSum, c.lat[:], formatCost(c.units))
 	}
-	for _, k := range slices.SortedFunc(maps.Keys(chans), compareCostKeys) {
-		r := chans[k]
+	for k, r := range chans {
 		b.Queue(`INSERT INTO costs (hour, channel_id, source, calls, errors, latency_ms_sum, lat, priced_calls, unpriced_calls, unpriced_tokens,
 				free_calls, tokens_in, tokens_out, cost)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::numeric)
@@ -587,8 +505,7 @@ func (p *Plugin) writeStats(ctx context.Context, rows map[statKey]*counters, cha
 				tokens_in = costs.tokens_in + EXCLUDED.tokens_in, tokens_out = costs.tokens_out + EXCLUDED.tokens_out, cost = costs.cost + EXCLUDED.cost`,
 			k.hour, k.channel, k.source, r.calls, r.errors, r.latSum, r.lat[:], r.priced, r.unpriced, r.unpricedTokens, r.free, r.in, r.out, formatCost(r.units))
 	}
-	for _, k := range slices.SortedFunc(maps.Keys(users), compareUserKeys) {
-		u := users[k]
+	for k, u := range users {
 		var last *time.Time
 		if !u.lastHit.IsZero() {
 			last = &u.lastHit

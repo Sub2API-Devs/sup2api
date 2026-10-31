@@ -6,10 +6,10 @@
     "zh": "提示词审核"
   },
   "description": {
-    "en": "Moderates gateway requests with flows of auditors (OpenAI moderation, TypeSafe Jev, LLM verdict) bound to groups. Users on the watch list at the enforce level are moderated before the upstream call and refused on a hit; the others are moderated in the background. Suspicious users join the watch list automatically; an AI analysis reviews their records and can adjust the watch level; repeated violations can ban them. The cost of every moderation call is shown with the core model prices. Hourly statistics show load, latency and channel health; error-rate alerts and AI watch list changes can be posted to a webhook.",
-    "zh": "按分组绑定的审核流程（OpenAI 内容审核、TypeSafe Jev、大模型判定）审核网关请求。观察名单中拦截级的用户先审后发、命中即拒绝，其余请求在后台审核。可疑用户自动进入观察名单，AI 分析复核其记录并可调整名单级别，多次违规可自动封禁。每次审核调用的费用按核心的模型价格展示。按小时统计审核量、延迟和渠道健康度，异常率告警和 AI 名单变更可推送到 webhook。"
+    "en": "Moderates gateway requests with flows of auditors (OpenAI moderation, TypeSafe Jev, LLM verdict) bound to groups. Users on the watch list at the enforce level are moderated before the upstream call and refused on a hit; the others are moderated in the background. Suspicious users join the watch list automatically; an AI analysis reviews their records and can adjust the watch level; repeated violations can ban them. The cost of every moderation call is shown with the core model prices.",
+    "zh": "按分组绑定的审核流程（OpenAI 内容审核、TypeSafe Jev、大模型判定）审核网关请求。观察名单中拦截级的用户先审后发、命中即拒绝，其余请求在后台审核。可疑用户自动进入观察名单，AI 分析复核其记录并可调整名单级别，多次违规可自动封禁。每次审核调用的费用按核心的模型价格展示。"
   },
-  "version": "0.4.0",
+  "version": "0.3.1",
   "publisher": "sub2api",
   "icon": "text:M",
   "runtime": "grpc",
@@ -69,11 +69,6 @@
       "id": "analysis",
       "schedule": "@every 1m",
       "timeoutSec": 60
-    },
-    {
-      "id": "alerts",
-      "schedule": "@every 1m",
-      "timeoutSec": 30
     }
   ],
   "database": {
@@ -108,30 +103,6 @@
     {
       "method": "GET",
       "path": "/overview",
-      "scope": "admin",
-      "permission": "moderation:read"
-    },
-    {
-      "method": "GET",
-      "path": "/status",
-      "scope": "admin",
-      "permission": "moderation:read"
-    },
-    {
-      "method": "GET",
-      "path": "/stats/trend",
-      "scope": "admin",
-      "permission": "moderation:read"
-    },
-    {
-      "method": "GET",
-      "path": "/stats/performance",
-      "scope": "admin",
-      "permission": "moderation:read"
-    },
-    {
-      "method": "GET",
-      "path": "/stats/categories",
       "scope": "admin",
       "permission": "moderation:read"
     },
@@ -478,8 +449,8 @@
     {
       "id": "kv",
       "reason": {
-        "en": "Share the pass cache between nodes and remember which flows were alerted",
-        "zh": "在节点之间共享审核通过缓存，并记录已告警的流程"
+        "en": "Share the pass cache between nodes",
+        "zh": "在节点之间共享审核通过缓存"
       }
     },
     {
@@ -525,8 +496,8 @@
     {
       "id": "jobs",
       "reason": {
-        "en": "Clean up old records and statistics, run the queued AI analyses and check flow error rates",
-        "zh": "清理过期记录和统计、执行排队的 AI 分析、检查流程异常率"
+        "en": "Delete expired records, watch entries and bans daily; run queued AI analyses every minute",
+        "zh": "每天清理过期的审核记录、观察名单和封禁；每分钟启动排队中的 AI 分析"
       }
     },
     {
@@ -566,8 +537,8 @@
       },
       "optional": true,
       "reason": {
-        "en": "Call the moderation channels (enforced when the egress policy is an allowlist); post alerts to the notification webhook",
-        "zh": "调用配置的审核渠道（出口策略为白名单时生效）；向通知 webhook 发送告警"
+        "en": "Call the moderation channels (enforced when the egress policy is an allowlist)",
+        "zh": "调用配置的审核渠道（出口策略为白名单时生效）"
       }
     }
   ]

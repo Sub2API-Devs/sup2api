@@ -181,27 +181,6 @@
       "maximum": 3,
       "default": 3
     },
-    "stats_retention_days": {
-      "type": "integer",
-      "title": "Statistics retention (days)",
-      "minimum": 7,
-      "maximum": 3650,
-      "default": 90
-    },
-    "error_rate_alert_percent": {
-      "type": "integer",
-      "title": "Error rate alert (%)",
-      "minimum": 0,
-      "maximum": 100,
-      "default": 5
-    },
-    "notify_webhook_url": {
-      "type": "string",
-      "title": "Notification webhook",
-      "default": "",
-      "maxLength": 2048,
-      "pattern": "^(https?://\\S+)?$"
-    },
     "max_concurrency": {
       "type": "integer",
       "title": "Max concurrency",

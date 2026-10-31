@@ -74,11 +74,6 @@ type Settings struct {
 	OverturnedRetentionDays int `json:"overturned_retention_days"`
 	ErrorRetentionDays      int `json:"error_retention_days"`
 	PassRetentionDays       int `json:"pass_retention_days"`
-	StatsRetentionDays      int `json:"stats_retention_days"`
-
-	// Alerts (CONTRACTS §72.14.5).
-	ErrorRateAlertPercent int    `json:"error_rate_alert_percent"`
-	NotifyWebhookURL      string `json:"notify_webhook_url"`
 
 	AutoWatch               bool `json:"auto_watch"`
 	WatchDays               int  `json:"watch_days"`
@@ -135,9 +130,8 @@ func DefaultSettings() Settings {
 		MaxConcurrency: 16, QueueSize: 1000,
 		BlockStatus: 403, BlockMessage: DefaultBlockMessage,
 		RecordOverturned: true, RecordErrors: true, StoreText: true,
-		HitRetentionDays: 180, OverturnedRetentionDays: 30, ErrorRetentionDays: 7, PassRetentionDays: 3, StatsRetentionDays: 90,
-		ErrorRateAlertPercent: 5,
-		AutoWatch:             true, WatchDays: 30, AnalysisEveryViolations: 30,
+		HitRetentionDays: 180, OverturnedRetentionDays: 30, ErrorRetentionDays: 7, PassRetentionDays: 3,
+		AutoWatch: true, WatchDays: 30, AnalysisEveryViolations: 30,
 		AnalysisTimeoutMs: 60000, AnalysisConcurrency: 2, AnalysisContextKB: 64, AnalysisKeepPerUser: 20,
 		AnalysisAllowUpgrade: true, AnalysisAllowDowngrade: true, AnalysisAllowRemove: true,
 		BanWindowHours: 24, BanDurationHours: 24,
@@ -288,12 +282,6 @@ func (d decoder) storage(s *Settings) {
 	d.integer("overturned_retention_days", &s.OverturnedRetentionDays, 1, 3650)
 	d.integer("error_retention_days", &s.ErrorRetentionDays, 1, 3650)
 	d.integer("pass_retention_days", &s.PassRetentionDays, 1, 3)
-	d.integer("stats_retention_days", &s.StatsRetentionDays, 7, 3650)
-	d.integer("error_rate_alert_percent", &s.ErrorRateAlertPercent, 0, 100)
-	d.str("notify_webhook_url", &s.NotifyWebhookURL)
-	if s.NotifyWebhookURL = strings.TrimSpace(s.NotifyWebhookURL); !baseURLRe.MatchString(s.NotifyWebhookURL) {
-		s.NotifyWebhookURL = ""
-	}
 }
 
 func (d decoder) watch(s *Settings) {

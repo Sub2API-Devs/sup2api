@@ -2,9 +2,6 @@ import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join, normalize } from 'node:path'
 import { fail, nextId, now, on, paginate } from './router'
-import './moderation-flows'
-import './moderation-overview'
-import './moderation-pages'
 
 // Mock of the moderation plugin 0.2 routes (/p/moderation/*, CONTRACTS §72.11)
 // and its native UI from plugins/moderation/ui/native/dist. Stateful, in memory.
@@ -68,24 +65,14 @@ const cost30d: Record<number, any> = {
   4: summary('0.08310000', 37),
   5: summary('0.01944000', 6)
 }
-const health1h: Record<number, [number, number]> = { 1: [96, 0], 2: [41, 6], 4: [3, 0] }
-const channelHealth = (id: number) => {
-  const [calls, errors] = health1h[id] || [0, 0]
-  const today = cost30d[id] ? summary((Number(cost30d[id].cost) / 30).toFixed(8), Math.round(cost30d[id].calls / 30)) : summary('0', 0)
-  return { calls_1h: calls, error_rate_1h: calls ? errors / calls : 0, tokens_today: today.tokens_in + today.tokens_out, cost_1h: summary((Number(today.cost) / 24).toFixed(8), calls), cost_today: today, cost_today_sources: { audit: today } }
-}
-const ANALYSIS_CHANNEL = 4
-const channelView = (c: any) => ({
-  ...c, price_state: priceState(c), cost_30d: cost30d[c.id] || summary('0', 0), health: channelHealth(c.id),
-  used_by: auditors.filter((a) => a.channel_id === c.id).map((a) => ({ id: a.id, name: a.name })), is_analysis: c.id === ANALYSIS_CHANNEL
-})
+const channelView = (c: any) => ({ ...c, price_state: priceState(c), cost_30d: cost30d[c.id] || summary('0', 0) })
 const auditors: any[] = [
   { id: 1, name: '初审 OpenAI', type: 'openai_moderation', channel_id: 1, config: { thresholds: { sexual: 0.5 } }, usable: true, created_at: now(-86400), updated_at: now(-3600) },
   { id: 2, name: '复核 Jev', type: 'typesafe', channel_id: 2, config: { review_images: true }, rules_version: 'content-audit-v2-zh', usable: true, created_at: now(-86400), updated_at: now(-3600) },
   { id: 3, name: '0.1 LLM 审核', type: 'llm_verdict', channel_id: 3, config: {}, usable: false, created_at: now(-86400 * 30), updated_at: now(-86400) },
   { id: 4, name: 'DeepSeek 复核', type: 'llm_verdict', channel_id: 4, config: { tool_choice: 'required', flag_as_hit: false }, usable: true, created_at: now(-86400 * 2), updated_at: now(-7200) }
 ]
-const spec = (stages: any[]) => ({ model_filter: { type: 'all', models: [] }, sample_rate: 100, total_timeout_ms: 0, stages })
+const spec = (stages: any[]) => ({ model_filter: { type: 'all', models: [] }, sample_rate: 100, total_timeout_ms: 11000, stages })
 const flows: any[] = [
   { id: 1, name: '默认两级', enabled: true, draft: spec([{ auditors: [1], combine: 'any' }, { auditors: [2], combine: 'any' }]), published: spec([{ auditors: [1], combine: 'any' }, { auditors: [2], combine: 'any' }]), version: 3, published_at: now(-7200), published_by: 1, groups: [0], dirty: false, created_at: now(-86400 * 2), updated_at: now(-7200) },
   { id: 2, name: '0.1 设置', enabled: false, draft: spec([{ auditors: [3], combine: 'any' }]), published: spec([{ auditors: [3], combine: 'any' }]), version: 1, published_at: now(-86400 * 30), published_by: null, groups: [], dirty: false, created_at: now(-86400 * 30), updated_at: now(-86400 * 30) }
@@ -121,9 +108,9 @@ function versionView(f: any, v: any) {
 }
 
 const watch: any[] = [
-  { user_id: 7, level: 'enforce', source: 'analysis', since_at: now(-86400 * 2), expires_at: now(86400 * 25), hit_count: 14, hits_since_seen: 3, violation_count: 0, last_hit_at: now(-600), note: '多次越狱尝试', updated_at: now(-600), analysis_requested_at: null, analysis_source: '', analysis_running: false, latest_analysis_id: 21, latest_analysis_status: 'ok', latest_trend: 'escalating', latest_suggestion: 'block', analyzed_at: now(-86400 * 2) },
-  { user_id: 12, level: 'observe', source: 'auto', since_at: now(-86400), expires_at: now(86400 * 29), hit_count: 2, hits_since_seen: 2, violation_count: 2, last_hit_at: now(-3000), note: '', updated_at: now(-3000), analysis_requested_at: now(-40), analysis_source: 'auto', analysis_running: false, latest_analysis_id: 18, latest_analysis_status: 'ok', latest_trend: 'occasional', latest_suggestion: 'observe', analyzed_at: now(-86400 * 3), _hold: true },
-  { user_id: 44, level: 'observe', source: 'manual', since_at: now(-86400 * 4), expires_at: now(86400 * 26), hit_count: 5, hits_since_seen: 0, violation_count: 4, last_hit_at: now(-7000), note: '客服反馈', updated_at: now(-7000), analysis_requested_at: null, analysis_source: '', analysis_running: false, latest_analysis_id: 15, latest_analysis_status: 'failed', latest_trend: '', latest_suggestion: '', analyzed_at: now(-86400) }
+  { user_id: 7, level: 'enforce', source: 'analysis', since_at: now(-86400 * 2), expires_at: now(86400 * 25), hit_count: 14, violation_count: 0, last_hit_at: now(-600), note: '多次越狱尝试', updated_at: now(-600), analysis_requested_at: null, analysis_source: '', analysis_running: false, latest_analysis_id: 21, latest_analysis_status: 'ok', latest_trend: 'escalating', latest_suggestion: 'block', analyzed_at: now(-86400 * 2) },
+  { user_id: 12, level: 'observe', source: 'auto', since_at: now(-86400), expires_at: now(86400 * 29), hit_count: 2, violation_count: 2, last_hit_at: now(-3000), note: '', updated_at: now(-3000), analysis_requested_at: now(-40), analysis_source: 'auto', analysis_running: false, latest_analysis_id: 18, latest_analysis_status: 'ok', latest_trend: 'occasional', latest_suggestion: 'observe', analyzed_at: now(-86400 * 3), _hold: true },
+  { user_id: 44, level: 'observe', source: 'manual', since_at: now(-86400 * 4), expires_at: now(86400 * 26), hit_count: 5, violation_count: 4, last_hit_at: now(-7000), note: '客服反馈', updated_at: now(-7000), analysis_requested_at: null, analysis_source: '', analysis_running: false, latest_analysis_id: 15, latest_analysis_status: 'failed', latest_trend: '', latest_suggestion: '', analyzed_at: now(-86400) }
 ]
 const watchEvents: any[] = [
   { id: 6, user_id: 12, action: 'auto_not_allowed', from_level: 'observe', to_level: 'observe', reason: 'auto_remove:likely_false_positive', operator_id: null, analysis_id: 17, created_at: now(-86400 * 4) },
@@ -199,10 +186,9 @@ function tick(w: any) {
 const blocks: any[] = [{ user_id: 31, reason: '5 violations within 24h', violations: 5, source: 'auto', created_at: now(-7200), expires_at: now(79200), created_by: null }]
 
 function trace(hit: boolean, overturn = false) {
-  const top = [{ category: 'sexual', score: hit || overturn ? 0.93 : 0.41, threshold: 0.5 }, { category: 'violence', score: 0.32, threshold: 0.95 }, { category: 'hate', score: 0.11, threshold: 0.65 }]
-  const o1 = { auditor_id: 1, channel_id: 1, model: 'omni-moderation-latest', calls: 1, hit: hit || overturn, top_category: 'sexual', top_score: 0.93, hits: hit || overturn ? [{ category: 'sexual', score: 0.93, threshold: 0.5 }] : [], top, latency_ms: 412 }
+  const o1 = { auditor_id: 1, channel_id: 1, model: 'omni-moderation-latest', calls: 1, hit: hit || overturn, top_category: 'sexual', top_score: 0.93, hits: hit || overturn ? [{ category: 'sexual', score: 0.93, threshold: 0.5 }] : [], latency_ms: 412 }
   const o2 = { auditor_id: 2, channel_id: 2, model: 'jev-latest', rules_version: 'content-audit-v2-zh', calls: 1, hit, top_category: 'sexual', top_score: hit ? 0.97 : 0.12, hits: hit ? [{ category: 'sexual', score: 0.97, threshold: 0.9 }] : [], latency_ms: 2310, usage: { input_tokens: 812 } }
-  const stages: any[] = [{ outcomes: [o1], result: o1.hit ? 'hit' : 'pass' }]
+  const stages = [{ outcomes: [o1], result: o1.hit ? 'hit' : 'pass' }]
   if (o1.hit) stages.push({ outcomes: [o2], result: hit ? 'hit' : 'pass' })
   return { stages, final: hit ? 'hit' : 'pass', decider: hit ? 1 : -1, overturned: overturn, latency_ms: 2730 }
 }
@@ -304,33 +290,11 @@ on('GET', '/p/moderation/costs', (req) => {
   const trend = Array.from({ length: points }, (_, i) => ({ bucket: new Date(Date.now() - (points - 1 - i) * step).toISOString(), cost: ((Number(totals.cost) / points) * (0.6 + ((i * 7) % 9) / 10)).toFixed(8) }))
   return { range, from: now(-(points * step) / 1000), to: now(), bucket: range === '24h' ? 'hour' : 'day', totals, by_channel, by_source, trend }
 })
-const listItem = ({ text: _text, ...e }: any) => e
-on('GET', '/p/moderation/events', (req) => paginate(filterEvents(req.query).map(listItem), req.query))
-on('GET', '/p/moderation/events/:id', (req) => {
-  const e = events.find((x) => x.id === Number(req.params.id))
-  if (!e) return fail(404, 'not_found', 'event not found')
-  const f = flows.find((x) => x.id === e.flow_id)
-  const v = f && flowVersions[f.id]?.find((x: any) => x.version === e.flow_version)
-  const snapAuditors = v ? v.spec.stages.flatMap((st: any) => st.auditors).map((id: number) => {
-    const a = auditors.find((x) => x.id === id)
-    const c = a && channels.find((x) => x.id === a.channel_id)
-    return a ? { id, name: a.name, type: a.type, channel_id: a.channel_id, channel_name: c?.name || '', config: a.config, rules_version: a.rules_version, deleted: false }
-      : { id, name: DELETED_AUDITORS[id]?.name || '', type: DELETED_AUDITORS[id]?.type || '', channel_id: 0, channel_name: '', config: {}, deleted: true }
-  }) : []
-  const w = watch.find((x) => x.user_id === e.user_id)
-  return { data: {
-    ...e,
-    related: events.filter((x) => x.request_id === e.request_id && x.id !== e.id).map(listItem),
-    flow_snapshot: f && v ? { flow_id: f.id, name: f.name, version: v.version, current_version: f.version, published_at: v.published_at, spec: v.spec, auditors: snapAuditors } : null,
-    user: { watch: w ? watchView(w) : null, exempt: false, staff: e.user_id === 1, blocked: blocks.some((b) => b.user_id === e.user_id) }
-  } }
-})
+on('GET', '/p/moderation/events', (req) => paginate(filterEvents(req.query).map(({ text: _text, trace: _trace, ...e }) => e), req.query))
+on('GET', '/p/moderation/events/:id', (req) => events.find((e) => e.id === Number(req.params.id)) || fail(404, 'not_found', 'event not found'))
 on('GET', '/p/moderation/events/:id/input', (req) => {
   const e = events.find((x) => x.id === Number(req.params.id))
-  if (!e) return fail(404, 'not_found', 'event not found')
-  // Records with an image carry a small inline PNG block (Anthropic shape).
-  const image = e.image_count ? [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAKElEQVR4nGP8z8Dwn4ECwESJ5lEDRg0YNWDUgFEDRg0YNWDUAOoBAPU8Ah8Y3WqJAAAAAElFTkSuQmCC' } }] : []
-  return { id: e.id, format: 'messages', messages: [{ role: 'user', content: [{ type: 'text', text: e.text }, ...image] }] }
+  return e ? { id: e.id, format: 'messages', messages: [{ role: 'user', content: [{ type: 'text', text: e.text }] }] } : fail(404, 'not_found', 'event not found')
 })
 on('POST', '/p/moderation/events/review', (req) => {
   const ids: number[] = req.body?.ids || []
@@ -346,29 +310,7 @@ on('DELETE', '/p/moderation/events/:id', (req) => {
 const watchView = ({ _hold, ...w }: any) => w
 on('GET', '/p/moderation/watchlist', (req) => {
   watch.forEach(tick)
-  const q = req.query
-  const sus = (uid: number) => events.filter((e) => e.user_id === uid && ['hit', 'block'].includes(e.result))
-  const rows = watch.filter((w) => (!q.level || w.level === q.level) && (!(q.user_id || q.q) || String(w.user_id) === (q.user_id || q.q)) &&
-    (!q.with_new || (w.hits_since_seen || 0) > 0) && (!q.trend || (q.trend === 'none' ? !w.latest_trend : w.latest_trend === q.trend)) &&
-    (!q.category || sus(w.user_id).some((e) => e.hit_categories.includes(q.category))))
-  const item = (w: any) => {
-    const list = sus(w.user_id)
-    const cats: Record<string, number> = {}
-    for (const e of list) for (const c of e.hit_categories) cats[c] = (cats[c] || 0) + 1
-    const sorted = Object.entries(cats).sort((a, b) => b[1] - a[1])
-    const a = analyses.find((x) => x.id === w.latest_analysis_id && x.status === 'ok')
-    return { ...watchView(w), suspicious_total: list.length, severity: { high: list.filter((e) => e.severity === 'high').length, medium: list.filter((e) => e.severity === 'medium').length, low: list.filter((e) => e.severity === 'low').length },
-      top_categories: sorted.slice(0, 3).map(([category, count]) => ({ category, count })), other_categories: Math.max(0, sorted.length - 3), groups: [...new Set(list.map((e) => e.group_id))], ai_counts: a ? a.verdict_counts : null }
-  }
-  const items = rows.map(item)
-  const by: Record<string, (a: any, b: any) => number> = {
-    new: (a, b) => (b.hits_since_seen || 0) - (a.hits_since_seen || 0) || String(b.last_hit_at).localeCompare(String(a.last_hit_at)),
-    last_hit: (a, b) => String(b.last_hit_at).localeCompare(String(a.last_hit_at)),
-    severity: (a, b) => b.severity.high - a.severity.high || b.severity.medium - a.severity.medium,
-    total: (a, b) => b.suspicious_total - a.suspicious_total
-  }
-  items.sort(by[q.sort || 'new'] || by.new)
-  return paginate(items, q)
+  return paginate(watch.filter((w) => (!req.query.level || w.level === req.query.level) && (!req.query.user_id || String(w.user_id) === req.query.user_id)).map(watchView), req.query)
 })
 on('GET', '/p/moderation/watchlist/:id', (req) => {
   const w = watch.find((x) => x.user_id === Number(req.params.id))
@@ -402,7 +344,7 @@ on('GET', '/p/moderation/analysis/prompt', (req) => {
     { category: 'illicit', name: '违法', source: 'typesafe', stage: 2, auditor: '复核 Jev', from: '第 2 级 · 复核 Jev · Jev 题目原文', definition: '文本是否请求可直接用于现实的违法犯罪方案？' }
   ]
   const prompt = `你是内容安全分析员，负责根据一个用户最近的可疑记录判断他的违规趋势……\n\n## 分析准则（内置 v7.7）\n1. 先用 get_user_summary 了解概况；\n2. 用 list_suspicious_records 浏览记录，必要时 get_record 读全文；\n3. 证据必须是原文的子串；\n4. 最后调用 submit_analysis 提交。\n\n## 该用户分组绑定的流程\n${flow ? `${flow.name} v${flow.version}：` + flow.stages.map((s: any) => `第 ${s.stage} 级 ${s.auditors.map((a: any) => a.name).join(' + ')}`).join('；') : '（未绑定流程）'}\n\n## 类别字典\n` + dict.map((d) => `- ${d.category}（${d.name}）：${d.definition}`).join('\n')
-  return { group_id: Number(req.query.group_id || 0), flow, dict, prompt, bytes: Buffer.byteLength(prompt), default_guidelines: DEFAULT_GUIDELINES, custom_guidelines: false }
+  return { group_id: Number(req.query.group_id || 0), flow, dict, prompt, bytes: Buffer.byteLength(prompt) }
 })
 on('POST', '/p/moderation/watchlist', (req) => {
   if (watch.some((w) => w.user_id === Number(req.body?.user_id))) return fail(409, 'already_watched', 'user is already on the watch list / 该用户已在观察名单中')
@@ -413,15 +355,13 @@ on('POST', '/p/moderation/watchlist', (req) => {
 on('PATCH', '/p/moderation/watchlist/:id', (req) => {
   const w = watch.find((x) => x.user_id === Number(req.params.id))
   if (!w) return fail(404, 'not_found', 'not on the watch list')
-  if (req.body.level && req.body.level !== w.level) Object.assign(w, { level: req.body.level, hits_since_seen: 0, violation_count: 0 })
-  watchEvents.unshift({ id: nextId(), user_id: w.user_id, action: 'set_level', from_level: w.level, to_level: w.level, reason: req.body.reason ?? req.body.note ?? '', operator_id: 1, created_at: now() })
+  if (req.body.level) w.level = req.body.level
   if (req.body.note !== undefined) w.note = req.body.note
   if (req.body.days !== undefined) w.expires_at = req.body.days ? now(req.body.days * 86400) : null
   return w
 })
 on('DELETE', '/p/moderation/watchlist/:id', (req) => {
   const i = watch.findIndex((x) => x.user_id === Number(req.params.id))
-  if (i >= 0) watchEvents.unshift({ id: nextId(), user_id: watch[i].user_id, action: 'remove', from_level: watch[i].level, to_level: '', reason: req.query.reason || '', operator_id: 1, created_at: now() })
   if (i >= 0) watch.splice(i, 1)
   return { user_id: Number(req.params.id), removed: true }
 })
@@ -445,25 +385,20 @@ on('GET', '/p/moderation/channels/:id', (req) => {
   return c ? channelView(c) : fail(404, 'not_found', 'channel not found')
 })
 on('POST', '/p/moderation/channels', (req) => {
-  const { api_key, proxy, ...b } = req.body || {}
-  const c = { _proxy: proxy || '', has_proxy: !!proxy, id: nextId(), protocol: b.type === 'llm' ? 'openai_chat' : '', enabled: true, timeout_ms: 3000, model: '', billing_model: '', ...b, has_key: !!api_key, api_key_tail: api_key ? String(api_key).slice(-4) : '', created_at: now(), updated_at: now() }
+  const { api_key, ...b } = req.body || {}
+  const c = { id: nextId(), protocol: b.type === 'llm' ? 'openai_chat' : '', has_proxy: false, enabled: true, timeout_ms: 3000, model: '', billing_model: '', ...b, has_key: !!api_key, api_key_tail: api_key ? String(api_key).slice(-4) : '', created_at: now(), updated_at: now() }
   channels.push(c)
   return channelView(c)
 })
 on('PUT', '/p/moderation/channels/:id', (req) => {
   const c = channels.find((x) => x.id === Number(req.params.id))
   if (!c) return fail(404, 'not_found', 'channel not found')
-  const { api_key, proxy, ...b } = req.body || {}
-  if (proxy !== undefined && proxy !== (c._proxy || '') && c.has_key && !api_key) return fail(400, 'invalid_argument', 'invalid channel / 渠道参数无效', { fields: [{ field: 'api_key', code: 'required', message: 'changing the proxy needs the key again / 修改代理需要重新填写 key' }] })
-  if (proxy !== undefined) Object.assign(c, { _proxy: proxy, has_proxy: !!proxy })
+  const { api_key, ...b } = req.body || {}
   Object.assign(c, b, { updated_at: now() }, api_key ? { has_key: true, api_key_tail: String(api_key).slice(-4) } : {})
   return channelView(c)
 })
 on('DELETE', '/p/moderation/channels/:id', (req) => {
-  const id = Number(req.params.id)
-  if (id === ANALYSIS_CHANNEL) return fail(409, 'analysis_channel', 'the channel is the AI analysis channel / 该渠道是 AI 分析渠道，请先在设置里换掉')
-  const used = auditors.filter((a) => a.channel_id === id).map((a) => ({ id: a.id, name: a.name }))
-  if (used.length) return fail(409, 'channel_in_use', 'the channel is used by auditors / 该渠道仍被审核器使用', { auditors: used })
+  if (auditors.some((a) => a.channel_id === Number(req.params.id))) return fail(409, 'in_use', 'the channel is used by auditors / 该渠道仍被审核器使用')
   channels.splice(channels.findIndex((x) => x.id === Number(req.params.id)), 1)
   return { deleted: true }
 })
@@ -478,16 +413,10 @@ function callCost(channelId: number, tokens: number) {
 const runCost = (hit: boolean) => (hit ? { mode: 'priced', cost: '0.00048720', billing_model: '', tokens_in: 812, tokens_out: 0 } : { mode: 'free', billing_model: '', tokens_in: 0, tokens_out: 0 })
 on('POST', '/p/moderation/channels/:id/test', (req) => {
   const c = channels.find((x) => x.id === Number(req.params.id))
-  const path = c?.type === 'openai_moderation' ? '/v1/moderations' : c?.type === 'typesafe' ? '/v1/systemone' : c?.protocol === 'anthropic' ? '/v1/messages' : c?.protocol === 'openai_responses' ? '/v1/responses' : '/v1/chat/completions'
-  const url = String(c?.base_url || '').replace(/\/+$/, '').replace(/\/v1$/, '') + path
-  return c?.has_key ? { ok: true, model: c.model, latency_ms: 312, cost: callCost(c.id, 24), url } : { ok: false, error: 'upstream_error', status: 401, message: 'invalid api key', latency_ms: 120, url }
+  return c?.has_key ? { ok: true, model: c.model, latency_ms: 312, cost: callCost(c.id, 24) } : { ok: false, error: 'upstream_error', status: 401, message: 'invalid api key', latency_ms: 120 }
 })
 
-const auditorToday: Record<number, [number, string]> = { 1: [96, '0'], 2: [41, '0.01394000'], 4: [3, '0.00277000'] }
-on('GET', '/p/moderation/auditors', () => auditors.map((a) => {
-  const [calls, cost] = auditorToday[a.id] || [0, '0']
-  return { ...a, today: { calls, cost: summary(cost, calls) } }
-}))
+on('GET', '/p/moderation/auditors', () => auditors)
 on('POST', '/p/moderation/auditors', (req) => {
   const a = { id: nextId(), ...req.body, usable: true, created_at: now(), updated_at: now() }
   auditors.push(a)
@@ -504,8 +433,7 @@ on('DELETE', '/p/moderation/auditors/:id', (req) => {
 on('POST', '/p/moderation/auditors/:id/try', (req) => {
   const hit = /MOD-HIT|露骨|越狱|指令/.test(req.body?.text || '')
   const scores = Object.fromEntries(OPENAI.map((c, i) => [c, hit && c === 'sexual' ? 0.94 : 0.01 * (i + 1)]))
-  const a = auditors.find((x) => x.id === Number(req.params.id)) || (req.body?.channel_id ? { channel_id: Number(req.body.channel_id) } : null)
-  if (!a) return fail(400, 'invalid_argument', 'invalid auditor / 审核器参数无效', { fields: [{ field: 'channel_id', code: 'not_found', message: 'channel does not exist / 渠道不存在' }] })
+  const a = auditors.find((x) => x.id === Number(req.params.id))
   return { auditor_id: Number(req.params.id), calls: 1, model: 'omni-moderation-latest', scores, hit, top_category: 'sexual', top_score: hit ? 0.94 : 0.13, hits: hit ? [{ category: 'sexual', score: 0.94, threshold: 0.5 }] : [], latency_ms: 388, cost: a ? callCost(a.channel_id, 812) : null }
 })
 on('GET', '/p/moderation/jev/default-questions', () => ({
@@ -515,17 +443,7 @@ on('GET', '/p/moderation/jev/default-questions', () => ({
   llm_categories: [{ id: 'sexual', description: '色情露骨内容' }, { id: 'violence', description: '暴力、恐怖主义、血腥内容' }, { id: 'jailbreak', description: '越狱、提示词注入' }]
 }))
 
-const flow24h: Record<number, any> = { 1: { audited: 1820, suspicious_rate: 0.031, pre_latency_avg_ms: 512 } }
-const timeoutOf = (sp: any) => Math.min(120000, Math.max(1000, sp.stages.reduce((sum: number, st: any) => sum + Math.max(0, ...st.auditors.map((id: number) => {
-  const a = auditors.find((x) => x.id === id)
-  const c = a && channels.find((x) => x.id === a.channel_id)
-  return c ? c.timeout_ms || ({ openai_moderation: 3000, typesafe: 8000, llm: 15000 } as any)[c.type] : 0
-})), 0)))
-on('GET', '/p/moderation/flows', () => flows.map((f) => ({ ...f, stats_24h: flow24h[f.id] || { audited: 0, suspicious_rate: 0, pre_latency_avg_ms: 0 } })))
-on('GET', '/p/moderation/flows/:id', (req) => {
-  const f = flowOr404(req.params.id)
-  return f ? { ...f, stage_timeout_sum_ms: timeoutOf(f.draft) } : fail(404, 'not_found', 'flow not found')
-})
+on('GET', '/p/moderation/flows', () => flows)
 on('POST', '/p/moderation/flows', (req) => {
   const f = { id: nextId(), name: req.body.name, enabled: true, draft: req.body.draft, published: null, version: 0, published_at: null, published_by: null, groups: [], dirty: true, created_at: now(), updated_at: now() }
   flows.push(f)
@@ -604,75 +522,3 @@ on('POST', '/p/moderation/test', (req) => {
   return { flow_id: req.body?.flow_id || 1, flow_version: 3, result: hit ? 'hit' : 'pass', severity: hit ? 'high' : '', categories: hit ? [{ category: 'sexual', score: 0.97, threshold: 0.9, stage: 2, auditor: 2 }] : [], trace: trace(hit), cost: runCost(hit) }
 })
 on('POST', '/p/moderation/import', (req) => ({ channels: req.body?.data?.channels?.length || 0, auditors: req.body?.data?.auditors?.length || 0, preview: !!req.body?.preview }))
-
-// ---------------------------------------------------------------- P3 statistics (§72.14.2)
-
-const DEFAULT_GUIDELINES = '你是内容审计的分析员。你的任务：用工具查看这一个用户的近期可疑记录，逐条复核它们是不是真违规，再判断他是不是在持续违规，给出趋势和处理建议。\n\n（内置准则全文见插件 analysis_guidelines.go）'
-const LAT = [120, 410, 380, 520, 260, 140, 60, 8, 2]
-const lat = (scale: number) => LAT.map((n) => Math.round(n * scale))
-const latSummary = (scale: number, avg: number) => ({ count: lat(scale).reduce((a, b) => a + b, 0), avg_ms: avg, p50_ms: avg * 0.8, p95_ms: avg * 3.1, p99_ms: avg * 5.2, buckets: lat(scale) })
-const dayStart = (tz: number, t = Date.now()) => {
-  const d = new Date(t + tz * 60000)
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - tz * 60000
-}
-function window(q: Record<string, string>, def: 'hour' | 'day') {
-  const g = (q.granularity || def) as 'hour' | 'day'
-  const tz = Number(q.tz || 0)
-  const today = dayStart(tz)
-  const from = q.from ? Date.parse(q.from) : g === 'hour' ? today : today - 13 * 86400000
-  const to = q.to ? Math.min(Date.parse(q.to), Date.now()) : Date.now()
-  const step = g === 'hour' ? 3600000 : 86400000
-  const ts: string[] = []
-  for (let b = g === 'hour' ? Math.floor(from / 3600000) * 3600000 : from; b <= to; b += step) ts.push(new Date(b).toISOString())
-  return { g, from: new Date(from).toISOString(), to: new Date(to).toISOString(), ts }
-}
-const wave = (i: number, base: number) => Math.max(0, Math.round(base * (1 + 0.4 * Math.sin(i / 2))))
-
-on('GET', '/p/moderation/status', () => {
-  watch.forEach(tick)
-  const sum = (cost: string, calls: number) => summary(cost, calls)
-  return {
-    mode: 'observe', enabled: true, error_rate_alert_percent: 5,
-    runtime: { mode: 'observe', configured: true, settings_hash: 'ab12cd', config_version: 14, flows: 1, auditors: 3, queue_len: 2, queue_cap: 1000, dropped: 0, inflight: 1, calls: 1820, errors: 12, cache_hits: 640, cache_entries: 5321, avg_latency_ms: 731, blocked_users: blocks.length, watched_users: watch.length, analysis: { channel_configured: true, pending: 1, running: 0 } },
-    status_line: { enabled_flows: flows.filter((f) => f.enabled && f.version > 0).length, bound_groups: [...new Set(flows.flatMap((f) => f.groups))], stale_groups: flows.filter((f) => !f.enabled).flatMap((f) => f.groups), disabled_channels: channels.filter((c) => !c.enabled).length, analysis_channel: true },
-    today: { audited: 1820, suspicious: 57, blocked: 9, overturned: 31, errors: 12, cache_skipped: 640, auditor_calls: 1962, tokens_in: 812400, tokens_out: 0, analyses: 4, analyses_failed: 1, analysis_tokens_in: 172100, analysis_tokens_out: 6304 },
-    ai_review: { reviewed: 18, violation: 11, false_positive: 5, unsure: 2 },
-    watch: { watching: watch.length, watching_with_new: watch.filter((w) => (w.hits_since_seen || 0) > 0).length, blocking: watch.filter((w) => w.level === 'enforce').length, analysis_every_violations: 30 },
-    attention: [...watch].sort((a, b) => (b.hits_since_seen || 0) - (a.hits_since_seen || 0)).slice(0, 6).map((w) => ({ user_id: w.user_id, level: w.level, hits_since_seen: w.hits_since_seen || 0, hit_count: w.hit_count, last_hit_at: w.last_hit_at, latest_trend: w.latest_trend || '' })),
-    auditors: [
-      { id: 1, audited: 96, calls: 96, hits: 9, errors: 0, error_rate: 0, hit_rate: 0.094, flagged: false, skipped_no_text: 2 },
-      { id: 2, audited: 41, calls: 41, hits: 4, errors: 6, error_rate: 0.146, hit_rate: 0.098, flagged: true }
-    ],
-    channels: Object.entries(health1h).map(([id, [calls, errors]]) => ({ id: Number(id), audited: 0, calls, hits: 0, errors, error_rate: calls ? errors / calls : 0, hit_rate: 0, flagged: calls >= 20 && errors * 100 > 5 * calls })),
-    funnels: [{ flow_id: 1, name: '默认两级', stages: [{ stage: 1, received: 1180, hit: 88, passed: 1092 }, { stage: 2, received: 88, hit: 57, passed: 31 }], suspicious: 57, blocked: 9 }],
-    queue: { post_queue: 2, post_queue_cap: 1000, dropped_post_full: 0, price_queue: 0, price_queue_cap: 8192, dropped_costs: 0, analysis_pending: 1, analysis_running: 0, analysis_concurrency: 2 },
-    costs: { total: sum('0.02171000', 2010), audit: sum('0.01394000', 1962), analysis: sum('0.00777000', 4), manual: sum('0', 44), channels: [{ id: 2, cost: sum('0.01394000', 41) }, { id: 4, cost: sum('0.00777000', 4) }], auditors: [{ id: 1, cost: sum('0', 96) }, { id: 2, cost: sum('0.01394000', 41) }] }
-  }
-})
-on('GET', '/p/moderation/stats/trend', (req) => {
-  const w = window(req.query, 'day')
-  const scale = w.g === 'hour' ? 1 : 24
-  const flowIds = req.query.flow_id ? [Number(req.query.flow_id)] : [1]
-  return {
-    granularity: w.g, from: w.from, to: w.to,
-    flows: flowIds.map((id) => ({ flow_id: id, name: flows.find((f) => f.id === id)?.name || '', points: w.ts.map((ts, i) => {
-      const audited = wave(i, 50 * scale), hit = wave(i + 3, 1.6 * scale)
-      return { ts, audited, cache_skipped: wave(i, 18 * scale), hit, blocked: Math.round(hit / 6), overturned: wave(i + 1, scale), errors: i % 5 === 2 ? Math.round(audited * 0.08) : 0,
-        suspicious_rate: audited ? hit / (audited + wave(i, 18 * scale)) : 0, pre_avg_ms: 480 + (i % 4) * 40, pre_p95_ms: 1900 + (i % 3) * 300, post_avg_ms: 2200, post_p95_ms: 6100 }
-    }) })),
-    auditors: [[1, 1, 1], [1, 2, 2]].map(([flow_id, stage, auditor_id]) => ({ flow_id, stage, auditor_id, points: w.ts.map((ts, i) => {
-      const audited = wave(i, (stage === 1 ? 50 : 4) * scale), errors = auditor_id === 2 && i % 4 === 1 ? Math.round(audited * 0.15) : 0
-      return { ts, audited, hit: Math.round(audited * 0.09), errors, hit_rate: 0.09, error_rate: audited ? errors / audited : 0 }
-    }) }))
-  }
-})
-on('GET', '/p/moderation/stats/performance', (req) => {
-  const w = window(req.query, 'hour')
-  return { granularity: w.g, from: w.from, to: w.to, summary: latSummary(w.g === 'hour' ? 1 : 14, 512),
-    points: w.ts.map((ts, i) => ({ ts, ...latSummary(w.g === 'hour' ? 0.06 : 1, 440 + (i % 5) * 50) })),
-    auditors: [{ auditor_id: 1, ...latSummary(0.8, 412) }, { auditor_id: 2, ...latSummary(0.1, 2310) }] }
-})
-on('GET', '/p/moderation/stats/categories', () => ({
-  suspicious_requests: 57, category_hits: 71, truncated: false,
-  items: [{ category: 'sexual', count: 29 }, { category: 'custom/jailbreak', count: 21 }, { category: 'illicit', count: 12 }, { category: 'violence', count: 6 }, { category: 'hate', count: 3 }]
-}))

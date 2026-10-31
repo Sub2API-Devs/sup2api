@@ -277,9 +277,8 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 	c := p.cfg.Load()
 	now := p.now().UTC()
 	changed := false
-	var notice func()
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		changed, notice = false, nil
+		changed = false
 		if err := lockBlockSubject(ctx, tx, job.UserID); err != nil {
 			return err
 		}
@@ -341,7 +340,7 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 				expires = &t
 			}
 			tag, err := tx.Exec(ctx, `UPDATE watchlist SET level = $3, source = 'analysis', since_at = $4, expires_at = $5,
-				hit_count = 0, hits_since_seen = 0, violation_count = 0, violation_epoch = $6, updated_at = $4 WHERE user_id = $1 AND level = $2`,
+				hit_count = 0, violation_count = 0, violation_epoch = $6, updated_at = $4 WHERE user_id = $1 AND level = $2`,
 				job.UserID, w.Level, to, now, expires, newEpoch())
 			if err != nil || tag.RowsAffected() != 1 {
 				return err
@@ -361,15 +360,12 @@ func (p *Plugin) applyAnalysis(ctx context.Context, job analysisJob, a *Analysis
 			return err
 		}
 		if changed {
-			from := w.Level
-			notice = func() { p.notifyAutoChange(job.UserID, action, from, to, a, id) }
 			return bumpWatch(ctx, tx)
 		}
 		return nil
 	})
 	if err == nil && changed {
 		p.watchChanged(ctx)
-		notice()
 	}
 	return err
 }
@@ -587,15 +583,6 @@ type PromptPreview struct {
 	Dict    []CategoryDef    `json:"dict"`
 	Prompt  string           `json:"prompt"`
 	Bytes   int              `json:"bytes"`
-	// The built-in guidelines and whether analysis_guidelines replaces them
-	// (the settings page shows the default in its editor).
-	DefaultGuidelines string `json:"default_guidelines"`
-	CustomGuidelines  bool   `json:"custom_guidelines"`
-}
-
-func (v PromptPreview) withGuidelines(c *config) PromptPreview {
-	v.DefaultGuidelines, v.CustomGuidelines = DefaultAnalysisGuidelines, c.AnalysisGuidelines != ""
-	return v
 }
 
 // getAnalysisPrompt previews the system prompt by group (what its users
@@ -616,7 +603,7 @@ func (p *Plugin) getAnalysisPrompt(ctx context.Context, req *pluginv1.HTTPReques
 			return nil, err
 		}
 		prompt := buildAnalysisPrompt(c.AnalysisGuidelines, nil, view, *view.Dict)
-		return pluginsdk.DataResponse(PromptPreview{Flow: view, Dict: view.Dict.Items, Prompt: prompt, Bytes: len(prompt)}.withGuidelines(c)), nil
+		return pluginsdk.DataResponse(PromptPreview{Flow: view, Dict: view.Dict.Items, Prompt: prompt, Bytes: len(prompt)}), nil
 	}
 	var g int64
 	if v := pluginsdk.Query(req, "group_id"); v != "" {
@@ -627,7 +614,7 @@ func (p *Plugin) getAnalysisPrompt(ctx context.Context, req *pluginv1.HTTPReques
 		g = id
 	}
 	prompt, view, dict := analysisPrompt(c.AnalysisGuidelines, s, &g)
-	return pluginsdk.DataResponse(PromptPreview{GroupID: &g, Flow: view, Dict: dict.Items, Prompt: prompt, Bytes: len(prompt)}.withGuidelines(c)), nil
+	return pluginsdk.DataResponse(PromptPreview{GroupID: &g, Flow: view, Dict: dict.Items, Prompt: prompt, Bytes: len(prompt)}), nil
 }
 
 func (p *Plugin) getAnalysisTools(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {

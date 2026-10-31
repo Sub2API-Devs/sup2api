@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { SAlert, SBadge, SDisclosure, SHint, SLink, SSpinner, STable, type TableColumn } from '@sub2api/ui'
-import VerdictGroups from './pages/VerdictGroups.vue'
 import {
   aiVerdictTone,
   categoryLabel,
@@ -21,7 +20,7 @@ import {
 // One AI analysis of a watched user (§72.13.4): conclusion, problems, verdict
 // counts and cost; the steps (trace) and per-record verdicts load on demand
 // from GET /analyses/:id.
-const props = defineProps<{ analysis: Analysis; detail?: AnalysisDetail | null; defaultOpen?: boolean; /** suspicious records of the user; more than reviewed = "N not reviewed" */ timelineCount?: number }>()
+const props = defineProps<{ analysis: Analysis; detail?: AnalysisDetail | null; defaultOpen?: boolean }>()
 const emit = defineEmits<{ (e: 'open-record', id: number): void }>()
 const host = useModHost()
 const t = host.t
@@ -61,8 +60,6 @@ watch(
 const stale = computed(() => a.value.status === 'stale' || a.value.error === 'stale')
 const failed = computed(() => a.value.status === 'failed' && !stale.value)
 const counts = computed(() => a.value.verdict_counts)
-const reviewed = computed(() => (counts.value ? counts.value.violation + counts.value.false_positive + counts.value.unsure : 0))
-const notReviewed = computed(() => Math.max(0, (props.timelineCount ?? 0) - reviewed.value))
 
 const stepColumns = computed<TableColumn[]>(() => [
   { key: 'step', label: t('analysis.step.step'), nowrap: true, align: 'right' },
@@ -113,16 +110,8 @@ function notes(s: AnalysisStep): string {
       </ul>
     </div>
 
-    <p v-if="counts" class="mod-pg-ai-summary mod-num">
-      {{ t('pagesP3.verdicts.summary', { n: n(reviewed) }) }}
-      <b class="mod-pg-ai-v">{{ t('pagesP3.verdicts.violationN', { n: n(counts.violation) }) }}</b>
-      <span v-if="counts.high !== undefined" class="mod-sub">({{ t('pagesP3.watch.sev', { high: n(counts.high), medium: n(counts.medium), low: n(counts.low) }) }})</span>
-      · <b class="mod-pg-ai-fp">{{ t('pagesP3.verdicts.fpN', { n: n(counts.false_positive) }) }}</b>
-      · <b class="mod-pg-ai-u">{{ t('pagesP3.verdicts.unsureN', { n: n(counts.unsure) }) }}</b>
-      <span v-if="notReviewed" class="mod-sub"> · {{ t('pagesP3.verdicts.notReviewed', { n: n(notReviewed) }) }}</span>
-    </p>
-
     <div class="mod-analysis-meta mod-num">
+      <span v-if="counts">{{ t('analysis.verdictCounts') }}: {{ t('analysis.counts', { v: n(counts.violation), fp: n(counts.false_positive), u: n(counts.unsure) }) }}</span>
       <span v-if="a.model">{{ a.model }}</span>
       <span>{{ t('analysis.steps', { n: n(a.steps) }) }}</span>
       <span>{{ t('analysis.tokens', { in: n(a.tokens_in), out: n(a.tokens_out) }) }}</span>
@@ -142,10 +131,6 @@ function notes(s: AnalysisStep): string {
       <SSpinner v-if="loading" block />
       <SAlert v-else-if="error" tone="danger" dense>{{ error }}</SAlert>
       <div v-else class="mod-analysis-trace">
-        <template v-if="records.length">
-          <p class="mod-cost-label">{{ t('analysis.records') }}</p>
-          <VerdictGroups :verdicts="records" @open-record="emit('open-record', $event)" />
-        </template>
         <STable :columns="stepColumns" :rows="steps" row-key="step" dense :empty-text="t('analysis.traceEmpty')">
           <template #cell-tool="{ row }">
             <code v-if="row.tool" class="mod-code mod-code-plain">{{ row.tool }}</code>
@@ -164,7 +149,7 @@ function notes(s: AnalysisStep): string {
           </template>
         </STable>
 
-        <p class="mod-cost-label">{{ t('pagesP3.verdicts.detail') }}</p>
+        <p class="mod-cost-label">{{ t('analysis.records') }}</p>
         <STable :columns="recColumns" :rows="records" row-key="record_id" dense :empty-text="t('analysis.noRecords')">
           <template #cell-record_id="{ row }">
             <SLink as="button" class="mod-num" @click="emit('open-record', row.record_id)">#{{ row.record_id }}</SLink>
@@ -181,19 +166,3 @@ function notes(s: AnalysisStep): string {
     </SDisclosure>
   </div>
 </template>
-
-<style scoped>
-.mod-pg-ai-summary {
-  margin: 0;
-  font-size: 0.8125rem;
-}
-.mod-pg-ai-v {
-  color: rgb(220 38 38);
-}
-.mod-pg-ai-fp {
-  color: rgb(22 163 74);
-}
-.mod-pg-ai-u {
-  color: rgb(202 138 4);
-}
-</style>

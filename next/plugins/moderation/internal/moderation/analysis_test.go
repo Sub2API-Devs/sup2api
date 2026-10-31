@@ -4,12 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/pluginsdk/pluginsdktest"
@@ -69,15 +66,7 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 		return 200, scriptTurn{Usage: u, Calls: []llmToolCall{{ID: "t9", Name: submitAnalysisTool, Args: []byte(`{"trend":"likely_false_positive",
 			"suggestion":"release","summary":"误报","record_verdicts":[{"record_id":` + ids[0] + `,"verdict":"false_positive","severity":"low","reason":"引用"}]}`)}}}
 	})
-	notices := make(chan map[string]any, 4)
-	webhook := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		var m map[string]any
-		_ = json.NewDecoder(r.Body).Decode(&m)
-		notices <- m
-	}))
-	t.Cleanup(webhook.Close)
-	_, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve, "analysis_every_violations": 2, "analysis_channel_id": 2,
-		"notify_webhook_url": webhook.URL}, func(p *Plugin) {})
+	_, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve, "analysis_every_violations": 2, "analysis_channel_id": 2}, func(p *Plugin) {})
 	priceTable(fh, map[string][2]float64{"deepseek-flash": {0.3, 1.2}, "jev-latest": {0.042, 0}})
 	setupFlow(t, h, mod.srv.URL, []int64{0}, CombineAny, []string{AuditorOpenAI})
 	ch := decodeData[ChannelView](t, h.Do("POST", "/channels", nil, map[string]any{"type": "llm", "protocol": "anthropic", "name": "ana",
@@ -127,14 +116,6 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 	if hist[0].Action != ActionAutoUpgrade || hist[0].AnalysisID == nil || *hist[0].AnalysisID != list[0].ID || hist[0].Reason != "trend:persistent" {
 		t.Fatalf("history = %+v", hist[0])
 	}
-	select {
-	case n := <-notices:
-		if n["event"] != EventWatchAutoChange || n["action"] != ActionAutoUpgrade || n["to_level"] != LevelEnforce || n["user_id"] != float64(3) || n["summary"] != nil {
-			t.Fatalf("notice = %+v", n)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("no auto-change notice")
-	}
 	// Costs: the analysis is priced; the OpenAI moderation calls are free.
 	var costs CostReport
 	waitFor(t, "audit calls metered", func() bool {
@@ -163,7 +144,7 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 		t.Fatalf("analyses = %+v", all)
 	}
 	pr := decodeData[PromptPreview](t, h.Do("GET", "/analysis/prompt", map[string]string{"group_id": "0"}, nil))
-	if pr.Flow == nil || !strings.Contains(pr.Prompt, "第 1 级 初审") || len(pr.Dict) != 13 || pr.DefaultGuidelines != DefaultAnalysisGuidelines || pr.CustomGuidelines {
+	if pr.Flow == nil || !strings.Contains(pr.Prompt, "第 1 级 初审") || len(pr.Dict) != 13 {
 		t.Fatalf("prompt preview = %+v", pr)
 	}
 	if n := len(decodeData[[]ToolView](t, h.Do("GET", "/analysis/tools", nil, nil))); n != 5 {

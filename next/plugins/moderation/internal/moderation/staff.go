@@ -27,27 +27,19 @@ type staffCache struct {
 	m  map[int64]staffEntry
 }
 
-// staffCached returns the cached answer for uid, if fresh.
-func (p *Plugin) staffCached(uid int64) (staff, ok bool) {
-	p.staff.mu.Lock()
-	defer p.staff.mu.Unlock()
-	e, ok := p.staff.m[uid]
-	if !ok || p.now().Sub(e.at) >= staffTTL {
-		return false, false
-	}
-	return e.staff, true
-}
-
 // isStaff reports whether uid may read moderation; host errors count as not
 // staff (the user is then treated like any other).
 func (p *Plugin) isStaff(ctx context.Context, uid int64) bool {
 	if uid <= 0 || p.host == nil {
 		return false
 	}
-	if staff, ok := p.staffCached(uid); ok {
-		return staff
-	}
 	now := p.now()
+	p.staff.mu.Lock()
+	e, ok := p.staff.m[uid]
+	p.staff.mu.Unlock()
+	if ok && now.Sub(e.at) < staffTTL {
+		return e.staff
+	}
 	cctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	allowed, err := p.host.AuthzCheck(cctx, uid, PermRead)

@@ -48,7 +48,6 @@ ALTER TABLE costs ADD COLUMN IF NOT EXISTS errors         bigint   NOT NULL DEFA
 ALTER TABLE costs ADD COLUMN IF NOT EXISTS latency_ms_sum bigint   NOT NULL DEFAULT 0;
 ALTER TABLE costs ADD COLUMN IF NOT EXISTS lat            bigint[] NOT NULL DEFAULT '{0,0,0,0,0,0,0,0,0}';
 
--- Suspicious records since the last level change (manual or by the AI
--- analysis); new-api calls it hits_since_mark.
+-- Suspicious records since an administrator last looked at the entry.
 ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS hits_since_seen integer NOT NULL DEFAULT 0;
 

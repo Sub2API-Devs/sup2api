@@ -6,11 +6,6 @@ import CategoryChips from './CategoryChips.vue'
 import TraceView from './TraceView.vue'
 import VerdictBadge from './VerdictBadge.vue'
 import AnalysisModal from './AnalysisModal.vue'
-import FlowLabel from './pages/FlowLabel.vue'
-import FlowSnapshotCard from './pages/FlowSnapshotCard.vue'
-import InputMessage from './pages/InputMessage.vue'
-import RecordUserCard from './pages/RecordUserCard.vue'
-import UserCell from './pages/UserCell.vue'
 import {
   aiVerdictTone,
   canManage,
@@ -19,25 +14,22 @@ import {
   enumLabel,
   errorMessage,
   fetchEvent,
+  fetchEventInput,
   modeTone,
   reviewEvents,
   severityTone,
   useModHost,
   type ModEventDetail,
-  type ReviewStatus,
-  type Watch
+  type ReviewStatus
 } from './host'
 
-// Record detail (GET /events/:id): result, the user and their watch list
-// state (changeable here), per-stage trace, the flow at the time, other
-// records of the same request, text and the saved user messages; manage
-// users review or delete it.
+// Record detail (GET /events/:id): result, per-stage trace, text, the raw
+// user messages on demand; manage users review or delete it.
 const props = defineProps<{ open: boolean; eventId: number | null }>()
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void
   (e: 'deleted', id: number): void
   (e: 'reviewed', ids: number[], status: ReviewStatus): void
-  (e: 'watch-changed', userId: number, w: Watch | null): void
 }>()
 const host = useModHost()
 const t = host.t
@@ -48,8 +40,10 @@ const loading = ref(false)
 const error = ref('')
 const busy = ref(false)
 const manage = computed(() => canManage())
+const input = ref<string | null>(null)
+const inputLoading = ref(false)
 
-// The shown record: the prop, or a record opened from the AI analysis or the related list.
+// The shown record: the prop, or a record opened from the AI analysis.
 const currentId = ref<number | null>(props.eventId)
 watch(
   () => [props.eventId, props.open] as const,
@@ -62,6 +56,7 @@ watch(
     if (!open || id === null) return
     if (ev.value?.id === id) return
     ev.value = null
+    input.value = null
     loading.value = true
     error.value = ''
     try {
@@ -78,6 +73,20 @@ watch(
 
 function close() {
   emit('update:open', false)
+}
+
+async function loadInput() {
+  const e = ev.value
+  if (!e) return
+  inputLoading.value = true
+  try {
+    const r = await fetchEventInput(e.id)
+    input.value = r.messages ? JSON.stringify(r.messages, null, 2) : ''
+  } catch (err) {
+    host.toast(errorMessage(err, t('actionFailed')), 'error')
+  } finally {
+    inputLoading.value = false
+  }
 }
 
 async function review(status: ReviewStatus) {
@@ -115,12 +124,7 @@ async function remove() {
   }
 }
 
-function onWatchChanged(w: Watch | null) {
-  const e = ev.value
-  if (!e) return
-  e.user = { ...(e.user || { exempt: false, staff: false, blocked: false }), watch: w }
-  emit('watch-changed', e.user_id, w)
-}
+const idOrDash = (v: number | null | undefined) => (v ? `#${v}` : '—')
 
 // AI verdict of the record (§72.13.4) and the analysis that wrote it.
 const hasAI = computed(() => !!ev.value?.ai_verdict)
@@ -140,8 +144,6 @@ function openRecord(id: number) {
   currentId.value = id
 }
 
-const related = computed(() => ev.value?.related || [])
-
 const fields = computed<DescItem[]>(() => {
   const e = ev.value
   if (!e) return []
@@ -149,14 +151,17 @@ const fields = computed<DescItem[]>(() => {
     { key: 'id', label: t('detail.f.id'), value: String(e.id) },
     { key: 'request', label: t('detail.f.request'), value: e.request_id || '', mono: true, copyable: true },
     { key: 'categories', label: t('detail.f.categories'), full: true },
-    { key: 'flow', label: t('detail.f.flow') },
+    { key: 'user', label: t('detail.f.user'), value: idOrDash(e.user_id) },
+    { key: 'key', label: t('detail.f.key'), value: idOrDash(e.api_key_id) },
+    { key: 'group', label: t('detail.f.group'), value: idOrDash(e.group_id) },
+    { key: 'flow', label: t('detail.f.flow'), value: e.flow_id ? `#${e.flow_id} v${e.flow_version}` : t('events.legacy') },
     { key: 'model', label: t('detail.f.model'), value: e.model || '' },
     { key: 'protocol', label: t('detail.f.protocol'), value: e.protocol || '' },
     { key: 'latency', label: t('detail.f.latency'), value: t('ms', { n: n(e.latency_ms) }) + (e.queue_ms ? ` (${t('detail.queued', { n: n(e.queue_ms) })})` : '') },
     { key: 'counted', label: t('detail.f.counted'), value: e.counted ? t('yes') : t('no') },
     { key: 'keep', label: t('detail.f.keepUntil'), value: e.keep_until ? host.i18n.formatDateTime(e.keep_until) : '' }
   ]
-  if (e.reviewed_at) items.push({ key: 'reviewed', label: t('detail.f.reviewed') })
+  if (e.reviewed_at) items.push({ key: 'reviewed', label: t('detail.f.reviewed'), value: `${host.i18n.formatDateTime(e.reviewed_at)} ${idOrDash(e.reviewed_by)}` })
   if (e.llm_model) items.push({ key: 'llm', label: t('detail.f.llmModel'), value: e.llm_model })
   return items
 })
@@ -179,11 +184,6 @@ const fields = computed<DescItem[]>(() => {
       <SAlert v-if="ev.reason" tone="neutral" :icon="false" :title="t('detail.f.reason')">{{ ev.reason }}</SAlert>
       <SAlert v-if="ev.error" tone="danger" :title="t('detail.f.error')"><span class="mod-prewrap">{{ ev.error }}</span></SAlert>
 
-      <div>
-        <SSectionTitle tag="p">{{ t('pagesP3.user.title') }}</SSectionTitle>
-        <RecordUserCard :event="ev" @watch-changed="onWatchChanged" />
-      </div>
-
       <div v-if="hasAI">
         <SSectionTitle tag="p">
           {{ t('detail.ai') }}
@@ -203,30 +203,6 @@ const fields = computed<DescItem[]>(() => {
         <TraceView :trace="ev.trace" />
       </div>
 
-      <div v-if="ev.flow_snapshot">
-        <SSectionTitle tag="p">{{ t('pagesP3.snapshot.title') }}</SSectionTitle>
-        <FlowSnapshotCard :snapshot="ev.flow_snapshot" :trace="ev.trace" />
-      </div>
-
-      <div v-if="related.length">
-        <SSectionTitle tag="p">
-          {{ t('pagesP3.related.title') }}
-          <SHint inline size="xs" class="mod-chars">{{ t('pagesP3.related.hint') }}</SHint>
-        </SSectionTitle>
-        <ul class="mod-pg-related">
-          <li v-for="r in related" :key="r.id">
-            <button type="button" class="mod-pg-related-item" @click="currentId = r.id">
-              <span class="mod-num">#{{ r.id }}</span>
-              <ResultBadge :result="r.result" />
-              <span class="mod-sub">{{ enumLabel('timing', r.timing) }}</span>
-              <FlowLabel :flow-id="r.flow_id" :version="r.flow_version" />
-              <CategoryChips :categories="r.hit_categories" />
-              <SHint inline size="xs" class="mod-ml-auto">{{ host.i18n.formatDateTime(r.created_at) }}</SHint>
-            </button>
-          </li>
-        </ul>
-      </div>
-
       <div>
         <SSectionTitle tag="p">
           {{ t('detail.text') }}
@@ -240,12 +216,20 @@ const fields = computed<DescItem[]>(() => {
         <SHint v-else size="xs">{{ t('detail.textNotStored') }}</SHint>
       </div>
 
-      <InputMessage v-if="ev.input_message_size" :event-id="ev.id" :size="ev.input_message_size" />
+      <div v-if="ev.input_message_size">
+        <SSectionTitle tag="p">
+          {{ t('detail.input') }}
+          <SHint inline size="xs" class="mod-chars">{{ t('detail.bytes', { n: host.i18n.formatNumber(ev.input_message_size) }) }}</SHint>
+          <template #actions>
+            <SButton v-if="input === null" size="sm" :loading="inputLoading" @click="loadInput">{{ t('detail.loadInput') }}</SButton>
+            <SCopyButton v-else-if="input" :text="input" />
+          </template>
+        </SSectionTitle>
+        <SCode v-if="input" :text="input" class="mod-text-block" />
+      </div>
 
       <SDescriptions :items="fields" :columns="2" dense>
         <template #item-categories><CategoryChips :categories="ev.hit_categories" wrap /></template>
-        <template #item-flow><FlowLabel :flow-id="ev.flow_id" :version="ev.flow_version" /></template>
-        <template #item-reviewed>{{ ev.reviewed_at ? host.i18n.formatDateTime(ev.reviewed_at) : '' }} <UserCell v-if="ev.reviewed_by" :id="ev.reviewed_by" /></template>
       </SDescriptions>
     </div>
     <template #footer>
@@ -260,31 +244,3 @@ const fields = computed<DescItem[]>(() => {
   </SModal>
   <AnalysisModal v-model:open="analysisOpen" :analysis-id="ev?.ai_analysis_id ?? null" @open-record="openRecord" />
 </template>
-
-<style scoped>
-.mod-pg-related {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.mod-pg-related-item {
-  display: flex;
-  width: 100%;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0.5rem;
-  border: 1px solid rgb(var(--line));
-  border-radius: 0.375rem;
-  background: none;
-  text-align: start;
-  font-size: 0.8125rem;
-  cursor: pointer;
-}
-.mod-pg-related-item:hover {
-  background: rgb(var(--surface-2));
-}
-</style>

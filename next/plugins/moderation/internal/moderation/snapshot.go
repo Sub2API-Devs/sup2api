@@ -65,26 +65,6 @@ func (s *snapshot) flowFor(group int64) *liveFlow {
 // groupsOf lists the groups bound to a flow.
 func (s *snapshot) groupsOf(flowID int64) []int64 { return s.groups[flowID] }
 
-// stageTimeoutSumMs is the automatic total timeout of a spec: the sum per
-// stage of its largest channel timeout (CONTRACTS §72.6).
-func (s *snapshot) stageTimeoutSumMs(spec *Spec) int {
-	return spec.DefaultTotalTimeoutMs(func(id int64) int {
-		if a := s.auditors[id]; a != nil && a.channel != nil {
-			return int(a.channel.Timeout / time.Millisecond)
-		}
-		return 0
-	})
-}
-
-// flowTimeout is the total timeout of a run: the spec value, or the
-// automatic one when it is 0 (the spec keeps 0 so it follows channel edits).
-func (s *snapshot) flowTimeout(spec *Spec) time.Duration {
-	if spec.TotalTimeoutMs > 0 {
-		return time.Duration(spec.TotalTimeoutMs) * time.Millisecond
-	}
-	return time.Duration(s.stageTimeoutSumMs(spec)) * time.Millisecond
-}
-
 // sendsImages reports whether any auditor of the flow sends images; when
 // none does, the request images are not kept while the request waits.
 func (s *snapshot) sendsImages(f *liveFlow) bool {
@@ -128,45 +108,6 @@ func secretContext(id int64, what string) string {
 	return "channel:" + strconv.FormatInt(id, 10) + ":" + what
 }
 
-// channelRecord is a channels row with its key and proxy still sealed.
-type channelRecord struct {
-	id                                        int64
-	typ, protocol, name, base, model, billing string
-	keyEnc, proxyEnc                          []byte
-	timeout                                   int
-}
-
-const channelRecordColumns = `id, type, protocol, name, base_url, api_key_enc, proxy_enc, model, billing_model, timeout_ms`
-
-func (r *channelRecord) targets() []any {
-	return []any{&r.id, &r.typ, &r.protocol, &r.name, &r.base, &r.keyEnc, &r.proxyEnc, &r.model, &r.billing, &r.timeout}
-}
-
-// openChannel opens a channel's key and proxy into a live channel.
-func (p *Plugin) openChannel(ctx context.Context, r channelRecord) (*liveChannel, error) {
-	ch := &liveChannel{ID: r.id, Name: r.name, Type: r.typ, Protocol: r.protocol, BaseURL: r.base, Model: r.model, BillingModel: r.billing,
-		Timeout: time.Duration(r.timeout) * time.Millisecond}
-	if len(r.keyEnc) > 0 {
-		key, err := p.host.OpenSecret(ctx, secretContext(r.id, "key"), r.keyEnc)
-		if err != nil {
-			return nil, fmt.Errorf("open channel key: %w", err)
-		}
-		ch.Key = string(key)
-	}
-	proxy, err := p.openProxy(ctx, r.id, r.proxyEnc)
-	if err != nil {
-		return nil, err
-	}
-	ch.proxy, ch.client = proxy, p.clientFor(proxy)
-	if ch.Timeout <= 0 {
-		ch.Timeout = time.Duration(defaultChannelTimeoutMs[ch.Type]) * time.Millisecond
-	}
-	if ch.Type == ChannelLLM && ch.Key != "" {
-		ch.markerKey = markerKey(ch.Key)
-	}
-	return ch, nil
-}
-
 // loadSnapshot reads the whole configuration. Channels whose key does not
 // open are left out (their auditors error with no_channel).
 func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
@@ -178,32 +119,46 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 	if err := db.QueryRow(ctx, `SELECT config_version FROM config_state WHERE id = 1`).Scan(&s.version); err != nil {
 		return nil, err
 	}
-	rows, err := db.Query(ctx, `SELECT `+channelRecordColumns+` FROM channels WHERE deleted_at IS NULL AND enabled`)
+	rows, err := db.Query(ctx, `SELECT id, type, protocol, name, base_url, api_key_enc, model, billing_model, timeout_ms FROM channels
+		WHERE deleted_at IS NULL AND enabled`)
 	if err != nil {
 		return nil, err
 	}
-	var recs []channelRecord
-	var r channelRecord
-	if _, err := pgx.ForEachRow(rows, r.targets(), func() error {
-		recs = append(recs, r)
+	type chRow struct {
+		id                         int64
+		typ, protocol, base, model string
+		name, billing              string
+		keyEnc                     []byte
+		timeout                    int
+	}
+	var chRows []chRow
+	var r chRow
+	if _, err := pgx.ForEachRow(rows, []any{&r.id, &r.typ, &r.protocol, &r.name, &r.base, &r.keyEnc, &r.model, &r.billing, &r.timeout}, func() error {
+		chRows = append(chRows, r)
 		return nil
 	}); err != nil {
 		return nil, err
 	}
-	proxies := map[string]bool{}
-	for _, r := range recs {
-		ch, err := p.openChannel(ctx, r)
-		if err != nil {
-			p.log.Warn("moderation: channel secrets do not open", "channel_id", r.id, "error", err.Error())
-			continue
+	for _, r := range chRows {
+		ch := &liveChannel{ID: r.id, Name: r.name, Type: r.typ, Protocol: r.protocol, BaseURL: r.base, Model: r.model, BillingModel: r.billing,
+			Timeout: time.Duration(r.timeout) * time.Millisecond, client: p.httpClient}
+		if len(r.keyEnc) > 0 {
+			key, err := p.host.OpenSecret(ctx, secretContext(r.id, "key"), r.keyEnc)
+			if err != nil {
+				p.log.Warn("moderation: channel key does not open", "channel_id", r.id, "error", err.Error())
+				continue
+			}
+			ch.Key = string(key)
 		}
-		if ch.markerKey != nil {
+		if ch.Timeout <= 0 {
+			ch.Timeout = time.Duration(defaultChannelTimeoutMs[ch.Type]) * time.Millisecond
+		}
+		if ch.Type == ChannelLLM && ch.Key != "" {
+			ch.markerKey = markerKey(ch.Key)
 			s.markers = append(s.markers, ch.markerKey)
 		}
-		proxies[ch.proxy] = true
 		s.channels[ch.ID] = ch
 	}
-	p.pruneProxies(proxies)
 	c := p.cfg.Load()
 	rows, err = db.Query(ctx, `SELECT id, name, type, channel_id, config FROM auditors WHERE deleted_at IS NULL`)
 	if err != nil {
@@ -247,7 +202,11 @@ func (p *Plugin) loadSnapshot(ctx context.Context) (*snapshot, error) {
 			p.log.Warn("moderation: published flow is invalid", "flow_id", fid, "error", err.Error())
 			return nil
 		}
-		f := &liveFlow{ID: fid, Name: fname, Version: version, Spec: spec, timeout: s.flowTimeout(spec)}
+		f := &liveFlow{ID: fid, Name: fname, Version: version, Spec: spec}
+		f.timeout = time.Duration(spec.TotalTimeoutMs) * time.Millisecond
+		if f.timeout <= 0 {
+			f.timeout = maxTotalTimeoutMs * time.Millisecond
+		}
 		s.flows[fid] = f
 		return nil
 	}); err != nil {

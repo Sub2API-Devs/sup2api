@@ -76,7 +76,6 @@ export default {
     labelColon: '{label}：',
     ms: '{n} 毫秒',
     mode: { off: '未启用', observe: '观察', enforce: '拦截' },
-    directory: { defaultGroup: '默认分组', group: '分组 #{id}' },
     tabs: { overview: '概览', events: '审核记录', watch: '观察名单', blocks: '封禁用户', flows: '流程', auditors: '审核器', channels: '渠道', test: '在线测试' },
     result: { block: '已拦截', hit: '命中', overturned: '被推翻', error: '出错', pass: '通过' },
     timing: { pre: '先审后发', post: '后台审核' },
@@ -329,7 +328,7 @@ export default {
       empty: '没有审核调用'
     },
     watch: {
-      hint: '观察级：请求照常放行，后台审核并计违规次数。拦截级：请求先审核，命中就拒绝。首次出现可疑记录的用户会自动以观察级加入（可在设置中关闭）。有提示词审核查看权限的管理员照常审核和记录，但不会进入名单，也不会被封禁。',
+      hint: '观察级：请求照常放行，后台审核并计违规次数。拦截级：请求先审核，命中就拒绝。首次出现可疑记录的用户会自动以观察级加入（可在设置中关闭）。插件目前识别不了管理员，请把管理员加入设置里的免审用户。',
       add: '加入名单',
       editTitle: '编辑用户 #{id}',
       levelHint: '拦截级的用户每个请求都先审核，命中即拒绝。',
@@ -629,7 +628,6 @@ export default {
     labelColon: '{label}:',
     ms: '{n} ms',
     mode: { off: 'Off', observe: 'Observe', enforce: 'Enforce' },
-    directory: { defaultGroup: 'Default group', group: 'Group #{id}' },
     tabs: { overview: 'Overview', events: 'Records', watch: 'Watch list', blocks: 'Banned users', flows: 'Flows', auditors: 'Auditors', channels: 'Channels', test: 'Playground' },
     result: { block: 'Blocked', hit: 'Hit', overturned: 'Overturned', error: 'Error', pass: 'Pass' },
     timing: { pre: 'Before upstream', post: 'Background' },
@@ -870,7 +868,7 @@ export default {
       empty: 'No auditor calls'
     },
     watch: {
-      hint: 'Observe: requests pass and are moderated in the background, violations are counted. Enforce: requests are moderated first and refused on a hit. Users with a first suspicious record join at the observe level (configurable). Moderators (users who may view prompt moderation) are moderated and recorded but never watched or banned.',
+      hint: 'Observe: requests pass and are moderated in the background, violations are counted. Enforce: requests are moderated first and refused on a hit. Users with a first suspicious record join at the observe level (configurable). The plugin cannot tell administrators apart yet: add them to the exempt users in the settings.',
       add: 'Add user',
       editTitle: 'Edit user #{id}',
       levelHint: 'Every request of an enforce-level user is moderated first and refused on a hit.',

@@ -1,6 +1,5 @@
 import type { PluginHost } from '@sub2api/host'
 import type { Tone } from '@sub2api/ui'
-import type { ChannelHealth } from './stats'
 
 // Plugin-scoped host handed to register(); shared by all moderation components.
 // All API shapes (CONTRACTS §72.11) live in this file so they are easy to adjust.
@@ -127,8 +126,6 @@ export interface ModEvent {
   ai_evidence?: string | null
   ai_reason?: string | null
   ai_analysis_id?: number | null
-  /** P3: per-stage path and scores (list items too); null on 0.1 records */
-  trace?: Trace | null
 }
 
 export interface HitCategory {
@@ -155,8 +152,6 @@ export interface Outcome {
   top_category?: string
   top_score: number
   hits?: HitCategory[]
-  /** P3: categories closest to their thresholds (score / threshold), hits or not */
-  top?: HitCategory[]
   latency_ms: number
   skipped?: boolean
   err?: string
@@ -185,27 +180,6 @@ export interface Trace {
 export interface ModEventDetail extends ModEvent {
   text: string | null
   trace: Trace | null
-  /** P3 (§72.14.3) */
-  related?: ModEvent[]
-  flow_snapshot?: FlowSnapshot | null
-  user?: RecordUser | null
-}
-
-export interface FlowSnapshot {
-  flow_id: number
-  name: string
-  version: number
-  current_version: number
-  published_at: string | null
-  spec: Spec
-  auditors: Array<{ id: number; name: string; type: AuditorType | string; channel_id: number; channel_name: string; config: AuditorConfig; rules_version?: string; deleted: boolean }>
-}
-
-export interface RecordUser {
-  watch: Watch | null
-  exempt: boolean
-  staff: boolean
-  blocked: boolean
 }
 
 export interface Block {
@@ -225,8 +199,6 @@ export interface Watch {
   since_at: string
   expires_at: string | null
   hit_count: number
-  /** P3: suspicious records since the last level change */
-  hits_since_seen?: number
   violation_count: number
   last_hit_at: string | null
   note: string
@@ -290,10 +262,6 @@ export interface Channel {
   billing_model?: string
   price_state?: PriceState | null
   cost_30d?: CostSummary | null
-  /** P3 list figures (§72.14.3) */
-  health?: ChannelHealth | null
-  used_by?: Array<{ id: number; name: string }>
-  is_analysis?: boolean
   timeout_ms: number
   enabled: boolean
   created_at: string
@@ -407,9 +375,6 @@ export interface AnalysisPrompt {
   dict: CategoryDef[] | null
   prompt: string
   bytes?: number
-  /** P3: built-in guidelines, and whether analysis_guidelines replaces them */
-  default_guidelines?: string
-  custom_guidelines?: boolean
 }
 
 export interface AnalysisTool {
@@ -479,8 +444,6 @@ export interface Auditor {
   config: AuditorConfig
   rules_version?: string
   usable: boolean
-  /** P3: hook calls and cost today */
-  today?: { calls: number; cost: CostSummary } | null
   created_at: string
   updated_at: string
 }
@@ -509,10 +472,6 @@ export interface Flow {
   published_by: number | null
   groups: number[]
   dirty: boolean
-  /** P3: automatic total timeout of the draft (detail only) */
-  stage_timeout_sum_ms?: number
-  /** P3: last 24 hours (list only) */
-  stats_24h?: { audited: number; suspicious_rate: number; pre_latency_avg_ms: number } | null
   created_at: string
   updated_at: string
 }
@@ -553,8 +512,6 @@ export interface ChannelTestResult {
   model?: string
   latency_ms: number
   cost?: CallCost | null
-  /** P3: the address called */
-  url?: string
 }
 
 /** Price of one call or of the calls of one run (§72.13.3). */
@@ -590,16 +547,9 @@ export async function fetchBlocks(): Promise<Block[]> {
 export const createBlock = (body: { user_id: number; reason?: string; duration_hours?: number }) => api().post('/blocks', body)
 export const deleteBlock = (userId: number) => api().del(`/blocks/${userId}`)
 
-export interface WatchChange {
-  level?: WatchLevel
-  days?: number
-  note?: string
-  /** P3: history text of the change (default: note) */
-  reason?: string
-}
-export const createWatch = (body: WatchChange & { user_id: number }) => api().post<Watch>('/watchlist', body)
-export const updateWatch = (userId: number, body: WatchChange) => api().patch<Watch>(`/watchlist/${userId}`, body)
-export const deleteWatch = (userId: number, reason?: string) => api().del(`/watchlist/${userId}`, reason ? { reason } : undefined)
+export const createWatch = (body: { user_id: number; level?: WatchLevel; days?: number; note?: string }) => api().post<Watch>('/watchlist', body)
+export const updateWatch = (userId: number, body: { level?: WatchLevel; days?: number; note?: string }) => api().patch<Watch>(`/watchlist/${userId}`, body)
+export const deleteWatch = (userId: number) => api().del(`/watchlist/${userId}`)
 export const fetchWatchEvents = (userId: number) => api().get<WatchEvent[]>(`/watchlist/${userId}/events`)
 
 export const fetchChannels = () => api().get<Channel[]>('/channels')
@@ -612,15 +562,7 @@ export const fetchAuditors = () => api().get<Auditor[]>('/auditors')
 export const saveAuditor = (id: number | null, body: Record<string, unknown>) =>
   id ? api().put<Auditor>(`/auditors/${id}`, body) : api().post<Auditor>('/auditors', body)
 export const deleteAuditor = (id: number) => api().del(`/auditors/${id}`)
-/** P3: id 0 runs a whole draft; otherwise the draft fields override the stored auditor. */
-export interface AuditorDraft {
-  name?: string
-  type?: AuditorType
-  channel_id?: number
-  config?: AuditorConfig
-}
-export const tryAuditor = (id: number, text: string, images: string[], draft?: AuditorDraft) =>
-  api().post<TryResult>(`/auditors/${id}/try`, { text, images, ...draft })
+export const tryAuditor = (id: number, text: string, images: string[]) => api().post<TryResult>(`/auditors/${id}/try`, { text, images })
 export const fetchDefaults = () => api().get<Defaults>('/jev/default-questions')
 
 export const fetchFlows = () => api().get<Flow[]>('/flows')

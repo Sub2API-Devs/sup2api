@@ -1,18 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SBulkBar, SButton, SDrawer, SEmpty, SHint, SSpinner, STable, STabs, type TableColumn } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SDescriptions, SDrawer, SEmpty, SHint, SSectionTitle, SSpinner, STabs, type DescItem } from '@sub2api/ui'
 import AnalysisCard from './AnalysisCard.vue'
 import CategoryChips from './CategoryChips.vue'
 import EventDetail from './EventDetail.vue'
 import ResultBadge from './ResultBadge.vue'
-import FlowLabel from './pages/FlowLabel.vue'
-import StagePath from './pages/StagePath.vue'
-import UserCell from './pages/UserCell.vue'
-import WatchUserCard from './pages/WatchUserCard.vue'
-import { loadStatus, status } from './pages/catalog'
+import VerdictBadge from './VerdictBadge.vue'
 import {
-  aiVerdictTone,
   analysisState,
   analyzeWatch,
   canManage,
@@ -22,26 +17,20 @@ import {
   fetchWatch,
   fetchWatchAnalyses,
   fetchWatchEvents,
-  reviewEvents,
-  reviewTone,
-  severityTone,
+  levelTone,
   suggestionTone,
   trendTone,
   useModHost,
   watchReason,
   type Analysis,
   type ModEvent,
-  type ReviewStatus,
   type Watch,
   type WatchEvent
 } from './host'
-import { userName } from './directory'
-import { fetchWatchList, type WatchItem } from './stats'
 
-// Watch list detail (§72.13.6, §72.14.3): the user card (figures, next
-// analysis, watch list actions) and "重新分析", the analysis queue state and
-// latest conclusion, the analyses, the suspicious records (bulk review) and
-// the watch history with the operators' names.
+// Watch list detail (§72.13.6): the entry and "重新分析", the analysis queue
+// state and latest conclusion, the analyses (expandable steps), the suspicious
+// records of the user and the watch history.
 const props = defineProps<{ open: boolean; userId: number | null }>()
 const emit = defineEmits<{
   (e: 'update:open', v: boolean): void
@@ -55,7 +44,6 @@ const dt = (v: string | null | undefined) => (v ? host.i18n.formatDateTime(v) : 
 const manage = computed(() => canManage())
 
 const entry = ref<Watch | null>(null)
-const item = ref<WatchItem | null>(null)
 const loading = ref(false)
 const error = ref('')
 const analyses = ref<Analysis[]>([])
@@ -68,7 +56,6 @@ const history = ref<WatchEvent[]>([])
 const section = ref('analyses')
 
 const state = computed(() => analysisState(entry.value))
-const every = computed(() => status.value?.watch.analysis_every_violations ?? 0)
 
 let timer: ReturnType<typeof setInterval> | null = null
 function stopPoll() {
@@ -94,12 +81,6 @@ async function loadEntry(id: number) {
   }
 }
 
-/** 30-day figures of the list row (suspicious total, severities, categories, groups). */
-async function loadItem(id: number) {
-  const r = await fetchWatchList({ q: String(id), page_size: 1 }).catch(() => null)
-  if (props.userId === id) item.value = r?.items.find((x) => x.user_id === id) || null
-}
-
 async function loadAnalyses(id: number, page = 1) {
   analysesLoading.value = true
   try {
@@ -114,12 +95,11 @@ async function loadAnalyses(id: number, page = 1) {
 }
 
 async function loadLists(id: number) {
-  const [, ev, hist] = await Promise.all([loadAnalyses(id), fetchUserEvents(id), fetchWatchEvents(id), loadItem(id)])
+  const [, ev, hist] = await Promise.all([loadAnalyses(id), fetchUserEvents(id), fetchWatchEvents(id)])
   if (props.userId !== id) return
   records.value = ev.items
   recordsTotal.value = ev.page.total
   history.value = Array.isArray(hist) ? hist : []
-  checked.value = []
 }
 
 async function load() {
@@ -127,7 +107,6 @@ async function load() {
   if (!id) return
   loading.value = true
   error.value = ''
-  loadStatus()
   try {
     await Promise.all([loadEntry(id), loadLists(id)])
   } catch (e) {
@@ -144,7 +123,6 @@ watch(
     if (!open || !id) return
     if (entry.value?.user_id !== id) {
       entry.value = null
-      item.value = null
       analyses.value = []
       records.value = []
       history.value = []
@@ -189,54 +167,27 @@ async function analyze() {
   }
 }
 
-/** A change from the user card: level → reload the figures and the history; removal → not watched. */
-function onWatchChanged(w: Watch | null) {
-  const id = props.userId
-  if (!id) return
-  if (!w) {
-    entry.value = null
-    error.value = t('watch.notWatched')
-    emit('changed', null)
-    return
-  }
-  entry.value = w
-  emit('changed', w)
-  fetchWatchEvents(id)
-    .then((h) => props.userId === id && (history.value = Array.isArray(h) ? h : []))
-    .catch(() => undefined)
-  loadItem(id)
-}
+const fields = computed<DescItem[]>(() => {
+  const w = entry.value
+  if (!w) return []
+  const items: DescItem[] = [
+    { key: 'level', label: t('watch.col.level') },
+    { key: 'source', label: t('watch.col.source'), value: enumLabel('watchSource', w.source) },
+    { key: 'violations', label: t('watch.col.violations'), value: n(w.violation_count) },
+    { key: 'hits', label: t('watch.col.hits'), value: n(w.hit_count) },
+    { key: 'since', label: t('watch.since'), value: dt(w.since_at) },
+    { key: 'expires', label: t('watch.col.expires'), value: w.expires_at ? dt(w.expires_at) : t('watch.noExpiry') },
+    { key: 'last', label: t('watch.col.lastHit'), value: dt(w.last_hit_at) }
+  ]
+  if (w.note) items.push({ key: 'note', label: t('watch.col.note'), value: w.note, full: true })
+  return items
+})
 
 const tabs = computed(() => [
   { key: 'analyses', label: `${t('watch.analyses')} (${n(analysesTotal.value)})` },
   { key: 'records', label: `${t('watch.suspicious')} (${n(recordsTotal.value)})` },
   { key: 'history', label: `${t('watch.history')} (${n(history.value.length)})` }
 ])
-
-// Suspicious records: one row each, bulk review of the selected ones.
-const recordColumns = computed<TableColumn[]>(() => [
-  { key: 'record', label: t('pagesP3.timeline.record') },
-  { key: 'ai', label: t('pagesP3.timeline.ai'), nowrap: true },
-  { key: 'review', label: t('pagesP3.timeline.review'), nowrap: true }
-])
-const checked = ref<number[]>([])
-const reviewing = ref(false)
-async function bulkReview(status: ReviewStatus) {
-  const ids = records.value.filter((r) => checked.value.includes(r.id)).map((r) => r.id)
-  if (!ids.length) return
-  reviewing.value = true
-  try {
-    await reviewEvents(ids, status)
-    onReviewed(ids, status)
-    checked.value = []
-    host.toast(t('review.done', { n: ids.length }), 'success')
-    if (props.userId) loadEntry(props.userId).catch(() => undefined)
-  } catch (e) {
-    host.toast(errorMessage(e, t('actionFailed')), 'error')
-  } finally {
-    reviewing.value = false
-  }
-}
 
 // Record detail on top of the drawer.
 const recordId = ref<number | null>(null)
@@ -252,20 +203,25 @@ function onDeleted(id: number) {
   records.value = records.value.filter((r) => r.id !== id)
   recordsTotal.value = Math.max(0, recordsTotal.value - 1)
 }
-function onRecordWatchChanged(uid: number, w: Watch | null) {
-  if (uid === props.userId) onWatchChanged(w)
-}
 </script>
 
 <template>
-  <SDrawer :open="open" :title="t('pagesP3.wdetail.title', { name: userId ? userName(userId) : '' })" width="xl" @update:open="emit('update:open', $event)">
+  <SDrawer :open="open" :title="t('watch.detailTitle', { id: userId ?? '' })" width="xl" @update:open="emit('update:open', $event)">
     <SSpinner v-if="loading && !entry" block />
     <SAlert v-else-if="error" tone="warning">{{ error }}</SAlert>
     <div v-else-if="entry" class="mod-detail">
-      <WatchUserCard :watch="entry" :item="item" :records="records" :records-total="recordsTotal" :every="every" @changed="onWatchChanged">
-        <SButton size="sm" variant="ghost" @click="emit('show-user', entry.user_id)">{{ t('watch.allRecords') }}</SButton>
-        <SButton v-if="manage" size="sm" variant="primary" icon="refresh" :loading="analyzing" :disabled="state !== 'idle'" @click="analyze">{{ t('watch.analyze') }}</SButton>
-      </WatchUserCard>
+      <div>
+        <SSectionTitle tag="p">
+          {{ t('watch.info') }}
+          <template #actions>
+            <SButton size="sm" variant="ghost" @click="emit('show-user', entry.user_id)">{{ t('watch.allRecords') }}</SButton>
+            <SButton v-if="manage" size="sm" variant="primary" icon="refresh" :loading="analyzing" :disabled="state !== 'idle'" @click="analyze">{{ t('watch.analyze') }}</SButton>
+          </template>
+        </SSectionTitle>
+        <SDescriptions :items="fields" :columns="2" dense>
+          <template #item-level><SBadge :tone="levelTone(entry.level)">{{ enumLabel('level', entry.level) }}</SBadge></template>
+        </SDescriptions>
+      </div>
 
       <div class="mod-analysis-state">
         <span class="mod-cost-label">{{ t('watch.analysisState') }}</span>
@@ -289,7 +245,7 @@ function onRecordWatchChanged(uid: number, w: Watch | null) {
         <div v-show="section === 'analyses'">
           <SEmpty v-if="!analysesLoading && !analyses.length" :text="t('watch.noAnalyses')" icon="eyeglass" />
           <div v-else class="mod-analysis-list">
-            <AnalysisCard v-for="a in analyses" :key="a.id" :analysis="a" :timeline-count="recordsTotal" @open-record="openRecord" />
+            <AnalysisCard v-for="a in analyses" :key="a.id" :analysis="a" @open-record="openRecord" />
             <div v-if="analyses.length < analysesTotal" class="mod-center">
               <SButton size="sm" :loading="analysesLoading" @click="userId && loadAnalyses(userId, analysesPage + 1)">{{ t('watch.loadMore') }}</SButton>
             </div>
@@ -297,46 +253,21 @@ function onRecordWatchChanged(uid: number, w: Watch | null) {
         </div>
 
         <div v-show="section === 'records'">
-          <SBulkBar v-if="manage && records.length" :count="checked.length" :total="records.length" :page-selected="checked.length === records.length" class="mod-block" @select-page="checked = records.map((r) => r.id)" @clear="checked = []">
-            <template #idle>{{ t('review.hint') }}</template>
-            <SButton size="sm" :loading="reviewing" @click="bulkReview('false_positive')">{{ t('review.falsePositive') }}</SButton>
-            <SButton size="sm" variant="danger" :loading="reviewing" @click="bulkReview('confirmed')">{{ t('review.confirmed') }}</SButton>
-            <SButton size="sm" variant="ghost" :loading="reviewing" @click="bulkReview('pending')">{{ t('review.reset') }}</SButton>
-          </SBulkBar>
-          <STable
-            v-model:selected="checked"
-            :columns="recordColumns"
-            :rows="records"
-            :empty-text="t('watch.noSuspicious')"
-            :selectable="manage"
-            dense
-            clickable
-            @row-click="(r: ModEvent) => openRecord(r.id)"
-          >
-            <template #cell-record="{ row }">
-              <div class="mod-pg-tl-head">
-                <span class="mod-num">#{{ row.id }}</span>
-                <SHint inline size="xs">{{ dt(row.created_at) }}</SHint>
-                <FlowLabel :flow-id="row.flow_id" :version="row.flow_version" />
-              </div>
-              <div class="mod-pg-tl-head">
-                <CategoryChips :categories="row.hit_categories" />
-                <SBadge v-if="row.severity" size="xs" :tone="severityTone(row.severity)">{{ enumLabel('severity', row.severity) }}</SBadge>
-                <ResultBadge :result="row.result" />
-                <StagePath v-if="row.trace" :trace="row.trace" :result="row.result" />
-              </div>
-              <div v-if="row.text_excerpt" class="mod-sub mod-timeline-text">{{ row.text_excerpt }}</div>
-            </template>
-            <template #cell-ai="{ row }">
-              <SBadge v-if="row.ai_verdict" :tone="aiVerdictTone(row.ai_verdict)">{{ enumLabel('aiVerdict', row.ai_verdict) }}</SBadge>
-              <SHint v-else inline size="xs">{{ enumLabel('aiVerdict', 'none') }}</SHint>
-              <div v-if="row.ai_verdict === 'violation' && row.ai_severity" class="mod-sub">{{ enumLabel('severity', row.ai_severity) }}</div>
-            </template>
-            <template #cell-review="{ row }">
-              <SBadge :tone="reviewTone(row.review_status)">{{ enumLabel('review', row.review_status) }}</SBadge>
-            </template>
-          </STable>
-          <SHint size="xs" class="mod-section">{{ t('pagesP3.timeline.hint') }}</SHint>
+          <SEmpty v-if="!records.length" :text="t('watch.noSuspicious')" icon="eyeglass" />
+          <ol v-else class="mod-timeline">
+            <li v-for="r in records" :key="r.id">
+              <button type="button" class="mod-timeline-item" @click="openRecord(r.id)">
+                <span class="mod-history-head">
+                  <ResultBadge :result="r.result" />
+                  <VerdictBadge :event="r" />
+                  <CategoryChips :categories="r.hit_categories" />
+                  <SHint inline size="xs" class="mod-ml-auto">{{ dt(r.created_at) }} · #{{ r.id }}</SHint>
+                </span>
+                <span class="mod-sub mod-timeline-text">{{ r.text_excerpt || '—' }}</span>
+                <span v-if="r.ai_reason" class="mod-sub mod-timeline-text">AI: {{ r.ai_reason }}</span>
+              </button>
+            </li>
+          </ol>
           <div v-if="recordsTotal > records.length" class="mod-center">
             <SButton size="sm" variant="ghost" @click="emit('show-user', entry.user_id)">{{ t('watch.allRecords') }}</SButton>
           </div>
@@ -349,9 +280,7 @@ function onRecordWatchChanged(uid: number, w: Watch | null) {
               <div class="mod-history-head">
                 <SBadge>{{ enumLabel('watchAction', e.action) }}</SBadge>
                 <span v-if="e.from_level || e.to_level" class="mod-sub">{{ enumLabel('level', e.from_level) }} → {{ enumLabel('level', e.to_level) }}</span>
-                <SHint inline size="xs">{{ dt(e.created_at) }}</SHint>
-                <SHint v-if="e.operator_id" inline size="xs">· {{ t('pagesP3.wdetail.operator') }} <UserCell :id="e.operator_id" /></SHint>
-                <SHint v-else inline size="xs">· {{ t('pagesP3.wdetail.system') }}</SHint>
+                <SHint inline size="xs">{{ dt(e.created_at) }}<template v-if="e.operator_id"> · #{{ e.operator_id }}</template></SHint>
                 <SHint v-if="e.analysis_id" inline size="xs">· {{ t('analysis.title', { id: e.analysis_id }) }}</SHint>
               </div>
               <div v-if="e.reason" class="mod-sub">{{ watchReason(e.action, e.reason) }}</div>
@@ -361,14 +290,5 @@ function onRecordWatchChanged(uid: number, w: Watch | null) {
       </STabs>
     </div>
   </SDrawer>
-  <EventDetail v-model:open="recordOpen" :event-id="recordId" @reviewed="onReviewed" @deleted="onDeleted" @watch-changed="onRecordWatchChanged" />
+  <EventDetail v-model:open="recordOpen" :event-id="recordId" @reviewed="onReviewed" @deleted="onDeleted" />
 </template>
-
-<style scoped>
-.mod-pg-tl-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.375rem;
-}
-</style>

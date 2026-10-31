@@ -3,7 +3,6 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { isApiError } from '@sub2api/host'
 import { SAlert, SBadge, SButton, SCard, SField, SHint, SInput, STable, type TableColumn } from '@sub2api/ui'
 import { canManage, createBlock, deleteBlock, enumLabel, errorMessage, fetchBlocks, useModHost, type Block } from './host'
-import UserCell from './pages/UserCell.vue'
 
 // Blocked users: list (GET /blocks), unblock (DELETE /blocks/:user_id),
 // manual block (POST /blocks). Actions need the manage permission.
@@ -119,7 +118,7 @@ async function submit() {
 
     <SCard :padded="false">
       <STable :columns="columns" :rows="rows" :loading="loading" row-key="user_id" :empty-text="t('blocks.empty')">
-        <template #cell-user_id="{ row }"><UserCell :id="row.user_id" /></template>
+        <template #cell-user_id="{ row }"><span class="mod-num">#{{ row.user_id }}</span></template>
         <template #cell-source="{ row }">
           <SBadge :tone="row.source === 'manual' ? 'accent' : 'warning'">{{ enumLabel('source', row.source) }}</SBadge>
         </template>

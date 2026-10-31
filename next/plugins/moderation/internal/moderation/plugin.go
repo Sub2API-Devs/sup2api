@@ -82,9 +82,6 @@ type Plugin struct {
 	refreshEvery   time.Duration
 	refreshNow     chan struct{}
 
-	categories categoryCache // GET /stats/categories
-	proxies    proxyClients  // channel proxies
-
 	stats struct {
 		calls, errors, cacheHits, dropped, droppedEvents, kvErrors atomic.Int64
 		inflight, latencyMsSum                                     atomic.Int64
