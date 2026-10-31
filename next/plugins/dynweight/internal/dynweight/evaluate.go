@@ -48,8 +48,12 @@ func (p *Plugin) runCleanup(ctx context.Context) (*pluginv1.RunJobResponse, erro
 	if err != nil {
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
+	cfg, err := p.loadedConfig(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Unavailable, err.Error())
+	}
 	now := p.now()
-	n, err := s.prune(ctx, obsSince(p.cfg.Load(), now.Unix()), now.Add(-eventRetention), now.Add(-staleAfter))
+	n, err := s.prune(ctx, obsSince(cfg, now.Unix()), now.Add(-eventRetention), now.Add(-staleAfter))
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup: %v", err)
 	}
@@ -84,11 +88,17 @@ type evaluation struct {
 // runEvaluate evaluates every key. It also runs when the plugin is off:
 // the kernel then pins the degraded keys to their base (the adjustment is
 // off), so turning it back on starts from the base, as new-api's reset of
-// every key on a global disable does.
+// every key on a global disable does. It never runs on the factory
+// configuration standing in for one it could not read, which would pin
+// them all the same.
 func (p *Plugin) runEvaluate(ctx context.Context) (*pluginv1.RunJobResponse, error) {
-	cfg := p.cfg.Load()
 	s, err := p.store(ctx)
 	if err != nil {
+		return nil, status.Error(codes.Unavailable, err.Error())
+	}
+	cfg, err := p.loadedConfig(ctx)
+	if err != nil {
+		p.stats.add(cRunFailures, 1)
 		return nil, status.Error(codes.Unavailable, err.Error())
 	}
 	started := time.Now()
@@ -291,7 +301,11 @@ func (p *Plugin) resetKeys(ctx context.Context, f filter, reason string, userID 
 	if err != nil {
 		return 0, err
 	}
-	cfg, now := p.cfg.Load(), p.now().Unix()
+	cfg, err := p.loadedConfig(ctx)
+	if err != nil {
+		return 0, err
+	}
+	now := p.now().Unix()
 	keys, err := s.keys(ctx, f, obsSince(cfg, now))
 	if err != nil {
 		return 0, err

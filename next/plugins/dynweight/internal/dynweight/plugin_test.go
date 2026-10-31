@@ -460,8 +460,8 @@ func TestChannelsWithoutGrant(t *testing.T) {
 	e.decode(e.h.Do("PUT", "/config", nil, configBody{Config: c}), http.StatusBadRequest, nil)
 }
 
-// Turning the plugin off pins the degraded keys to their base, without
-// events, so turning it back on starts from the base.
+// Turning the plugin off pins the degraded keys to their base, so turning
+// it back on starts from the base; the pinning records no event.
 func TestGlobalDisablePinsToBase(t *testing.T) {
 	e := newEnv(t)
 	e.configure(nil)

@@ -1,18 +1,24 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watchEffect } from 'vue'
 import { SAlert, SButton, SField, SHint, SInput, SSectionTitle, SSegmented, SSelect, SSwitch } from '@sub2api/ui'
 import ItemsJsonPanel from './ItemsJsonPanel.vue'
 import RulesEditor from './RulesEditor.vue'
 import StrategiesEditor from './StrategiesEditor.vue'
-import { clone, enumOptions, useDwHost, type Layer, type When } from './host'
+import { clone, enumOptions, rulesWithEmptyNumbers, useDwHost, type Layer, type When } from './host'
 
 // One configuration layer (the global one or a group's): window, sample
 // floor, exempt status codes, weight floor, rules and strategies.
 const props = defineProps<{ defaults: Layer | null; master?: boolean }>()
 const layer = defineModel<Layer>({ required: true })
-// Set while the JSON panel holds text that does not parse.
+// Set while the JSON panel holds text that does not parse, or a number is
+// left empty: the plugin would refuse it, or read a group's as the default.
 const invalid = defineModel<boolean>('invalid', { default: false })
 const t = useDwHost().t
+const jsonInvalid = ref(false)
+const required = (v: number | null) => (v === null || v === undefined ? t('layer.required') : undefined)
+const emptyScalar = computed(() => [layer.value.window_seconds, layer.value.min_samples, layer.value.min_weight].some((v) => required(v)))
+const emptyRules = computed(() => rulesWithEmptyNumbers(layer.value.rules))
+watchEffect(() => (invalid.value = jsonInvalid.value || emptyScalar.value || emptyRules.value.length > 0))
 
 const floorOptions = computed(() => enumOptions('floor', ['base_percent', 'fixed']))
 // Rules and strategies are edited visually or as JSON.
@@ -56,10 +62,10 @@ function restoreRules() {
       </SField>
     </div>
     <div class="dw-row">
-      <SField class="dw-w-8" :label="t('layer.window')" :hint="t('layer.windowHint')">
+      <SField class="dw-w-8" :label="t('layer.window')" :hint="t('layer.windowHint')" :error="required(layer.window_seconds)">
         <SInput v-model="layer.window_seconds" type="number" min="10" max="3600" :suffix="t('unit.second')" />
       </SField>
-      <SField class="dw-w-8" :label="t('layer.minSamples')" :hint="t('layer.minSamplesHint')">
+      <SField class="dw-w-8" :label="t('layer.minSamples')" :hint="t('layer.minSamplesHint')" :error="required(layer.min_samples)">
         <SInput v-model="layer.min_samples" type="number" min="1" />
       </SField>
       <SField class="dw-grow" :label="t('layer.exempt')" :hint="t('layer.exemptHint')">
@@ -68,7 +74,7 @@ function restoreRules() {
       <SField class="dw-w-10" :label="t('layer.floorMode')">
         <SSelect v-model="layer.min_weight_mode" :options="floorOptions" />
       </SField>
-      <SField class="dw-w-8" :label="t('layer.floor')" :hint="t('layer.floorHint')">
+      <SField class="dw-w-8" :label="t('layer.floor')" :hint="t('layer.floorHint')" :error="required(layer.min_weight)">
         <SInput v-model="layer.min_weight" type="number" min="0" :suffix="layer.min_weight_mode === 'base_percent' ? '%' : ''" />
       </SField>
     </div>
@@ -81,7 +87,8 @@ function restoreRules() {
     </SSectionTitle>
     <SHint class="dw-hint">{{ t('layer.rulesHint') }}</SHint>
     <SAlert v-if="staleStrategies.length" tone="warning" class="dw-block">{{ t('layer.staleRefs', { names: staleStrategies.join(', ') }) }}</SAlert>
-    <ItemsJsonPanel v-if="mode === 'json'" v-model="layer" v-model:invalid="invalid" />
+    <SAlert v-if="emptyRules.length" tone="danger" class="dw-block">{{ t('layer.emptyNumbers', { names: emptyRules.join(', ') }) }}</SAlert>
+    <ItemsJsonPanel v-if="mode === 'json'" v-model="layer" v-model:invalid="jsonInvalid" />
     <template v-else>
       <RulesEditor v-model="layer.rules" @rename="renameRule" />
       <SSectionTitle :title="t('layer.strategies')" />

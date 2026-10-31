@@ -7,6 +7,7 @@ package dynweight
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -65,6 +66,9 @@ type Plugin struct {
 type compiledConfig struct {
 	*rules.Compiled
 	version int64
+	// loaded is false for the factory configuration standing in until the
+	// stored one is read (loadedConfig).
+	loaded bool
 }
 
 // New returns the plugin.
@@ -180,13 +184,15 @@ func (p *Plugin) flush(ctx context.Context) {
 	}
 }
 
-// refresh reloads the configuration when its version moved, and the weights.
+// refresh reloads the configuration when its version moved or it is not
+// loaded yet, and the weights.
 func (p *Plugin) refresh(ctx context.Context) {
 	s, err := p.store(ctx)
 	if err != nil {
 		return
 	}
-	if v, err := s.configVersion(ctx); err == nil && v != p.cfg.Load().version {
+	cur := p.cfg.Load()
+	if v, err := s.configVersion(ctx); err == nil && (v != cur.version || !cur.loaded) {
 		if err := p.reloadConfig(ctx); err != nil {
 			p.log.Warn("dynweight: reload configuration failed", "error", err.Error())
 		}
@@ -215,8 +221,22 @@ func (p *Plugin) reloadConfig(ctx context.Context) error {
 	if _, err := c.Normalize(); err != nil {
 		return err
 	}
-	p.cfg.Store(&compiledConfig{Compiled: rules.Compile(c), version: version})
+	p.cfg.Store(&compiledConfig{Compiled: rules.Compile(c), version: version, loaded: true})
 	return nil
+}
+
+// loadedConfig is the configuration in force, read first while it is not
+// (Init could not). The factory configuration that stands in meanwhile is
+// off: what writes states or prunes counters must not run on it, or it
+// would pin every key to its base and prune by the wrong retention.
+func (p *Plugin) loadedConfig(ctx context.Context) (*compiledConfig, error) {
+	if cfg := p.cfg.Load(); cfg.loaded {
+		return cfg, nil
+	}
+	if err := p.reloadConfig(ctx); err != nil {
+		return nil, fmt.Errorf("the configuration is not loaded: %w", err)
+	}
+	return p.cfg.Load(), nil
 }
 
 func (p *Plugin) reloadWeights(ctx context.Context) error {

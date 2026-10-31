@@ -12,10 +12,7 @@ const props = defineProps<{ row: KeyStatus }>()
 const host = useDwHost()
 const t = host.t
 
-const rate = (total: number, fail: number) => {
-  const r = successRate(total, fail)
-  return r === null ? '—' : `${r}%`
-}
+const rate = successRate
 const counts = (items: ThresholdCount[], samples: number) => items.map((x) => `≥${formatMs(x.ms)} ${x.count}/${samples}`).join(' · ')
 const time = (unix: number) => (unix ? host.i18n.formatDateTime(unix * 1000) : '—')
 

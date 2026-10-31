@@ -19,15 +19,15 @@ const zh = {
     col: { account: '账号', group: '分组', model: '模型', weight: '有效 / 基准', window: '最近窗口', rules: '命中规则', changed: '最近变化', actions: '操作' },
     resetBadge: '已重置',
     paused: '未启用调整',
-    windowStats: '{total} 次 · 失败 {fail} · 成功率 {rate}%',
-    recent: '近 {n} 窗口成功率 {rate}%',
+    windowStats: '{total} 次 · 失败 {fail} · 成功率 {rate}',
+    recent: '近 {n} 窗口成功率 {rate}',
     notEvaluated: '尚未评估',
     current: '本窗口 {total} 次，失败 {fail}',
     ruleSamples: '{n} 个样本，回看 {lookback} 个窗口',
     events: '事件',
     reset: '重置',
     resetFiltered: '重置筛选到的全部',
-    resetKeyConfirm: '把账号 {account} 在分组 #{group}、模型 {model} 下的有效权重重置为基准？历史窗口会被清空。',
+    resetKeyConfirm: '把账号 {account} 在分组 {group}、模型 {model} 下的有效权重重置为基准？历史窗口会被清空。',
     resetFilterConfirm: '把筛选条件覆盖的全部（账号、分组、模型）重置为基准？历史窗口会被清空。',
     resetSelected: '重置选中的 {n} 个账号',
     selectedAccounts: '已选 {n} 个账号（最多 {max}）',
@@ -145,8 +145,9 @@ const zh = {
     strategies: '策略 JSON',
     strategiesHint: '数组，每条：name、when（规则名，或 all / any 数组）、actions（type、mode、value、percent）、cooldown_seconds、enabled',
     notArray: '必须是一个数组',
-    invalid: 'JSON 有错误，修正后才能校验或保存',
-    unnamed: '第 {i} 项必须是带 name 的对象'
+    invalid: '有错误（JSON 无法解析或数值未填写），修正后才能校验或保存',
+    unnamed: '第 {i} 项必须是带 name 的对象',
+    malformed: '第 {i} 项的 {field} 格式不对'
   },
   when: { rule: '单条规则', all: '全部满足', any: '任一满足', addRule: '添加规则', addGroup: '添加子组' },
   action: { weight_degrade: '降低权重', weight_climb: '抬高权重', affinity_clear: '清理粘性会话' },
@@ -183,7 +184,9 @@ const zh = {
     restoreRules: '恢复默认规则和策略',
     strategies: '策略',
     strategiesHint: '规则触发后执行的动作。',
-    staleRefs: '这些策略引用了已删除或停用的规则，保存前请修改：{names}'
+    staleRefs: '这些策略引用了已删除或停用的规则，保存前请修改：{names}',
+    required: '请填写',
+    emptyNumbers: '这些规则有未填写的数值，保存前请填写：{names}'
   },
   config: {
     loadFailed: '加载配置失败',
@@ -238,15 +241,15 @@ const en: typeof zh = {
     col: { account: 'Account', group: 'Group', model: 'Model', weight: 'Effective / base', window: 'Last window', rules: 'Rules hit', changed: 'Last change', actions: 'Actions' },
     resetBadge: 'Reset',
     paused: 'Adjustment off',
-    windowStats: '{total} attempts · {fail} failed · {rate}% succeeded',
-    recent: 'last {n} windows: {rate}% succeeded',
+    windowStats: '{total} attempts · {fail} failed · {rate} succeeded',
+    recent: 'last {n} windows: {rate} succeeded',
     notEvaluated: 'Not evaluated yet',
     current: 'this window: {total} attempts, {fail} failed',
     ruleSamples: '{n} samples over {lookback} windows',
     events: 'Events',
     reset: 'Reset',
     resetFiltered: 'Reset everything filtered',
-    resetKeyConfirm: 'Reset the effective weight of account {account} in group #{group}, model {model} to its base? Its window history is dropped.',
+    resetKeyConfirm: 'Reset the effective weight of account {account} in group {group}, model {model} to its base? Its window history is dropped.',
     resetFilterConfirm: 'Reset every (account, group, model) the filter covers to its base? Their window history is dropped.',
     resetSelected: 'Reset the {n} selected accounts',
     selectedAccounts: '{n} accounts selected (max {max})',
@@ -364,8 +367,9 @@ const en: typeof zh = {
     strategies: 'Strategies JSON',
     strategiesHint: 'An array; each strategy: name, when (a rule name, or an all / any array), actions (type, mode, value, percent), cooldown_seconds, enabled',
     notArray: 'must be an array',
-    invalid: 'Fix the JSON errors to validate or save',
-    unnamed: 'item {i} must be an object with a name'
+    invalid: 'Fix the errors (JSON that does not parse, or an empty number) to validate or save',
+    unnamed: 'item {i} must be an object with a name',
+    malformed: 'item {i}: {field} is malformed'
   },
   when: { rule: 'One rule', all: 'All of', any: 'Any of', addRule: 'Add rule', addGroup: 'Add group' },
   action: { weight_degrade: 'Lower the weight', weight_climb: 'Raise the weight', affinity_clear: 'Clear sticky sessions' },
@@ -402,7 +406,9 @@ const en: typeof zh = {
     restoreRules: 'Restore default rules and strategies',
     strategies: 'Strategies',
     strategiesHint: 'What happens when rules fire.',
-    staleRefs: 'These strategies reference a removed or disabled rule; fix them before saving: {names}'
+    staleRefs: 'These strategies reference a removed or disabled rule; fix them before saving: {names}',
+    required: 'Required',
+    emptyNumbers: 'These rules have an empty number; fill it in before saving: {names}'
   },
   config: {
     loadFailed: 'Failed to load the configuration',

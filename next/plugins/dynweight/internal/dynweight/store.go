@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/dynweight/internal/rules"
@@ -33,9 +34,9 @@ type store struct{ db *pgxpool.Pool }
 
 var errVersionConflict = errors.New("the configuration was changed meanwhile")
 
-// loadConfig reads the configuration; version 0 means the default. A
-// stored window below the minimum is raised (rules.RaiseWindows); warnings
-// say so.
+// loadConfig reads the configuration; version 0 means the default. The
+// stored one is read tolerantly (rules.LoadConfig); warnings say what was
+// raised, fell back or was dropped.
 func (s store) loadConfig(ctx context.Context) (c rules.Config, version int64, warnings []string, err error) {
 	var raw []byte
 	err = s.db.QueryRow(ctx, `SELECT doc, version FROM config WHERE id = 1`).Scan(&raw, &version)
@@ -45,22 +46,26 @@ func (s store) loadConfig(ctx context.Context) (c rules.Config, version int64, w
 	if err != nil {
 		return rules.Config{}, 0, nil, err
 	}
-	if err := json.Unmarshal(raw, &c); err != nil {
+	if c, warnings, err = rules.LoadConfig(raw); err != nil {
 		return rules.Config{}, 0, nil, fmt.Errorf("stored configuration: %w", err)
 	}
-	return c, version, c.RaiseWindows(), nil
+	return c, version, warnings, nil
 }
 
 // saveConfig stores a normalized configuration if version is still the
-// stored one, and returns the new version.
+// stored one (0 = none stored yet), and returns the new version.
 func (s store) saveConfig(ctx context.Context, c rules.Config, version, userID int64) (int64, error) {
 	raw, err := json.Marshal(c)
 	if err != nil {
 		return 0, err
 	}
-	tag, err := s.db.Exec(ctx, `INSERT INTO config (id, doc, version, updated_by) VALUES (1, $1, $2 + 1, $3)
-		ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc, version = EXCLUDED.version, updated_at = now(), updated_by = EXCLUDED.updated_by
-		WHERE config.version = $2`, raw, version, userID)
+	var tag pgconn.CommandTag
+	if version == 0 {
+		tag, err = s.db.Exec(ctx, `INSERT INTO config (id, doc, version, updated_by) VALUES (1, $1, 1, $2) ON CONFLICT (id) DO NOTHING`, raw, userID)
+	} else {
+		tag, err = s.db.Exec(ctx, `UPDATE config SET doc = $1, version = version + 1, updated_at = now(), updated_by = $2
+			WHERE id = 1 AND version = $3`, raw, userID, version)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -296,12 +301,10 @@ func (s store) addEvents(ctx context.Context, events []eventRow) error {
 
 // keys lists the keys matching f with a state, or with counters from since on.
 func (s store) keys(ctx context.Context, f filter, since int64) ([]key, error) {
-	// Both clauses number f's conditions alike; the obs clause appends one
-	// more, so its arguments serve the state clause too.
-	stateWhere, _ := f.where()
-	obsWhere, args := f.where(cond{"window_start >= $%d", since})
+	stateWhere, stateArgs := f.where()
+	obsWhere, obsArgs := f.whereFrom(len(stateArgs)+1, cond{"window_start >= $%d", since})
 	rows, err := s.db.Query(ctx, `SELECT account_id, group_id, model FROM state`+stateWhere+
-		` UNION SELECT account_id, group_id, model FROM obs`+obsWhere, args...)
+		` UNION SELECT account_id, group_id, model FROM obs`+obsWhere, append(stateArgs, obsArgs...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +367,10 @@ type cond struct {
 }
 
 // where builds the WHERE clause of f and the extra conditions.
-func (f filter) where(extra ...cond) (string, []any) {
+func (f filter) where(extra ...cond) (string, []any) { return f.whereFrom(1, extra...) }
+
+// whereFrom is where with the placeholders numbered from first on.
+func (f filter) whereFrom(first int, extra ...cond) (string, []any) {
 	var conds []cond
 	if ids := f.accounts(); len(ids) > 0 {
 		conds = append(conds, cond{"account_id = ANY($%d)", ids})
@@ -381,7 +387,7 @@ func (f filter) where(extra ...cond) (string, []any) {
 	}
 	parts, args := make([]string, len(conds)), make([]any, len(conds))
 	for i, c := range conds {
-		parts[i], args[i] = fmt.Sprintf(c.sql, i+1), c.arg
+		parts[i], args[i] = fmt.Sprintf(c.sql, first+i), c.arg
 	}
 	return " WHERE " + strings.Join(parts, " AND "), args
 }

@@ -49,7 +49,10 @@ var tables = [...]struct {
 	{"nl", func(f *Family) *map[int]int64 { return &f.LatencySamples }},
 }
 
-const streamPrefix = "s:"
+const (
+	streamPrefix   = "s:"
+	tablePrefixLen = 2 // every table prefix has this length
+)
 
 func addCount(m *map[int]int64, k int, v int64) {
 	if *m == nil {
@@ -172,24 +175,44 @@ func CountsOf(fields map[string]int64) Counts {
 		if stripped, ok := strings.CutPrefix(name, streamPrefix); ok {
 			name, f = stripped, &c.Stream
 		}
-		switch name {
-		case "total":
-			f.Total = v
-		case "fail":
-			f.Fail = v
-		case "tn":
-			f.TN = v
-		case "ln":
-			f.LN = v
-		default:
-			for _, t := range tables {
-				rest, ok := strings.CutPrefix(name, t.prefix)
-				if k, err := strconv.Atoi(rest); ok && err == nil {
-					addCount(t.of(f), k, v)
-					break
-				}
-			}
-		}
+		f.set(name, v)
 	}
 	return c
+}
+
+// scalarFields / tableFields find a flat field's target by its name, or by
+// its prefix and the key after it.
+var (
+	scalarFields = map[string]func(*Family) *int64{
+		"total": func(f *Family) *int64 { return &f.Total },
+		"fail":  func(f *Family) *int64 { return &f.Fail },
+		"tn":    func(f *Family) *int64 { return &f.TN },
+		"ln":    func(f *Family) *int64 { return &f.LN },
+	}
+	tableFields = func() map[string]func(*Family) *map[int]int64 {
+		m := make(map[string]func(*Family) *map[int]int64, len(tables))
+		for _, t := range tables {
+			if len(t.prefix) != tablePrefixLen {
+				panic("dynweight: table prefix " + t.prefix)
+			}
+			m[t.prefix] = t.of
+		}
+		return m
+	}()
+)
+
+// set puts a flat field back (CountsOf).
+func (f *Family) set(name string, v int64) {
+	if field := scalarFields[name]; field != nil {
+		*field(f) = v
+		return
+	}
+	if len(name) <= tablePrefixLen {
+		return
+	}
+	if table := tableFields[name[:tablePrefixLen]]; table != nil {
+		if k, err := strconv.Atoi(name[tablePrefixLen:]); err == nil {
+			addCount(table(f), k, v)
+		}
+	}
 }

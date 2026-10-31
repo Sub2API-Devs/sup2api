@@ -154,6 +154,47 @@ func TestDocumentDefaults(t *testing.T) {
 	}
 }
 
+// A null field of a group would read as the default: refused when saved,
+// and the group dropped when loaded.
+func TestGroupNullField(t *testing.T) {
+	var c Config
+	err := json.Unmarshal([]byte(`{"groups":{"7":{"window_seconds":30,"min_weight":null}}}`), &c)
+	if err == nil || !strings.Contains(err.Error(), "groups.7: min_weight must not be null") {
+		t.Fatalf("null accepted: %v", err)
+	}
+}
+
+// A stored configuration loads with what no longer validates dropped or
+// set back to its default, each with a warning.
+func TestLoadConfigTolerant(t *testing.T) {
+	c, warnings, err := LoadConfig([]byte(`{"enabled":true,"window_seconds":99999,"min_samples":0,"exempt_status_codes":"x",
+		"min_weight_mode":"fixed","min_weight":-1,
+		"groups":{"7":{"min_weight":null},"8":{"window_seconds":5},"9":{"min_samples":0},"10":{"rules":[{"name":""}]},"11":[]},
+		"accounts":{"3":{"min_weight":5},"4":{"enabled":false}},
+		"notify":{"enabled":true,"channel":"","recipients":["a"]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	def := DefaultLayer()
+	if !c.Enabled || c.WindowSeconds != def.WindowSeconds || c.MinSamples != def.MinSamples || c.ExemptStatusCodes != def.ExemptStatusCodes ||
+		c.MinWeightMode != def.MinWeightMode || c.MinWeight != def.MinWeight {
+		t.Fatalf("global: %+v", c.Layer)
+	}
+	if len(c.Groups) != 1 || c.Groups[8].WindowSeconds != MinWindowSeconds || len(c.Accounts) != 1 || c.Accounts[4].Enabled == nil || c.Notify.Enabled {
+		t.Fatalf("groups %v, accounts %v, notify %+v", c.Groups, c.Accounts, c.Notify)
+	}
+	// 4 global fields, 4 groups dropped and 1 raised, 1 account, notify.
+	if len(warnings) != 11 {
+		t.Fatalf("%d warnings: %q", len(warnings), warnings)
+	}
+	if _, err := c.Normalize(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := LoadConfig([]byte(`{"window_seconds":"x"}`)); err == nil {
+		t.Fatal("undecodable document loaded")
+	}
+}
+
 func TestWhenJSON(t *testing.T) {
 	var w When
 	if err := json.Unmarshal([]byte(`{"any":["a",{"all":["b","c"]}]}`), &w); err != nil {
@@ -189,6 +230,9 @@ func TestCountsFields(t *testing.T) {
 	back := CountsOf(c.Fields())
 	if !reflect.DeepEqual(back.Fields(), c.Fields()) || back.Total != 2 || back.Stream.Thresholds[60000] != 1 || back.FailStatus[429] != 1 {
 		t.Fatalf("%v", back.Fields())
+	}
+	if got := CountsOf(map[string]int64{"zz1": 1, "fs": 2, "tcx": 3, "s:total": 4}); got.Total != 0 || got.Stream.Total != 4 || len(got.Fields()) != 1 {
+		t.Fatalf("unknown fields read: %v", got.Fields())
 	}
 }
 

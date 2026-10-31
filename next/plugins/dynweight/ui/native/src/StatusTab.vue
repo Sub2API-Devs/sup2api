@@ -52,7 +52,7 @@ const columns = computed<TableColumn[]>(() => [
 
 const keyOf = (r: Key) => `${r.account_id}|${r.group_id}|${r.model}`
 const rows = computed(() => list.items.value.map((r) => ({ ...r, key: keyOf(r), hits: r.rules.filter((x) => x.hit) })))
-const rate = (total: number, fail: number) => successRate(total, fail) ?? '—'
+const rate = successRate
 
 const busy = ref('')
 async function reset(k: Key & { account_ids?: number[] }, message: string, tag: string) {
@@ -73,7 +73,7 @@ async function reset(k: Key & { account_ids?: number[] }, message: string, tag: 
 
 const accountLabel = (r: KeyStatus) => catalog.accountName(r.account_id, r.account_name)
 const resetRow = (r: KeyStatus) =>
-  reset(r, t('status.resetKeyConfirm', { account: accountLabel(r), group: catalog.groupName(r.group_id), model: r.model }), keyOf(r))
+  reset({ account_id: r.account_id, group_id: r.group_id, model: r.model }, t('status.resetKeyConfirm', { account: accountLabel(r), group: catalog.groupName(r.group_id), model: r.model }), keyOf(r))
 
 // Reset every key the applied filter's account and/or group covers (not what
 // is typed but not searched yet).

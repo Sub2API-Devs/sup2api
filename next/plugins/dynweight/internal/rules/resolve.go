@@ -61,42 +61,54 @@ type derived struct {
 func derive(l Layer) derived {
 	d := derived{cfg: Resolved{Layer: l}}
 	cfg := &d.cfg
-	thresholds, latency := map[int]bool{}, map[int]bool{}
 	for _, r := range l.Rules {
-		if !r.IsEnabled() {
-			continue
-		}
-		cfg.Rules = append(cfg.Rules, r)
-		for _, c := range r.Conditions {
-			if spec, _ := specOf(c.Metric); spec.percentile {
-				bucket := thresholds
-				if spec.latency {
-					bucket = latency
-				}
-				bucket[int(c.Value)] = true
-			}
+		if r.IsEnabled() {
+			cfg.Rules = append(cfg.Rules, r)
 		}
 	}
-	index := ruleIndex(cfg.Rules)
+	cfg.Thresholds, cfg.LatencyThresholds = percentileThresholds(cfg.Rules)
 	var enabled []Strategy
-	for _, s := range l.Strategies {
-		if !s.IsEnabled() || s.When == nil {
-			continue
-		}
-		tree, err := compileWhen(*s.When, cfg.Rules, index, true, 0)
-		if err != nil {
-			continue // Normalize rejects it; never reached for a saved config
-		}
-		cfg.Strategies = append(cfg.Strategies, ResolvedStrategy{Strategy: s, Tree: tree})
-		enabled = append(enabled, s)
-	}
-	cfg.Thresholds = slices.Sorted(maps.Keys(thresholds))
-	cfg.LatencyThresholds = slices.Sorted(maps.Keys(latency))
+	cfg.Strategies, enabled = resolveStrategies(l.Strategies, cfg.Rules)
 	rulesJSON, _ := json.Marshal(cfg.Rules)
 	strategiesJSON, _ := json.Marshal(enabled)
 	d.sigHead = strconv.Itoa(l.WindowSeconds) + "|" + strconv.Itoa(l.MinSamples) + "|"
 	d.sigTail = "|" + string(rulesJSON) + "|" + string(strategiesJSON)
 	return d.withExempt(l.ExemptStatusCodes)
+}
+
+// percentileThresholds lists the thresholds of the TTFB and of the latency
+// percentile conditions of rules, sorted and unique.
+func percentileThresholds(rules []Rule) (ttfb, latency []int) {
+	ttfbSet, latencySet := map[int]bool{}, map[int]bool{}
+	for _, r := range rules {
+		for _, c := range r.Conditions {
+			switch spec, _ := specOf(c.Metric); {
+			case spec.percentile && spec.latency:
+				latencySet[int(c.Value)] = true
+			case spec.percentile:
+				ttfbSet[int(c.Value)] = true
+			}
+		}
+	}
+	return slices.Sorted(maps.Keys(ttfbSet)), slices.Sorted(maps.Keys(latencySet))
+}
+
+// resolveStrategies compiles the enabled strategies against the enabled
+// rules; enabled lists them as configured, for the signature.
+func resolveStrategies(strategies []Strategy, rules []Rule) (resolved []ResolvedStrategy, enabled []Strategy) {
+	index := ruleIndex(rules)
+	for _, s := range strategies {
+		if !s.IsEnabled() || s.When == nil {
+			continue
+		}
+		tree, err := compileWhen(*s.When, rules, index, true, 0)
+		if err != nil {
+			continue // Normalize rejects it; never reached for a saved config
+		}
+		resolved = append(resolved, ResolvedStrategy{Strategy: s, Tree: tree})
+		enabled = append(enabled, s)
+	}
+	return resolved, enabled
 }
 
 // withExempt recomputes the exempt codes and the signature.

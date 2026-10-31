@@ -7,7 +7,8 @@ import { duplicateItem, enumOptions, metrics, moveItem, opsOf, percentileMetric,
 // Judgement rules: conditions joined by and / or ("and" binds first), judged
 // per window; a rule fires once it hit in M of the last N windows. A name
 // change is committed on blur and reported so strategies can follow it. The
-// order is the order of the rule slots (and of the status page).
+// order is the order of the rule slots (and of the status page). An emptied
+// number is marked here; LayerEditor names the rule and blocks saving.
 const rules = defineModel<Rule[]>({ required: true })
 const emit = defineEmits<{ (e: 'rename', from: string, to: string): void }>()
 const t = useDwHost().t
@@ -54,10 +55,10 @@ function removeCondition(r: Rule, i: number) {
           <SSelect :model-value="r.scope || 'all'" :options="scopeOptions" @update:model-value="r.scope = $event as Rule['scope']" />
         </SField>
         <SField class="dw-w-6" :label="t('rules.periods')" :hint="t('rules.periodsHint')">
-          <SInput v-model="r.periods" type="number" min="1" max="60" />
+          <SInput v-model="r.periods" type="number" min="1" max="60" :error="r.periods == null" />
         </SField>
         <SField class="dw-w-6" :label="t('rules.hitPeriods')">
-          <SInput v-model="r.hit_periods" type="number" min="1" :max="r.periods" />
+          <SInput v-model="r.hit_periods" type="number" min="1" :max="r.periods" :error="r.hit_periods == null" />
         </SField>
         <SField :label="t('enabled')">
           <SSwitch :model-value="r.enabled !== false" @update:model-value="r.enabled = $event ? undefined : false" />
@@ -69,11 +70,11 @@ function removeCondition(r: Rule, i: number) {
         <SSelect v-if="j > 0" class="dw-w-6" :model-value="c.join ?? 'and'" :options="joinOptions" @update:model-value="c.join = $event as Condition['join']" />
         <span v-else class="dw-w-6 dw-sub">{{ t('rules.if') }}</span>
         <SSelect class="dw-w-10" :model-value="c.metric" :options="metricOptions" @update:model-value="setMetric(c, $event as Metric)" />
-        <SInput v-if="percentileMetric(c.metric)" v-model="c.p" class="dw-w-6" type="number" min="50" max="100" :aria-label="t('rules.p')">
+        <SInput v-if="percentileMetric(c.metric)" v-model="c.p" class="dw-w-6" type="number" min="50" max="100" :error="c.p == null" :aria-label="t('rules.p')">
           <template #prefix>{{ t('rules.pPrefix') }}</template>
         </SInput>
         <SSelect class="dw-w-6" v-model="c.op" :options="opOptions(c.metric)" />
-        <SInput v-model="c.value" class="dw-w-8" type="number" min="0" :aria-label="t('rules.value')" :suffix="t(`unit.${c.metric}`)" />
+        <SInput v-model="c.value" class="dw-w-8" type="number" min="0" :error="c.value == null" :aria-label="t('rules.value')" :suffix="t(`unit.${c.metric}`)" />
         <SButton size="sm" variant="ghost" icon="x" icon-only :aria-label="t('remove')" :disabled="r.conditions.length <= 1" @click="removeCondition(r, j)" />
       </div>
       <SButton size="xs" icon="plus" :disabled="r.conditions.length >= 10" @click="r.conditions.push(newCondition())">{{ t('rules.addCondition') }}</SButton>

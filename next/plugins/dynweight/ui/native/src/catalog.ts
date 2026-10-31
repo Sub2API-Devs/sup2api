@@ -1,18 +1,20 @@
 import { reactive } from 'vue'
-import { listAll } from '@sub2api/host'
+import { isApiError, listAll } from '@sub2api/host'
 import { useDwHost, type Named } from './host'
 
 // Names of the core groups and accounts, read through the core API with the
 // viewer's own permissions (group:read, account:read). The groups are few:
 // loaded once, again after a failure. The accounts are searched by name as
 // typed (q=) and looked up by id as they are shown. Without the permissions
-// the pickers still take a typed id and the names read "#id".
+// the pickers still take a typed id and the names read "#id"; after a first
+// refusal no more accounts are looked up by id.
 const MAX_GROUPS = 1000
 const SEARCH_SIZE = 20
 
 const state = reactive({ groups: [] as Named[], accounts: {} as Record<number, string> })
 let loading: Promise<void> | null = null
 const looked = new Set<number>()
+let accountsDenied = false
 
 const named = ({ id, name }: Named): Named => ({ id, name })
 const label = (name: string | undefined, id: number) => (name ? `${name} #${id}` : `#${id}`)
@@ -30,12 +32,14 @@ function loadGroups() {
 
 /** Fetches the name of an account not seen yet, once. */
 function lookUp(id: number) {
-  if (id <= 0 || looked.has(id)) return
+  if (id <= 0 || accountsDenied || looked.has(id)) return
   looked.add(id)
   useDwHost()
     .api.get<Named>(`/accounts/${id}`)
     .then((a) => (state.accounts[id] = a.name))
-    .catch(() => {})
+    .catch((e) => {
+      if (isApiError(e) && (e.status === 401 || e.status === 403)) accountsDenied = true
+    })
 }
 
 /** The first accounts whose name contains q; [] when not readable. */

@@ -91,8 +91,26 @@ const (
 
 // UnmarshalJSON lays each group over the factory layer, adjusting unless it
 // says "enabled": false, as new-api does: a group that leaves a field out
-// gets the default, not a zero.
+// gets the default, not a zero. A group's field set to null is refused: it
+// would read as the default too, unlike the global layer's.
 func (c *Config) UnmarshalJSON(data []byte) error {
+	groups, err := c.decode(data)
+	if err != nil {
+		return err
+	}
+	for id, raw := range groups {
+		l, err := decodeGroup(raw)
+		if err != nil {
+			return fmt.Errorf("groups.%d: %w", id, err)
+		}
+		c.setGroup(id, l)
+	}
+	return nil
+}
+
+// decode reads all but the groups, which it returns undecoded (a null group
+// is none).
+func (c *Config) decode(data []byte) (map[int64]json.RawMessage, error) {
 	type plain Config
 	var doc struct {
 		*plain
@@ -101,24 +119,108 @@ func (c *Config) UnmarshalJSON(data []byte) error {
 	doc.plain = (*plain)(c)
 	c.LogEvents = true
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return err
+		return nil, err
 	}
 	c.Groups = nil
-	for id, raw := range doc.Groups {
-		if string(raw) == "null" {
+	maps.DeleteFunc(doc.Groups, func(_ int64, raw json.RawMessage) bool { return string(raw) == "null" })
+	return doc.Groups, nil
+}
+
+// decodeGroup lays a group over the factory layer (UnmarshalJSON).
+func decodeGroup(raw json.RawMessage) (*Layer, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, err
+	}
+	for _, name := range slices.Sorted(maps.Keys(fields)) {
+		if string(fields[name]) == "null" {
+			return nil, fmt.Errorf("%s must not be null", name)
+		}
+	}
+	l := DefaultLayer()
+	l.Enabled = true
+	if err := json.Unmarshal(raw, &l); err != nil {
+		return nil, err
+	}
+	return &l, nil
+}
+
+func (c *Config) setGroup(id int64, l *Layer) {
+	if c.Groups == nil {
+		c.Groups = map[int64]*Layer{}
+	}
+	c.Groups[id] = l
+}
+
+// LoadConfig reads a stored configuration tolerantly, as new-api reads its
+// options: a group that does not decode or validate is dropped (the global
+// layer serves it), a global scalar out of range falls back to its default,
+// an account override that does not validate is dropped and notifications
+// that do not validate are turned off. A window below the minimum is raised
+// (RaiseWindows). The warnings say what changed, until a save writes it
+// back. Only a document that does not decode is an error; what is left
+// (the global rules and strategies) is for Normalize to check.
+func LoadConfig(data []byte) (Config, []string, error) {
+	var c Config
+	groups, err := c.decode(data)
+	if err != nil {
+		return Config{}, nil, err
+	}
+	var warnings []string
+	for _, id := range slices.Sorted(maps.Keys(groups)) {
+		l, err := decodeGroup(groups[id])
+		if err != nil {
+			warnings = append(warnings, dropped("groups", id, err))
 			continue
 		}
-		l := DefaultLayer()
-		l.Enabled = true
-		if err := json.Unmarshal(raw, &l); err != nil {
-			return fmt.Errorf("groups.%d: %w", id, err)
-		}
-		if c.Groups == nil {
-			c.Groups = map[int64]*Layer{}
-		}
-		c.Groups[id] = &l
+		c.setGroup(id, l)
 	}
-	return nil
+	warnings = append(warnings, c.RaiseWindows()...)
+	return c, append(warnings, c.repair()...), nil
+}
+
+func dropped(what string, id int64, err error) string {
+	return fmt.Sprintf("%s.%d: %v; it is ignored until the configuration is saved", what, id, err)
+}
+
+// repair applies the fallbacks of LoadConfig past decoding.
+func (c *Config) repair() []string {
+	var warnings []string
+	g, def := &c.Layer, DefaultLayer()
+	_, codesErr := NormalizeStatusCodes(g.ExemptStatusCodes)
+	for _, f := range [...]struct {
+		err   error
+		reset func()
+	}{
+		{checkWindow(g.WindowSeconds), func() { g.WindowSeconds = def.WindowSeconds }},
+		{checkMinSamples(g.MinSamples), func() { g.MinSamples = def.MinSamples }},
+		{codesErr, func() { g.ExemptStatusCodes = def.ExemptStatusCodes }},
+		{checkMinWeight(g.MinWeightMode, g.MinWeight), func() { g.MinWeightMode, g.MinWeight = def.MinWeightMode, def.MinWeight }},
+	} {
+		if f.err != nil {
+			f.reset()
+			warnings = append(warnings, fmt.Sprintf("%v; the default is used until the configuration is saved", f.err))
+		}
+	}
+	for _, id := range slices.Sorted(maps.Keys(c.Groups)) {
+		if _, err := c.Groups[id].normalize(""); err != nil {
+			delete(c.Groups, id)
+			warnings = append(warnings, dropped("groups", id, err))
+		}
+	}
+	for _, id := range slices.Sorted(maps.Keys(c.Accounts)) {
+		o := c.Accounts[id]
+		if err := o.normalize(""); err != nil {
+			delete(c.Accounts, id)
+			warnings = append(warnings, dropped("accounts", id, err))
+		}
+	}
+	if err := c.Notify.normalize(); err != nil {
+		c.Notify.Enabled = false
+		c.Notify.Recipients = c.Notify.Recipients[:min(len(c.Notify.Recipients), maxRecipients)]
+		warnings = append(warnings, fmt.Sprintf("%v; notifications are off until the configuration is saved", err))
+	}
+	return warnings
 }
 
 // DefaultLayer is the factory layer (adjustment off).
@@ -203,14 +305,10 @@ func (c *Config) Normalize() (warnings []string, err error) {
 
 // normalize validates a layer; path prefixes the messages ("groups.7.").
 func (l *Layer) normalize(path string) ([]string, error) {
-	if l.WindowSeconds < MinWindowSeconds || l.WindowSeconds > maxWindowSeconds {
-		return nil, fmt.Errorf("%swindow_seconds must be between %d and %d", path, MinWindowSeconds, maxWindowSeconds)
-	}
-	if l.MinSamples < 1 || l.MinSamples > maxMinSamples {
-		return nil, fmt.Errorf("%smin_samples must be between 1 and %d", path, maxMinSamples)
-	}
-	if err := checkMinWeight(l.MinWeightMode, l.MinWeight); err != nil {
-		return nil, fmt.Errorf("%s%w", path, err)
+	for _, err := range [...]error{checkWindow(l.WindowSeconds), checkMinSamples(l.MinSamples), checkMinWeight(l.MinWeightMode, l.MinWeight)} {
+		if err != nil {
+			return nil, fmt.Errorf("%s%w", path, err)
+		}
 	}
 	codes, err := NormalizeStatusCodes(l.ExemptStatusCodes)
 	if err != nil {
@@ -276,6 +374,20 @@ func (l *Layer) warnings(path string) []string {
 	}
 	if degrade && !revive && l.MinWeight == 0 {
 		return []string{path + "strategies: no enabled climb references a rule with a weight condition; a weight that drops to 0 never recovers on its own"}
+	}
+	return nil
+}
+
+func checkWindow(v int) error {
+	if v < MinWindowSeconds || v > maxWindowSeconds {
+		return fmt.Errorf("window_seconds must be between %d and %d", MinWindowSeconds, maxWindowSeconds)
+	}
+	return nil
+}
+
+func checkMinSamples(v int) error {
+	if v < 1 || v > maxMinSamples {
+		return fmt.Errorf("min_samples must be between 1 and %d", maxMinSamples)
 	}
 	return nil
 }
