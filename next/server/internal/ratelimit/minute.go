@@ -238,6 +238,21 @@ func (m *Minute) AddSubTokens(ctx context.Context, id int64, sub string, n int64
 	}
 }
 
+// ReleaseSession removes session from the active sessions of every set, so a
+// session that moved to another subject no longer holds a slot of this one.
+func (m *Minute) ReleaseSession(ctx context.Context, sets []Limits, session string) {
+	if m.rdb == nil || session == "" || len(sets) == 0 {
+		return
+	}
+	pipe := m.rdb.Pipeline()
+	for _, l := range sets {
+		pipe.ZRem(ctx, SessionKey(m.scope, l.ID, l.Sub), session)
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		slog.WarnContext(ctx, "ratelimit: release session", "scope", m.scope, "id", sets[0].ID, "err", err)
+	}
+}
+
 // Usage returns the last-60-seconds counters of ids.
 func (m *Minute) Usage(ctx context.Context, ids []int64) (map[int64]core.RateUsage, error) {
 	sets := make([]Limits, len(ids))

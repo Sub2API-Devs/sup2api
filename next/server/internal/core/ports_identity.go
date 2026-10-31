@@ -278,6 +278,10 @@ type AccountLimiter interface {
 	// admitted request (and the session). RPM and SPM admission is exact;
 	// tokens are counted after responses finish.
 	TryHit(ctx context.Context, ref AccountRef, model, session string) (bool, error)
+	// ReleaseSession takes session off the account's (and its model list's)
+	// active sessions: a retry moved the session to another account, which
+	// now holds it alone. Best effort.
+	ReleaseSession(ctx context.Context, ref AccountRef, model, session string)
 	// AddTokens adds the tokens of a finished response to the account and,
 	// when list is not "", to the model list of that key (ModelLimit.Key).
 	AddTokens(ctx context.Context, id int64, list string, n int64)

@@ -310,6 +310,7 @@ func (c *call) prepareRetry(ctx context.Context, ref *core.AccountRef, action st
 		if err := c.resetPolicyBinding(ctx); err != nil {
 			return "sticky_reset_failed"
 		}
+		c.releaseSession(ctx, ref)
 	}
 	s.preserveSticky = action == failureSwitch
 	s.sameID = 0

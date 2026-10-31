@@ -4719,6 +4719,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - `Exhausted(ctx, refs, model, session)` 只读预判（一次 pipeline：各层 RPM/TPM 窗口 + `ZCOUNT` + 该会话的 `ZSCORE`），会拒绝该会话的账号不进候选池。粘性绑定的账号在 60 秒内持有该会话，所以照常放行；新会话改去别的账号并绑定到那里。会话在绑定账号上空闲超过 60 秒后不再算持有：该账号 SPM 已满时，`failover` 规则改绑到别的账号（提示缓存随之失效），`stick` 规则回 429；与 new-api 相同。WebSocket 连接首轮得到 `req:{首轮请求 ID}`（或粘性键），后续轮次沿用，一条连接算一个会话。`SPMLimit > 0`（账号或任一模型列表）也算 `Limited()`。
 - Redis 出错：预判放行（与 RPM / TPM 预判一致）；原子准入出错时整次请求失败（`account limits unavailable`，与 §18.1 现行 RPM / TPM 一致，不是放行）。
+- **重试换号时会话跟着走**（2026-11-01）：失败策略换号并清除粘性绑定（`switch_reset`，Schema 3 起总是如此），或未发布失败策略时按插件分类切换账号，核心在换号前把本次会话从离开的账号各层 ZSET 里移除（`core.AccountLimiter.ReleaseSession`，尽力而为，`ZREM`；`gateway` `releaseSession`）。否则同一会话在 60 秒内同时占着两个账号的会话槽。已计的 RPM 不退。旧版失败策略的 `switch`（换号但保留绑定）不移除：会话仍绑定在原账号上。
 
 ### 71.4 插件
 

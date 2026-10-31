@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
 // A unique generation lives in the binding itself. Every write compares it;
@@ -77,4 +79,17 @@ func (c *call) resetPolicyBinding(ctx context.Context) error {
 		return nil
 	}
 	return c.writePolicyBinding(ctx, c.sticky, 0)
+}
+
+// releaseSession takes the request's session off the active sessions of the
+// account a retry leaves (sessions-per-minute, CONTRACTS §71): the session
+// moves to the next account with its binding, and counting it on both would
+// hold a session slot of an account that no longer serves it.
+func (c *call) releaseSession(ctx context.Context, ref *core.AccountRef) {
+	if c.g.d.Limiter == nil || c.session == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stickyRedisTimeout)
+	defer cancel()
+	c.g.d.Limiter.ReleaseSession(ctx, *ref, c.model, c.session)
 }

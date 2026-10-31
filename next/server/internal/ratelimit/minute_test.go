@@ -197,3 +197,29 @@ func TestAdmitSessionLevelsAreIndependent(t *testing.T) {
 		t.Fatal("precheck refused the list's own session")
 	}
 }
+
+// A released session frees its slot in every set at once; requests stay
+// counted.
+func TestReleaseSession(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rdb.Close() })
+	mr.SetTime(time.Date(2026, 11, 1, 12, 0, 10, 0, time.UTC))
+	ctx := t.Context()
+	m := NewMinute(rdb, "account")
+	sets := []Limits{{ID: 3, SPM: 1}, {ID: 3, Sub: "m:a", SPM: 1}}
+	if ok, _, _ := m.AdmitAll(ctx, sets, "moved"); !ok {
+		t.Fatal("first session refused")
+	}
+	if ok, _, _ := m.AdmitAll(ctx, sets, "next"); ok {
+		t.Fatal("second session admitted over the cap")
+	}
+	m.ReleaseSession(ctx, sets, "moved")
+	u, err := m.UsageOf(ctx, sets)
+	if err != nil || u[0].Sessions != 0 || u[1].Sessions != 0 || u[0].RPM != 1 {
+		t.Fatal("released session still counted", u, err)
+	}
+	if ok, _, _ := m.AdmitAll(ctx, sets, "next"); !ok {
+		t.Fatal("released slot not free")
+	}
+}

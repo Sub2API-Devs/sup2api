@@ -22,6 +22,7 @@ type fakeLimiter struct {
 	listTokens map[string]int64 // "<id>:<list key>"
 	models     []string         // model of each Exhausted call
 	sessions   []string         // session of each Exhausted and TryHit call
+	released   []string         // "<id>:<session>" of each ReleaseSession call
 }
 
 func newFakeLimiter() *fakeLimiter {
@@ -48,6 +49,12 @@ func (l *fakeLimiter) TryHit(_ context.Context, ref core.AccountRef, model, sess
 	l.hits = append(l.hits, itoa(ref.ID)+":"+model)
 	l.sessions = append(l.sessions, session)
 	return true, nil
+}
+
+func (l *fakeLimiter) ReleaseSession(_ context.Context, ref core.AccountRef, _ string, session string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.released = append(l.released, itoa(ref.ID)+":"+session)
 }
 
 func (l *fakeLimiter) AddTokens(_ context.Context, id int64, list string, n int64) {
