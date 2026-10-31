@@ -847,7 +847,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 
 候选账号 = 分组内 `active` 且 `schedulable` 的账号 ∩ 账号类型能服务该端点（原生或经转换） ∩ `models` 为空或含请求模型 ∩ 未冷却 ∩ 未达 rpm/tpm 上限。粘性绑定的账号仍然优先；其余按 `priority` 升序，同优先级按 `weight` 加权随机；逐个获取并发槽位，失败切换时跳过已试过的账号。
 
-排序用的 `priority` / `weight` **可能已被插件为本次请求改写**（§24：粘性绑定不服务的挑选（未命中，或绑定账号失败后的切换）会先过一遍 `SchedulerService.RankAccounts`，`weight=0` 的账号本次不用；但一个优先级里的账号全是 0 时，它们平分流量，不让给下一级）。候选集合的筛选、并发槽位、限流、冷却仍完全由核心把关，插件改不到。
+排序用的 `priority` / `weight` **可能已被插件为本次请求改写**（§24：粘性绑定不服务的挑选（未命中，或绑定账号失败后的切换）会先过一遍 `SchedulerService.RankAccounts`，`weight=0` 的账号本次不用）。候选集合的筛选、并发槽位、限流、冷却仍完全由核心把关，插件改不到。
 
 ### 18.3 接口变化
 
@@ -1141,10 +1141,10 @@ type ProxyResolver interface {
 
 ### 23.1 加载方式与 import map
 
-- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.2.0`；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。
+- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.3.0`；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。
 - `entry.js` 的形状是 `NativePluginModule`：`register(host: PluginHost): void | Promise<void>`、`unregister?(): void | Promise<void>`。`register` 里用 `host.registerComponent(name, comp)` 注册 manifest `ui.pages[].component`、`ui.slots[].component` 引用的组件名，用 `host.addMessages({en, zh})` 注册文案；`unregister` 释放模块级状态（moderation 的 `entry.ts` 是最小样例）。
 - **import map**：控制台 `index.html` 注入 `<script type="importmap">`，把 `vue`、`vue-router`、`pinia`、`vue-i18n`、`@sub2api/ui`、`@sub2api/host` 映射到控制台自己构建出的 chunk（`web/vite.config.ts` 的 `SHARED`，`preserveEntrySignatures: 'strict'`，所有导出都保留；dev 下映射到源码，复用同样的预打包依赖）。插件用 `@sub2api/vite-preset` 构建时这些模块（`SHARED_MODULES`，前缀匹配 `vue/*` 之类的子路径）全部 external，**不得打进插件包**，否则页面里会出现第二份 Vue 运行时和第二套组件/状态：`toast`、`confirm`、i18n、路由、`theme` 都不再与控制台共享，组件的 `provide/inject` 也会失效。
-- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（迁移后的 moderation 用 `^3.0`；`sdk/manifest`：声明了 `ui.native` 时必填）。
+- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（moderation 与 dynweight 用 `^3.3`，因为它们用到 3.3 新增的 `listAll`；`sdk/manifest`：声明了 `ui.native` 时必填）。
 - 插件的 `package.json` 只需 devDependencies：`@sub2api/vite-preset`、`@vitejs/plugin-vue`、`vite`、`vue`（类型用）；`@sub2api/ui`、`@sub2api/host` 通过 import map 在运行时解析，本地开发用 tsconfig `paths` 指到 `web/packages/*/src` 取类型。
 
 ### 23.2 `@sub2api/host`
@@ -1183,6 +1183,7 @@ type ProxyResolver interface {
 - `path` 相对客户端根；`query` 中 `undefined`/`null`/`''` 省略，数组按重复键展开。`opts: {query?, body?, headers?, signal?, anonymous?}`（`noStepUp` 已删除，§3.3）。
 - 自动带 `Authorization`、`Accept-Language`；401 自动刷新一次并重试（多标签页串行，§14.2）；204 返回 `null`。（原 403 `step_up_required` 弹密码确认重试的逻辑与 `noStepUp` 选项随二次验证删除，§3.3。）
 - 失败抛 `ApiError {status, code, message, details, fields}`：`fields` 是 `details.fields[]` 折平后的 `{field: message}`（`invalid_argument`，§3.1；message 为 `{en,zh}` 时按当前语言取），用 `isApiError(e)` 判断。响应没有 `error.code` 时按 HTTP 状态映射（400 `invalid_argument`、401 `unauthenticated`、403 `permission_denied`、404 `not_found`、409 `conflict`、429 `rate_limited`、503 `unavailable`，其余 `internal`）。
+- `listAll<T>(client, path, {query?, max?})`（UI 3.3）：按核心最大页长 200 逐页读完一个分页列表（`page`、`page_size` 由它填，`query` 是其余筛选），读到短页、`page.total` 或 `max` 条（缺省不限）为止；任何一页失败都整体 reject，不返回半截列表。插件读核心分组等整表时用它（moderation、dynweight）。
 - 其他导出：`createClient(prefix)`、`api`（= `/api/v1` 客户端）、`session`、`configureHttp`（控制台用，插件不要调）、`satisfiesRange`、`bridge-protocol.ts`（iframe 插件的 postMessage 协议，与原生 UI 无关）。
 
 `useList`（`useList.ts`，分页列表状态，控制台的列表页和插件的列表页共用）：
@@ -1386,7 +1387,7 @@ message RankedAccount {
 - `candidates` 是核心已经筛完的候选（§18.2 的集合：分组、账号类型能服务该端点、状态、`models`、冷却、限流都已判过），`priority` / `weight` 是**账号当前的值**（经前面插件改写后的值，见 §24.1 的 `order`）。**宿主保证出站值也落在声明的区间内**：`priority` 钳进 0–1000000，`weight` 钳进 1–1000（不只是 `weight<=0 → 1` 的归一化），所以插件不必自己防御越界的入参。
 - 响应里 `priority` 和 `weight` 都是**最终值而不是增量**：proto3 没有 presence，`0` 不是"未设置"，所以列出来的账号必须两个都带；只想改其中一个就把另一个按收到的值原样带回。
 - **只需列出要改写的账号**；没列出的保持账号自身的值。`accounts` 为**空数组**是合法应答，含义是"本次什么都不改"（等价于不实现）：不算故障、不记警告、也不打断后面的插件，最终效果与回退一致。与之相对，**整个响应对象为空（nil）**属于应答非法，按 §24.3 第 3 条 fail open 处理。
-- `weight = 0` 表示本次请求不使用该账号（该账号退出本次候选，但不是冷却、不改状态、不发事件）。只在同一优先级（改写后的 `priority`）还有权重大于 0 的候选时才排除；**一个优先级的候选全是 0 时，它们按相同权重平分**，流量不会因此落到下一级（2026-10-31，与 new-api 同优先级权重全 0 时平均分配一致）。
+- `weight = 0` 表示本次请求不使用该账号（该账号退出本次候选，但不是冷却、不改状态、不发事件）。同一优先级的候选全被置 0 时，流量落到下一级；所有候选都是 0 时按 §24.3 第 3 条回退。插件想要 new-api 那样"同优先级权重全 0 时平均分配"，自己把这些账号的 `weight` 回成 1 即可，核心不替插件改写 0。
 
 ### 24.3 调用时机与边界
 
@@ -1456,7 +1457,7 @@ message RankedAccount {
 | 字段 | 说明 |
 |---|---|
 | `endpoint` (13) | 匹配到的客户端端点的路径模式，如 `/v1/messages`、`/v1beta/models/:model:generateContent`，与使用记录的 `endpoint` 相同。每次调用都带 |
-| `session_fingerprint` (14) | 请求所属粘性会话的不透明标识：第一条命中且取到会话值的粘性规则算出的粘性键（`sticky:{rule}:{group}:{model}:{sha256(value)}`）再做 SHA-256，小写 hex。同一会话的请求相同，原始会话值不出核心。在钩子之前算一次（钩子改写请求体不影响它），与粘性路由是否开启无关；没有规则取到会话值时为空 |
+| `session_fingerprint` (14) | 请求所属粘性会话的不透明标识：第一条命中且取到会话值的粘性规则算出的粘性键（`sticky:{rule}:{group}:{model}:{sha256(value)}`）再做 HMAC-SHA-256，小写 hex。HMAC 的密钥由主密钥（`SUB2API_MASTER_KEY`）派生（`HMAC-SHA-256(master_key, "session-fingerprint")`），所以不同安装的指纹不同，拿到指纹的插件也无法用猜测的会话值验证；更换主密钥后指纹随之改变。同一会话的请求相同，原始会话值不出核心。在钩子之前算一次（钩子改写请求体不影响它），与粘性路由是否开启无关；没有规则取到会话值时为空 |
 
 受益的是**五个已有调用点**，它们本来就带 `RequestMeta`，无需各自改动：`BuildUpstreamRequest`、`ClassifyError`、`OnGatewayRequest`、`RankAccounts`（当时还有 `ResolveAffinityKey`，2026-10-10 已删除）。
 
@@ -4905,7 +4906,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 | `violation_epoch`、`counted` | |
 | `keep_until` | |
 | `queue_ms` | |
-| `endpoint`、`session_fp` | 0.4（迁移 `0007_endpoint_session.sql`）：`RequestMeta.endpoint`（客户端端点的路径模式，如 `/v1/messages`，与使用记录相同）和 `RequestMeta.session_fingerprint`（粘性会话指纹，§25.1；没有粘性会话时为空），之前的记录为空。`session_fp` 有部分索引（非空） |
+| `endpoint`、`session_fp` | 0.5.0（迁移 `0007_endpoint_session.sql`）：`RequestMeta.endpoint`（客户端端点的路径模式，如 `/v1/messages`，与使用记录相同）和 `RequestMeta.session_fingerprint`（粘性会话指纹，§25.1；没有粘性会话时为空），之前的记录为空。`session_fp` 有部分索引（非空） |
 
 - P2 再加 6 个 `ai_*` 列。
 - 老列 `verdict`、`action`、`text` 等保留只读，迁移时回填 `result`：block 且 deny → block；block 且 allow → hit；flag → hit；error → error；pass → pass。回填的 `keep_until`：命中类（block、flag）取创建时间 + 180 天，其余 + 30 天。0.1 的 flag 记录（`flow_id = 0`）不计入封禁次数（0.1 只计 block）。滚动升级时旧节点还在写的行，由 `cleanup` 任务每次先执行同一条回填。
@@ -4939,7 +4940,8 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 按 `keep_until` 删除记录，`keep_until` 在写入时由结果类别算出。
   - 删除已过期的名单条目（写 `watch_events` 的 expire）和已过期的封禁。
   - 另按**当前**留存期删除：结果类别对应的留存期之前创建的记录一律删除（照 new-api `cleanup.go`），统计表按 `stats_retention_days` 删除。所以缩短留存期对已有记录同样生效。
-  - 保存设置后，任一留存期（四个结果类别或 `stats_retention_days`）比原来短时，各节点在应用新设置（Configure）后马上执行一次记录和统计的删除，不等每天 04:00 的任务（照 new-api `controller:250-257`）。删除是幂等的，多个节点同时执行没有影响。（2026-10-31 改：此前缩短留存期只对之后写入的记录生效。）
+  - 保存设置后，任一留存期（四个结果类别或 `stats_retention_days`）比原来短时，各节点在应用新设置（Configure）后马上尝试执行一次记录和统计的删除，不等每天 04:00 的任务（照 new-api `controller:250-257`）。（2026-10-31 改：此前缩短留存期只对之后写入的记录生效。）
+  - 按留存期删除（`purgeRetention`，Configure 和 `cleanup` 任务共用）只在一个节点上执行：先在插件库里取会话级 advisory lock（`pg_try_advisory_lock`，键由 `moderation.retention_purge:` 加当前 schema 算出），取不到说明别的节点正在删，直接返回 0。删除分批进行：每条 `DELETE` 最多 5000 行（按 `ctid` 选出），批间停 50 ms，每批前检查 ctx，照 new-api `cleanup.go` 的 `deleteRecordBatches`；统计表 `stats_hourly`、`user_daily` 同样分批。释放锁失败时关闭该连接，不把持锁的连接还回连接池。（2026-10-31 改：此前每个节点同时执行，且每类只用一条不分批的 `DELETE`。）
 
 ### 72.11 接口（`/api/v1/p/moderation/*`，新增或修改的部分）
 
@@ -5137,7 +5139,12 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - 上下文栏：最近一条记录的分组、该分组现在绑定的流程，以及 30 天内的来源（分组 → 流程@版本，各带 AI 计数，标出当前来源）；
   - 30 天的 `user_daily`；
   - 最近一次分析和分析进度。
-- 用户名、角色、状态：界面把一次渲染用到的 id 合起来调插件的 `GET /users?ids=`（`moderation:read`，最多 500 个；插件用宿主的 `GetUsers`，§74.3），所以没有核心 `user:read` 的审核员也能看到用户名。插件查不了（没授予 `users.read`，或核心早于 Host API 8）时回答 503 `users_unavailable`，界面改为逐个调核心的 `/users/:id`（需要 `user:read`）。时间线和名单历史仍走 `GET /events?user_id=` 和 `GET /watchlist/:user_id/events`。
+- 用户名、状态：界面把一次渲染用到的 id 合起来调插件的 `GET /users?ids=`（`moderation:read`，最多 500 个；插件用宿主的 `GetUsers`，§74.3），所以没有核心 `user:read` 的审核员也能看到用户名。
+  - 每项只有 `{id, display_name, status}`，不含邮箱和角色。
+  - 只回答插件自己的表里出现过的 id（`events`、`watchlist`、`watch_events` 的用户和操作者、`blocks`、`unblocks`、`user_analyses`、`user_daily`），其余 id 当作不存在，所以不能借它列出核心的用户。
+  - 插件查不了（没授予 `users.read`，或核心早于 Host API 8）时回答 503 `users_unavailable`，界面此后改为逐个调核心的 `/users/:id`（需要 `user:read`，遇到 403 就停止）；邮箱和角色只从这条路得到，没有显示名时界面才显示邮箱。其他错误（查询失败等）不切换：这批 id 暂记为未知，30 秒后再次渲染时重查。
+  - 通知（AI 调整观察级别）里的用户写成"显示名 #id"，没有显示名时只写 `#id`，不用邮箱。
+  - 时间线和名单历史仍走 `GET /events?user_id=` 和 `GET /watchlist/:user_id/events`。（2026-10-31 改：此前返回邮箱和角色、任意 id 都回答、任何错误都永久改走核心。）
 - 手动加入名单（`POST /watchlist`）和手动封禁（`POST /blocks`）先用 `GetUsers` 确认用户存在，不存在返回 404 `user_not_found`（照 new-api）。查不了时不校验，与以前相同；查询出错返回 503。
 - `users.read`（风险 high）是**可选**授权：不授予时上面两项退回旧行为。0.5.0 新增，升级时管理员需要确认。
 - 名单的"新命中"（`hits_since_seen`）在以下情况清零：手动标记已读、手动改级别、AI 改级别（与 new-api 的 `hits_since_mark` 一致）。
@@ -5154,7 +5161,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **与 new-api 不同**（有意为之）：
 - 天按查看者的浏览器时区划分（new-api 用服务器本地时区），不设时区设置。例外是 `user_daily`：按 UTC 日期存储，改时区就要改表，所以用户详情的每日图按 UTC 日，界面写明。
-- 分析渠道的类型在保存设置时不校验：设置由核心保存，不经插件（核心没有保存前的校验钩子；Configure 拒绝只记日志，启动时拒绝会让插件起不来）。插件在应用时把不存在、不是 `llm`、或停用的渠道当作未配置，`GET /status` 的 `runtime.analysis.channel_problem`（`not_found`、`not_llm`、`unusable`）给出原因，概览状态条和设置页显示出来。new-api 保存时就拒绝。
+- 分析渠道的类型在保存设置时不校验：设置由核心保存，不经插件（核心没有保存前的校验钩子；Configure 拒绝只记日志，启动时拒绝会让插件起不来）。插件在应用时把不存在、不是 `llm`、或停用的渠道当作未配置，`GET /status` 的 `runtime.analysis.channel_problem`（`not_found`、`not_llm`、`unusable`）给出原因，概览状态条显示出来。设置页按渠道列表对所选渠道作同样的提示：不存在或不是 `llm` 时提示重新选择，停用时用 `unusable` 的文案。new-api 保存时就拒绝。
 - 原始消息由 `store_text` 一起控制，没有单独的 `record_input_message`。
 - `worker_count` 和 `post_concurrency` 合并为 `max_concurrency`。
 - 手动分析改为排队，不返回 503。
@@ -5241,7 +5248,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **值的来源**：按 账号 → 分组 → 全局设置 → 进程环境变量 的顺序取，0 或没设置就看下一层。
 - **已声明的变量**（定义见 `core/environment.go`）：
   - `relay_timeout_seconds`、`response_header_timeout_seconds`、`streaming_idle_timeout_seconds`
-  - `max_request_body_mb`：没有账号层，因为选账号之前就要用到。只放宽不收紧：生效值取它与端点自身上限（端点声明的 `request.maxBodyBytes`，未声明为 32 MB）中较大的那个。
+  - `max_request_body_mb`：没有账号层，因为选账号之前就要用到。端点声明了 `request.maxBodyBytes` 时，生效值取两者中较大的那个（只放宽，不收紧端点自己要的上限）；端点没有声明时直接用它，所以运营方仍可把默认的 32 MB 调小。未设置：端点声明的值，否则 32 MB。
   - `task_timeout_minutes`、`task_poll_max_failures`：只有分组层和账号层，全局层就是对账设置（§8 的 `max_reconcile_age_sec`、`max_poll_failures`），没有进程环境变量。只作用于异步任务；普通预扣条目只按对账设置。`task_timeout_minutes` 在任务登记时折算成截止时间，之后修改不影响已登记的任务；`task_poll_max_failures` 每次查询失败时重新解析。
   - 三个超时只作用于 HTTP 转发；WebSocket 会话是长连接，只用请求体上限（作为单条消息的上限）。
   - `relay_timeout_seconds` 或 `streaming_idle_timeout_seconds` 中途切断流式响应时，使用记录的错误信息写明是哪一个（`upstream stream interrupted: upstream request exceeded relay_timeout_seconds` / `… upstream stream exceeded streaming_idle_timeout_seconds`），不再只是 `context canceled`。
@@ -5322,13 +5329,17 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 有效权重有变化时广播 `dynweight.weights`，各节点重新加载快照。快照里只有不在基准上的键。
 - **基准权重**：从 `RankCandidate` 学到（账号、分组）的权重，写入 `bases`。
   - 账号权重被修改后，键的历史重置，事件原因记为 `base_mismatch`。
-  - 规则修改后清空历史、保留当前权重，事件原因记为 `rules_change`。
-- **账号恢复正常状态时重置**（0.2.0 起）：收到 `account.status_changed` 且 `status` 为 `active`（管理员启用、重置状态、自动禁用到期、重新授权）时，该账号的全部键按"手动重置"同样处理，事件原因记为 `status_change`。new-api 在渠道状态任一方向变化时都重置；这里只在进入 `active` 时重置：其他状态下账号不被调度，进入时重置与恢复时重置效果相同，而且 sup2api 的这个事件也报告每次冷却（`cooldown`），在冷却时重置会抹掉造成冷却的那些失败刚降下的权重。事件至少投递一次：重复投递只会多记一条 `reset` 事件。处理失败时确认到前一个事件，由核心重投。
-- **重置**（手动、批量、状态变化共用）：匹配的键按最近一个已结束窗口写入重置标记，每个键记一条 `reset` 事件；指定了账号却没有任何可重置的键时，与 new-api 一样仍为该账号记一条 `reset` 事件（分组、模型为请求里的值，`detail.matched = 0`）。
+  - 规则修改后清空历史、保留当前权重，事件原因记为 `rules_change`。规则签名（`RulesSig`）包含窗口长度、`min_samples`、豁免状态码和规则，所以加载时把 0.1.0 保存的小于 10 秒的窗口提升到 10 秒（见上文"窗口长度"）也会改变签名：受影响的键在下一次评估时清空历史，各记一条 `rules_change` 事件，有效权重保留。
+- **账号恢复正常状态时重置**（0.2.0 起）：收到 `account.status_changed` 且 `status` 为 `active`（管理员启用、重置状态、自动禁用到期、重新授权）时，该账号的全部键按"手动重置"同样处理，事件原因记为 `status_change`。new-api 在渠道状态任一方向变化时都重置；这里只在进入 `active` 时重置：其他状态下账号不被调度，进入时重置与恢复时重置效果相同，而且 sup2api 的这个事件也报告每次冷却（`cooldown`），在冷却时重置会抹掉造成冷却的那些失败刚降下的权重。同一批事件里进入 `active` 的账号一起重置：一次写入、一次广播。事件至少投递一次：重复投递只会再记一遍 `reset` 事件。重置失败时这一批都不确认，由核心整批重投。
+- **重置**（手动、批量、状态变化共用）：匹配的键按最近一个已结束窗口写入重置标记，一条语句写完，要么全部成功，要么都不写。事件与 new-api 的 `recordDynamicResetEvents` 一致：
+  - 不在基准上的键（本节点快照里的）各记一条 `reset` 事件，权重从有效权重到基准；
+  - 其余已在基准上的键，每个（账号、分组）合记一条，模型为请求里的值（不限时为空），`detail.keys` 为键数；
+  - 指定了账号却没有任何可重置的键时，仍为该账号记一条（分组、模型为请求里的值，`detail.matched = 0`）。
 - **规模**：评估任务每次读入全部状态和保留期内的计数，`/status` 在内存中分页；适合数万个键以内。
-- **运行指标**：每个节点在内存里累计自启动以来的计数（`GET /stats`，对应 new-api 的 `GET /dynamic_weight/stats`）：评估运行次数、失败次数、耗时（累计微秒、上次毫秒、上次结束时间），逐键结果（评估、写回、已评估跳过、CAS 让位、`base_mismatch` 重置、失败、权重变化），手动和状态变化重置的键，计入的样本，写入计数的次数、失败次数、写入的（键、窗口）和样本，超出待写上限丢弃的样本，写入日志和超出日志上限的事件；另有总开关、配置版本、快照中降权的键、待写的键。评估任务每次只在一个节点上运行，所以评估相关的计数只反映回答请求的那个节点。插件 Health 的三个指标（`degraded_keys`、`pending_keys`、`dropped_counters`）不变。
+- **运行指标**：每个节点在内存里累计自启动以来的计数（`GET /stats`，对应 new-api 的 `GET /dynamic_weight/stats`）：评估运行次数、失败次数、耗时（累计微秒、上次毫秒、上次结束时间），逐键结果（评估、写回、已评估跳过、CAS 让位、`base_mismatch` 重置、失败、权重变化），手动和状态变化重置的键，计入的样本，写入计数的次数、失败次数、写入的（键、窗口）和样本，超出待写上限丢弃的样本，写入日志和超出日志上限的事件；另有总开关、配置版本、快照中降权的键、待写的键，以及回答的节点 `node_id`（host 的节点 id，没有时为 主机名:pid）和插件在该节点的启动时间 `started_at`（unix 秒），控制台显示在运行指标面板顶部。评估任务每次只在一个节点上运行，所以评估相关的计数只反映回答请求的那个节点。插件 Health 的三个指标（`degraded_keys`、`pending_keys`、`dropped_counters`）不变。
 - **基准取自排在前面的排序器之后**：dynweight 记录的是它收到的候选权重。若以后有 order 更小的排序器改权重，dynweight 会把改后的值当基准，键会因 `base_mismatch` 反复重置；这类排序器应排在 dynweight 之后。
 - **调度**：`RankAccounts` 只在快照里的基准等于候选的当前权重时，才把权重换成有效权重。有效权重四舍五入后限制在 0..1000，0 表示排除这个账号；优先级原样返回。
+  - 一个优先级层里的候选全部被有效权重降到 0 时，这一层每个候选都返回 1，层内均分，与 new-api 层内加权随机在权重和为 0 时均分一致：不会因为动态权重而跳到更低的优先级层。核心的"权重 0 排除、全部为 0 时回退"规则不变；核心传来的候选权重至少为 1，所以只有动态权重能让一层全为 0。
   - 插件出错或超时时放行（fail-open），按原权重调度。
 - **清理任务**：`cleanup` 每小时跑一次，删除以下数据：
   - 过期的 `obs`；
@@ -5354,7 +5365,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 | `POST /config/validate` | 0.2.0 起，需要 `dynweight:manage`。与 `PUT /config` 同一套校验但不保存：拒绝时回同样的 400，通过时回 `{config（规范化后）, version, warnings}`。控制台保存前先调它，有警告时请管理员确认 |
 | `GET /defaults` | 默认的层，包括默认规则和策略 |
 | `GET /channels` | 可选的通知渠道 |
-| `GET /status?account_id&group_id&model&degraded=1` | 有状态或保留期内有计数的键（尚未评估过的键也列出，`eval_window` 为 0），按 有效/基准 比值升序，分页。每项另有：`weight_min`（生效下限换算出的权重）、`state`（`normal` / `degrading` / `climbing`）、`group_configured`、`no_climb_strategy`、`next_eval_at`（最早的评估时刻 = 本窗口结束 + 宽限）、上一窗口的 `error_evaluable`、`ttfb_samples`、`latency_samples`、`thresholds` / `latency_thresholds`（`[{ms, count}]`）；`rules` 列出生效层的每条启用规则：`scope`、`periods`、`hit_periods`，以及状态用的就是这套规则且调整开启时的 `hit`、`fired`、`bitmap`（最近窗口是否命中，最新在末尾，触发后清空）、`samples`、`lookback`、`no_samples`；`current` 是进行中的窗口（已写入的计数）：`window_start`、`elapsed_seconds`、`total`、`fail`、`stream_total`、`stream_fail`（都已扣除豁免状态码的失败）、`ttfb_samples`、`latency_samples` 和阈值计数 |
+| `GET /status?account_id&group_id&model&degraded=1` | 有状态或保留期内有计数的键（尚未评估过的键也列出，`eval_window` 为 0；状态的基准与调度最近给的基准不同时，与 new-api 一样按没有状态显示：有效权重等于新基准，调度也不用它，下一次评估按 `base_mismatch` 重置），按 有效/基准 比值升序，分页。每项另有：`weight_min`（生效下限换算出的权重）、`state`（`normal` / `degrading` / `climbing`）、`group_configured`、`no_climb_strategy`、`next_eval_at`（最早的评估时刻 = 本窗口结束 + 宽限）、上一窗口的 `error_evaluable`、`ttfb_samples`、`latency_samples`、`thresholds` / `latency_thresholds`（`[{ms, count}]`）；`rules` 列出生效层的每条启用规则：`scope`、`periods`、`hit_periods`，以及状态用的就是这套规则且调整开启时的 `hit`、`fired`、`bitmap`（最近窗口是否命中，最新在末尾，触发后清空）、`samples`、`lookback`、`no_samples`；`current` 是进行中的窗口（已写入的计数）：`window_start`、`elapsed_seconds`、`total`、`fail`、`stream_total`、`stream_fail`（都已扣除豁免状态码的失败）、`ttfb_samples`、`latency_samples` 和阈值计数 |
 | `GET /events?account_id&group_id&model&kind` | 权重事件，分页。每项带 `account_name`（调度最近一次看到的账号名） |
 | `POST /reset {account_id?, account_ids?, group_id?, model?}` | 至少指定账号或分组，`account_ids` 最多 500 个（0.2.0 起）。见上文"重置"；回答 `{reset}` 为重置的键数 |
 | `GET /stats` | 0.2.0 起。本节点的运行指标，见上文 |
@@ -5363,10 +5374,10 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 #### 界面（`ui/native`，只用 `@sub2api/ui` 和 `@sub2api/host`）
 
 - **菜单**：网关分组下的"动态权重"，有三个标签页：
-  - 有效权重：本节点运行指标（折叠面板）；按名称选账号和分组筛选；展开一行看该键的详情（对应 new-api 的悬浮详情：有效/基准与下限、配置来源、成功率、进行中窗口、上一窗口与阈值计数、每条规则的"N 个窗口命中 M 次"进度和位图、最近变化、最早下次评估、没有回升策略的告警）；单键重置、勾选多行后按账号批量重置（可再限定分组和模型）、按筛选结果批量重置、跳转到该键的事件。
+  - 有效权重：本节点运行指标（折叠面板）；按名称选账号和分组筛选；展开一行看该键的详情（对应 new-api 的悬浮详情：有效/基准与下限、配置来源、成功率、进行中窗口、上一窗口与阈值计数、每条规则的"N 个窗口命中 M 次"进度和位图、最近变化、最早下次评估、没有回升策略的告警）；单键重置、勾选多行后按账号批量重置（可再限定分组和模型；显示"已选 N 个账号（最多 500）"，超过 500 不能提交；筛选、翻页、刷新都会清空勾选）、按筛选结果批量重置、跳转到该键的事件。
   - 权重事件：账号和分组显示名称。
-  - 配置：全局层、分组层、账号覆盖、事件日志开关、通知。分组和账号按名称选择。规则和策略可以可视化编辑（上移、下移、复制、删除；顺序有意义），也可以切到 JSON 直接编辑两个数组（解析失败时提示，不写回）。"校验"调 `/config/validate` 只显示错误或警告，"保存"先校验，有警告时确认后再保存。
-  - 分组和账号的名称经核心接口 `GET /groups`、`GET /accounts` 取得，用的是查看者自己的 `group:read` / `account:read`；没有这些权限时选择框退回输入 id，名称显示为 `#id`（状态和事件里的账号名仍来自插件自己记下的名称）。
+  - 配置：全局层、分组层、账号覆盖、事件日志开关、通知。分组和账号按名称选择。规则和策略可以可视化编辑（上移、下移、复制、删除；顺序有意义），也可以切到 JSON 直接编辑两个数组（解析失败时提示，不写回，"校验"和"保存"不可用，"放弃修改"可用；恢复默认、放弃修改和保存后文本跟着配置刷新，输入中的文本不会被重排）。新建分组层复制全局层，但不复制只在全局的 `log_events`。"校验"调 `/config/validate` 只显示错误或警告，"保存"先校验，有警告时确认后再保存。
+  - 分组和账号的名称经核心接口取得，用的是查看者自己的 `group:read` / `account:read`：分组一次读入（`@sub2api/host` 的 `listAll`，最多 1000 个，失败后下次再读）；账号不整表读入，选择框按输入的名称搜索 `GET /accounts?q=`（前 20 个），其他地方要显示的账号名按 id 读 `GET /accounts/:id`。选择框总能直接输入数字 id；选中的 id 不在列表里时显示为名称或 `#id`。没有这些权限时名称显示为 `#id`（状态和事件里的账号名仍来自插件自己记下的名称）。
 - **账号列表**：`account.list.weight` 插槽在权重下方显示"动态 N"。同一帧内所有行的请求合并成一次 `/weights`。
 
 ### 73.6 发布
@@ -5382,12 +5393,14 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 ### 74.1 插件设置权限（manifest `ui.settings.permission`）
 
 - **字段**：`ui.settings.permission`，值是插件自己 `userPermissions` 里的一个 key（插件内的本地 key，例如 `moderation:manage`）。
+  - 应当是**管理级**权限（`*:manage` 一类）：持有它的人能改插件的全部设置，包括地址类设置（webhook、`base_url`）。不要用只读或日常操作级的权限。
   - `manifest/check` 校验：必须是已声明的 `userPermissions`（否则 `ui.settings.permission` `unknown`）；只有 `ui.settings` 可以写，账号类型表单等其他表单写了报 `unsupported`。
 - **核心接口**：`GET|PUT /plugins/:key/settings` 改为登录即可进入，处理函数里再判断：
   - `GET`：`plugin:read` **或** `plugin.<key>:<permission>`；
   - `PUT`：`plugin:manage` **或** `plugin.<key>:<permission>`。
-  - 都没有时 403 `permission_denied`，`details.permission` 为核心权限。
+  - 都没有时 403 `permission_denied`，`details.permission` 为核心权限。权限先于其他检查：插件不存在时，没有核心权限的人同样得到 403（不暴露插件是否存在），有核心权限的人得到 404；`PUT` 的请求体也在权限检查之后才读。
   - 取的是插件当前版本的 manifest；插件没写这个字段时与以前相同。
+  - **只凭插件权限（没有 `plugin:manage`）修改时，密钥不能沿用**：只要有任一非密钥字段改变，回传掩码 `******` 的密钥字段不再沿用原值，回答 400 `invalid_argument`，`details.fields` 里每个这样的字段一项（`field = "values/<字段>"`，`code = "reenter"`），要求重新填写。否则持有插件权限的人可以把 webhook 或 `base_url` 改到自己的地址，让插件把保存的密钥发过去。只改密钥本身、或什么都没改时照常沿用。`plugin:manage` 不受此限制。
   - `GET` 的回答多一个 `permission`：完整的 RBAC key（`plugin.<key>:<permission>`），没有声明时省略。
 - **审计**：设置修改照旧写 `plugin.settings.update`（`changed_keys`，不记值），现在多记 `request_id`；用户是谁看 `user_id`。
 - **控制台**：
@@ -5401,11 +5414,15 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **记录什么**：`/api/v1/p/:key/*` 中 `scope = admin` 的路由，方法是 POST、PUT、PATCH、DELETE，并且请求已转给插件（通过登录和权限检查）时，核心在回答后写一行 `audit_logs`：
   - `action = "plugin.route.write"`，`target_type = "plugin"`，`target_id = 插件 key`，`user_id`，`ip`；
   - `detail = {method, path（插件内路径，不含查询串）, route（manifest 里的路由模式）, status（控制台收到的 HTTP 状态码；插件调用失败时是核心回答的错误状态码）, request_id, body?}`。
-  - `body` 是请求体摘要：JSON 里名字像密钥的字段（含 password、passwd、secret、token、credential、authorization、cookie、private，或以 key 结尾，或等于 code）的值换成 `"[REDACTED]"`；字符串截到 200 字节，数组截到 20 项，嵌套截到 4 层；摘要仍超过 4 KiB 时只留 `{truncated, bytes, fields}`（顶层字段名）；不是 JSON 时只留 `{non_json, bytes}`。
+  - `body` 是请求体摘要：
+    - JSON 里名字像密钥的字段的值换成 `"[REDACTED]"`：名字（不分大小写）含 password、passwd、passphrase、secret、token、credential、authorization、bearer、cookie、session、signature、private；或按 `_`、`-`、`.` 和驼峰拆开后有一个词是 auth、pass、pwd、dsn、sig；或以 key、keys 结尾；或等于 code。
+    - `{name, value}`（或 `{key, value}`）形式的对象，`name`（`key`）像密钥时 `value` 也换成 `"[REDACTED]"`（请求头、环境变量列表）。
+    - 绝对 URL 去掉用户信息、查询串和片段；字段名含 url、uri、webhook、endpoint、callback 时只留协议和主机（路径里也可能带密钥，例如 Slack webhook）。
+    - 字符串截到 200 字节（不切断 UTF-8 字符），数组截到 20 项，嵌套截到 4 层；摘要仍超过 4 KiB 时只留 `{truncated, bytes, fields}`（顶层字段名）；不是 JSON 时只留 `{non_json, bytes}`。
   - user、public、webhook 路由和读请求不记录：它们不是管理操作，量也大。
-  - 写审计失败只记日志，不影响插件的回答。插件不能选择不记录。
-- **保留**：`plugin.route.write` 保留 180 天。删除是顺带做的：每个节点每小时最多一次，在下一次写审计时删除过期行（每次最多 1 万行）。其他审计行不删除。
-- **实现位置**：`routes.WithAudit`（插件路由转发处唯一的挂点），写入由 `audit.PluginWrites` 完成。
+  - 回答先发给调用方（flush）再写审计行。写审计失败只记日志，不影响插件的回答。插件不能选择不记录。
+- **保留**：`plugin.route.write` 保留 180 天。后台每小时删除一次过期行，只在拿到集群锁 `audit:plugin-writes` 的节点上执行（受后台准入控制），每批 1 万行直到删完；不在请求路径上。其他审计行不删除。
+- **实现位置**：`routes.WithAudit`（插件路由转发处唯一的挂点，接 `core.PluginWriteAuditor` / `core.PluginWrite`），写入和删除由 `audit.PluginWrites` 完成（`Run` 是删除循环）。
 - **迁移 `0066_audit_log_targets`**：`audit_logs` 增加索引 `(target_type, target_id, id DESC)` 和 `(user_id, id DESC)`。
 - **查询接口** `GET /audit-logs`（仍要求 `audit:read`，分页规则同 §3.1，按 id 倒序）：
   - 筛选参数：`action`、`target_type`、`target_id`、`user_id`、`from`、`to`（RFC 3339，`created_at` 的 `[from, to)`）。
@@ -5416,14 +5433,15 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 
 ### 74.3 按 id 查用户（`HostService.GetUsers`，Host API 8，授权 `users.read`）
 
-- **请求**：`{user_ids}`，最多 500 个，超过返回 `INVALID_ARGUMENT`。
-- **回答**：`{users: [UserInfo]}`，`UserInfo = {id, email, display_name, status (active|disabled), roles（角色 key）}`。
+- **请求**：`{user_ids}`，最多 500 个（`protocol.GetUsersMaxIDs`），超过返回 `INVALID_ARGUMENT`。
+- **回答**：`{users: [UserInfo]}`，`UserInfo = {id, display_name, status (active|disabled)}`。按最少必要原则不给邮箱和角色（2026-10-31 删去；Host API 8 未发布，字段号重排为 1–3）。
   - 不存在和已删除的用户不出现在回答里；其余按请求顺序，每个用户一次。
   - 用途：校验手动加入名单的用户是否存在、在界面和通知里显示用户名。
+  - **插件不得把用户数据转给权限更弱的调用方**：`users.read` 是管理员授予插件的，不是授予插件的每个用户的。插件通过自己的路由返回用户信息时，要么要求足以查看用户的插件权限，要么只回答与调用方的工作相关的用户（例如只回答插件自己的记录里出现过的用户），不能让调用方借插件枚举核心用户。
 - **授权**：`users.read`（风险等级 High，原来就在授权表里，现在才有调用）。
 - **Host API**：仍是 8。Host API 8 还没有发布（§73.6），GetUsers 跟它一起发布；`protocol.UsersHostAPIVersion = 8`。
-- **SDK**：`pluginsdk.GetUsers(ctx, host, ids)`；测试用 `pluginsdktest.FakeHost.Users`（`map[int64]*pluginv1.UserInfo`）。
-- **核心**：`core.UserDirectory`（`iam` 实现），`grpcruntime.Options.Users`。
+- **SDK**：`pluginsdk.GetUsers(ctx, host, ids)`：先去重，再按每批 500 个分批调用，所以 ids 不限个数；测试用 `pluginsdktest.FakeHost.Users`（`map[int64]*pluginv1.UserInfo`）。
+- **核心**：`core.UserDirectory`（`iam` 实现，回答 `core.UserSummary`，由 `grpcruntime` 转成 `UserInfo`；`iam` 不依赖 proto），`grpcruntime.Options.Users`。
 
 ### 74.4 已有的 `account.status_changed` 事件
 

@@ -5,6 +5,7 @@
 > - 实现情况、有意保留的差异、仍缺的核心接口，见 CONTRACTS §72.14；界面见 §72.15。
 > - 2026-10-31 补上的几项：记录保存 endpoint 和会话指纹并可筛选（核心 `RequestMeta` 新增字段，迁移 0007），AI 分析工具恢复 `session_fp`；缩短保留期立即生效（按当前保留期删除已有记录，保存后马上清理一次）；试跑、测试、模拟可上传或粘贴图片；`/costs` 的按天分桶改按浏览器时区；分析渠道不是大模型渠道时在 `/status` 和设置页提示。
 > - 核心 §74 补上后已接入（插件 0.5.0，管理员需重新批准）：`ui.settings.permission = moderation:manage`；`GetUsers`（可选权限 `users.read`）用于手动加入名单和封禁时校验用户存在、界面批量显示用户名、通知带用户名；管理接口的写操作由核心自动审计（`plugin.route.write`）。
+> - 2026-10-31 评审后修补：保留期清理只在取到 advisory lock 的一个节点上执行，并分批删除（每批 5000 行、批间停 50 ms，照 new-api `deleteRecordBatches`）；插件 `GET /users` 只返回 id、显示名、状态，只回答插件自己的表里出现过的用户，通知不再用邮箱代替用户名；界面只在 503 `users_unavailable` 时改走核心 `/users/:id`，其他错误 30 秒后重查；设置页对停用的分析渠道也提示（同 `channel_problem` 的 `unusable`）。
 > - 仍要等核心：按权限通知管理员（及各管理员自己的订阅）。
 
 > 本清单最初由只读 agent 对照两边源码生成；第 1 节的状态列已按代码核对，第 2–4 节是当时整理的 new-api 规格，留作参照。
@@ -61,7 +62,7 @@
 | new-api 功能 | 插件现状 | 插件实现位置 |
 |---|---|---|
 | 列表筛选：level、只看有新记录、AI 趋势（含"未分析"）、类别、用户；排序 new、last_hit、severity、total | 已有 | `watch_list.go` watchFilter |
-| 每行聚合：分组、当前流程@版本、可疑总数、各严重度、前 3 类别及"其他 N"、其他分组、最近分析的 ai_counts、过期标记 | 已有（用户名由界面经插件 `GET /users` 批量查询） | `watch_list.go` WatchItem；`users.go` |
+| 每行聚合：分组、当前流程@版本、可疑总数、各严重度、前 3 类别及"其他 N"、其他分组、最近分析的 ai_counts、过期标记 | 已有（用户显示名由界面经插件 `GET /users` 批量查询；邮箱只在有 `user:read` 时从核心取） | `watch_list.go` WatchItem；`users.go` |
 | 表头计数：watching、with_new、blocking，以及 analysis_every_violations | 已有 | `GET /watchlist` 的 meta |
 | 手动加入时校验：不是管理员、不在白名单 | 已有 | `watch.go`（isStaff、exempt） |
 | 手动加入时校验用户存在 | 已有：不存在返回 404 `user_not_found`（封禁同样）；未授予 `users.read` 时跳过校验 | `users.go` missingUser；`watch.go`、`routes.go` createBlock |
@@ -108,9 +109,9 @@
 | `error_rate_alert_percent`、`ttft_timeout_ms`、`stats_retention_days` | 已有 | §72.14 |
 | `record_input_message` | 有意不同：并入 `store_text` | §72.14 |
 | `worker_count`、`post_concurrency` | 有意不同：合并为 `max_concurrency` | §72.14 |
-| 缩短保留期后立刻清理一次 | 已有：清理按当前保留期删除已有记录；保留期缩短时各节点在应用设置后马上清理一次 | `routes_misc.go` purgeRetention；`plugin.go` Configure；§72.10 |
+| 缩短保留期后立刻清理一次 | 已有：清理按当前保留期删除已有记录；保留期缩短时各节点在应用设置后尝试清理，只有取到 advisory lock 的节点执行，分批删除（每天的 `cleanup` 任务走同一条路径） | `routes_misc.go` purgeRetention、deleteBatches；`plugin.go` Configure；§72.10 |
 | 拦截响应预览（OpenAI、Claude、Gemini 和流式错误） | 已有 | `SettingsTab.vue`、`blockPreview.ts` |
-| 分析渠道下拉，只列 llm 渠道，并做校验 | 已有下拉；校验见说明 | 设置由核心保存，不经插件（核心没有保存前的校验钩子，Configure 失败只记日志，启动时失败会让插件起不来）。插件在应用时把非 llm 渠道当作未配置，`/status` 返回 `channel_problem`，概览状态条和设置页写明原因 |
+| 分析渠道下拉，只列 llm 渠道，并做校验 | 已有下拉；校验见说明 | 设置由核心保存，不经插件（核心没有保存前的校验钩子，Configure 失败只记日志，启动时失败会让插件起不来）。插件在应用时把不存在、非 llm 或停用的渠道当作未配置，`/status` 返回 `channel_problem`，概览状态条写明原因；设置页按渠道列表对所选渠道同样提示（停用时用 `unusable` 的文案） |
 | Jev 默认题集编辑器，可恢复内置 | 已有 | `SettingsTab.vue`、`JevQuestionsEditor.vue` |
 | 分析准则默认文本、提示词预览、工具表、类别字典 | 已有 | `AnalysisPromptModal.vue` |
 | 设置页的权限：有写权限就能改 | 已有：manifest `ui.settings.permission = moderation:manage`（核心 §74.1）；没有 `plugin:read` 的人走 `/plugins/moderation/settings` | `manifest.json`；`ui/native/src/host.ts` canManageSettings、settingsPath |
@@ -364,7 +365,7 @@
 
 | 需要 | new-api 用在哪里 | 现状和建议 |
 |---|---|---|
-| 按 id 批量取用户名、分组、角色、状态 | 名单、记录详情、通知、历史里的操作人 | 已有：`GetUsers`（Host API 8，`users.read`）；插件 `GET /users?ids=` 每次最多 500 个，界面按页合并请求；未授予时界面退回逐个调核心 `/users/:id` |
+| 按 id 批量取用户名、分组、角色、状态 | 名单、记录详情、通知、历史里的操作人 | 已有：`GetUsers`（Host API 8，`users.read`）；插件 `GET /users?ids=` 每次最多 500 个，只返回 id、显示名、状态，只回答插件表里出现过的用户；界面按页合并请求；未授予（503 `users_unavailable`）时界面退回逐个调核心 `/users/:id`（邮箱、角色只从这里来） |
 | 按用户名查用户 | 记录和名单的搜索 | 界面先用 `/users?q=` 查到 id，再用 id 搜 |
 | 识别管理员 | 名单、统计 | 已用 `AuthzCheck(moderation:read)` 实现（`staff.go`） |
 | 用户当前所在的分组 | 上下文条 | 取该用户最近一条记录的分组 |
