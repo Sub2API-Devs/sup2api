@@ -1,126 +1,127 @@
 # 附录：new-api 内容审核与 moderation 插件的功能差异清单（2026-10-31）
 
-> **进度（2026-10-30 更新）**：
-> - 本清单的缺口已在插件 0.4.0 补齐（`feat/next-platform`，提交 952a65803 至 afac307a6），并做过两轮 agent 审核（代码规范、迁移完整度）及修复。
+> **进度（2026-10-31 按代码核对后更新）**：
+> - 第 1 节的状态已按插件现有代码（0.4.0 及之后的修补）逐条核对：原先标"缺失""部分"的大多已经实现，表里写的是现在的状态。
 > - 实现情况、有意保留的差异、仍缺的核心接口，见 CONTRACTS §72.14；界面见 §72.15。
-> - 2026-10-31 合并动态权重后，核心有了通知（§73.4 `Notify`，按渠道 + 接收人发送）。moderation 仍发自己的签名 webhook，是否迁到核心通知等用户决定；剩下的缺口只是"按权限通知管理员、各管理员自己订阅"。
-> - 仍未做（需要核心支持）：`users.read`、按权限通知管理员（及各管理员自己的订阅）、插件审计日志、按 endpoint 或会话筛选记录、设置页权限。
+> - 2026-10-31 补上的几项：记录保存 endpoint 和会话指纹并可筛选（核心 `RequestMeta` 新增字段，迁移 0007），AI 分析工具恢复 `session_fp`；缩短保留期立即生效（按当前保留期删除已有记录，保存后马上清理一次）；试跑、测试、模拟可上传或粘贴图片；`/costs` 的按天分桶改按浏览器时区；分析渠道不是大模型渠道时在 `/status` 和设置页提示。
+> - 核心 §74 补上后已接入（插件 0.5.0，管理员需重新批准）：`ui.settings.permission = moderation:manage`；`GetUsers`（可选权限 `users.read`）用于手动加入名单和封禁时校验用户存在、界面批量显示用户名、通知带用户名；管理接口的写操作由核心自动审计（`plugin.route.write`）。
+> - 仍要等核心：按权限通知管理员（及各管理员自己的订阅）。
 
-> 本清单由只读 agent 对照两边源码生成，主控没有逐条核实，只作待办来源用，动手前请对照源码确认。
+> 本清单最初由只读 agent 对照两边源码生成；第 1 节的状态列已按代码核对，第 2–4 节是当时整理的 new-api 规格，留作参照。
 >
 > 路径缩写：
 > - `N:` = `D:\projects\golang\new-api`
 > - `P:` = `next/plugins/moderation`
 > - `FE:` = `N:web/default/src/features/content-moderation`
 >
-> CONTRACTS §72 里写明的取舍不算缺口：放行缓存、名单两级 observe/enforce、保留封禁表、设置用 schema 表单、分组用数字 id、`llm_verdict` 可以进流程、flows.enabled 单独一列、费用以美元计、P1 不做渠道代理。
+> CONTRACTS §72 里写明的取舍不算缺口：放行缓存、名单两级 observe/enforce、保留封禁表、设置用 schema 表单、分组用数字 id、`llm_verdict` 可以进流程、flows.enabled 单独一列、费用以美元计。
 >
-> 主控补充两点：
-> 1. 管理员识别已改用 `AuthzCheck(uid, "moderation:read")`（`staff.go`），不必再等 `users.read`。
-> 2. 用户名和分组名由界面用 `host.api` 调核心的 `/users/:id`、`/groups` 查询，核心不用改。
+> 状态列：**已有** = 已实现；**有意不同** = §72 写明的取舍；**等核心** = 需要核心先提供接口。
 
 ## 总结
 
-- **完全没做的**：统计体系（小时统计表、延迟分桶、漏斗、健康度、性能）和通知告警。
-- **流程画布**：插件现在是弹窗表单（`P:ui/native/src/FlowsTab.vue`）。画布的完整规格见第 2 节。
-- **记录详情和观察名单详情**：后端给的数据偏少，缺"同请求的其他记录"、"流程快照"、"用户摘要"、"上下文条"；名单列表也缺筛选和排序。
-- **已知 bug**：发布流程时，`P:internal/moderation/routes_flows.go` 的 publishFlow 把自动算出的总超时写回了草稿。new-api 的做法是草稿保持 0（表示自动）。
+- 统计（小时统计表、延迟分桶、漏斗、健康度、性能）、通知告警、流程画布、记录详情、观察名单详情和筛选排序都已实现。
+- 原"已知 bug"（发布流程时把自动算出的总超时写回草稿）已修：草稿保持 0，发布的版本存算出的值（`stats_api_test.go` TestFlowDraftTimeoutAndDelete）。
+- 剩下要等核心的只有按权限通知管理员；用户校验、管理审计、设置页权限已由核心 §74 补上。
+- 有意不同：统计里用户每日计数（`user_daily`）按 UTC 日期；结尾 user 消息最多取 16 条（§72.4）；手动分析排队、不返回 503。
 
 ## 1. 各区域对照
 
 ### 概览与统计
 
-| new-api 功能 | 插件现状 | new-api 实现位置 |
+| new-api 功能 | 插件现状 | 插件实现位置 |
 |---|---|---|
-| 运行状态条：总开关、运行中、启用流程数、已绑分组数、未审核分组、停用渠道数、是否配了分析渠道 | 部分：有 `runtime.configured` 等，没有未审核分组 | `FE:overview/status-line.tsx`；`N:controller/content_moderation.go:1189-1204`（unbound_groups / stale_groups） |
-| 今日 KPI：审核数、可疑、观察中（其中有新记录的人数）、拦截级人数、前置拒绝 | 部分：按 events 现算；缺"有新记录"，缺 hits_since_mark | `FE:overview/kpi-cards.tsx`；`N:service/moderation/stats.go:598` 的 Status |
-| 最需关注的人：名单前 6 名，按新增命中排序 | 部分：插件的 top_users 是按命中数排 | `FE:overview/attention-users-card.tsx` |
-| AI 复核卡：违规、误报、不确定，误报率，分析次数和 token | 缺失 | `FE:overview/ai-review-card.tsx`；`stats.go:715` 的 addAnalysisCounts |
-| 费用卡：今日费用，按来源、按渠道、按审核器 | 部分：插件有 /costs（24h、7d、30d），缺按审核器 | `FE:overview/cost-card.tsx`；`stats.go:647-661` |
-| 性能影响：前置附加延迟的平均值和 P50/P95/P99、受影响请求数；可按分组、流程筛选；各审核器调用耗时 | 缺失 | `FE:overview/performance-*.tsx`；`stats.go:820` 的 Performance |
-| 今日类别分布：按 request_id 去重，最多 5 万条，缓存 60 秒 | 部分：插件取前 10 个类别，按记录计数，不去重 | `FE:overview/categories-card.tsx`；`stats.go:866` |
-| 漏斗：每级的进入、命中、通过（推翻）数，以及流程结果 | 缺失 | `FE:overview/funnel-card.tsx`；`stats.go:674-680` |
-| 趋势：各流程可疑率；审核器节点的命中率、错误率（超阈值标红）；可切换小时/天 | 部分：插件只有按结果分类的计数趋势 | `FE:overview/trend-card.tsx`；`stats.go:753` 的 TrendStats |
-| 健康度：审核器和渠道近 1 小时的调用数、命中率、错误率，flagged 标记；队列状态 | 缺失：插件只有本节点内存里的计数 | `FE:overview/health-card.tsx`、`queue-status.tsx` |
-| 每分钟自动刷新 | 部分 | `FE:overview/overview-page.tsx` |
+| 运行状态条：总开关、运行中、启用流程数、已绑分组数、未审核分组、停用渠道数、是否配了分析渠道 | 已有；分析渠道不存在或不是大模型渠道时写明原因 | `P:ui/native/src/overview/StatusLine.vue`；`/status` 的 `runtime.analysis.channel_problem` |
+| 今日 KPI：审核数、可疑、观察中（其中有新记录的人数）、拦截级人数、前置拒绝 | 已有（`hits_since_seen` 对应 hits_since_mark） | `GET /status` 的 today、watch |
+| 最需关注的人：名单前 6 名，按新增命中排序 | 已有 | `overview/AttentionUsers.vue`（`sort=new`） |
+| AI 复核卡：违规、误报、不确定，误报率，分析次数和 token | 已有 | `overview/AiReviewCard.vue`；`stats_api.go` addAnalysisCounts |
+| 费用卡：今日费用，按来源、按渠道、按审核器 | 已有；`/costs` 的按天分桶按浏览器时区 | `overview/TodayCostCard.vue`、`CostCard.vue`；`costs.go` |
+| 性能影响：前置附加延迟的平均值和 P50/P95/P99、受影响请求数；按分组、流程筛选；各审核器耗时 | 已有 | `overview/PerformanceCard.vue`；`GET /stats/performance` |
+| 今日类别分布：按 request_id 去重，最多 5 万条，缓存 60 秒 | 已有 | `overview/CategoriesCard.vue`；`GET /stats/categories` |
+| 漏斗：每级的进入、命中、通过数，以及流程结果 | 已有 | `overview/FunnelCard.vue` |
+| 趋势：各流程可疑率；审核器命中率、错误率（超阈值标红）；小时/天 | 已有；天按浏览器时区（整点对齐） | `overview/TrendCard.vue`；`GET /stats/trend` |
+| 健康度：审核器和渠道近 1 小时的调用数、命中率、错误率、flagged；队列状态 | 已有 | `overview/HealthCard.vue`、`QueueCard.vue` |
+| 每分钟自动刷新 | 已有 | `overview/tick.ts` |
 
 ### 记录
 
-| new-api 功能 | 插件现状 | new-api 实现位置 |
+| new-api 功能 | 插件现状 | 插件实现位置 |
 |---|---|---|
-| 筛选 result、severity、review、ai_verdict、verdict、timing、watch、flow、时间 | 已有 | — |
-| 筛选 group、endpoint、token_id、session_fp；按用户名精确搜索，或按 request id 搜索 | 部分：插件界面没有 group 筛选；没有 endpoint、session_fp；q 搜的是原文 | `N:controller/content_moderation.go:1717-1800`；`FE:records/records-filters.tsx` |
-| 列表列：流程名@版本（旧版本提示"现为 vN"）、各级路径（stage-path）、接近阈值的分数、后台排队耗时 | 部分 | `FE:records/records-columns.tsx`、`shared/stage-path.tsx`、`shared/score-chips.tsx` |
-| 详情：同一请求的其他记录、当时的流程快照（阈值、题集、渠道）、用户的名单状态、是否在白名单、是否管理员、AI 复核结论及分析时间 | 部分：插件只有 trace 和 AI 字段 | `N:controller/content_moderation.go:1843-1914`；`FE:shared/flow-snapshot-card.tsx`、`records/record-user-section.tsx` |
-| 原文结构化展示：文字分段、图片缩略图、可切换 raw JSON、`input_text` 全文、`input_message_dropped` 原因 | 部分：插件只显示 JSON 文本 | `N:service/moderation/record_message.go`（MessageParts、MessageText）、`controller:1919-1941`；`FE:records/record-input-message-section.tsx` |
-| 在记录详情里直接操作名单 | 缺失 | `FE:watchlist/watch-level-actions.tsx`（WatchUserActions） |
-| 批量人工处理 | 已有 | — |
+| 筛选 result、severity、review、ai_verdict、verdict、timing、watch、flow、时间 | 已有 | `routes.go` eventFilter |
+| 筛选 group、token、用户名、request id | 已有（用户名经核心 `/users?q=` 换成 id；q 搜 request id、原因和原文） | `EventsTab.vue`、`users.ts` |
+| 筛选 endpoint、session_fp；详情显示端点和粘性会话，可点击只看同一会话 | 已有（`RequestMeta.endpoint`、`session_fingerprint`，迁移 `0007_endpoint_session.sql`）；new-api 的会话规则名 `session_rule` 没有（核心只给指纹） | `routes.go` eventFilter；`EventsTab.vue`、`EventDetail.vue` |
+| 列表列：流程名@版本（旧版本提示"现为 vN"）、各级路径、接近阈值的分数、后台排队耗时 | 已有 | `FlowRef.vue`、`StagePath.vue`、`ScoreChips.vue` |
+| 详情：同一请求的其他记录、流程快照、名单状态、豁免、是否管理员、AI 结论及分析时间 | 已有 | `GET /events/:id`（related、flow_snapshot、user_state、ai_analyzed_at）；`EventDetail.vue` |
+| 原文结构化展示：文字分段、图片缩略图、raw JSON、`input_text` 全文、`input_message_dropped` 原因 | 已有 | `InputMessage.vue`、`TraceView.vue` |
+| 在记录详情里直接操作名单 | 已有 | `UserStateSection.vue`、`WatchActions.vue` |
+| 批量人工处理 | 已有 | `useBulkReview.ts` |
 
 ### 观察名单与 AI 分析
 
-| new-api 功能 | 插件现状 | new-api 实现位置 |
+| new-api 功能 | 插件现状 | 插件实现位置 |
 |---|---|---|
-| 列表筛选：level、只看有新记录、AI 趋势（含"未分析"）、类别、用户名或 ID 片段。排序：new、last_hit、severity、total | 部分：插件只能按 level 和 user_id 筛，排序固定 | `N:model/moderation_watch.go:894-951`；`FE:watchlist/watchlist-filters.tsx` |
-| 每行聚合信息：用户名、分组、当前流程@版本、可疑总数、各严重度计数、主要类别前几名及"其他 N"、其他分组、最近一次分析的 ai_counts、已过期标记 | 缺失 | `model/moderation_watch.go:881-890`、`controller:1992-2024` |
-| 表头计数：watching、with_new、blocking，以及 analysis_every_violations | 缺失 | `controller:2072-2075`、`moderation_watch.go:832` |
-| 手动加入时校验：用户存在、不是管理员、不在白名单 | 部分：插件只查豁免名单 | `controller:2147-2178` |
-| 手动修改：可填 reason 和 analysis_id（按 AI 建议执行时关联）；有效期用绝对时间 | 部分：插件用 days 表示有效期，没有 reason | `controller:2078-2123` |
-| 详情抽屉：用户卡；摘要（各处理状态、严重度、AI 结论的分布）；上下文条（近 30 天的"分组→流程@版本"来源，可只看某个来源）；时间线 50 条，可批量处理；历史里显示操作人姓名；距下次分析的进度 | 部分 | `controller:2345-2451`；`service/moderation/watchlist.go:171`（UserModerationContext）；`FE:watchlist/user-detail-*.tsx`、`audit-context-bar.tsx`、`suspicious-timeline.tsx` |
-| 分析卡：逐条结论按违规的高/中/低分组；所用流程是否当前版本；可一键执行 AI 建议 | 部分 | `FE:watchlist/analysis-card.tsx`、`analysis-verdicts.tsx`、`analysis-history.tsx` |
-| 手动分析时，并发已满返回 503 | 部分：插件只排队 | `controller:2236-2259` |
+| 列表筛选：level、只看有新记录、AI 趋势（含"未分析"）、类别、用户；排序 new、last_hit、severity、total | 已有 | `watch_list.go` watchFilter |
+| 每行聚合：分组、当前流程@版本、可疑总数、各严重度、前 3 类别及"其他 N"、其他分组、最近分析的 ai_counts、过期标记 | 已有（用户名由界面经插件 `GET /users` 批量查询） | `watch_list.go` WatchItem；`users.go` |
+| 表头计数：watching、with_new、blocking，以及 analysis_every_violations | 已有 | `GET /watchlist` 的 meta |
+| 手动加入时校验：不是管理员、不在白名单 | 已有 | `watch.go`（isStaff、exempt） |
+| 手动加入时校验用户存在 | 已有：不存在返回 404 `user_not_found`（封禁同样）；未授予 `users.read` 时跳过校验 | `users.go` missingUser；`watch.go`、`routes.go` createBlock |
+| 手动修改：reason、analysis_id、绝对时间 expires_at | 已有 | `watch.go` watchInput |
+| 详情抽屉：用户卡、摘要、上下文条（可只看某来源）、时间线批量处理、历史里的操作人、分析进度 | 已有 | `WatchDetail.vue`、`WatchSummary.vue`、`UserTimeline.vue`、`WatchHistory.vue`、`UserAnalysisBar.vue` |
+| 分析卡：结论按高/中/低排序；流程是否当前版本；一键执行 AI 建议 | 已有 | `AnalysisCard.vue` |
+| 分析工具的记录带 session_rule / session_fp | 已有 `session_fp`；`session_rule` 没有（核心只给指纹） | `analysis_tools.go` toolRecord |
+| 手动分析时并发已满返回 503 | 有意不同：排队（§72.14） | — |
 
 ### 流程
 
-| new-api 功能 | 插件现状 | new-api 实现位置 |
+| new-api 功能 | 插件现状 | 插件实现位置 |
 |---|---|---|
-| 拖拽画布编辑器（规格见第 2 节） | 缺失：插件是带勾选框的表单 | `FE:flows/*` |
-| 列表：按名称搜索、按分组筛选、近 24 小时审核数、可疑率、前置平均延迟、"N 个分组，M 个已绑"、提示停用流程的分组和已不存在的分组 | 部分 | `FE:flows/flows-table.tsx`；`stats.go:1001`（FlowStats24h） |
-| 在列表行内编辑分组：多选弹层，每项标"已绑某流程"或"未审核"；遇到 409 时确认后改绑 | 部分：插件在编辑弹窗里勾选，409 时弹确认 | `FE:flows/flow-groups-cell.tsx` |
-| 启用且已绑分组的流程不能删除 | 缺失 | `flows-table.tsx:200-223` |
-| 总超时为 0 表示自动，草稿保持 0 | 有 bug（见上方总结） | `controller:1108-1123`、`1443-1445` |
-| 详情返回 `stage_timeout_sum_ms` | 缺失 | `controller:1248-1250` |
-| 模拟时可选用户状态：未标记（后置）、观察级（后置）、拦截级（前置） | 部分 | `FE:flows/simulate-panel.tsx` |
+| 拖拽画布编辑器（规格见第 2 节） | 已有 | `FlowEditor.vue`、`FlowCanvas.vue`、`StageCard.vue`、`flowOps.ts` |
+| 列表：按名称搜索、按分组筛选、24 小时审核数、可疑率、前置平均延迟、分组覆盖、停用流程的分组和已不存在的分组 | 已有 | `FlowsTab.vue` |
+| 行内编辑分组，409 时确认后改绑 | 已有 | `FlowGroupsCell.vue` |
+| 启用且已绑分组的流程不能删除 | 已有（409 `flow_in_use`） | `routes_flows.go` deleteFlow |
+| 总超时 0 表示自动，草稿保持 0 | 已有（原 bug 已修） | `routes_flows.go` publishFlow |
+| 详情返回 `stage_timeout_sum_ms` | 已有 | `routes_flows.go` FlowView |
+| 模拟时可选用户状态 | 已有；可上传、粘贴图片 | `FlowSimulate.vue`、`ImageInput.vue` |
 
 ### 审核器
 
-| new-api 功能 | 插件现状 | new-api 实现位置 |
+| new-api 功能 | 插件现状 | 插件实现位置 |
 |---|---|---|
-| 列表列：渠道名和状态、今日调用数、今日费用 | 部分：插件只显示是否可用 | `controller:575-630`；`stats.go:974` |
-| OpenAI 阈值预设：宽松（×1.1）、默认、严格（×0.75），能识别当前用的是哪一档 | 缺失 | `FE:auditors/threshold-presets.ts`、`openai-thresholds-editor.tsx` |
-| Jev 题目的 label 和判定标准（answer_yes / answer_no），显示 rules_version | 部分 | `FE:auditors/jev-question-row.tsx` |
-| 试跑未保存的修改：`:id=0`，或在已有配置上叠加草稿字段；可带单张图片 | 部分：插件只能试跑已保存的审核器 | `controller:863-969` |
+| 列表列：渠道名和状态、今日调用数、今日费用 | 已有 | `AuditorsTab.vue`；AuditorView.today |
+| OpenAI 阈值预设：宽松、默认、严格，识别当前档位 | 已有 | `thresholdPresets.ts` |
+| Jev 题目的 label 和判定标准（answer_yes / answer_no），显示 rules_version | 已有 | `JevQuestionsEditor.vue`、`AuditorEditModal.vue` |
+| 试跑未保存的修改，可带图片（上传或粘贴） | 已有；图片合计约 675 KB（核心转发插件请求最多 1 MiB） | `AuditorTryModal.vue`、`ImageInput.vue`；`POST /auditors/try` |
 
 ### 渠道
 
-| new-api 功能 | 插件现状 | new-api 实现位置 |
+| new-api 功能 | 插件现状 | 插件实现位置 |
 |---|---|---|
-| 列表列：被哪些审核器使用、是否分析渠道、近 1 小时调用数/错误率/费用、今日费用和 token（按来源拆分） | 部分：插件有 price_state 和 cost_30d | `controller:382-416`；`stats.go:925` |
-| 在行内启用或停用（带确认）；测试结果显示 URL、HTTP 状态码和上游返回的信息 | 部分 | `FE:channels/channel-row-actions.tsx` |
-| 删除时：是分析渠道返回 409；被审核器使用返回 409，并列出这些审核器 | 部分：插件不检查分析渠道，也不列出审核器名单 | `controller:523-557` |
-| 渠道代理 | 用户 2026-10-31 要求完整迁移，需要补 | `N:service/moderation/channel.go` |
+| 列表列：被哪些审核器使用、是否分析渠道、近 1 小时调用数/错误率、今日费用和 token（按来源） | 已有 | `ChannelsTab.vue`；ChannelView |
+| 行内启用或停用（带确认）；测试结果显示 URL、HTTP 状态码和上游信息 | 已有 | `ChannelsTab.vue` |
+| 删除时：是分析渠道 409；被审核器使用 409 并列出审核器 | 已有 | `routes_config.go` deleteChannel |
+| 渠道代理 | 已有 | `proxy.go` |
 
 ### 设置
 
 | new-api 设置项 | 插件现状 | 说明 |
 |---|---|---|
-| `error_rate_alert_percent`（默认 5） | 缺失 | 告警和 flagged 都依赖它 |
-| `ttft_timeout_ms`（首字节超时，1–60 秒） | 缺失 | `N:service/moderation/upstream.go:22-55` |
-| `stats_retention_days`（默认 90） | 缺失 | 清理统计表用，`cleanup.go:96-102` |
-| `record_input_message` | 部分：插件并入了 store_text | — |
-| `worker_count`、`post_concurrency` | 部分：插件统一用 max_concurrency | — |
-| 缩短保留期后立刻清理一次 | 缺失 | `controller:250-257` |
-| 拦截响应预览（OpenAI、Claude、Gemini 三种格式和流式错误） | 缺失 | `FE:settings/block-response-preview.tsx` |
-| 分析渠道用下拉选择，只列 llm 渠道，并做校验 | 部分：插件的 schema 里是填数字 | `controller:229-239` |
-| Jev 默认题集编辑器，可恢复内置 | 部分：插件是 schema 里的 JSON | `FE:settings/jev-default-questions-section.tsx` |
-| 分析准则显示内置默认文本、提示词预览、工具表、类别字典 | 已有 | — |
+| `error_rate_alert_percent`、`ttft_timeout_ms`、`stats_retention_days` | 已有 | §72.14 |
+| `record_input_message` | 有意不同：并入 `store_text` | §72.14 |
+| `worker_count`、`post_concurrency` | 有意不同：合并为 `max_concurrency` | §72.14 |
+| 缩短保留期后立刻清理一次 | 已有：清理按当前保留期删除已有记录；保留期缩短时各节点在应用设置后马上清理一次 | `routes_misc.go` purgeRetention；`plugin.go` Configure；§72.10 |
+| 拦截响应预览（OpenAI、Claude、Gemini 和流式错误） | 已有 | `SettingsTab.vue`、`blockPreview.ts` |
+| 分析渠道下拉，只列 llm 渠道，并做校验 | 已有下拉；校验见说明 | 设置由核心保存，不经插件（核心没有保存前的校验钩子，Configure 失败只记日志，启动时失败会让插件起不来）。插件在应用时把非 llm 渠道当作未配置，`/status` 返回 `channel_problem`，概览状态条和设置页写明原因 |
+| Jev 默认题集编辑器，可恢复内置 | 已有 | `SettingsTab.vue`、`JevQuestionsEditor.vue` |
+| 分析准则默认文本、提示词预览、工具表、类别字典 | 已有 | `AnalysisPromptModal.vue` |
+| 设置页的权限：有写权限就能改 | 已有：manifest `ui.settings.permission = moderation:manage`（核心 §74.1）；没有 `plugin:read` 的人走 `/plugins/moderation/settings` | `manifest.json`；`ui/native/src/host.ts` canManageSettings、settingsPath |
 
 ### 通知、告警、审计
 
-| 功能 | 插件现状 | new-api 实现位置 |
+| 功能 | 插件现状 | 插件实现位置 |
 |---|---|---|
-| AI 自动升级、降级、移出名单后通知管理员 | 缺失 | `escalate.go:139`（notifyAutoChange） |
-| 流程异常率越过阈值时告警 | 缺失 | `stats.go:1034`（alertErrorRate） |
-| 管理操作写审计 | 缺失（§72.11 已放到 P3） | `controller/audit_content_moderation.go` |
+| AI 自动升级、降级、移出名单后通知管理员 | 已有：发到设置的签名 webhook；按权限发给管理员等核心 | `notify.go` |
+| 流程异常率越过阈值时告警 | 已有（`alerts` 任务，KV 去重） | `notify.go`、`stats_api.go` |
+| 管理操作写审计 | 已有：核心自动审计插件管理接口的写操作（§74.2 `plugin.route.write`） | 名单操作另记在 `watch_events` |
 
 ## 2. 拖拽画布编辑器（用 Vue 重写所需的规格）
 
@@ -363,13 +364,14 @@
 
 | 需要 | new-api 用在哪里 | 现状和建议 |
 |---|---|---|
-| 按 id 批量取用户名、分组、角色、状态 | 名单、记录详情、通知、历史里的操作人 | 界面用 `host.api` 调 `/users/:id`；没有 `user:read` 权限的人只能看到 id |
+| 按 id 批量取用户名、分组、角色、状态 | 名单、记录详情、通知、历史里的操作人 | 已有：`GetUsers`（Host API 8，`users.read`）；插件 `GET /users?ids=` 每次最多 500 个，界面按页合并请求；未授予时界面退回逐个调核心 `/users/:id` |
 | 按用户名查用户 | 记录和名单的搜索 | 界面先用 `/users?q=` 查到 id，再用 id 搜 |
 | 识别管理员 | 名单、统计 | 已用 `AuthzCheck(moderation:read)` 实现（`staff.go`） |
 | 用户当前所在的分组 | 上下文条 | 取该用户最近一条记录的分组 |
 | 全部分组列表 | 找出未绑定流程的分组、已失效的分组 | 界面调 `/groups`（需要 group:read 权限） |
 | 按权限给管理员发通知 | 第 4 节 | 核心已有 `Notify`（§73.4），但只按渠道 + 接收人发送；按权限找收件人、各管理员订阅仍缺。插件继续发自己的 webhook |
-| 管理操作审计 | recordManageAudit | 核心没有给插件写审计的接口 |
-| 请求端点路径、粘性会话指纹 | 记录的 endpoint 和 session_fp 筛选 | RequestMeta 里没有这两个字段 |
-| 渠道代理 | 渠道 proxy 字段 | 自定义的 Transport 要从 SDK 装好之后的 `http.DefaultTransport` Clone 出来，才会继续走出口隧道 |
-| 设置页的权限 | new-api 的设置页只要有写权限就能改 | 插件设置需要宿主的 plugin:manage 权限 |
+| 管理操作审计 | recordManageAudit | 已有：核心自动审计插件管理接口的写操作（§74.2 `plugin.route.write`），插件不用改 |
+| 请求端点路径、粘性会话指纹 | 记录的 endpoint 和 session_fp 筛选 | 已有：`RequestMeta.endpoint`、`session_fingerprint`（§25.1，2026-10-31），插件已接上 |
+| 渠道代理 | 渠道 proxy 字段 | 已实现（`proxy.go`）：Transport 从 SDK 装好之后的 `http.DefaultTransport` Clone 出来，继续走出口隧道 |
+| 设置页的权限 | new-api 的设置页只要有写权限就能改 | 已有：manifest `ui.settings.permission`（§74.1），插件设为 `moderation:manage` |
+| 保存设置前让插件校验 | 分析渠道必须是已有的 llm 渠道（`controller:229-239`） | 核心保存设置不问插件；Configure 拒绝只记日志（启动时拒绝会让插件起不来），所以插件只能在应用时把错误的渠道当作未配置，并在 `/status` 和设置页提示 |
