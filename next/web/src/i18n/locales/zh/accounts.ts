@@ -19,11 +19,12 @@ export default {
   },
   usage: {
     column: '用量', title: '账号用量', raw: '原始', rawHint: '按原始倍率计费：分组倍率视为 1',
-    today: '今日 {cost} · {n} 次', range: '时间', rawCost: '原始费用', cost: '计费后', requests: '请求',
+    today: '今日 {cost} · {n} 次', range: '时间', rawCost: '原始费用', cost: '计费后', requests: '请求', tokens: 'Token',
     ranges: { today: '今日', last7: '近 7 天', last30: '近 30 天', total: '累计' },
-    periodShort: { hour: '时', day: '日', week: '周', month: '月', none: '总' }, periodShortN: '{n}{unit}',
+    per: { hour: '每小时', day: '每天', week: '每周', month: '每月', none: '总额' },
+    perN: { hour: '每 {n} 小时', day: '每 {n} 天', week: '每 {n} 周', month: '每 {n} 个月' },
     limitLine: '用量限制（{period}）：{used} / {amount}', resetsAt: '{time} 重置', loadFailed: '用量明细加载失败',
-    limitReached: '用量已达上限：{detail}',
+    limitReached: '用量已达上限：{used} / {amount}（{period}）',
     hint: '数据来自使用记录（核心统计）。开启原始倍率计费时，累计用量和用量限制都按原始费用计算（分组倍率视为 1）。'
   },
   usageLimit: {
@@ -34,9 +35,11 @@ export default {
     period: '重置周期', periodHint: '「不重置」即总额度：用满后保持自动禁用，调高限额后自动启用。',
     periods: { hour: '每小时', day: '每天', week: '每周', month: '每月', none: '不重置' },
     periodCount: '周期长度', periodCountHint: '例如 2 + 每周 = 每两周重置一次', periodCountUnit: '个周期',
-    anchor: '周期起点', anchorHint: '从这个时间开始计算周期（按整点，服务器时区）；留空则从 2024-01-01 00:00 开始，日、周、月落在自然边界上。',
-    current: '本周期已用（{start} → {end}）', currentTotal: '累计已用', summary: '用量限制 {amount}/{period}', saveFailed: '账号已保存，但用量限制保存失败：{error}',
-    amountInvalid: '开启用量限制需要填写 0-1000000000 之间、大于 0 的限额', periodCountInvalid: '周期长度必须为 1-1000'
+    anchor: '周期起点', anchorHint: '从这个时间开始计算周期（按整点，2000-2099 年）；留空则从 2024-01-01 00:00 开始，日、周、月落在自然边界上。',
+    timezone: '周期按 {zone} 计算',
+    current: '本周期已用（{start} → {end}）', currentTotal: '累计已用', summary: '用量限制 {amount} {period}', saveFailed: '账号已保存，但用量限制保存失败：{error}',
+    amountInvalid: '开启用量限制需要填写 0-1000000000 之间、大于 0 的限额', periodCountInvalid: '周期长度必须为 1-{max}',
+    loadFailed: '用量限制加载失败，暂时不能修改：{error}', retry: '重试'
   },
   successRate: {
     column: '成功率 · 1 分钟', title: '成功率（近 60 秒）', success: '成功请求', failed: '失败尝试',
@@ -255,7 +258,7 @@ export default {
   selectAll: '全选',
   selectNone: '全不选',
   quota: {
-    column: '余额',
+    column: '套餐用量',
     windows: { '5h': '5 小时', '7d': '7 天', '7d_sonnet': '7 天 Sonnet', '7d_fable': '7 天 Fable' },
     windowsShort: { '5h': '5h', '7d': '7d', '7d_sonnet': '7d S', '7d_fable': '7d F' },
     rejectedHint: '上游已拒绝该窗口的请求，需等待重置',

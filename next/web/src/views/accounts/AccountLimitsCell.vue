@@ -10,6 +10,7 @@ import { STooltip } from '@sub2api/ui'
 import type { Account } from '@/api/types'
 import { formatCompact } from '@/utils/format'
 import { figureTone, limitRows, usedShare, type LimitFigure } from './accountLimits'
+import { LEVEL_TEXT } from './usageLevel'
 import AccountLimitsTable from './AccountLimitsTable.vue'
 
 const props = defineProps<{ account: Account }>()
@@ -19,11 +20,10 @@ const total = computed(() => rows.value[0].figures)
 const lists = computed(() => rows.value.length - 1)
 
 const text = (f: LimitFigure) => (f.limit > 0 ? `${formatCompact(f.used)}/${formatCompact(f.limit)}` : formatCompact(f.used))
-const FILL = { danger: 'bg-danger-500/25', warning: 'bg-warning-500/25', primary: 'bg-primary-500/20', none: '' } as const
-const TEXT = { danger: 'text-danger-700 dark:text-danger-300', warning: 'text-warning-700 dark:text-warning-300', primary: 'text-fg' } as const
+const FILL = { danger: 'bg-danger-500/25', warning: 'bg-warning-500/25', ok: 'bg-primary-500/20', none: '' } as const
 const pillText = (f: LimitFigure) => {
   const tone = figureTone(f)
-  return tone === 'none' ? (f.used ? 'text-fg' : 'text-fg-subtle') : TEXT[tone]
+  return tone === 'none' ? (f.used ? 'text-fg' : 'text-fg-subtle') : LEVEL_TEXT[tone]
 }
 </script>
 

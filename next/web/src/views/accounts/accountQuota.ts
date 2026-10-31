@@ -5,6 +5,7 @@
 import { onBeforeUnmount, reactive, ref, type Ref } from 'vue'
 import { api } from '@sub2api/host'
 import type { Account, AccountBalance, CredentialRefreshOutcome, QuotaSnapshot, QuotaWindow } from '@/api/types'
+import { usageLevel, type UsageLevel } from './usageLevel'
 
 /** GET /accounts/:id/quota — `force` makes the server query the upstream now. */
 export function fetchAccountQuota(id: number, force = true): Promise<QuotaSnapshot> {
@@ -25,16 +26,16 @@ export function sortWindows(windows: QuotaWindow[] | null | undefined): QuotaWin
   return [...(windows || [])]
 }
 
-export type QuotaLevel = 'ok' | 'warning' | 'danger'
+export type QuotaLevel = UsageLevel
 
 /**
  * Colour level of a window (thresholds as sub2api's usage bars): rejected or
  * ≥ 90 % is danger, an upstream warning or ≥ 75 % is warning.
  */
 export function quotaLevel(w: Pick<QuotaWindow, 'utilization' | 'status'>): QuotaLevel {
-  if (w.status === 'rejected' || w.utilization >= 90) return 'danger'
-  if (w.status === 'allowed_warning' || w.utilization >= 75) return 'warning'
-  return 'ok'
+  if (w.status === 'rejected') return 'danger'
+  const level = usageLevel(w.utilization / 100, 0.75, 0.9)
+  return level === 'ok' && w.status === 'allowed_warning' ? 'warning' : level
 }
 
 /** "42%", rounded; ">999%" beyond. */

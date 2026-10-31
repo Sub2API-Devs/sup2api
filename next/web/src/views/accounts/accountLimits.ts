@@ -1,4 +1,5 @@
 import type { Account, ModelLimit } from '@/api/types'
+import { usageLevel, type UsageLevel } from './usageLevel'
 
 /** One figure of an account's limits: what is used now and the cap (0 = none). */
 export interface LimitFigure {
@@ -35,6 +36,5 @@ export function limitRows(a: Account): LimitRow[] {
 /** Share of the cap in use, 0–1; 0 without a cap. */
 export const usedShare = (f: LimitFigure) => (f.limit > 0 ? Math.min(f.used / f.limit, 1) : 0)
 
-/** Tone of a capped figure: danger at the cap, warning from 80 %. */
-export const figureTone = (f: LimitFigure): 'danger' | 'warning' | 'primary' | 'none' =>
-  f.limit <= 0 ? 'none' : f.used >= f.limit ? 'danger' : f.used >= f.limit * 0.8 ? 'warning' : 'primary'
+/** Tone of a capped figure: danger at the cap, warning from 80 %; 'none' without a cap. */
+export const figureTone = (f: LimitFigure): UsageLevel | 'none' => (f.limit > 0 ? usageLevel(f.used / f.limit) : 'none')

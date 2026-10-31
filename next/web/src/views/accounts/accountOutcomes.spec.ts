@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { formatSuccessRate, successRate, successRateTone } from './accountOutcomes'
+import { formatPercent } from '@/utils/format'
+import { successRate, successRateTone } from './accountOutcomes'
 
 describe('account success rate', () => {
   it('rates successes against failed attempts and stays empty without traffic', () => {
@@ -18,9 +19,12 @@ describe('account success rate', () => {
   })
 
   it('never rounds a failing account up to 100 %', () => {
-    expect(formatSuccessRate(null)).toBe('—')
-    expect(formatSuccessRate(100)).toBe('100%')
-    expect(formatSuccessRate((999 * 100) / 1000)).toBe('99.9%')
-    expect(formatSuccessRate((9999 * 100) / 10000)).toBe('99.9%')
+    const rate = (success: number, total: number) => formatPercent(success, total, { floor: true })
+    expect(rate(0, 0)).toBe('—')
+    expect(rate(5, 5)).toBe('100.0%')
+    expect(rate(999, 1000)).toBe('99.9%')
+    expect(rate(9999, 10000)).toBe('99.9%')
+    expect(rate(9996, 10000)).toBe('99.9%')
+    expect(rate(1, 3)).toBe('33.3%')
   })
 })

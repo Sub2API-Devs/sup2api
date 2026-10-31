@@ -2,13 +2,15 @@
 // The account's usage from the core's record (CONTRACTS §73): lifetime cost
 // in the basis the raw-ratio switch picks, then the usage limit of the current
 // period as plain figures, or today's cost and requests without a limit.
-// Hovering loads today / 7 days / 30 days / lifetime with both costs.
-import { computed, ref } from 'vue'
+// Hovering loads today / 7 days / 30 days / lifetime with both costs, again
+// once the row's usage changes.
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SBadge, SHint, SSpinner, STooltip } from '@sub2api/ui'
 import type { AccountUsage, AccountUsageDetail, AccountUsageFigures } from '@/api/types'
-import { formatCompact, formatDateTime, formatMoney } from '@/utils/format'
-import { fetchAccountUsage, limitTone, mainCost } from './accountUsage'
+import { formatCompact, formatDateTime, formatMoney, formatNumber } from '@/utils/format'
+import { fetchAccountUsage, limitLevel, mainCost, usagePeriodLabel } from './accountUsage'
+import { LEVEL_TEXT } from './usageLevel'
 
 const props = defineProps<{ accountId: number; usage: AccountUsage | null | undefined }>()
 const { t } = useI18n()
@@ -16,27 +18,35 @@ const { t } = useI18n()
 const detail = ref<AccountUsageDetail | null>(null)
 const loading = ref(false)
 const failed = ref(false)
+let seq = 0
 
 async function load() {
   if (loading.value || detail.value) return
+  const my = ++seq
   loading.value = true
   failed.value = false
   try {
-    detail.value = await fetchAccountUsage(props.accountId)
+    const d = await fetchAccountUsage(props.accountId)
+    if (my === seq) detail.value = d
   } catch {
-    failed.value = true
+    if (my === seq) failed.value = true
   } finally {
-    loading.value = false
+    if (my === seq) loading.value = false
   }
 }
+// A reloaded row (or another account) makes the loaded details stale.
+watch([() => props.accountId, () => props.usage], () => {
+  seq++
+  detail.value = null
+  loading.value = false
+  failed.value = false
+})
 
 const money = (v: number | string) => formatMoney(v, 2)
-const LIMIT_TEXT = { danger: 'font-semibold text-danger-700 dark:text-danger-300', warning: 'text-warning-700 dark:text-warning-300', normal: 'text-fg' } as const
+const level = computed(() => (props.usage?.limit ? limitLevel(props.usage.limit) : 'ok'))
 const periodLabel = computed(() => {
   const l = props.usage?.limit
-  if (!l) return ''
-  const unit = t(`accounts.usage.periodShort.${l.period}`)
-  return l.period !== 'none' && l.period_count > 1 ? t('accounts.usage.periodShortN', { n: l.period_count, unit }) : unit
+  return l ? usagePeriodLabel(t, l.period, l.period_count) : ''
 })
 const rows = computed<Array<{ key: string; f: AccountUsageFigures }>>(() =>
   detail.value
@@ -66,7 +76,7 @@ const rows = computed<Array<{ key: string; f: AccountUsageFigures }>>(() =>
       </span>
       <span v-if="usage.limit" class="flex items-center gap-1.5 text-xxs tabular-nums" data-testid="account-usage-limit">
         <span class="rounded bg-surface-2 px-1.5 text-fg-muted">{{ periodLabel }}</span>
-        <span :class="LIMIT_TEXT[limitTone(usage.limit)]">{{ money(usage.limit.used) }} / {{ money(usage.limit.amount) }}</span>
+        <span :class="[LEVEL_TEXT[level], { 'font-semibold': level === 'danger' }]">{{ money(usage.limit.used) }} / {{ money(usage.limit.amount) }}</span>
       </span>
       <span v-else class="text-xxs tabular-nums text-fg-muted">{{ t('accounts.usage.today', { cost: money(mainCost(usage, usage.today)), n: usage.today.requests }) }}</span>
     </span>
@@ -81,7 +91,7 @@ const rows = computed<Array<{ key: string; f: AccountUsageFigures }>>(() =>
             <th class="py-1 pl-3 text-right font-medium">{{ t('accounts.usage.rawCost') }}</th>
             <th class="py-1 pl-3 text-right font-medium">{{ t('accounts.usage.cost') }}</th>
             <th class="py-1 pl-3 text-right font-medium">{{ t('accounts.usage.requests') }}</th>
-            <th class="py-1 pl-3 text-right font-medium">Token</th>
+            <th class="py-1 pl-3 text-right font-medium">{{ t('accounts.usage.tokens') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -89,7 +99,7 @@ const rows = computed<Array<{ key: string; f: AccountUsageFigures }>>(() =>
             <td class="py-1 pr-3">{{ t(`accounts.usage.ranges.${r.key}`) }}</td>
             <td class="py-1 pl-3 text-right">{{ money(r.f.raw_cost) }}</td>
             <td class="py-1 pl-3 text-right">{{ money(r.f.cost) }}</td>
-            <td class="py-1 pl-3 text-right">{{ r.f.requests.toLocaleString() }}</td>
+            <td class="py-1 pl-3 text-right">{{ formatNumber(r.f.requests) }}</td>
             <td class="py-1 pl-3 text-right">{{ formatCompact(r.f.tokens) }}</td>
           </tr>
         </tbody>

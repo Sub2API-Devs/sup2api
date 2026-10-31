@@ -17,10 +17,3 @@ export function successRateTone(rate: number | null): 'success' | 'warning' | 'd
   if (rate >= 95) return 'warning'
   return 'danger'
 }
-
-/** "99.6%" with one decimal, trailing ".0" dropped; "—" without a rate. */
-export function formatSuccessRate(rate: number | null): string {
-  if (rate === null) return '—'
-  const floored = Math.floor(rate * 10) / 10
-  return `${Number(floored.toFixed(1))}%`
-}

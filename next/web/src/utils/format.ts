@@ -48,11 +48,15 @@ export function formatNumber(v: string | number | null | undefined, digits = 0):
   return n.toLocaleString(currentLocale() === 'zh' ? 'zh-CN' : 'en-US', { maximumFractionDigits: digits })
 }
 
-/** "12.3%" of part / whole, '—' when whole is 0 or part is missing. */
-export function formatPercent(part: string | number | null | undefined, whole: string | number | null | undefined): string {
+/**
+ * "12.3%" of part / whole, '—' when whole is 0 or part is missing. `floor`
+ * rounds down, so a share just under 100 % never reads "100.0%".
+ */
+export function formatPercent(part: string | number | null | undefined, whole: string | number | null | undefined, opts: { floor?: boolean } = {}): string {
   const w = Number(whole) || 0
   if (!w || part === null || part === undefined) return '—'
-  return ((Number(part) / w) * 100).toFixed(1) + '%'
+  const p = (Number(part) * 100) / w
+  return (opts.floor ? Math.floor(p * 10 + 1e-9) / 10 : p).toFixed(1) + '%'
 }
 
 /** 1234 -> "1.2K", 3_200_000 -> "3.2M"; small numbers stay as they are. */

@@ -11,7 +11,7 @@ import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { useAuthStore } from '@/stores/auth'
 import { usePluginStore } from '@/stores/plugins'
 import { errorMessage, notifyError } from '@/utils/errors'
-import { formatDateTime, formatRelative, formatTime } from '@/utils/format'
+import { formatDateTime, formatMoney, formatRelative, formatTime } from '@/utils/format'
 import { lt } from '@/i18n'
 import { useAccountTypes, typeKey } from './accountTypes'
 import AccountTypePicker from './AccountTypePicker.vue'
@@ -23,7 +23,7 @@ import PluginSlot from '@/components/plugin/PluginSlot.vue'
 import AccountLimitsCell from './AccountLimitsCell.vue'
 import AccountSuccessRateCell from './AccountSuccessRateCell.vue'
 import AccountUsageCell from './AccountUsageCell.vue'
-import { usageLimitReasonDetail } from './accountUsage'
+import { todayQuery, usagePeriodLabel } from './accountUsage'
 import AccountLimitsTable from './AccountLimitsTable.vue'
 import { accountControl, sameCreationGroup } from './accountTypeChoices'
 import AccountQuotaCell from './AccountQuotaCell.vue'
@@ -63,7 +63,8 @@ const canDelete = (a: Account) => own.can(a, ACCOUNT_KEYS.delete)
 const canReveal = (a: Account) => own.can(a, ACCOUNT_KEYS.reveal)
 
 // `mine=true` works at both levels; `created_by=<id>` only at the all level (ignored otherwise).
-const list = useList<Account>('/accounts', { plugin_key: '', type: '', group_id: '', status: '', model: '', q: '', mine: '', created_by: '', orphaned: '' })
+// The usage column's "today" is the browser's day (CONTRACTS §73).
+const list = useList<Account>(`/accounts?${new URLSearchParams(todayQuery())}`, { plugin_key: '', type: '', group_id: '', status: '', model: '', q: '', mine: '', created_by: '', orphaned: '' })
 const onlyMine = computed({
   get: () => list.filters.mine === 'true',
   set: (v: boolean) => {
@@ -132,8 +133,10 @@ type StatusView = { tone: ReturnType<typeof accountStatusTone>; label: string; d
 function statusOf(a: Account): StatusView {
   const key = accountStatusKey(a)
   const cooling = key === 'active' && coolingDown(a)
-  const usageLimit = usageLimitReasonDetail(a.status_reason)
-  const statusReason = usageLimit !== null ? t('accounts.usage.limitReached', { detail: usageLimit }) : a.status_reason
+  const limit = a.usage?.limit_disabled ? a.usage.limit : null
+  const statusReason = limit
+    ? t('accounts.usage.limitReached', { used: formatMoney(limit.used, 2), amount: formatMoney(limit.amount, 2), period: usagePeriodLabel(t, limit.period, limit.period_count) })
+    : a.status_reason
   const reason = a.orphaned ? t('accounts.orphanedHint', { plugin: a.plugin_key }) : (cooling && a.cooldown_reason) || statusReason
   const view: StatusView = { tone: accountStatusTone(a), label: t(`accounts.status.${key}`), detail: reason || undefined }
   // Auto-disabled reads as one yellow badge; why, and when it comes back, show on hover.
@@ -185,7 +188,7 @@ async function openEdit(a: Pick<Account, 'id'>) {
   editorOpen.value = true
   step.value = 2
   try {
-    const full = await api.get<Account>(`/accounts/${a.id}`)
+    const full = await api.get<Account>(`/accounts/${a.id}`, todayQuery())
     editing.value = full
     await accountTypes.load()
     pickedType.value = typeOf(full) || null
@@ -359,7 +362,7 @@ async function openDetail(a: Account) {
   detail.value = a
   detailOpen.value = true
   try {
-    const full = await api.get<Account>(`/accounts/${a.id}`)
+    const full = await api.get<Account>(`/accounts/${a.id}`, todayQuery())
     // The quota snapshot is a list field; keep the row's when the detail omits it.
     detail.value = full.quota === undefined ? { ...full, quota: a.quota } : full
   } catch (e) {

@@ -1,10 +1,17 @@
 // Account usage and usage limits (CONTRACTS §73): API calls and the figures
 // the usage cell, its hover card and the editor show.
 import { api } from '@sub2api/host'
-import type { AccountUsage, AccountUsageDetail, AccountUsageFigures, AccountUsageLimit, AccountUsageLimitState } from '@/api/types'
+import type { AccountUsage, AccountUsageDetail, AccountUsageFigures, AccountUsageLimit, AccountUsageLimitState, UsageLimitPeriod } from '@/api/types'
+import { browserTZ } from '@/components/stats/stats'
+import { usageLevel } from './usageLevel'
+
+type Translate = (key: string, named?: Record<string, unknown>) => string
+
+/** ?tz= of the requests carrying usage: "today" is the browser's day. */
+export const todayQuery = () => ({ tz: browserTZ() })
 
 export function fetchAccountUsage(id: number): Promise<AccountUsageDetail> {
-  return api.get<AccountUsageDetail>(`/accounts/${id}/usage`)
+  return api.get<AccountUsageDetail>(`/accounts/${id}/usage`, todayQuery())
 }
 
 export function fetchUsageLimit(id: number): Promise<AccountUsageLimit> {
@@ -16,7 +23,15 @@ export function saveUsageLimit(id: number, limit: AccountUsageLimit): Promise<Ac
 }
 
 export function defaultUsageLimit(): AccountUsageLimit {
-  return { raw_cost_accounting: false, enabled: false, amount: '0', period: 'month', period_count: 1, anchor: null }
+  return { raw_cost_accounting: false, enabled: false, amount: '0', period: 'month', period_count: 1, anchor: null, timezone: browserTZ() }
+}
+
+/** Largest period_count of each period: one period spans at most 366 days (as the server checks). */
+export const PERIOD_COUNT_MAX: Record<UsageLimitPeriod, number> = { hour: 8784, day: 366, week: 52, month: 12, none: 1000 }
+
+/** "per week", "per 2 weeks", "total". */
+export function usagePeriodLabel(t: Translate, period: UsageLimitPeriod, count: number): string {
+  return period !== 'none' && count > 1 ? t(`accounts.usage.perN.${period}`, { n: count }) : t(`accounts.usage.per.${period}`)
 }
 
 /** The cost the account's usage is counted in: raw (before the group multiplier) or charged. */
@@ -25,33 +40,16 @@ export function mainCost(u: Pick<AccountUsage, 'raw_cost_accounting'>, f: Accoun
   return Number(u.raw_cost_accounting ? f.raw_cost : f.cost) || 0
 }
 
-/** Share of the limit used, 0–∞. */
-export function limitShare(l: AccountUsageLimitState): number {
+/** Level of the period figure: danger at the limit, warning from 90 %. */
+export function limitLevel(l: AccountUsageLimitState) {
   const amount = Number(l.amount)
-  return amount > 0 ? (Number(l.used) || 0) / amount : 0
+  return usageLevel(amount > 0 ? (Number(l.used) || 0) / amount : 0, 0.9)
 }
 
-/** Tone of the period figure: danger at the limit, warning from 90 %. */
-export function limitTone(l: AccountUsageLimitState): 'danger' | 'warning' | 'normal' {
-  const share = limitShare(l)
-  if (share >= 1) return 'danger'
-  if (share >= 0.9) return 'warning'
-  return 'normal'
-}
-
-/** Whether a submitted limit can be saved: an enabled limit needs an amount above 0. */
+/** The field that keeps a limit from being saved: an enabled limit needs an amount above 0. */
 export function usageLimitError(l: AccountUsageLimit): 'amount' | 'period_count' | null {
   const amount = Number(l.amount)
   if (!Number.isFinite(amount) || amount < 0 || amount > 1e9 || (l.enabled && amount <= 0)) return 'amount'
-  if (!Number.isInteger(l.period_count) || l.period_count < 1 || l.period_count > 1000) return 'period_count'
+  if (!Number.isInteger(l.period_count) || l.period_count < 1 || l.period_count > PERIOD_COUNT_MAX[l.period]) return 'period_count'
   return null
-}
-
-/** status_reason the usage limit writes (server constant usageLimitReason). */
-export const USAGE_LIMIT_REASON = 'usage limit reached'
-
-/** The figures after "usage limit reached: " ("$200.00 / $200.00 (per week)"), or null for other reasons. */
-export function usageLimitReasonDetail(reason: string | undefined | null): string | null {
-  if (!reason || !reason.startsWith(USAGE_LIMIT_REASON)) return null
-  return reason.slice(USAGE_LIMIT_REASON.length).replace(/^:\s*/, '')
 }

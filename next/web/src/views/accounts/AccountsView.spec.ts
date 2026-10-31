@@ -246,10 +246,18 @@ describe('account status recovery', () => {
     expect(w.get('[data-testid="account-schedulable-switch"]').attributes('aria-checked')).toBe('true')
   })
 
-  it('translates the reason of the usage limit (CONTRACTS §73)', () => {
-    Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'usage limit reached: $200.00 / $200.00 (per week)', auto_disabled_until: null })
-    const w = render()
-    expect(w.get('[data-testid="account-status"]').attributes('title')).toBe('用量已达上限：$200.00 / $200.00 (per week)')
+  it('words the reason of the usage limit from the usage figures (CONTRACTS §73)', () => {
+    const usage = { raw_cost_accounting: false, limit_disabled: true, limit: { amount: '200', used: '200.004', period: 'week', period_count: 1, window_start: null, window_end: null } }
+    Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'usage limit reached: $200.00 / $200.00 (per week)', auto_disabled_until: null, usage })
+    expect(render().get('[data-testid="account-status"]').attributes('title')).toBe('用量已达上限：$200.00 / $200.00（每周）')
+    i18n.global.locale.value = 'en'
+    usage.limit.period_count = 2
+    expect(render().get('[data-testid="account-status"]').attributes('title')).toBe('Usage limit reached: $200.00 / $200.00 (per 2 weeks)')
+  })
+
+  it('keeps the server reason when the usage limit did not disable the account', () => {
+    Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'usage limit reached: $1 / $1 (total)', auto_disabled_until: null, usage: { limit_disabled: false, limit: null } })
+    expect(render().get('[data-testid="account-status"]').attributes('title')).toBe('usage limit reached: $1 / $1 (total)')
   })
 
   it('shows a manual disable as a plain badge without the reason or a note', () => {

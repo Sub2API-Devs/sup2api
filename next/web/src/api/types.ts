@@ -433,9 +433,12 @@ export interface AccountUsage {
   /** Usage counts at the raw ratio: the main figure is raw_cost. */
   raw_cost_accounting: boolean
   total: AccountUsageFigures
+  /** Since midnight in the request's ?tz= (default UTC). */
   today: AccountUsageFigures
   /** Null when no usage limit is on. */
   limit: AccountUsageLimitState | null
+  /** The account is auto-disabled by its usage limit. */
+  limit_disabled: boolean
 }
 
 /** GET /accounts/:id/usage: the details behind the usage cell. */
@@ -455,8 +458,10 @@ export interface AccountUsageLimit {
   amount: string
   period: UsageLimitPeriod
   period_count: number
-  /** Periods are counted from here (whole hours); null = 2024-01-01 00:00 server time. */
+  /** Periods are counted from here (whole hours, from 2000 up to 2100); null = 2024-01-01 00:00 in `timezone`. */
   anchor: string | null
+  /** IANA time zone of the periods' boundaries (server default "UTC"); the console saves the browser's. */
+  timezone: string
 }
 
 /** Success-rate figure of an account (CONTRACTS §73): 400s, cancellations and gateway rate limiting are not failures. */

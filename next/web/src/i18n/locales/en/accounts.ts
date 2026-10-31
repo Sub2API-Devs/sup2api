@@ -19,11 +19,12 @@ export default {
   },
   usage: {
     column: 'Usage', title: 'Account usage', raw: 'Raw', rawHint: 'Counted at the raw ratio: group multiplier taken as 1',
-    today: 'Today {cost} · {n} requests', range: 'Range', rawCost: 'Raw cost', cost: 'Charged', requests: 'Requests',
+    today: 'Today {cost} · {n} requests', range: 'Range', rawCost: 'Raw cost', cost: 'Charged', requests: 'Requests', tokens: 'Tokens',
     ranges: { today: 'Today', last7: 'Last 7 days', last30: 'Last 30 days', total: 'Lifetime' },
-    periodShort: { hour: 'h', day: 'day', week: 'wk', month: 'mo', none: 'total' }, periodShortN: '{n} {unit}',
+    per: { hour: 'per hour', day: 'per day', week: 'per week', month: 'per month', none: 'total' },
+    perN: { hour: 'per {n} hours', day: 'per {n} days', week: 'per {n} weeks', month: 'per {n} months' },
     limitLine: 'Usage limit ({period}): {used} / {amount}', resetsAt: 'resets {time}', loadFailed: 'Could not load the usage details',
-    limitReached: 'Usage limit reached: {detail}',
+    limitReached: 'Usage limit reached: {used} / {amount} ({period})',
     hint: 'From the usage records (core statistics). With raw-ratio accounting, lifetime usage and the usage limit count the raw cost (group multiplier taken as 1).'
   },
   usageLimit: {
@@ -34,9 +35,11 @@ export default {
     period: 'Reset period', periodHint: '"Never" is a lifetime limit: once reached the account stays auto-disabled until the limit is raised.',
     periods: { hour: 'Hourly', day: 'Daily', week: 'Weekly', month: 'Monthly', none: 'Never' },
     periodCount: 'Period length', periodCountHint: 'For example 2 + weekly = resets every two weeks', periodCountUnit: 'periods',
-    anchor: 'Periods start at', anchorHint: 'Periods are counted from here (whole hours, server time zone); empty = 2024-01-01 00:00, so days, weeks and months fall on their natural boundaries.',
-    current: 'Used this period ({start} → {end})', currentTotal: 'Used in total', summary: 'Usage limit {amount}/{period}', saveFailed: 'The account was saved, but the usage limit was not: {error}',
-    amountInvalid: 'An enabled usage limit needs an amount above 0 and up to 1000000000', periodCountInvalid: 'Period length must be 1-1000'
+    anchor: 'Periods start at', anchorHint: 'Periods are counted from here (whole hours, years 2000-2099); empty = 2024-01-01 00:00, so days, weeks and months fall on their natural boundaries.',
+    timezone: 'Periods follow {zone}',
+    current: 'Used this period ({start} → {end})', currentTotal: 'Used in total', summary: 'Usage limit {amount} {period}', saveFailed: 'The account was saved, but the usage limit was not: {error}',
+    amountInvalid: 'An enabled usage limit needs an amount above 0 and up to 1000000000', periodCountInvalid: 'Period length must be 1-{max}',
+    loadFailed: 'Could not load the usage limit, so it cannot be edited: {error}', retry: 'Retry'
   },
   successRate: {
     column: 'Success · 1 min', title: 'Success rate (last 60 seconds)', success: 'Successful requests', failed: 'Failed attempts',
@@ -255,7 +258,7 @@ export default {
   selectAll: 'Select all',
   selectNone: 'Select none',
   quota: {
-    column: 'Balance',
+    column: 'Plan usage',
     /** Known window keys, in display order. Unknown keys follow in server order. */
     /** Windows sorted as KNOWN_QUOTA_WINDOWS, unknown keys last (stable). */
     windows: { '5h': '5 hours', '7d': '7 days', '7d_sonnet': '7 days Sonnet', '7d_fable': '7 days Fable' },

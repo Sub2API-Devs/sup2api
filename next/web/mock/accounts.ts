@@ -466,7 +466,9 @@ function outcomesOf(a: any) {
   return { success, failed }
 }
 const usageLimits = new Map<number, any>()
-const defaultLimit = () => ({ raw_cost_accounting: false, enabled: false, amount: '0', period: 'month', period_count: 1, anchor: null })
+const defaultLimit = () => ({ raw_cost_accounting: false, enabled: false, amount: '0', period: 'month', period_count: 1, anchor: null, timezone: 'UTC' })
+/** Largest period_count per period: one period spans at most 366 days. */
+const PERIOD_COUNT_MAX: Record<string, number> = { hour: 8784, day: 366, week: 52, month: 12, none: 1000 }
 function usageFigures(a: any, scale: number) {
   const cost = Math.round(a.id * 97.31 * scale) / 100
   return { cost: cost.toFixed(8), raw_cost: (cost / 1.2).toFixed(8), requests: Math.round(a.id * 41 * scale), tokens: Math.round(a.id * 1_234_567 * scale) }
@@ -484,7 +486,9 @@ function usageOf(a: any) {
     raw_cost_accounting: l.raw_cost_accounting,
     total,
     today: usageFigures(a, 0.3),
-    limit: l.enabled ? { amount: l.amount, used: used.toFixed(8), period: l.period, period_count: l.period_count, window_start: l.period === 'none' ? null : start.toISOString(), window_end: l.period === 'none' ? null : end.toISOString() } : null
+    limit: l.enabled ? { amount: l.amount, used: used.toFixed(8), period: l.period, period_count: l.period_count, window_start: l.period === 'none' ? null : start.toISOString(), window_end: l.period === 'none' ? null : end.toISOString() } : null,
+    // The mock does not disable accounts: the status poll of the server does.
+    limit_disabled: a.status === 'auto_disabled' && String(a.status_reason || '').startsWith('usage limit reached')
   }
 }
 
@@ -900,8 +904,13 @@ on('PUT', '/accounts/:id/usage-limit', (req) => {
   const r = scopedAccount(req, 'update')
   if (!('a' in r)) return r
   const b = req.body || {}
-  if (b.enabled && !(Number(b.amount) > 0)) return fail(400, 'validation_failed', 'invalid', { fields: [{ field: 'amount', code: 'invalid', message: 'set an amount above 0 to enable the usage limit' }] })
-  usageLimits.set(r.a.id, { ...defaultLimit(), ...b })
+  const invalid = (field: string, message: string) => fail(400, 'validation_failed', 'invalid', { fields: [{ field, code: 'invalid', message }] })
+  if (b.enabled && !(Number(b.amount) > 0)) return invalid('amount', 'set an amount above 0 to enable the usage limit')
+  const max = PERIOD_COUNT_MAX[b.period]
+  if (max && !(b.period_count >= 1 && b.period_count <= max)) return invalid('period_count', `period_count must be 1-${max} for ${b.period}`)
+  const year = b.anchor ? new Date(b.anchor).getUTCFullYear() : 2024
+  if (!(year >= 2000 && year < 2100)) return invalid('anchor', 'anchor must be between 2000 and 2100')
+  usageLimits.set(r.a.id, { ...defaultLimit(), ...b, timezone: b.timezone || 'UTC' })
   const u = usageOf(r.a)
   return { ...u, last_7_days: usageFigures(r.a, 2), last_30_days: usageFigures(r.a, 7) }
 })

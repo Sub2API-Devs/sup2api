@@ -6,7 +6,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SBadge, SHint, STooltip } from '@sub2api/ui'
 import type { AccountOutcomes } from '@/api/types'
-import { formatSuccessRate, successRate, successRateTone } from './accountOutcomes'
+import { formatPercent } from '@/utils/format'
+import { successRate, successRateTone } from './accountOutcomes'
 
 const props = defineProps<{ outcomes: AccountOutcomes | null | undefined }>()
 const { t } = useI18n()
@@ -18,7 +19,7 @@ const total = computed(() => (props.outcomes ? props.outcomes.success + props.ou
   <SHint v-if="!outcomes" inline size="xs">—</SHint>
   <STooltip v-else variant="card" placement="bottom" :delay="150" max-width="22rem">
     <span class="inline-flex flex-col gap-0.5 whitespace-nowrap rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40" tabindex="0" data-testid="account-success-rate">
-      <SBadge :tone="successRateTone(rate)" size="xs" class="self-start tabular-nums">{{ formatSuccessRate(rate) }}</SBadge>
+      <SBadge :tone="successRateTone(rate)" size="xs" class="self-start tabular-nums">{{ formatPercent(outcomes.success, total, { floor: true }) }}</SBadge>
       <span class="text-xxs tabular-nums text-fg-muted">{{ total ? t('accounts.successRate.requests', { success: outcomes.success, total }) : t('accounts.successRate.idle') }}</span>
     </span>
     <template #content>

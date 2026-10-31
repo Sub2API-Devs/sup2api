@@ -10,9 +10,12 @@ import ModelTagSelect from '@/components/models/ModelTagSelect.vue'
 import AccountModelsCard from './AccountModelsCard.vue'
 import ModelLimitsEditor from './ModelLimitsEditor.vue'
 import { SSwitch } from '@sub2api/ui'
+import AccountEditorNav from './AccountEditorNav.vue'
+import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), list: vi.fn().mockResolvedValue({ items: [] }) }))
-vi.mock('@sub2api/host', () => ({ api: mocks }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), list: vi.fn().mockResolvedValue({ items: [] }), toast: vi.fn() }))
+vi.mock('@sub2api/host', async (original) => ({ ...await original<object>(), api: mocks }))
+vi.mock('@sub2api/ui', async (original) => ({ ...await original<typeof import('@sub2api/ui')>(), toast: mocks.toast }))
 vi.mock('@/stores/plugins', () => ({ usePluginStore: () => ({ plugin: () => null, component: () => null }), assetURL: () => '' }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
 vi.mock('@/composables/useOwnership', async original => ({ ...await original<typeof import('@/composables/useOwnership')>(), useOwnership: () => ({ can: () => true }) }))
@@ -439,5 +442,102 @@ describe('account model limits', () => {
     await flushPromises()
     expect(w.getComponent(ModelLimitsEditor).props('modelValue')).toEqual([{ lists: [['m-a']], ...caps, max_concurrency: 2 }])
     expect((w.get('input[data-testid="account-spm_limit"]').element as HTMLInputElement).value).toBe('6')
+  })
+})
+
+describe('account usage limit', () => {
+  const saved = { raw_cost_accounting: false, enabled: true, amount: '200', period: 'week', period_count: 1, anchor: null, timezone: 'UTC' }
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  let limitGet: () => Promise<unknown>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    i18n.global.locale.value = 'zh'
+    limitGet = () => Promise.resolve(saved)
+    mocks.get.mockImplementation((path: string) =>
+      path.endsWith('/usage-limit') ? limitGet() : Promise.resolve(path === '/accounts/auto-disable' ? { enabled: true } : path.endsWith('/form') ? { schema: { type: 'object' } } : location)
+    )
+    mocks.patch.mockResolvedValue(savedAccount())
+    mocks.put.mockResolvedValue({})
+  })
+
+  const card = (w: ReturnType<typeof render>) => w.getComponent(AccountUsageLimitCard)
+  async function open() {
+    const w = render(savedAccount())
+    await flushPromises()
+    w.getComponent(AccountEditorNav).vm.$emit('update:modelValue', 'scheduling')
+    await flushPromises()
+    return w
+  }
+  async function submit(w: ReturnType<typeof render>) {
+    await w.get('form').trigger('submit')
+    await flushPromises()
+  }
+
+  it('loads the limit when the section is shown and saves it after the account, in the browser time zone', async () => {
+    const w = render(savedAccount())
+    await flushPromises()
+    expect(mocks.get).not.toHaveBeenCalledWith('/accounts/1/usage-limit')
+    w.getComponent(AccountEditorNav).vm.$emit('update:modelValue', 'scheduling')
+    await flushPromises()
+    expect(card(w).props()).toMatchObject({ status: 'ready', modelValue: saved })
+    expect(w.getComponent(AccountEditorNav).props('sections')[2].summary).toContain('用量限制 $200.00 每周')
+    await submit(w)
+    expect(mocks.patch).toHaveBeenCalledOnce()
+    expect(mocks.put).not.toHaveBeenCalled()
+
+    card(w).vm.$emit('update:modelValue', { ...saved, amount: '300', period_count: 2 })
+    await flushPromises()
+    expect(card(w).props('modelValue').timezone).toBe(zone)
+    expect(w.getComponent(AccountEditorNav).props('sections')[2].summary).toContain('用量限制 $300.00 每 2 周')
+    await submit(w)
+    expect(mocks.put).toHaveBeenCalledWith('/accounts/1/usage-limit', { ...saved, amount: '300', period_count: 2, timezone: zone })
+    expect(mocks.patch.mock.invocationCallOrder[1]).toBeLessThan(mocks.put.mock.invocationCallOrder[0])
+    expect(w.emitted('saved')).toHaveLength(2)
+  })
+
+  it('keeps the card read-only and never saves a limit that did not load', async () => {
+    limitGet = () => Promise.reject(new Error('network down'))
+    const w = await open()
+    expect(card(w).props()).toMatchObject({ status: 'failed', loadError: 'network down' })
+    card(w).vm.$emit('update:modelValue', { ...saved, amount: '1' })
+    await submit(w)
+    expect(mocks.patch).toHaveBeenCalledOnce()
+    expect(mocks.put).not.toHaveBeenCalled()
+
+    limitGet = () => Promise.resolve(saved)
+    card(w).vm.$emit('retry')
+    await flushPromises()
+    expect(card(w).props()).toMatchObject({ status: 'ready', modelValue: saved })
+  })
+
+  it('holds the card while the limit loads', async () => {
+    let resolve!: (v: unknown) => void
+    limitGet = () => new Promise((r) => (resolve = r))
+    const w = await open()
+    expect(card(w).props('status')).toBe('loading')
+    await submit(w)
+    expect(mocks.put).not.toHaveBeenCalled()
+    resolve(saved)
+    await flushPromises()
+    expect(card(w).props()).toMatchObject({ status: 'ready', modelValue: saved })
+  })
+
+  it('reports a refused limit without failing the saved account', async () => {
+    mocks.put.mockRejectedValue(new Error('period_count must be 1-12 for month'))
+    const w = await open()
+    card(w).vm.$emit('update:modelValue', { ...saved, amount: '300' })
+    await submit(w)
+    expect(mocks.toast).toHaveBeenCalledWith('账号已保存，但用量限制保存失败：period_count must be 1-12 for month', 'error')
+    expect(w.emitted('saved')).toHaveLength(1)
+  })
+
+  it('checks the period length against its period before saving anything', async () => {
+    const w = await open()
+    card(w).vm.$emit('update:modelValue', { ...saved, period: 'month', period_count: 13 })
+    await submit(w)
+    expect(mocks.patch).not.toHaveBeenCalled()
+    expect(card(w).props('errors')).toEqual({ period_count: '周期长度必须为 1-12' })
+    expect(w.getComponent(AccountEditorNav).props('errors').scheduling).toBe(true)
   })
 })
