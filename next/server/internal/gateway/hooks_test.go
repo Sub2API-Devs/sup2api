@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/tidwall/gjson"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -311,6 +313,25 @@ func TestHookBreaker(t *testing.T) {
 	e.record()
 	if h.count() != breakerThreshold+1 {
 		t.Fatalf("hook not retried after breaker window: %d", h.count())
+	}
+}
+
+func TestHookTooLargeKeepsBreakerClosed(t *testing.T) {
+	e := newEnv(t)
+	h := &fakeHook{fn: func(context.Context, *pluginv1.GatewayRequestHookRequest) (*pluginv1.GatewayRequestHookResponse, error) {
+		return nil, status.Error(codes.ResourceExhausted, "grpc: received message larger than max (70000000 vs. 67108864)")
+	}}
+	e.addHook(guardHook(300, "open"), []string{"prompt_text"}, h)
+	for i := 0; i <= breakerThreshold; i++ {
+		if r := e.messages(body(testModel, false)); r.status != 200 {
+			t.Fatalf("fail open %d: %d", i, r.status)
+		}
+		if d := e.record().HookDecisions; d[0].Decision != decisionErrorOpen {
+			t.Fatalf("decision %+v", d)
+		}
+	}
+	if h.count() != breakerThreshold+1 || e.mr.Exists("hook:breaker:guard:prompt-rules") {
+		t.Fatalf("oversize requests opened the breaker (calls %d)", h.count())
 	}
 }
 

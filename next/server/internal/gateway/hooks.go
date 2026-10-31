@@ -15,6 +15,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -163,6 +165,12 @@ func (h *hookRuntime) recordResult(ctx context.Context, k hookKey, failed bool) 
 	if err := h.rdb.Set(rctx, breakerKey(k), strconv.FormatInt(until.UnixMilli(), 10), breakerOpenFor).Err(); err != nil {
 		slog.WarnContext(ctx, "gateway: store hook breaker", "err", err)
 	}
+}
+
+// tooLarge tells whether a hook call failed because the request exceeded the
+// plugin's gRPC receive limit.
+func tooLarge(err error) bool {
+	return status.Code(err) == codes.ResourceExhausted && strings.Contains(err.Error(), "larger than max")
 }
 
 type hookOutcome int
@@ -463,7 +471,9 @@ func (c *call) runHook(ctx context.Context, hb core.HookBinding) (core.HookDecis
 			o, note = outcomeTimeout, fmt.Sprintf("timeout after %s", timeout)
 		}
 		g.hooks.observe(k, hb.Hook.Point, o, latency)
-		g.hooks.recordResult(ctx, k, true)
+		// A request too large for the plugin's receive limit says nothing
+		// about the plugin's health: it must not open the breaker for all.
+		g.hooks.recordResult(ctx, k, !tooLarge(err))
 		return failed(note)
 	}
 
