@@ -73,7 +73,7 @@ describe('CCGateway runtime card in control panel mode', () => {
     expect(w.get('[data-testid="ccgateway-image-upload"] button').text()).toBe('高级：手动上传镜像')
     await openUpload(w)
     // SSelect option values are indexes into IMAGE_ROLES (app, egress, controller).
-    expect(w.findAll('[data-testid="image-upload-role"] option').map(o => o.text())).toEqual(['业务容器（ccgateway-worker）', '出口代理', '控制器'])
+    expect(w.findAll('[data-testid="image-upload-role"] option').map(o => o.text())).toEqual(['业务容器（ccgateway-worker）', '共享出口网关（Xray）', '控制器'])
     await w.get('[data-testid="image-upload-role"]').setValue('2')
     await choose(w, 'controller.tar.gz')
     await w.get('[data-testid="image-upload-submit"]').trigger('click')

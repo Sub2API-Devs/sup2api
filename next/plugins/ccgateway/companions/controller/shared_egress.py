@@ -11,18 +11,14 @@ import os
 import secrets
 import threading
 import time
-from types import SimpleNamespace
 
 import docker
-from common import (ACCOUNT_PORT, KEY, LABEL, BadRequest, boot_id, container_env, failure_text, ipv4, read_json,
-                    resolv_conf, write_private)
-from dockerfs import container_identity, worker_idle, worker_target
+from common import (KEY, boot_id, failure_text, ipv4, read_json, resolv_conf, write_private)
 from network import PRIVATE_DESTINATIONS, first_subnet, proxy_outbound
 
 log = logging.getLogger('ccgateway.controller.shared_egress')
 
 SHARED = 'shared_xray'
-LEGACY = 'per_account_singbox'
 OWNER = 'io.sup2api.ccgateway.shared'
 SCHEMA = 'io.sup2api.ccgateway.shared-egress'
 BASE = {'log': {'loglevel': 'warning'},
@@ -126,7 +122,11 @@ class SharedEgress:
         self.boot = None
         self.loaded_nodes, self.loaded_ports = set(), set()
         self.name = manager.prefix + '-shared-egress'
-        self.image = os.getenv('CCG_XRAY_IMAGE', 'ccgateway-xray:1')
+        # The plugin bundle's egress image is the gateway's; CCG_XRAY_IMAGE pins
+        # another one (a host that built its own). Only a new gateway uses it:
+        # a running one is never recreated for a new image.
+        self.image = os.getenv('CCG_XRAY_IMAGE') or manager.egress_image
+        self.dropped = set()  # runtimes already rid of an own egress by this process
 
     def save(self):
         store(self.path, self.data)
@@ -317,6 +317,8 @@ class SharedEgress:
             if app.status != 'running':
                 app.start()
             gateway, c = self.configure(aid, state, desired)
+            # egress_backend is only read by controllers up to ccgateway 0.1.117:
+            # a plugin rolled back to one keeps this account on the gateway.
             state.update(gateway_ip=gateway, egress_backend=SHARED)
             self.m.save(aid, state)
             self.resolv(aid, gateway)
@@ -374,8 +376,7 @@ class SharedEgress:
 
     def status(self, aid):
         state = self.m.state(aid) or {}
-        return {'backend': state.get('egress_backend', LEGACY),
-                'migration': state.get('egress_migration'), 'ready': self.m.is_ready(aid, state)}
+        return {'backend': SHARED, 'ready': self.m.is_ready(aid, state)}
 
     def collect(self):
         # Conservative drain accounting: only reclaim unused objects when the
@@ -402,173 +403,12 @@ class SharedEgress:
                 self.save()
                 self.sync(c)
 
-    def network_idle(self, app):
-        output = self.m.oneshot(self.m.egress_image, entrypoint=['ss'],
-            command=['-Hnt', 'state', 'established'], network_mode='container:' + app.id,
-            cap_drop=['ALL'], security_opt=['no-new-privileges:true'])
-        for line in output.decode().splitlines():
-            fields = line.split()
-            if len(fields) < 4 or not fields[-2].endswith(f':{ACCOUNT_PORT}'):
-                return False
-        return True
-
-    # Moving a running account between its own sing-box egress (LEGACY) and
-    # the shared gateway: prepare (old gateway still serves) -> journal
-    # "prepared" -> stop app -> "stopped" -> switch -> journal removed. A
-    # failure is journaled "failed"; a failed first move is rolled back.
-
-    def migrate(self, aid, target):
-        if target not in (SHARED, LEGACY):
-            raise BadRequest('invalid backend')
-        with self.m.guard(aid):
-            state = self.m.state(aid)
-            if not state:
-                raise BadRequest('runtime missing')
-            current = state.get('egress_backend', LEGACY)
-            if current == target and not state.get('egress_migration'):
-                return self.status(aid)
-            app = self.m.owned(aid, 'app')
-            if target == LEGACY and current == SHARED and (app.status != 'running' or state.get('status') == 'blocked'):
-                return self._back_while_stopped(aid, state)
-            move = self._start_move(aid, target, current, app, state)
-            if isinstance(move, dict):
-                return move  # busy
-            state['egress_migration'] = {'target': target, 'phase': 'prepared', 'from': current}
-            self.m.save(aid, state)
-            try:
-                return self._cut_over(move)
-            except Exception:
-                self._failed(move)
-                raise
-
-    def _back_while_stopped(self, aid, state):
-        """A stopped or blocked shared account returns to its own egress
-        without running anything; the next apply revalidates it."""
-        self.m.go_offline(aid)
-        self.remove(aid, disconnect=True)
-        state.pop('egress_migration', None)
-        self._switch_to_legacy(aid, state)
-        return self.status(aid)
-
-    def _switch_to_legacy(self, aid, state):
-        """Point the runtime back at its retained own egress, resolver
-        included, and write it down; the account's configuration follows."""
-        state.update(egress_backend=LEGACY, gateway_ip=state['legacy_gateway_ip'], revision='')
-        self.resolv(aid, state['gateway_ip'])
-        self.m.save(aid, state)
-
-    def _start_move(self, aid, target, current, app, state):
-        """Checks, then the target gateway prepared while the old one still
-        owns business traffic. Busy answers {'status': 'busy'}."""
-        recovering = bool(state.get('egress_migration'))
-        if (app.status != 'running' and not recovering) or state.get('status') == 'blocked':
-            raise BadRequest('only running enabled runtimes can migrate')
-        _, base = worker_target(app)
-        if app.status == 'running' and self.m.wait_idle(aid, container_identity(app), base) is None:
-            return {'backend': current, 'status': 'busy'}
-        desired = self.desired(aid)
-        if not desired.get('enabled', True):
-            raise BadRequest('runtime disabled')
-        move = SimpleNamespace(aid=aid, target=target, current=current, app=app, base=base, state=state,
-                               desired=desired, was_online=self.m.go_offline(aid))
-        move.gateway = self._prepare(move)
-        return move
-
-    def _prepare(self, move):
-        aid, state = move.aid, move.state
-        if move.target == LEGACY:
-            gateway = state.get('legacy_gateway_ip')
-            if not gateway:
-                raise RuntimeError('no rollback gateway')
-            self.m.owned(aid, 'egress')  # the retained egress must still exist
-            return gateway
-        if 'legacy_gateway_ip' not in state:
-            state['legacy_gateway_ip'] = state['gateway_ip']
-        try:
-            return self.configure(aid, state, move.desired)[0]
-        except Exception:
-            if move.current == LEGACY:
-                with contextlib.suppress(Exception):
-                    self.remove(aid, disconnect=True)
-                self.m.restore_online(aid, move.was_online)
-            raise
-
-    def _cut_over(self, move):
-        aid, app, state = move.aid, move.app, move.state
-        # Final check narrows (but does not eliminate) the documented maintenance race.
-        if app.status == 'running' and (not worker_idle(app, move.base) or not self.network_idle(app)):
-            return self._abandon(move)
-        if app.status == 'running':
-            app.stop(timeout=30)
-        state['egress_migration']['phase'] = 'stopped'
-        self.m.save(aid, state)
-        state.update(gateway_ip=move.gateway, egress_backend=move.target)
-        self.resolv(aid, move.gateway)
-        self.m.save(aid, state)
-        if move.target == SHARED:
-            app.start()
-            self.apply(aid, state, move.desired)
-        else:
-            self.remove(aid, disconnect=True)
-            # Force legacy config revalidation (retained proxy may be old).
-            state['revision'] = ''
-            self.m.save(aid, state)
-            self.m.apply(aid, self.with_auth(app, move.desired))
-        move.state = self._finish_journal(aid)
-        if move.target == SHARED:
-            # Retain rollback container/config without retaining its running process.
-            with contextlib.suppress(docker.errors.DockerException):
-                self.m.owned(aid, 'egress').stop(timeout=10)
-        return self.status(aid)
-
-    def _abandon(self, move):
-        move.state.pop('egress_migration', None)
-        self.m.save(move.aid, move.state)
-        if move.current == LEGACY and move.target == SHARED:
-            self.remove(move.aid, disconnect=True)
-        self.m.restore_online(move.aid, move.was_online)
-        return {'backend': move.current, 'status': 'busy'}
-
-    def _finish_journal(self, aid):
-        state = self.m.state(aid)
-        state.pop('egress_migration', None)
-        self.m.save(aid, state)
-        return state
-
-    def _failed(self, move):
-        aid, state = move.aid, move.state
-        self.m.go_offline(aid)
-        state['egress_migration']['phase'] = 'failed'
-        self.m.save(aid, state)
-        if not (move.current == LEGACY and move.target == SHARED):
-            return
-        # Restore the original account after a failed first migration. A
-        # failed rollback deliberately retains its journal for recovery.
-        try:
-            move.app.stop(timeout=30)
-            self.remove(aid, disconnect=True)
-            self._switch_to_legacy(aid, state)
-            self.m.apply(aid, self.with_auth(move.app, move.desired))
-            self._finish_journal(aid)
-        except Exception:
-            self.m.go_offline(aid)
-
-    def with_auth(self, app, desired):
-        # Core auth material already belongs to this exact container. Do not invent OAuth
-        # defaults during rollback and accidentally recreate an API-key account.
-        env = container_env(app)
-        auth = {'mode': 'oauth'}
-        if env.get('ANTHROPIC_API_KEY'):
-            auth = {'mode': 'api_key', 'api_key': env['ANTHROPIC_API_KEY'], 'base_url': env['ANTHROPIC_BASE_URL']}
-        state = self.m.state(app.labels[LABEL])
-        auth.update(state.get('environment', {}))
-        return {**desired, 'auth': auth}
-
     def recover(self):
         """No account creation or automatic resurrection of stopped accounts."""
         keys = set(self.data['bindings']) | {p.name for p in self.m.root.iterdir() if KEY.fullmatch(p.name) and p.is_dir()}
         for key in sorted(keys):
             with self.m.guard(key):
+                self._drop_own_egress(key)
                 state = self.m.state(key)
                 if not state or state.get('status') == 'blocked':
                     continue
@@ -578,11 +418,19 @@ class SharedEgress:
                     log.warning('shared egress recover key=%s: %s', key, failure_text(e))
                     self.m.go_offline(key)
 
-    def _recover_one(self, key, state):
-        if state.get('egress_migration'):
-            self.migrate(key, state['egress_migration']['from'])
+    def _drop_own_egress(self, key):
+        """Once per process and runtime, stopped and blocked ones included; a
+        failure is retried on the next pass and never takes the account offline."""
+        if key in self.dropped:
             return
-        if state.get('egress_backend') != SHARED or state.get('status') != 'ready':
+        try:
+            self.m.drop_own_egress(key)
+            self.dropped.add(key)
+        except Exception as e:
+            log.warning('own egress cleanup key=%s: %s', key, failure_text(e))
+
+    def _recover_one(self, key, state):
+        if state.get('status') != 'ready':
             return  # failed new configurations follow the core's retry policy
         if self.m.owned(key, 'app').status != 'running':
             return

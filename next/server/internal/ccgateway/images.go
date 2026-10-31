@@ -4,7 +4,9 @@ package ccgateway
 // CCGateway configuration overrides them (Config.Images, e.g. tags built on
 // the Docker host while the GHCR packages are private), the core installs
 // exactly these references and starts the controller from ControllerImage
-// with AppImage / EgressImage in its environment.
+// with AppImage / EgressImage in its environment. EgressImage is the shared
+// Xray egress gateway's image (CONTRACTS §57); the digest below predates that
+// (sing-box) and only matters without a plugin bundle.
 //
 // Update method: after a change under tools/ccgateway is pushed, take the
 // three digests from the summary of the "CCGateway images" workflow

@@ -1,7 +1,7 @@
 name: CCGateway images
 
-# Builds the Claude Code runtime images (business container, sing-box egress,
-# account controller).
+# Builds the Claude Code runtime images (business container, shared Xray
+# egress gateway, account controller).
 #
 # Since CONTRACTS §53.10 the images ship INSIDE the ccgateway plugin package:
 # the release host runs next/deploy/docker/build-ccgateway-images.sh before
@@ -139,8 +139,8 @@ jobs:
             context: next/plugins/ccgateway/companions
             file: next/plugins/ccgateway/companions/worker/Dockerfile
           - name: ccgateway-egress
-            context: next/plugins/ccgateway/companions/egress
-            file: next/plugins/ccgateway/companions/egress/Dockerfile
+            context: next/plugins/ccgateway/companions/xray-egress
+            file: next/plugins/ccgateway/companions/xray-egress/Dockerfile
           - name: ccgateway-controller
             context: next/plugins/ccgateway/companions/controller
             file: next/plugins/ccgateway/companions/controller/Dockerfile

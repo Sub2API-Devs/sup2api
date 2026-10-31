@@ -149,7 +149,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.reply(200, manager.runtimes())
         endpoint = {(None, 'DELETE'): self.delete_runtime, ('config', 'PUT'): self.put_config,
                     ('status', 'GET'): self.get_status, ('connection', 'GET'): self.get_connection,
-                    ('egress', 'GET'): self.get_egress, ('egress', 'POST'): self.post_egress}.get((path, self.command))
+                    ('egress', 'GET'): self.get_egress}.get((path, self.command))
         if endpoint:
             return endpoint(aid, body)
         if path in LOCAL_PATHS:
@@ -186,15 +186,6 @@ class Handler(BaseHTTPRequestHandler):
 
     def get_egress(self, aid, body):
         return self.reply(200, self.server.manager.shared.status(aid))
-
-    def post_egress(self, aid, body):
-        try:
-            payload = json.loads(body)
-        except ValueError as e:
-            raise BadRequest('invalid egress request') from e
-        if not isinstance(payload, dict) or set(payload) != {'backend'}:
-            raise BadRequest('invalid egress request')
-        return self.reply(200, self.server.manager.shared.migrate(aid, payload['backend']))
 
     # Pass-through to the account's Worker (admin key, revision checked).
 

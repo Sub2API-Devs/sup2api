@@ -21,7 +21,7 @@ Worker 不组装请求：build 下把客户端的块原样包进信封交给 CLI
 - `contracts/`：跨组件合同（Go 模块）：WorkerPolicy、能力名、CC 上下文头表（插件转发与 Worker 读取共用）、错误来源、资源接口、契约夹具 `testdata/`。
 - `cli-mods/`：定制 CLI 的补丁与打包（`request` 命令及其支持模块、每版的 `profiles/` 与 `patches/`），测试在 `test/`，离线端到端套件在 `test/e2e/`；`release/` 不进 Git，构建 Worker 前准备。见 [cli-mods README](cli-mods/README.md)。
 - `controller/`：Python 容器控制器（账号容器、网络、出口、隧道、配对原地更新）。见 [控制器 README](controller/README.md)。
-- `egress/`、`xray-egress/`：出口代理镜像。
+- `xray-egress/`：共享 Xray 出口网关镜像（插件包里的 egress 角色），所有账号经它出网。
 
 ## 构建
 
@@ -29,7 +29,7 @@ Worker 不组装请求：build 下把客户端的块原样包进信封交给 CLI
 
     docker build -f next/plugins/ccgateway/companions/worker/Dockerfile -t ccgateway-worker:dev next/plugins/ccgateway/companions
     docker build -f next/plugins/ccgateway/companions/controller/Dockerfile -t ccg-controller:dev next/plugins/ccgateway/companions/controller
-    docker build -f next/plugins/ccgateway/companions/egress/Dockerfile -t ccgateway-egress:dev next/plugins/ccgateway/companions/egress
+    docker build -f next/plugins/ccgateway/companions/xray-egress/Dockerfile -t ccgateway-egress:dev next/plugins/ccgateway/companions/xray-egress
 
 发布用 `next/deploy/docker/build-ccgateway-images.sh <插件版本> <输出目录>`（版本必须等于插件 `manifest.json`）。Worker 镜像从 `cli-mods/release/` 安装指定版本的定制 CLI，不在构建时下载官方 CLI；准备 `release/`（补丁、Bun 编译、打包）见 [CLI 升级手册](../docs/CLI-UPGRADE-RUNBOOK.md) 第 4–6 节。
 

@@ -1,8 +1,7 @@
-import json
 import unittest
 import ipaddress
 from unittest.mock import patch
-from network import configuration, business_rules, network_policy, allocate_subnet, allocate_addresses
+from network import proxy_outbound, business_rules, network_policy, allocate_subnet, allocate_addresses
 
 
 class NetworkTests(unittest.TestCase):
@@ -38,52 +37,24 @@ class NetworkTests(unittest.TestCase):
             allocate_subnet(policy, [first, second])
 
     @patch('network.socket.getaddrinfo', return_value=[(None, None, None, None, ('198.51.100.2', 443))])
-    def test_credentials_only_in_proxy_config(self, _):
-        config, rules = configuration({'protocol': 'https', 'host': 'proxy.example', 'port': 443,
-            'username': 'alice', 'password': 'test-secret'}, '172.20.0.3', '172.20.0.2')
-        self.assertEqual(config['outbounds'][0]['password'], 'test-secret')
-        self.assertNotIn('test-secret', rules)
-        self.assertNotIn('proxy.example', rules)
-        self.assertIn('policy drop', rules)
-        self.assertEqual(config['route']['final'], 'account-proxy')
-        self.assertEqual(config['dns']['servers'][0]['detour'], 'account-proxy')
-
-    def test_direct_egress_without_proxy(self):
-        config, rules = configuration(None, '172.20.0.3', '172.20.0.2')
-        self.assertEqual(config['outbounds'], [{'type': 'direct', 'tag': 'account-proxy'}])
-        self.assertEqual(config['route']['final'], 'account-proxy')
-        self.assertNotIn('detour', config['dns']['servers'][0])
-        output = rules.split('chain output')[1]
-        self.assertIn('policy drop', output)
-        self.assertLess(output.index('10.0.0.0/8'), output.index('meta l4proto tcp accept'))
-        self.assertNotIn('udp', output)
-
-    def test_singbox_json_key_order_is_pinned(self):
-        # manager.py writes json.dumps(config) to sing-box.json: the key order is
-        # part of the file's bytes, so a refactor must not move it (detour stays
-        # before tls, as it was written before the helpers were split out).
-        dns = ('{"type": "https", "tag": "remote-dns", "server": "1.1.1.1", "path": "/dns-query", '
-               '%s"tls": {"enabled": true, "server_name": "cloudflare-dns.com"}}')
-        tail = ('], "final": "remote-dns", "strategy": "ipv4_only"}, "inbounds": ['
-                '{"type": "tproxy", "tag": "traffic", "listen": "0.0.0.0", "listen_port": 15001, "network": "tcp"}, '
-                '{"type": "direct", "tag": "dns", "listen": "172.20.0.2", "listen_port": 53}], "outbounds": [')
-        route = '], "route": {"rules": [{"inbound": "dns", "action": "hijack-dns"}], "final": "account-proxy"}}'
-        head = '{"log": {"level": "warn"}, "dns": {"servers": ['
-        with patch('network.socket.getaddrinfo', return_value=[(None, None, None, None, ('198.51.100.2', 443))]):
-            proxy, _ = configuration({'protocol': 'https', 'host': 'proxy.example', 'port': 443,
-                                      'username': 'alice', 'password': 'test-secret'}, '172.20.0.3', '172.20.0.2')
-        self.assertEqual(json.dumps(proxy), head + (dns % '"detour": "account-proxy", ') + tail
-                         + ('{"type": "http", "tag": "account-proxy", "server": "198.51.100.2", "server_port": 443, '
-                            '"username": "alice", "password": "test-secret", '
-                            '"tls": {"enabled": true, "server_name": "proxy.example"}}') + route)
-        direct, _ = configuration(None, '172.20.0.3', '172.20.0.2')
-        self.assertEqual(json.dumps(direct), head + (dns % '') + tail + '{"type": "direct", "tag": "account-proxy"}' + route)
+    def test_proxy_pinned_to_its_resolved_address(self, _):
+        self.assertEqual(proxy_outbound({'protocol': 'https', 'host': 'proxy.example', 'port': 443,
+                                         'username': 'alice', 'password': 'test-secret'}),
+                         {'server': '198.51.100.2', 'server_port': 443, 'username': 'alice', 'password': 'test-secret'})
+        self.assertEqual(proxy_outbound({'protocol': 'socks5', 'host': 'proxy.example', 'port': '1080'}),
+                         {'server': '198.51.100.2', 'server_port': 1080, 'username': '', 'password': ''})
 
     def test_rejects_untrusted_network_operands(self):
         with self.assertRaises(ValueError):
             business_rules('172.20.0.2; reboot')
-        with self.assertRaises(ValueError):
-            configuration({'protocol': 'direct'}, '172.20.0.3', '172.20.0.2')
+        for proxy in ({'protocol': 'direct', 'host': 'proxy.example', 'port': 1},
+                      {'protocol': 'http', 'host': '', 'port': 80},
+                      {'protocol': 'http', 'host': 'proxy.example', 'port': 70000}):
+            with self.assertRaises(ValueError, msg=proxy):
+                proxy_outbound(proxy)
+        with patch('network.socket.getaddrinfo', return_value=[(None, None, None, None, ('::1', 80))]):
+            with self.assertRaises(ValueError):
+                proxy_outbound({'protocol': 'http', 'host': 'proxy.example', 'port': 80})
 
     def test_business_has_no_ipv6_or_udp_bypass(self):
         rules = business_rules('172.20.0.2')

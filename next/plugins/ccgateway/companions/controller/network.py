@@ -69,6 +69,7 @@ def allocate_addresses(subnet, allocation, count=2):
 
 
 def proxy_outbound(proxy):
+    """The account proxy pinned to one IPv4 address, with its credentials."""
     protocol = proxy.get('protocol')
     if protocol not in ('http', 'https', 'socks5'):
         raise ValueError('unsupported proxy protocol')
@@ -79,88 +80,12 @@ def proxy_outbound(proxy):
     # resulting address in both the dialer and the fail-closed firewall.
     ip = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)[0][4][0]
     ipaddress.IPv4Address(ip)
-    out = {'type': 'socks' if protocol == 'socks5' else 'http', 'tag': 'account-proxy',
-           'server': ip, 'server_port': port,
-           'username': proxy.get('username', ''), 'password': proxy.get('password', '')}
-    if protocol == 'socks5':
-        out['version'] = '5'
-    if protocol == 'https':
-        out['tls'] = {'enabled': True, 'server_name': host}
-    return out
+    return {'server': ip, 'server_port': port,
+            'username': proxy.get('username', ''), 'password': proxy.get('password', '')}
 
 
 PRIVATE_DESTINATIONS = ('0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, '
                         '172.16.0.0/12, 192.168.0.0/16, 224.0.0.0/4, 240.0.0.0/4')
-
-
-def singbox_dns(with_detour):
-    """Remote DNS over DoT through the account's outbound. A direct outbound
-    has no detour: sing-box refuses to start with a DNS detour to an empty
-    direct outbound (sing-box check accepts it); without one it dials
-    directly."""
-    # Keep detour before tls: sing-box.json is written with json.dumps and must
-    # stay byte-identical to what earlier controllers wrote.
-    server = {'type': 'https', 'tag': 'remote-dns', 'server': '1.1.1.1',
-              'path': '/dns-query', 'detour': 'account-proxy',
-              'tls': {'enabled': True, 'server_name': 'cloudflare-dns.com'}}
-    if not with_detour:
-        del server['detour']
-    return {'servers': [server], 'final': 'remote-dns', 'strategy': 'ipv4_only'}
-
-
-def singbox_inbounds(gateway_ip):
-    return [{'type': 'tproxy', 'tag': 'traffic', 'listen': '0.0.0.0', 'listen_port': 15001, 'network': 'tcp'},
-            {'type': 'direct', 'tag': 'dns', 'listen': gateway_ip, 'listen_port': 53}]
-
-
-def singbox_route():
-    return {'rules': [{'inbound': 'dns', 'action': 'hijack-dns'}], 'final': 'account-proxy'}
-
-
-def singbox_config(out, gateway_ip):
-    """The whole sing-box configuration for one outbound."""
-    return {'log': {'level': 'warn'},
-            'dns': singbox_dns(out['type'] != 'direct'),
-            'inbounds': singbox_inbounds(gateway_ip),
-            'outbounds': [out],
-            'route': singbox_route()}
-
-
-def configuration(proxy, app_ip, gateway_ip):
-    """proxy None is direct egress: the runtime reaches public IPv4 TCP from
-    the host's address, private and local destinations stay closed."""
-    app_ip = ipv4(app_ip)
-    gateway_ip = ipv4(gateway_ip)
-    if proxy is None:
-        out = {'type': 'direct', 'tag': 'account-proxy'}
-        egress = (f'ip daddr {{ {PRIVATE_DESTINATIONS} }} drop\n'
-                  '  meta nfproto ipv4 meta l4proto tcp accept')
-    else:
-        out = proxy_outbound(proxy)
-        egress = f"ip daddr {out['server']} tcp dport {out['server_port']} accept"
-    config = singbox_config(out, gateway_ip)
-    firewall = f'''table inet ccg {{
- chain intercept {{ type filter hook prerouting priority mangle; policy accept;
-  ip saddr {app_ip} ip daddr {gateway_ip} udp dport 53 accept
-  ip saddr {app_ip} ip daddr {gateway_ip} tcp dport 53 accept
-  ip saddr {app_ip} meta l4proto tcp meta mark set 1 tproxy ip to :15001 accept
- }}
- chain forward {{ type filter hook forward priority filter; policy drop; }}
- chain input {{ type filter hook input priority filter; policy drop;
-  iifname "lo" accept
-  ct state established,related accept
-  ip saddr {app_ip} meta mark 1 accept
-  ip saddr {app_ip} ip daddr {gateway_ip} udp dport 53 accept
-  ip saddr {app_ip} ip daddr {gateway_ip} tcp dport 53 accept
- }}
- chain output {{ type filter hook output priority filter; policy drop;
-  oifname "lo" accept
-  ct state established,related accept
-  {egress}
- }}
-}}
-'''
-    return config, firewall
 
 
 def business_rules(gateway_ip):

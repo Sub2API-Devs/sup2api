@@ -8,6 +8,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import MagicMock
 
+from shared_egress import SCHEMA as SHARED_SCHEMA
 from test_manager import FakeContainer
 from test_uploads import ServerBase
 
@@ -69,6 +70,7 @@ class RuntimeImageTests(ServerBase):
     def test_put_both_and_local_image_id(self):
         image_id = 'sha256:' + 'c' * 64
         self.fake.images.tags['local/egress:dev'] = image_id
+        self.fake.images.labels[image_id] = {SHARED_SCHEMA: '1'}
         status, health = self.call('PUT', '/runtime/images', {'app': 'app:test', 'egress': image_id})
         self.assertEqual(status, 200, health)
         self.assertEqual((health['app_image'], health['egress_image']), ('app:test', image_id))
@@ -80,6 +82,10 @@ class RuntimeImageTests(ServerBase):
         self.fake.images.env = ['HTTPS_PROXY=http://proxy']
         self.assertEqual(self.call('PUT', '/runtime/images', {'app': 'app:test'}), (400, {'error': 'invalid_image'}))
         self.fake.images.env = []
+        # The egress image runs the shared Xray gateway: an old sing-box image is refused.
+        self.fake.images.tags['ccgateway-egress:0.1.117'] = 'sha256:singbox'
+        self.assertEqual(self.call('PUT', '/runtime/images', {'egress': 'ccgateway-egress:0.1.117'}),
+                         (400, {'error': 'invalid_image'}))
         self.assertEqual(self.call('PUT', '/runtime/images', {'egress': 'missing:tag'}), (503, {'error': 'image_pull_failed'}))
         self.assertEqual(self.call('PUT', '/runtime/images', {'app': APP2, 'egress': 'egress:test'}),
                          (503, {'error': 'image_pull_failed'}))

@@ -2,7 +2,9 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from test_manager import Base, LABEL, DRAFT_KEY, OTHER_DRAFT
+import cleanup
 from common import BadRequest
+from shared_egress import OWNER, SharedEgress
 
 
 class CleanupTests(Base):
@@ -18,10 +20,8 @@ class CleanupTests(Base):
         backup.mkdir()
         (backup / '21.json').write_text('{}')
         self.m.delete('21', account=True, purge=True)
-        for role in ['app', 'egress']:
-            self.assertNotIn('ccg-21-' + role, self.fake.containers.items)
-        for role in ['net', 'uplink']:
-            self.assertNotIn('ccg-21-' + role, self.fake.networks.items)
+        self.assertNotIn('ccg-21-app', self.fake.containers.items)
+        self.assertNotIn('ccg-21-net', self.fake.networks.items)
         self.assertNotIn('ccg-21-data', self.fake.volumes.items)
         self.assertFalse(self.m.dir('21').exists())
         self.assertFalse((backup / '21.json').exists())
@@ -88,8 +88,16 @@ class CleanupTests(Base):
         result = self.cleanup([], snapshot)
         self.assertEqual(result['results'], [{'key': '21', 'status': 'failed', 'reason': 'resource_in_use'}])
         self.assertIn('ccg-21-app', self.fake.containers.items)
-        self.assertIn('ccg-21-egress', self.fake.containers.items)
         self.assertIn('ccg-21-net', self.fake.networks.items)
+
+    def test_own_egress_left_by_an_older_controller_is_inventoried_and_purged(self):
+        self.apply('21')
+        egress = self.fake.containers.create('egress:test', name='ccg-21-egress', labels={LABEL: '21'})
+        uplink = self.fake.networks.create('ccg-21-uplink', labels={LABEL: '21'}, ipam={'Config': [{'Subnet': '10.99.0.0/24'}]})
+        roles = {row[1] for row in cleanup.docker_resources(self.m, '21')}
+        self.assertTrue({'egress', 'uplink'} <= roles, roles)
+        self.assertEqual(self.cleanup([])['deleted'], 1)
+        self.assertTrue(egress.removed and uplink.removed)
 
     def test_one_unreadable_runtime_does_not_fail_the_inventory(self):
         # A same-name container of someone else next to runtime 23's
@@ -124,11 +132,8 @@ class CleanupTests(Base):
 
     def test_shared_gateway_binding_detached_without_removing_gateway(self):
         self.apply('21')
-        state = self.m.state('21')
-        state['egress_backend'] = 'shared_xray'
-        self.m.save('21', state)
-        self.m._shared = SimpleNamespace(data={'bindings': {'21': {}}}, remove=Mock())
-        gateway = self.fake.containers.create('egress:test', name='ccg-shared-egress', labels={})
+        gateway = self.fake.containers.get('ccg-shared-egress')
+        self.m._shared = SimpleNamespace(data={'bindings': {'21': {}}}, remove=Mock(), disconnect=Mock())
         self.assertEqual(self.cleanup([])['deleted'], 1)
         self.m._shared.remove.assert_called_once_with('21', disconnect=True)
         self.assertFalse(gateway.removed)
@@ -158,8 +163,7 @@ class CleanupTests(Base):
         self.assertFalse(self.m.dir('21').exists())
 
     def test_shared_binding_without_account_state_is_removed_in_place(self):
-        from shared_egress import OWNER
-        shared = self.m.shared
+        shared = self.m._shared = SharedEgress(self.m)
         shared.data['bindings']['21'] = {'active': True}
         shared.save()
         gateway = self.fake.containers.create('egress:test', name=shared.name, labels={OWNER: self.m.prefix})
@@ -172,8 +176,7 @@ class CleanupTests(Base):
         self.assertFalse(gateway.removed)
 
     def test_shared_cleanup_does_not_start_stopped_gateway(self):
-        from shared_egress import OWNER
-        shared = self.m.shared
+        shared = self.m._shared = SharedEgress(self.m)
         shared.data['bindings']['21'] = {'active': True}
         shared.save()
         gateway = self.fake.containers.create('egress:test', name=shared.name, labels={OWNER: self.m.prefix})

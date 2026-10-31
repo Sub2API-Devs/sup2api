@@ -124,7 +124,7 @@ class WorkerContainer(FakeContainer):
             assert args[0] == '-f' and user == '0'
             self.files.pop(args[1], None)
             return 0, b''
-        return 0, b''  # apply's egress readiness and proxy probe
+        return 0, b''  # apply's gateway readiness and proxy probe
 
     def put_archive(self, path, data):
         with tarfile.open(fileobj=io.BytesIO(data)) as tar:
@@ -396,7 +396,6 @@ class WorkerUpdateTests(WorkerBase):
         self.assertEqual(self.m.state('21')['revision'], REV)
         self.assertEqual(self.target.files[WORKER][0], NEW)
         self.assert_untouched_identity()
-        self.assertIn('ccg-21-egress', self.fake.containers.items)
         # The core's next reconciliation restores readiness without recreating anything.
         self.created.clear()
         self.assertEqual(self.apply('21')['status'], 'ready')

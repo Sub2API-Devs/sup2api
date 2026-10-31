@@ -152,15 +152,12 @@ class WorkerUpdates:
 
     def reactivate(self, aid, identity, revision):
         """Step 9: firewall, route and probe again; readiness at the old revision or none."""
-        app = self.same_container(aid, identity)
+        self.same_container(aid, identity)
         try:
             state = self.state(aid)
             if not state or state.get('revision') != revision:
                 raise RuntimeError('revision changed')
-            if state.get('egress_backend') == 'shared_xray':
-                self.shared.apply(aid, state, self.shared.desired(aid))
-            else:
-                self.activate(aid, state, app, self.owned(aid, 'egress'), revision)
+            self.shared.apply(aid, state, self.shared.desired(aid))
             return True
         except Exception as e:
             # The core's next reconciliation applies the configuration again;

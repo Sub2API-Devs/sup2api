@@ -16,7 +16,7 @@ def main():
     root = Path(os.environ['TEST_RUNTIME_ROOT'])
     if '/checks/xray-failclosed-' not in str(root) or root.name != 'isolated-runtime':
         raise RuntimeError('isolated audit root required')
-    m = Manager(str(root), 'ccgateway-app:0.1.55', 'ccgateway-egress:0.1.55', prefix='ccg-fault-test')
+    m = Manager(str(root), 'ccgateway-app:0.1.55', 'ccgateway-xray:1', prefix='ccg-fault-test')
     aid = 'dfa11face00000001'
     fixture = gateway = None
     result = []
@@ -37,13 +37,6 @@ def main():
                'auth': {'mode': 'api_key', 'api_key': 'fault-test-unused-key'}}
     try:
         assert m.apply(aid, desired)['status'] == 'ready'
-        for _ in range(10):
-            status = m.shared.migrate(aid, 'shared_xray')
-            if status.get('ready'):
-                break
-            time.sleep(1)
-        else:
-            raise RuntimeError('test runtime busy')
         gateway = m.shared.container()
         assert probe() and probe('dns')
         record('explicit_direct_baseline', passed=True)
@@ -74,8 +67,7 @@ def main():
         record('authenticated_proxy_baseline', passed=True)
         fixture.stop(timeout=2)
         both_blocked('upstream_proxy_stopped_with_direct_outbound_also_loaded')
-        assert m.state(aid)['egress_backend'] == 'shared_xray'
-        assert not any(c.name == m.name(aid, 'egress') for c in m.docker.containers.list())
+        assert not any(c.name == m.name(aid, 'egress') for c in m.docker.containers.list(all=True))
         fixture.start()
         time.sleep(1)
         assert probe()

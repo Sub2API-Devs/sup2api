@@ -10,7 +10,7 @@
 #
 # Output (every file replaced atomically; images.json is written last):
 #   <out>/app.tar.gz          ccgateway-app:<version>         (worker)
-#   <out>/egress.tar.gz       ccgateway-egress:<version>      (sing-box egress)
+#   <out>/egress.tar.gz       ccgateway-egress:<version>      (shared Xray egress gateway)
 #   <out>/controller.tar.gz   ccgateway-controller:<version>  (controller)
 #   <out>/gateway.tar.gz      $CCG_CADDY_IMAGE                (Caddy gateway)
 #   <out>/images.json         {"version":1,"images":{role:{ref,file,sha256,size}}}
@@ -93,7 +93,7 @@ docker build "$@" $labels -f "$companions/worker/Dockerfile" \
   -t "$app" "$companions"
 echo "==> building $egress"
 # shellcheck disable=SC2086
-docker build "$@" $labels -t "$egress" "$companions/egress"
+docker build "$@" $labels -t "$egress" "$companions/xray-egress"
 echo "==> building $controller (VERSION $short)"
 # shellcheck disable=SC2086
 docker build "$@" $labels --build-arg VERSION="$short" -t "$controller" "$companions/controller"

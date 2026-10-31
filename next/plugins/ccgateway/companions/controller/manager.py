@@ -3,8 +3,8 @@
 The core reaches it through the Caddy HTTPS gateway on the same host or over
 SSH port forwarding (CONTRACTS §49.16, §53.9); model requests go to the
 account Worker through GET connection / tunnel, never through this process's
-HTTP relay. Docker SDK owns container lifecycle; sing-box (or the shared Xray
-gateway) owns proxy protocols. The control API is never exposed on a business
+HTTP relay. Docker SDK owns container lifecycle; the shared Xray gateway owns
+proxy protocols. The control API is never exposed on a business
 network. State is root-private on this host.
 
 Modules (none imports this one, so there is no import cycle):
@@ -52,7 +52,7 @@ from common import (ACCOUNT_PORT, AUTH_LABEL, CONTROLLER_NAME, DISK_QUOTA_LABEL,
 from dockerfs import container_identity, image_of
 from http_api import Handler
 from images import Uploads
-from network import (configuration, business_rules, network_policy, host_routes, allocate_subnet, allocate_addresses,
+from network import (business_rules, network_policy, host_routes, allocate_subnet, allocate_addresses,
                      first_subnet)
 from runtime_admin import RuntimeAdmin
 from runtime_updates import RuntimeUpdates
@@ -91,6 +91,11 @@ PROXY_RECHECK_SECONDS = 300
 # Container names of a runtime after <prefix>-<key>-: its role, optionally
 # with a suffix (a rollback copy of a manual migration keeps label and volume).
 ACCOUNT_CONTAINER_ROLE = re.compile(r'(?:app|egress)(?:-[A-Za-z0-9_.-]+)?')
+# Left by runtimes created while every account had its own sing-box egress
+# (drop_own_egress): files in the runtime directory and fields of its state.
+# egress_backend stays: SharedEgress.apply keeps writing it for a rollback.
+OWN_EGRESS_FILES = ('sing-box.json', 'firewall.nft')
+OWN_EGRESS_STATE = ('uplink_ip', 'legacy_gateway_ip', 'egress_migration')
 MISSING = object()  # read_json default: the file does not exist
 DEFAULT_ACCOUNT_DISK_GIB = 10
 DEFAULT_ENV_FILE = '/opt/ccgateway-runtime.env'
@@ -340,8 +345,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         # Fixed helper image, no Docker socket, no host network/PID namespaces.
         d = self.dir(aid)
         write_private(d / 'app.nft', rules)
-        helper_image = (image_of(self.shared.container()) if (self.state(aid) or {}).get('egress_backend') == 'shared_xray'
-                        else image_of(self.owned(aid, 'egress')))
+        helper_image = image_of(self.shared.container())
         self.oneshot(helper_image, entrypoint=['sh', '-ec'],
             command=[script], network_mode='container:' + app.id,
             cap_drop=['ALL'], cap_add=['NET_ADMIN'], security_opt=['no-new-privileges:true'],
@@ -568,13 +572,12 @@ class Manager(RuntimeAdmin, WorkerUpdates):
                                disk_bytes=disk_bytes, legacy=legacy)
 
     def _check_subnet_capacity(self, aid, policy):
-        """Two free subnets for a new network policy, before anything goes."""
+        """A free subnet for a new network policy, before anything goes."""
         old_subnets, occupied = [], []
         for labels, subnet in self.docker_ipv4_subnets():
             (old_subnets if labels.get(LABEL) == aid else occupied).append(subnet)
         occupied.extend(r for r in host_routes() if r not in old_subnets)
-        first = allocate_subnet(policy, occupied)
-        allocate_subnet(policy, occupied + [first])
+        allocate_subnet(policy, occupied)
 
     def _remove_replaced(self, aid, state, existing, policy):
         if existing:
@@ -583,23 +586,35 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         if state and state.get('network') == policy:
             return
         self.drop_readiness(aid)
+        self.drop_own_egress(aid)
+        old = self.owned_resource(self.docker.networks, aid, 'net')
+        if old is not None:
+            absent_ok(old.remove)
+
+    def drop_own_egress(self, aid):
+        """What a runtime created while accounts had their own sing-box egress
+        leaves behind: the egress container, its uplink network, their files
+        and state fields. The shared gateway stays."""
         with contextlib.suppress(docker.errors.NotFound):
             self.owned(aid, 'egress').remove(force=True)
-        for role in ('net', 'uplink'):
-            old = self.owned_resource(self.docker.networks, aid, role)
-            if old is not None:
-                absent_ok(old.remove)
+        uplink = self.owned_resource(self.docker.networks, aid, 'uplink')
+        if uplink is not None:
+            absent_ok(uplink.remove)
+        for name in OWN_EGRESS_FILES:
+            (self.dir(aid) / name).unlink(missing_ok=True)
+        state = self.state(aid)
+        if state and any(field in state for field in OWN_EGRESS_STATE):
+            for field in OWN_EGRESS_STATE:
+                state.pop(field, None)
+            self.save(aid, state)
 
     def _addresses(self, aid, state, policy):
         network = self.ensure_network(aid, 'net', policy, True)
-        uplink = self.ensure_network(aid, 'uplink', policy, False)
         network.reload()
         if state and state.get('network') == policy:
-            return SimpleNamespace(network=network, gateway_ip=state['gateway_ip'], app_ip=state['app_ip'],
-                                   uplink_ip=state['uplink_ip'])
+            return SimpleNamespace(network=network, gateway_ip=state['gateway_ip'], app_ip=state['app_ip'])
         gateway_ip, app_ip = allocate_addresses(first_subnet(network), policy['allocation'])
-        uplink_ip = allocate_addresses(first_subnet(uplink), policy['allocation'], 1)[0]
-        return SimpleNamespace(network=network, gateway_ip=gateway_ip, app_ip=app_ip, uplink_ip=uplink_ip)
+        return SimpleNamespace(network=network, gateway_ip=gateway_ip, app_ip=app_ip)
 
     def _record_runtime(self, aid, state, salt, policy, addresses, plan):
         d = self.dir(aid)
@@ -612,7 +627,9 @@ class Manager(RuntimeAdmin, WorkerUpdates):
                           'app_ip': addresses.app_ip, 'gateway_ip': addresses.gateway_ip, 'revision': '',
                           'status': 'pending', 'created_at': rfc3339(time.time())}
         state.update(network=policy, gateway_ip=addresses.gateway_ip, app_ip=addresses.app_ip,
-                     uplink_ip=addresses.uplink_ip, revision='', status='pending')
+                     revision='', status='pending')
+        for field in OWN_EGRESS_STATE:
+            state.pop(field, None)  # the in-memory state predates drop_own_egress
         state['disk_quota'] = {'limit_bytes': plan.disk_bytes, 'status': 'enforced' if plan.disk_bytes
                                else 'legacy_unbounded' if plan.legacy else 'unbounded'}
         self.save(aid, state)
@@ -666,9 +683,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
             self.save_desired(aid, desired)
         if not (desired.get('proxy') or direct) or not desired.get('enabled', True):
             return self.block(aid)
-        if state and state.get('egress_backend') == 'shared_xray':
-            return self._apply_shared(aid, state, desired, policy, revision)
-        return self._apply_dedicated(aid, state, desired, policy, revision, direct)
+        return self._apply_shared(aid, state, desired, policy, revision)
 
     def update_runtime(self, aid, desired):
         """POST /accounts/<key>/worker with components: the paired Worker+CLI activation."""
@@ -695,73 +710,17 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         return revision, policy, desired.get('direct') is True and not desired.get('proxy')
 
     def _apply_shared(self, aid, state, desired, policy, revision):
-        if state.get('network') != policy:
-            raise BadRequest('migrate back before changing network allocation')
-        if state.get('egress_migration') and state['egress_migration'].get('phase') == 'failed':
-            raise BadRequest('resume or rollback failed egress migration')
-        if self.readiness(aid, state) == revision:
-            return self.public(aid)
-        self.shared.remove(aid)
-        state = self.provision(aid, desired.get('auth'), policy, desired.get('cli'))
-        return self.shared.apply(aid, state, desired)
-
-    def _apply_dedicated(self, aid, state, desired, policy, revision, direct):
-        old = None
-        with contextlib.suppress(docker.errors.NotFound):
-            old = self.owned(aid, 'egress')
-        egress_image = image_of(old) if old else self.egress_image
-        self.ensure_image(egress_image)
+        if state and state.get('network') != policy:
+            # The gateway holds an endpoint on the account's own network: it has
+            # to leave before that network is replaced.
+            self._detach_shared(aid)
         had_state = state is not None
         state = self.provision(aid, desired.get('auth'), policy, desired.get('cli'))
         if not had_state:
             self.save_desired(aid, desired)
         if self.readiness(aid, state) == revision:
-            return self.public(aid)  # readiness checked that app and egress still run
-        self.go_offline(aid)
-        state['status'] = 'syncing'
-        self.save(aid, state)
-        egress = self._egress(aid, state, desired, direct, egress_image, old is not None)
-        app = self.owned(aid, 'app')
-        if app.status != 'running':
-            app.start()
-        self.activate(aid, state, app, egress, revision)
-        return self.public(aid)
-
-    def _egress(self, aid, state, desired, direct, egress_image, had_egress):
-        """The running egress with the configuration desired asks for. The
-        running one is kept only with the very configuration it runs: the
-        same revision can resolve the proxy host to another address (B9)."""
-        # Config validation happens before the old egress is stopped.
-        try:
-            config, rules = configuration(None if direct else desired['proxy'], state['app_ip'], state['gateway_ip'])
-        except (ValueError, KeyError, TypeError) as e:
-            raise BadRequest('invalid proxy') from e
-        d = self.dir(aid)
-        reuse = had_egress and self._singbox(aid) == config
-        write_private(d / 'sing-box.json', json.dumps(config))
-        write_private(d / 'firewall.nft', rules)
-        self.oneshot(egress_image, entrypoint=['sing-box', 'check', '-c', '/config/sing-box.json'],
-                     network_mode='none', volumes={str(d): {'bind': '/config', 'mode': 'ro'}})
-        try:
-            old = self.owned(aid, 'egress')
-        except docker.errors.NotFound:
-            old = None
-        if old and not reuse:
-            old.remove(force=True)
-        egress = (old if reuse else None) or self._create_egress(aid, state, egress_image)
-        if egress.status != 'running':
-            egress.start()
-        return egress
-
-    def _create_egress(self, aid, state, egress_image):
-        uplink = self.name(aid, 'uplink')
-        egress = self.docker.containers.create(egress_image, name=self.name(aid, 'egress'), network=uplink,
-            networking_config={uplink: self.docker.api.create_endpoint_config(ipv4_address=state['uplink_ip'])},
-            cap_add=['NET_ADMIN'], sysctls={'net.ipv4.ip_forward': '0', 'net.ipv6.conf.all.disable_ipv6': '1'},
-            volumes={str(self.dir(aid)): {'bind': '/config', 'mode': 'ro'}}, mem_limit='128m',
-            **self.common(aid))
-        self.docker.networks.get(self.name(aid, 'net')).connect(egress, ipv4_address=state['gateway_ip'])
-        return egress
+            return self.public(aid)  # readiness checked that app and gateway still run
+        return self.shared.apply(aid, state, desired)
 
     def business_firewall(self, aid, app, gateway_ip):
         """The ccg_app rules and the default route inside the account's
@@ -800,13 +759,11 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         self.go_offline(aid)
         state = self.state(aid)
         if state:
-            for role in ('app', 'egress'):
-                with contextlib.suppress(docker.errors.NotFound):
-                    self.owned(aid, role).stop(timeout=10)
+            with contextlib.suppress(docker.errors.NotFound):
+                self.owned(aid, 'app').stop(timeout=10)
             state['status'] = 'blocked'
             self.save(aid, state)
-            if state.get('egress_backend') == 'shared_xray':
-                self.shared.remove(aid)
+            self.shared.remove(aid)
         return {'account_id': aid, 'status': 'blocked', 'revision': ''}
 
     # Delete: DELETE /accounts/<key>.
@@ -914,9 +871,9 @@ class Manager(RuntimeAdmin, WorkerUpdates):
 
     def _namespace_helpers(self, aid, ours):
         """This controller's ended one-shot helpers that joined the network
-        namespace of a container in ours (helper(), SharedEgress.network_idle)
-        or mounted the runtime directory or a file in it (sing-box check). A
-        running one is left alone: it ends by itself."""
+        namespace of a container in ours (helper()) or mounted the runtime
+        directory or a file in it. A running one is left alone: it ends by
+        itself."""
         d = str(self.dir(aid))
 
         def uses_runtime(c):
@@ -927,8 +884,12 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         return [c for c in found if self._stale_helper(c) and uses_runtime(c)]
 
     def _detach_shared(self, aid):
-        if (self.state(aid) or {}).get('egress_backend') == 'shared_xray' or aid in self.shared_bindings():
-            self.shared.remove(aid, disconnect=True)
+        """Take this controller's gateway off the account's network before that
+        network is replaced; the binding goes with it."""
+        gateway = container(self.docker, f'{self.prefix}-shared-egress')
+        if gateway is not None and gateway.labels.get(SHARED_OWNER) == self.prefix:
+            self.shared.disconnect(aid, gateway)
+        self.shared.remove(aid, disconnect=True)
 
     def _shared_gateway_id(self):
         """Id of this controller's shared egress gateway, attached to every
@@ -969,12 +930,9 @@ class Manager(RuntimeAdmin, WorkerUpdates):
         if aid not in self.online:
             return ''
         try:
-            if state.get('egress_backend') == 'shared_xray':
-                containers = [self.owned(aid, 'app'), self.shared.container()]
-                if not self.shared.healthy(aid, state):
-                    self.go_offline(aid)
-            else:
-                containers = [self.owned(aid, role) for role in ('app', 'egress')]
+            containers = [self.owned(aid, 'app'), self.shared.container()]
+            if not self.shared.healthy(aid, state):
+                self.go_offline(aid)
             if any(c.status != 'running' for c in containers) or tuple(boot_id(c) for c in containers) != self.boots.get(aid):
                 self.go_offline(aid)
         except docker.errors.NotFound:
@@ -1003,7 +961,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
                 'status': 'ready' if aid in self.online and online == state.get('revision') else 'pending',
                 'revision': online, 'auth_mode': state.get('auth_mode', 'oauth'),
                 'network': state.get('network'), 'app_ip': state.get('app_ip', ''),
-                'gateway_ip': state.get('gateway_ip', ''), 'uplink_ip': state.get('uplink_ip', '')}
+                'gateway_ip': state.get('gateway_ip', '')}
 
     @contextlib.contextmanager
     def request_guard(self, aid):
@@ -1038,7 +996,7 @@ class Manager(RuntimeAdmin, WorkerUpdates):
 
     # Proxy host names that moved (audit B9).
 
-    def pinned_proxy(self, aid, state):
+    def pinned_proxy(self, aid):
         """(host, port, pinned address) of a runtime whose proxy is a host
         name, else None. The address is the one its egress dials."""
         with contextlib.suppress(OSError, ValueError, KeyError, IndexError, TypeError):
@@ -1046,7 +1004,8 @@ class Manager(RuntimeAdmin, WorkerUpdates):
             host = proxy['host'] if isinstance(proxy, dict) else None
             if not isinstance(host, str) or not host or self._is_address(host):
                 return None
-            address = self._pinned_address(aid, state)
+            endpoint = self.shared.endpoint(aid)
+            address = endpoint[0] if endpoint else None
             return (host, int(proxy['port']), address) if isinstance(address, str) else None
         return None
 
@@ -1058,26 +1017,11 @@ class Manager(RuntimeAdmin, WorkerUpdates):
             return False
         return True  # an address literal never moves
 
-    def _pinned_address(self, aid, state):
-        if state.get('egress_backend') == 'shared_xray':
-            endpoint = self.shared.endpoint(aid)
-            return endpoint[0] if endpoint else None
-        config = self._singbox(aid)
-        return config['outbounds'][0]['server'] if config else None
-
-    def _singbox(self, aid):
-        """The persisted sing-box configuration of the runtime's own egress,
-        None when it cannot be read (absent, damaged or unreadable)."""
-        try:
-            return read_json(self.dir(aid) / 'sing-box.json')
-        except (OSError, ValueError):
-            return None
-
     def proxy_moved(self, aid):
         """Whether the proxy host name no longer resolves to the address the
         egress was pinned to. A failed lookup is no evidence: the runtime
         keeps working with the pinned address."""
-        pinned = self.pinned_proxy(aid, self.state(aid) or {})
+        pinned = self.pinned_proxy(aid)
         if pinned is None:
             return False
         host, port, address = pinned

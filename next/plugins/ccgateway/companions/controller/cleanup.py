@@ -22,6 +22,8 @@ def docker_resources(manager, key):
     """Identity rows of the runtime's containers, networks and volume; a
     same-name resource of someone else raises OwnershipMismatch."""
     resources = []
+    # egress and uplink only exist on runtimes created before the shared Xray
+    # egress; they stay in the list so those can still be purged.
     for role in ('app', 'egress'):
         with contextlib.suppress(docker.errors.NotFound):
             resources.append(resource_row('container', role, manager.owned(key, role)))

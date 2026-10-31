@@ -2,14 +2,15 @@
 
 This controller replaces the shared CCGateway endpoint when `account_runtimes`
 is enabled. Each account owns one business container, one data volume, an
-internal Docker network, and an egress container. Linux Docker is required.
+internal Docker network and a route through the host's shared Xray egress
+gateway (one container for all accounts). Linux Docker is required.
 The core reads account/proxy changes on a three-second control-plane loop and
 retries failed reconciliation. Model traffic uses authenticated
 `/accounts/<key>/connection` discovery followed by a direct HTTP connection to
 the account's port 8787: SSH direct-tcpip in SSH mode, or the controller's byte
 tunnel (`/accounts/<key>/tunnel`) in control panel mode (CONTRACTS §53). The
 legacy forwarding endpoints below remain compatibility surfaces. Stale revisions
-are rejected until synchronization succeeds; requests do not reconfigure sing-box.
+are rejected until synchronization succeeds; requests do not reconfigure the gateway.
 
 The existing SSH management integration still lives in the core. This change
 does not claim a completed extraction of all CCGateway UI/services into plugin
@@ -109,26 +110,28 @@ helper installs its default route and firewall inside that container's network
 namespace. It has no `NET_ADMIN`, `NET_RAW`, Docker socket, host filesystem,
 proxy variables, or proxy credentials. The helper exits before readiness.
 
-The egress container has separate internal and external interfaces. Its own
-nftables/TProxy rules deliver TCP traffic to sing-box. The forward chain drops
-all packets; only sing-box can originate a connection to the pinned proxy IP
-and port. DNS uses DoH through the same outbound. IPv6 and other UDP are blocked.
+The shared egress gateway (`<prefix>-shared-egress`, the plugin bundle's
+egress image: Xray) joins every account's internal network and is that
+account's default route and DNS server. Its nftables/TProxy rules deliver TCP
+traffic to Xray, which routes it by source address to the account's own
+outbound; an unknown source is dropped. The forward chain drops all packets;
+only Xray can originate a connection to a pinned proxy IP and port. DNS goes
+through the account's outbound. IPv6 and other UDP are blocked.
 Private/metadata destinations and Docker's embedded DNS are blocked in the
 business namespace. Host default routes and global firewall policies are not
 rewritten (Docker still manages its normal bridge rules).
 
-Each proxy update validates a new sing-box configuration and restarts only
-that account's egress container. **Existing connections may be interrupted.**
-No per-request reconfiguration or serialization is required: concurrent calls
-share the account's currently applied egress. The business container and data
-volume survive proxy changes. Missing/disabled proxies block the account;
+A proxy update replaces only that account's outbound and route through the
+Xray API; the gateway is not restarted and other accounts keep their
+connections. **The account's existing connections may be interrupted.** The
+business container and data volume survive proxy changes. A running gateway is
+never recreated for a new egress image; only a gateway created later uses it. Missing/disabled proxies block the account;
 there is no direct fallback. Controller restart clears readiness until actual
 container state, network rules, and a proxied HTTP connectivity probe pass.
 
 ## Runtime keys and drafts
 
-A runtime is one app container, one egress container, one internal network and
-one data volume, named `<prefix>-<key>-<role>` and labelled with the key. The
+A runtime is one app container, one internal network and one data volume, named `<prefix>-<key>-<role>` and labelled with the key. The
 key is either an account id (`^[1-9][0-9]{0,17}$`) or a draft key
 (`^d[0-9a-f]{16}$`). The account editor creates a draft runtime before a
 Claude Code account exists, authorizes it, and the saved account adopts the
@@ -147,7 +150,7 @@ Caddy container on the same host terminates HTTPS and proxies to it).
 |---|---|---|
 | GET | `/health` | `{"version","app_image","egress_image","controller_image","network_policy_version","features","disk_quota"}`; `version` is `CCG_CONTROLLER_VERSION` (default `dev`), `controller_image` is `CCG_CONTROLLER_IMAGE` |
 | GET | `/accounts` | `{"runtimes":[{"key","status","created_at"}]}` for every state directory |
-| DELETE | `/accounts/<key>` | draft keys only: removes both containers, the network, the data volume and the state directory; `200 {"deleted":true}` also when nothing existed; account ids → 405 |
+| DELETE | `/accounts/<key>` | draft keys only: removes its containers, the network, the data volume and the state directory; `200 {"deleted":true}` also when nothing existed; account ids → 405 |
 | PUT | `/accounts/<key>/config` | reconcile (proxy, enabled, revision, auth) |
 | GET | `/accounts/<key>/status` | `{"account_id","container","status","revision","auth_mode"}` |
 | GET | `/accounts/<key>/connection` | `{"app_ip","port","api_key","revision"}` for the current `X-CCG-Revision` |
@@ -156,7 +159,8 @@ Caddy container on the same host terminates HTTPS and proxies to it).
 | POST | `/images/uploads` | `{"size","sha256"?}` → `{"upload_id","offset","size"}` |
 | PUT/GET/DELETE | `/images/uploads/<id>` | append a chunk at `X-CCG-Offset` (≤ 64 MiB) / progress / discard |
 | POST | `/images/uploads/<id>/load` | verify and `docker load` → `{"sha256","images":[{"id","tags"}]}` |
-| GET/PUT | `/runtime/images` | target `{"app","egress","controller"}` / set app or egress (kept in `<root>/runtime.json`) |
+| GET/PUT | `/runtime/images` | target `{"app","egress","controller"}` / set app or egress (kept in `<root>/runtime.json`); an egress image must be a shared gateway image (`io.sup2api.ccgateway.shared-egress=1`), else `invalid_image` |
+| GET | `/accounts/<key>/egress` | `{"backend":"shared_xray","ready"}` |
 | POST | `/runtime/controller` | `{"image"}` → `202`; a helper container from that image runs `upgrade.py` |
 | GET/POST | `/accounts/<key>/v1/messages`, `/accounts/<key>/admin/status`, `/accounts/<key>/admin/auth/{session,start,complete,cancel,logout}` | passed through to the app container; requires `X-CCG-Revision` |
 
@@ -196,8 +200,8 @@ The app container carries the image id next to the credential fingerprint.
 Changing the configured image is informational for existing containers. Status
 reports `current_image`, `target_image`, `image_update_available` and
 `target_image_available` without changing readiness. New containers use the
-configured image. Reconciliation and controller restart retain existing app and
-egress images; an unchanged revision also retains the egress container.
+configured image. Reconciliation and controller restart retain existing app
+containers and the running gateway.
 
 Manual replacement prepares a separate authorization draft. Operators choose
 fresh authorization or migration of `/work/config` through the authenticated
@@ -241,7 +245,7 @@ mounts, data volume and authorization stay as they are.
 7. The restart rebuilt the account network namespace (no firewall or default
    route — the business container cannot reach anything meanwhile). If the
    account was online, the same steps as reconciliation run again (business
-   firewall and route, egress readiness, proxied probe) and readiness returns
+   firewall and route, gateway readiness, proxied probe) and readiness returns
    at the same revision; a failure only clears readiness and the core's next
    reconciliation repairs it.
 8. `{"status":"updated","previous_sha256","sha256","path","online"}`. Container
@@ -377,7 +381,7 @@ root on the remote Docker host (or pull the published GHCR images instead):
 
 ```sh
 docker build -f next/plugins/ccgateway/companions/worker/Dockerfile -t ccgateway:accounts next/plugins/ccgateway/companions
-docker build -f next/plugins/ccgateway/companions/egress/Dockerfile -t ccg-egress:1.12.14 next/plugins/ccgateway/companions/egress
+docker build -f next/plugins/ccgateway/companions/xray-egress/Dockerfile -t ccg-egress:xray next/plugins/ccgateway/companions/xray-egress
 docker build -f next/plugins/ccgateway/companions/controller/Dockerfile -t ccg-controller:accounts next/plugins/ccgateway/companions/controller
 ```
 
@@ -388,7 +392,7 @@ environment file (0600), using a freshly generated controller key of at least
 ```text
 CCG_RUNTIME_ROOT=/opt/ccgateway-runtime
 CCG_APP_IMAGE=ccgateway:accounts
-CCG_EGRESS_IMAGE=ccg-egress:1.12.14
+CCG_EGRESS_IMAGE=ccg-egress:xray
 CCG_CONTROLLER_KEY=<generated secret>
 CCG_CONTROLLER_PORT=8787
 CCG_CONTROLLER_VERSION=<optional version or git sha>
@@ -417,7 +421,8 @@ legacy API key is unused in this mode.
 
 ## Verification
 
-`test_network.py` tests generated policy/configuration. `test_manager.py` tests
+`test_network.py` tests the network policy, firewall rules and proxy pinning;
+`test_shared_egress.py` the gateway configuration and its wiring. `test_manager.py` tests
 the controller with an in-memory Docker client (key validation, draft deletion,
 listing, manual image updates, isolated authorization migration, digest pulls,
 routing and error codes); `test_tunnel.py`, `test_uploads.py`,
@@ -427,20 +432,8 @@ Docker. Run on Linux from this directory:
 
 ```sh
 pip install -r requirements.txt
-python -m unittest -v test_network test_headers test_manager test_tunnel test_uploads test_runtime test_upgrade test_worker
+python -m unittest discover -v -p 'test_*.py'
 ```
-
-`integration_test.py`
-uses disposable real Docker resources and two local CONNECT proxies; it tests
-two independent account exits, concurrent requests, proxy switching, DNS over
-the proxy, private/IPv6 blocking, absence of proxy environment variables, and
-fail-closed behavior. Only the DNS test contacts a public DoH resolver; no model
-requests or Claude authorization occur. It requires images `ccg-app:account-dev`
-and `ccg-egress:dev` and cleans up only its own generated resources.
-
-HTTP CONNECT and authenticated SOCKS5 are covered by the real-network tests.
-HTTPS proxy certificate handling is configured but still needs a dedicated
-real TLS-proxy acceptance test before claiming that protocol verified.
 
 ## Account authentication
 
@@ -465,8 +458,13 @@ API Key accounts are rejected in legacy shared-container mode.
 
 ## Shared Xray egress
 
-The optional controller capability `shared-egress-v1` preserves the existing core and Worker contracts. See `next/docs/CONTRACTS.md` section 57 and `next/docs/CCGATEWAY-XRAY-MIGRATION.md` for migration and rollback boundaries.
+Every runtime uses the shared gateway (CONTRACTS §57); the per-account sing-box
+egress is gone (2026-11-01). Its leftovers on older hosts (`<prefix>-<key>-egress`
+containers, `-uplink` networks, `sing-box.json`/`firewall.nft` and the
+`uplink_ip`/`legacy_gateway_ip`/`egress_migration` state fields) are removed by the controller itself, once per runtime and process,
+on its background pass; a failure is logged and retried and never takes an
+account offline. The gateway's own network `<prefix>-d0000000000000000-xray-uplink`
+is not an account resource and stays. `CCG_XRAY_IMAGE` pins a gateway image
+other than `CCG_EGRESS_IMAGE` (a host that built its own).
 
-Build the separate `companions/xray-egress` image as `ccgateway-xray:1` (Linux amd64); optionally pin its immutable image ID in `CCG_XRAY_IMAGE`. Existing runtimes stay on sing-box. The authenticated private `/accounts/<key>/egress` endpoint switches one runtime. `migrate_egress.py` reads the host's private controller env file, migrates explicit keys sequentially, and writes a report. Do not directly downgrade a controller with shared bindings.
-
-`shared_integration.py` requires an isolated `TEST_RUNTIME_ROOT` under `/checks/xray-migration-.../isolated-runtime`, the existing app/egress 0.1.55 images, and a test certificate under its sibling `fixture` directory. The certificate must cover `proxy.fixture.test` and `198.18.0.10`. The fixture directory must permit its isolated container to write events. The suite validates authenticated HTTP/HTTPS/SOCKS5 and DNS, TLS name rejection, source isolation, long-lived streams, restart recovery, rollback and identity retention. It uses test credentials only and does not send model requests. Run under a distinct controller prefix with Docker socket access; never point it at the production runtime root.
+`shared_integration.py` requires an isolated `TEST_RUNTIME_ROOT` under `/checks/xray-migration-.../isolated-runtime`, the app image `ccgateway-app:0.1.55` and the gateway image `ccgateway-xray:1`, and a test certificate under its sibling `fixture` directory. The certificate must cover `proxy.fixture.test` and `198.18.0.10`. The fixture directory must permit its isolated container to write events. The suite validates authenticated HTTP/HTTPS/SOCKS5 and DNS, TLS name rejection, source isolation, long-lived streams, restart recovery and fencing of a blocked runtime. It uses test credentials only and does not send model requests. Run under a distinct controller prefix with Docker socket access; never point it at the production runtime root.

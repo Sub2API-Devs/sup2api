@@ -14,22 +14,18 @@ def main():
     root = os.environ['TEST_RUNTIME_ROOT']
     if '/checks/xray-migration-' not in root or not root.endswith('/isolated-runtime'):
         raise RuntimeError('isolated root required')
-    m = Manager(root, 'ccgateway-app:0.1.55', 'ccgateway-egress:0.1.55', prefix='ccg-xray-test')
+    m = Manager(root, 'ccgateway-app:0.1.55', 'ccgateway-xray:1', prefix='ccg-xray-test')
     aid = 'd0123456789abcdef'
     desired = {'revision': 'a' * 64, 'direct': True, 'enabled': True,
                'auth': {'mode': 'api_key', 'api_key': 'test-key-unused'},
                'network': {'pool': '10.0.0.0/8', 'allocation': 'random'}}
     result = m.apply(aid, desired)
     assert result['status'] == 'ready', result
-    identity = m.owned(aid, 'app').id
-    time.sleep(5)
-    result = m.shared.migrate(aid, 'shared_xray')
-    assert result['ready'], result
-    assert m.owned(aid, 'app').id == identity
-    print(json.dumps({'test': 'migration', 'result': result}), flush=True)
+    assert m.shared.status(aid) == {'backend': 'shared_xray', 'ready': True}
+    assert not any(c.name == m.name(aid, 'egress') for c in m.docker.containers.list(all=True))
+    print(json.dumps({'test': 'new_runtime_on_shared_gateway', 'result': result}), flush=True)
     other = 'dfedcba9876543210'
     assert m.apply(other, desired)['status'] == 'ready'
-    assert m.shared.migrate(other, 'shared_xray')['ready']
     c = m.shared.container()
     boot = c.attrs['State']['StartedAt']
     assert m.apply(aid, {**desired, 'revision': 'b' * 64})['status'] == 'ready'
@@ -139,43 +135,10 @@ def main():
     finally:
         unknown.remove(force=True)
     print(json.dumps({'test': 'unknown_source_blocked', 'passed': True}), flush=True)
-    result = m.shared.migrate(aid, 'per_account_singbox')
-    assert result['ready'], result
-    assert m.owned(aid, 'app').id == identity
-    print(json.dumps({'test': 'rollback', 'result': result}), flush=True)
-    original_activate = m.activate
-    attempts = []
-    def fail_once(*args):
-        attempts.append(True)
-        if len(attempts) == 1:
-            raise RuntimeError('injected migration probe failure')
-        return original_activate(*args)
-    with patch.object(m, 'activate', side_effect=fail_once):
-        try:
-            for _ in range(15):
-                outcome = m.shared.migrate(aid, 'shared_xray')
-                if outcome.get('status') != 'busy':
-                    raise AssertionError('injected migration unexpectedly succeeded')
-                time.sleep(1)
-        except RuntimeError:
-            pass
-        else:
-            raise AssertionError('migration remained busy')
-    assert m.shared.status(aid) == {'backend': 'per_account_singbox', 'migration': None, 'ready': True}
-    assert m.owned(aid, 'app').id == identity
-    print(json.dumps({'test': 'failed_migration_automatic_rollback', 'passed': True}), flush=True)
-    state = m.state(aid)
-    state['egress_migration'] = {'target': 'shared_xray', 'from': 'per_account_singbox', 'phase': 'stopped'}
-    m.save(aid, state)
-    m.owned(aid, 'app').stop(timeout=5)
-    m.shared.recover()
-    assert m.shared.status(aid) == {'backend': 'per_account_singbox', 'migration': None, 'ready': True}
-    print(json.dumps({'test': 'interrupted_migration_recovery', 'passed': True}), flush=True)
     m.block(other)
-    result = m.shared.migrate(other, 'per_account_singbox')
-    assert result['backend'] == 'per_account_singbox' and not result['ready']
     assert m.owned(other, 'app').status != 'running'
-    print(json.dumps({'test': 'disabled_offline_rollback', 'passed': True}), flush=True)
+    assert not m.shared.data['bindings'][other]['active']
+    print(json.dumps({'test': 'blocked_runtime_fenced', 'passed': True}), flush=True)
     m.delete(aid)
     m.delete(other)
     time.sleep(1)

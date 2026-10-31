@@ -18,9 +18,10 @@ from http.server import ThreadingHTTPServer
 import docker
 
 import manager
-from common import AUTH_LABEL, IMAGE_LABEL, LABEL, BadRequest, NotDraft, check
+from common import AUTH_LABEL, IMAGE_LABEL, LABEL, BadRequest, NotDraft, check, read_json
 from http_api import ROUTE, Handler
 from manager import Manager
+from shared_egress import OWNER as SHARED_OWNER, SCHEMA as SHARED_SCHEMA, SHARED
 
 DRAFT_KEY = 'd0123456789abcdef'
 OTHER_DRAFT = 'dfedcba9876543210'
@@ -108,14 +109,16 @@ class FakeContainers:
 
 
 class FakeImage:
-    def __init__(self, image_id, env):
-        self.id, self.attrs = image_id, {'Config': {'Env': env}}
+    def __init__(self, image_id, env, labels=None):
+        self.id, self.attrs = image_id, {'Config': {'Env': env, 'Labels': dict(labels or {})}}
 
 
 class FakeImages:
     def __init__(self):
         self.tags = {'app:test': 'sha256:app1', 'egress:test': 'sha256:egress1'}
         self.env = []
+        # image id -> labels; the egress image is the shared Xray gateway's
+        self.labels = {'sha256:egress1': {SHARED_SCHEMA: '1'}}
         self.registry = {}  # pullable refs -> image id
         self.pulls = []
 
@@ -124,10 +127,10 @@ class FakeImages:
 
     def get(self, ref):
         if ref in self.tags.values():
-            return FakeImage(ref, list(self.env))
+            return FakeImage(ref, list(self.env), self.labels.get(ref))
         if ref not in self.tags:
             raise docker.errors.ImageNotFound(ref + ' not found')
-        return FakeImage(self.tags[ref], list(self.env))
+        return FakeImage(self.tags[ref], list(self.env), self.labels.get(self.tags[ref]))
 
     def pull(self, ref):
         self.pulls.append(ref)
@@ -231,6 +234,65 @@ class FakeDocker:
         return self.clock
 
 
+class FakeShared:
+    """Stands in for SharedEgress: the wiring Manager does around the shared
+    gateway, without a real Xray process. The gateway itself is covered by
+    test_shared_egress.py and the Linux-only integration scripts."""
+
+    def __init__(self, manager):
+        self.m = manager
+        self.data = {'bindings': {}}
+        self.pinned = {}  # aid -> [address, port] the gateway dials, set by tests
+        self.applied = []
+
+    def gateway(self):
+        name = f'{self.m.prefix}-shared-egress'
+        c = self.m.docker.containers.items.get(name)
+        if c is None:
+            c = self.m.docker.containers.create('egress:test', name=name, labels={SHARED_OWNER: self.m.prefix})
+            c.start()
+        return c
+
+    def container(self):
+        c = self.m.docker.containers.items.get(f'{self.m.prefix}-shared-egress')
+        if c is None:
+            raise not_found('shared gateway')
+        return c
+
+    def apply(self, aid, state, desired):
+        self.m.go_offline(aid)
+        app = self.m.owned(aid, 'app')
+        if app.status != 'running':
+            app.start()
+        gateway = self.gateway()
+        self.applied.append(aid)
+        self.data['bindings'][aid] = {'active': True, 'tag': 'proxy-' + aid}
+        self.m.save(aid, state)
+        self.m.activate(aid, state, app, gateway, desired['revision'])
+        return self.m.public(aid)
+
+    def remove(self, aid, disconnect=False):
+        if disconnect:
+            self.data['bindings'].pop(aid, None)
+        else:
+            self.data['bindings'].get(aid, {}).update(active=False)
+
+    def disconnect(self, aid, gateway):
+        pass
+
+    def status(self, aid):
+        return {'backend': SHARED, 'ready': self.m.is_ready(aid, self.m.state(aid) or {})}
+
+    def healthy(self, aid, state):
+        return True
+
+    def endpoint(self, aid):
+        return self.pinned.get(aid)
+
+    def desired(self, aid):
+        return read_json(self.m.dir(aid) / 'egress-desired.json')
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -244,15 +306,15 @@ class Base(unittest.TestCase):
             os.environ.pop(name, None)
         self.m = self.make('app:test', 'egress:test')
         # Pure configuration generation is covered by test_network.py.
-        for target, value in (('manager.configuration', ({'outbounds': []}, 'table inet x {}\n')),
-                              ('manager.business_rules', 'table inet ccg_app {}\n')):
-            p = patch(target, return_value=value)
-            p.start()
-            self.addCleanup(p.stop)
+        p = patch('manager.business_rules', return_value='table inet ccg_app {}\n')
+        p.start()
+        self.addCleanup(p.stop)
 
     def make(self, app_image, egress_image):
         with patch('manager.docker.from_env', return_value=self.fake):
-            return Manager(self.tmp, app_image, egress_image, 'ccg', 'http://probe.invalid/')
+            m = Manager(self.tmp, app_image, egress_image, 'ccg', 'http://probe.invalid/')
+        m._shared = FakeShared(m)
+        return m
 
     def tearDown(self):
         self.m.lockfile.close()
@@ -438,10 +500,8 @@ class KeyTests(unittest.TestCase):
 
 class ManagerTests(Base):
     def test_direct_runtime_without_proxy(self):
-        with patch('manager.configuration', return_value=({'outbounds': []}, 'table inet x {}\n')) as conf:
-            out = self.m.apply('5', {'revision': REV, 'proxy': None, 'direct': True})
+        out = self.m.apply('5', {'revision': REV, 'proxy': None, 'direct': True})
         self.assertEqual(out['status'], 'ready')
-        self.assertIsNone(conf.call_args.args[0])
         # Without the core's direct flag a missing proxy still blocks.
         self.assertEqual(self.m.apply('5', {'revision': REV, 'proxy': None})['status'], 'blocked')
         self.assertEqual(self.m.apply('5', {'revision': REV, 'direct': 'yes'})['status'], 'blocked')
@@ -485,21 +545,36 @@ class ManagerTests(Base):
         self.apply('7')
         old_state = self.m.state('7')
         old_app = self.app('7')
-        old_egress = self.fake.containers.get('ccg-7-egress')
         old_network = self.fake.networks.get('ccg-7-net')
         volume = self.fake.volumes.get('ccg-7-data')
         policy = {'pool': '10.80.0.0/16', 'allocation': 'sequential'}
         self.apply('7', network=policy)
         state = self.m.state('7')
-        self.assertTrue(old_app.removed and old_egress.removed and old_network.removed)
+        self.assertTrue(old_app.removed and old_network.removed)
         self.assertIs(self.fake.volumes.get('ccg-7-data'), volume)
         self.assertFalse(volume.removed)
         self.assertEqual((state['api_key'], state['admin_key']), (old_state['api_key'], old_state['admin_key']))
-        self.assertEqual((state['gateway_ip'], state['app_ip'], state['uplink_ip']),
-                         ('10.80.0.2', '10.80.0.3', '10.80.1.2'))
+        self.assertEqual((state['gateway_ip'], state['app_ip']), ('10.80.0.2', '10.80.0.3'))
+        self.assertNotIn('uplink_ip', state)
+        self.assertEqual(sorted(self.fake.networks.items), ['ccg-7-net'])
         app = self.app('7')
         self.apply('7', network=policy)
         self.assertIs(self.app('7'), app)
+
+    def test_new_account_has_no_egress_container_or_uplink(self):
+        self.assertEqual(self.apply('7')['status'], 'ready')
+        self.assertNotIn('ccg-7-egress', self.fake.containers.items)
+        self.assertNotIn('ccg-7-uplink', self.fake.networks.items)
+        self.assertEqual(self.m.shared.status('7'), {'backend': SHARED, 'ready': True})
+        self.assertNotIn('uplink_ip', self.m.public('7'))
+
+    def test_runtime_left_by_an_own_egress_controller_drops_its_uplink_address(self):
+        self.apply('7')
+        state = self.m.state('7')
+        state['uplink_ip'] = '10.1.2.3'
+        self.m.save('7', state)
+        self.apply('7', network={'pool': '10.80.0.0/16', 'allocation': 'sequential'})
+        self.assertNotIn('uplink_ip', self.m.state('7'))
 
     def test_invalid_network_does_not_interrupt_existing_runtime(self):
         self.apply('7')
@@ -588,21 +663,20 @@ class ManagerTests(Base):
     def test_controller_restart_keeps_old_image_and_new_accounts_use_new_default(self):
         app1 = 'ghcr.io/sub2api-devs/ccgateway-app@sha256:' + 'b' * 64
         app2 = 'ghcr.io/sub2api-devs/ccgateway-app@sha256:' + 'c' * 64
-        egress = 'ghcr.io/sub2api-devs/ccgateway-egress@sha256:' + 'd' * 64
         images = self.fake.images
-        images.registry = {app1: 'sha256:id-b', app2: 'sha256:id-c', egress: 'sha256:id-d'}
+        images.registry = {app1: 'sha256:id-b', app2: 'sha256:id-c'}
         self.m.lockfile.close()
-        self.m = self.make(app1, egress)
+        self.m = self.make(app1, 'egress:test')
         self.assertEqual(self.apply('8')['status'], 'ready')
-        self.assertEqual(sorted(images.pulls), sorted([app1, egress]))
+        self.assertEqual(images.pulls, [app1])
         old = self.app('8')
         self.assertEqual((old.labels[IMAGE_LABEL], old.attrs['Image']), ('sha256:id-b', 'sha256:id-b'))
         self.assertEqual(self.apply('8')['status'], 'ready')
-        self.assertEqual(len(images.pulls), 2)  # present images are not pulled again
+        self.assertEqual(len(images.pulls), 1)  # present images are not pulled again
         self.assertIs(self.app('8'), old)
         # Core upgrade: the controller restarts with a new pinned digest.
         self.m.lockfile.close()
-        self.m = self.make(app2, egress)
+        self.m = self.make(app2, 'egress:test')
         self.assertEqual(self.m.public('8')['status'], 'pending')
         self.assertEqual(self.apply('8')['status'], 'ready')
         self.assertNotIn(app2, images.pulls)
@@ -616,16 +690,14 @@ class ManagerTests(Base):
     def test_environment_changes_preserve_existing_runtime(self):
         self.apply('7')
         app = self.app('7')
-        egress = self.fake.containers.get('ccg-7-egress')
         volume = self.fake.volumes.items['ccg-7-data']
         # An older Worker has no /admin/environment: the change stays pending.
         with patch('manager.requests.Session', EnvironmentSession.respond(404)):
             self.apply('7', revision='b' * 64, auth={'mode': 'oauth', 'locale': 'ja_JP.UTF-8', 'timezone': 'Asia/Tokyo'})
         self.assertEqual(len(EnvironmentSession.calls), 1)
         self.assertIs(self.app('7'), app)
-        self.assertIs(self.fake.containers.get('ccg-7-egress'), egress)
         self.assertIs(self.fake.volumes.items['ccg-7-data'], volume)
-        self.assertFalse(app.removed or egress.removed or volume.removed)
+        self.assertFalse(app.removed or volume.removed)
         self.assertTrue(self.m.public('7')['environment_pending'])
         self.assertEqual(self.m.state('7')['environment'], {'locale': '', 'timezone': ''})
 
@@ -698,10 +770,10 @@ class ManagerTests(Base):
     def test_delete_draft_removes_everything_and_is_idempotent(self):
         self.apply(DRAFT_KEY)
         self.apply(OTHER_DRAFT)
-        names = [f'ccg-{DRAFT_KEY}-{r}' for r in ('app', 'egress')]
+        names = [f'ccg-{DRAFT_KEY}-app']
         self.assertTrue(all(n in self.fake.containers.items for n in names))
         self.assertEqual(self.m.delete(DRAFT_KEY), {'deleted': True, 'removed': {
-            'containers': sorted(names), 'networks': [f'ccg-{DRAFT_KEY}-net', f'ccg-{DRAFT_KEY}-uplink'], 'volume': True}})
+            'containers': names, 'networks': [f'ccg-{DRAFT_KEY}-net'], 'volume': True}})
         for n in names:
             self.assertNotIn(n, self.fake.containers.items)
         self.assertNotIn(f'ccg-{DRAFT_KEY}-net', self.fake.networks.items)
@@ -745,23 +817,47 @@ class ManagerTests(Base):
         # The network vanishes between the plan and its removal (another
         # cleanup, an operator): deleting stays idempotent (audit P10).
         self.apply('21')
-        network = self.fake.networks.items['ccg-21-uplink']
+        network = self.fake.networks.items['ccg-21-net']
 
         def gone(*args, **kwargs):
-            raise docker.errors.NotFound('network ccg-21-uplink not found')
+            raise docker.errors.NotFound('network ccg-21-net not found')
 
         def vanish(aid):
             self.fake.networks.items.pop(network.name)
             network.reload = network.remove = gone
         with patch.object(self.m, '_detach_shared', side_effect=vanish):
             removed = self.m.delete('21', account=True, purge=True)['removed']
-        self.assertEqual(removed['networks'], ['ccg-21-net'])
+        self.assertEqual(removed['networks'], [])
         self.assertTrue(removed['volume'])
 
+    def own_egress_leftovers(self, aid):
+        """The egress container and uplink network of a runtime created while
+        accounts still had their own sing-box egress."""
+        egress = self.fake.containers.create('egress:test', name=f'ccg-{aid}-egress', labels={LABEL: aid})
+        egress.status = 'exited'
+        uplink = self.fake.networks.create(f'ccg-{aid}-uplink', labels={LABEL: aid},
+                                           ipam={'Config': [{'Subnet': '10.99.0.0/24'}]})
+        return egress, uplink
+
+    def test_delete_purges_an_own_egress_left_by_an_older_controller(self):
+        self.apply('21')
+        egress, uplink = self.own_egress_leftovers('21')
+        result = self.m.delete('21', account=True, purge=True)
+        self.assertEqual(result['removed'], {'containers': ['ccg-21-app', 'ccg-21-egress'],
+                                             'networks': ['ccg-21-net', 'ccg-21-uplink'], 'volume': True})
+        self.assertTrue(egress.removed and uplink.removed)
+
+    def test_network_change_removes_an_own_egress_left_by_an_older_controller(self):
+        self.apply('7')
+        egress, uplink = self.own_egress_leftovers('7')
+        self.apply('7', network={'pool': '10.80.0.0/16', 'allocation': 'sequential'})
+        self.assertTrue(egress.removed and uplink.removed)
+        self.assertEqual(self.m.public('7')['status'], 'ready')
+
     def test_delete_removes_ended_helpers_in_the_runtime_namespace_or_directory(self):
-        # helper() / network_idle join the app's network namespace and
-        # sing-box check mounts the runtime directory; older controllers left
-        # failed ones behind in "Created" (audit P11).
+        # helper() joins the app's network namespace and mounts a file of the
+        # runtime directory; older controllers left failed ones behind in
+        # "Created" (audit P11).
         self.apply('21')
         self.apply('22')
         app, d = self.app('21'), str(self.m.dir('21'))
@@ -798,8 +894,8 @@ class ManagerTests(Base):
         self.apply('21')
         rollback = self.rollback_copy('21')
         result = self.m.delete('21', account=True, purge=True)
-        self.assertEqual(result['removed'], {'containers': ['ccg-21-app', 'ccg-21-app-rollback-cli16x', 'ccg-21-egress'],
-                                             'networks': ['ccg-21-net', 'ccg-21-uplink'], 'volume': True})
+        self.assertEqual(result['removed'], {'containers': ['ccg-21-app', 'ccg-21-app-rollback-cli16x'],
+                                             'networks': ['ccg-21-net'], 'volume': True})
         self.assertTrue(rollback.removed)
         self.assertNotIn('ccg-21-data', self.fake.volumes.items)
         self.assertFalse((Path(self.tmp) / '21').exists())
@@ -820,7 +916,7 @@ class ManagerTests(Base):
         with self.assertRaises(manager.ResourceInUse) as raised:
             self.m.delete('21', account=True, purge=True)
         self.assertEqual(raised.exception.names, ['debug-shell'])
-        for name in ('ccg-21-app', 'ccg-21-egress', 'debug-shell'):
+        for name in ('ccg-21-app', 'debug-shell'):
             self.assertIn(name, self.fake.containers.items)
         self.assertIn('ccg-21-net', self.fake.networks.items)
         self.assertIn('ccg-21-data', self.fake.volumes.items)
@@ -828,7 +924,7 @@ class ManagerTests(Base):
         self.assertTrue((backup / '21.json').exists())
         # A foreign endpoint on the account network blocks it as well.
         foreign.remove()
-        self.fake.networks.get('ccg-21-uplink').connect(FakeContainer(self.fake, 'sidecar', 'busybox', {}))
+        self.fake.networks.get('ccg-21-net').connect(FakeContainer(self.fake, 'sidecar', 'busybox', {}))
         with self.assertRaises(manager.ResourceInUse):
             self.m.delete('21', account=True, purge=True)
         self.assertIn('ccg-21-app', self.fake.containers.items)
@@ -998,6 +1094,9 @@ class HandlerTests(Base):
         self.assertEqual(self.call('POST', '/accounts', ''), (405, {'error': 'method_not_allowed'}))
         self.assertEqual(self.call('GET', f'/accounts/{DRAFT_KEY}'), (405, {'error': 'method_not_allowed'}))
         self.assertEqual(self.call('DELETE', f'/accounts/{DRAFT_KEY}/status'), (405, {'error': 'method_not_allowed'}))
+        # Accounts have no egress backend to switch any more: the status stays readable.
+        self.assertEqual(self.call('POST', '/accounts/1/egress', '{"backend":"shared_xray"}'),
+                         (405, {'error': 'method_not_allowed'}))
         self.assertEqual(self.call('PUT', '/accounts/1/config', 'not json'), (400, {'error': 'invalid_request'}))
         self.assertEqual(self.call('PUT', '/accounts/1/config', '[]'), (400, {'error': 'invalid_request'}))
         self.assertEqual(self.call('PUT', '/accounts/1/config', json.dumps({'revision': 'x', 'proxy': {}})),
@@ -1289,8 +1388,8 @@ class ProxyRecheckTests(Base):
         return patch('manager.socket.getaddrinfo', return_value=[(2, 1, 6, '', (a, 3128)) for a in addresses])
 
     def ready_with_host(self):
-        with patch('manager.configuration', return_value=({'outbounds': [{'server': '198.51.100.7'}]}, 'table inet x {}\n')):
-            self.m.apply('21', {'revision': REV, 'proxy': {'protocol': 'http', 'host': 'proxy.example.test', 'port': 3128}})
+        self.m.apply('21', {'revision': REV, 'proxy': {'protocol': 'http', 'host': 'proxy.example.test', 'port': 3128}})
+        self.m.shared.pinned['21'] = ['198.51.100.7', 3128]
         self.assertEqual(self.m.public('21')['status'], 'ready')
 
     def test_moved_proxy_host_makes_the_runtime_pending(self):
@@ -1305,14 +1404,13 @@ class ProxyRecheckTests(Base):
             self.m.recheck_proxies()
         self.assertEqual(self.m.public('21')['status'], 'pending')
 
-    def test_new_resolution_rebuilds_the_egress_at_the_same_revision(self):
+    def test_new_resolution_reconfigures_the_gateway_at_the_same_revision(self):
         self.ready_with_host()
-        egress = self.fake.containers.get('ccg-21-egress')
+        app = self.app('21')
         self.m.drop_readiness('21')
-        with patch('manager.configuration', return_value=({'outbounds': [{'server': '198.51.100.9'}]}, 'table inet x {}\n')):
-            self.m.apply('21', {'revision': REV, 'proxy': {'protocol': 'http', 'host': 'proxy.example.test', 'port': 3128}})
-        self.assertTrue(egress.removed)
-        self.assertIsNot(self.fake.containers.get('ccg-21-egress'), egress)
+        self.m.apply('21', {'revision': REV, 'proxy': {'protocol': 'http', 'host': 'proxy.example.test', 'port': 3128}})
+        self.assertEqual(self.m.shared.applied, ['21', '21'])
+        self.assertIs(self.app('21'), app)
         self.assertEqual(self.m.public('21')['status'], 'ready')
 
     def test_address_literal_and_direct_are_never_rechecked(self):

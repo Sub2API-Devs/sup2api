@@ -7,8 +7,8 @@ import posixpath
 import docker
 
 import cleanup
-from common import (DOCKER_SOCKET, BadRequest, UpgradeInProgress, check_business_image, single_image, valid_image,
-                    write_private)
+from common import (DOCKER_SOCKET, BadRequest, InvalidImage, UpgradeInProgress, check_business_image, single_image,
+                    valid_image, write_private)
 from shared_egress import SCHEMA as SHARED_EGRESS_SCHEMA
 
 FEATURES = ('tunnel', 'uploads', 'runtime-images', 'self-upgrade', 'worker-update', 'runtime-pair-update-v1',
@@ -37,6 +37,10 @@ class RuntimeAdmin:
                 image = self.ensure_image(ref)
                 if role == 'app':
                     check_business_image(image)
+                elif ((image.attrs.get('Config') or {}).get('Labels') or {}).get(SHARED_EGRESS_SCHEMA) != '1':
+                    # The egress image is the shared Xray gateway's; the old
+                    # per-account sing-box image cannot serve it.
+                    raise InvalidImage('egress image is not a shared egress gateway')
             app, egress = desired.get('app', self.app_image), desired.get('egress', self.egress_image)
             write_private(self.root / 'runtime.json',
                           json.dumps({'app': app, 'egress': egress, 'env': self.env_images}))
@@ -72,7 +76,7 @@ class RuntimeAdmin:
         if ((image.attrs.get('Config') or {}).get('Labels') or {}).get(SHARED_EGRESS_SCHEMA) == '1':
             return
         if self.shared_bindings():
-            raise BadRequest('migrate shared accounts back before controller downgrade')
+            raise BadRequest('controller image cannot serve the shared egress gateway')
 
     def cleanup_inventory(self):
         return cleanup.inventory(self)

@@ -3944,7 +3944,7 @@ images/controller.tar.gz   # 控制器
 images/gateway.tar.gz      # Caddy 网关
 ```
 
-`images/images.json`：`{"version": 1, "images": {"app": {"ref", "file"（images/ 下的裸文件名，如 `app.tar.gz`）, "sha256", "size"}, "egress": {…}, "controller": {…}, "gateway": {…}}}`。`ref` 是镜像加载后的标签：`ccgateway-app:<插件版本>`、`ccgateway-egress:<插件版本>`、`ccgateway-controller:<插件版本>`、`caddy:<固定版本>-alpine`（构建脚本里固定，不用 `latest` / `2-alpine` 浮动标签）；`sha256` 是 `file` 的 SHA-256；整个包由插件签名覆盖。四个角色缺一不可。
+`images/images.json`：`{"version": 1, "images": {"app": {"ref", "file"（images/ 下的裸文件名，如 `app.tar.gz`）, "sha256", "size"}, "egress": {…}, "controller": {…}, "gateway": {…}}}`。`ref` 是镜像加载后的标签：`ccgateway-app:<插件版本>`、`ccgateway-egress:<插件版本>`、`ccgateway-controller:<插件版本>`、`caddy:<固定版本>-alpine`（构建脚本里固定，不用 `latest` / `2-alpine` 浮动标签）；`sha256` 是 `file` 的 SHA-256；整个包由插件签名覆盖。四个角色缺一不可。`egress` 角色自 2026-11-01（ccgateway 0.1.118）起是共享 Xray 出口网关的镜像（`companions/xray-egress`，带 `io.sup2api.ccgateway.shared-egress=1` 标签），不再是每账号 sing-box 出口；镜像名 `ccgateway-egress:<插件版本>` 不变，核心照旧处理（§57）。
 
 **构建**：
 - 新脚本 `next/deploy/docker/build-ccgateway-images.sh <插件版本> <输出目录>` 在**有 Docker 的主机上**运行（Dockerfile 的 build 阶段没有 Docker 守护进程）：用 `companions/worker/Dockerfile`、`egress/Dockerfile`、`controller/Dockerfile` 构建三个镜像（构建参数带源码提交号），拉取固定版本的 Caddy，各自 `docker save | gzip -6` 到输出目录并写 `images.json`。输出目录约定为 `next/plugins/ccgateway/images/`（git 忽略，但要进入核心 Docker 构建上下文）。
@@ -4234,17 +4234,21 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ## 57. CCGateway 共享 Xray 出口
 
-- 控制器能力 `shared-egress-v1`，与现有核心配置下发、账号生命周期、Worker 协议兼容。既有账号默认 `per_account_singbox`，只有显式迁移才采用 `shared_xray`；普通 `PUT /accounts/<key>/config` 不得覆盖本地 backend。
-- 控制器私有 `GET /accounts/<key>/egress` 返回 backend、migration、ready；`POST` 接收且仅接收 `{"backend":"shared_xray"}` 或 `{"backend":"per_account_singbox"}`。沿用控制器 Bearer 鉴权，不向业务网络开放。繁忙返回 `status: busy`，调用者限时重试；新后端必须通过探测后才能 ready。
-- 每宿主机共享服务接入各账号独立内部网及一张共享 uplink，源 IP 与入口接口共同约束来源。默认拒绝未知来源、普通转发和 IPv6；直连仅限明确配置。Xray 版本固定为 26.3.27，管理 API 和 DNS 专用 SOCKS 入口仅监听 loopback。
+> 2026-11-01（ccgateway 0.1.118）起共享 Xray 是唯一出口，每账号 sing-box 出口（`per_account_singbox`）、迁移/回迁接口和 `migrate_egress.py` 全部删除（用户决定；ovh 的 11 个运行环境已于 10-31/11-01 迁完）。下面是现行规则；原迁移与回迁规则见 git 历史与 [迁移方案](CCGATEWAY-XRAY-MIGRATION.md)。
+
+- 控制器能力 `shared-egress-v1`。每个账号（新建的也一样）都经宿主机唯一的共享网关 `<prefix>-shared-egress` 出网；没有 per-account egress 容器和 uplink 网络。核心配置下发、账号生命周期、Worker 协议不变。
+- 网关镜像就是插件包的 `egress` 角色镜像（`CCG_EGRESS_IMAGE` / `PUT /runtime/images` 的 `egress`）；`CCG_XRAY_IMAGE` 可另行固定（自建镜像的宿主机）。`PUT /runtime/images` 拒绝不带 `io.sup2api.ccgateway.shared-egress=1` 标签的 egress 镜像（`invalid_image`），旧 sing-box 镜像因此进不来。运行中的网关不因镜像变化而重建，只有之后新建的网关才用新镜像；重建网关会中断所有账号的连接，属于维护操作。
+- 控制器私有 `GET /accounts/<key>/egress` 返回 `{"backend":"shared_xray","ready"}`；`POST` 已删除（405）。沿用控制器 Bearer 鉴权，不向业务网络开放。
+- 网关接入各账号独立内部网，自己另有一张网络 `<prefix>-d0000000000000000-xray-uplink`；源 IP 与入口接口共同约束来源。默认拒绝未知来源、普通转发和 IPv6；直连仅限明确配置。Xray 版本固定为 26.3.27，管理 API 和 DNS 专用 SOCKS 入口仅监听 loopback。
 - 核心 0.1.142 起，已绑定代理的记录缺失或协议异常必须返回 `proxy_unavailable`，不得把 LEFT JOIN 的空字段视为显式直连（2026-10-21 起不再停止容器，只让请求失败，§49.22）。共享网关防火墙表缺失时仍关闭普通转发，控制器须能重新创建该表。
-- 代理修改复用原配置事件；控制器按不可变出站 tag 合成全量路由，串行更新 Xray、DNS 和防火墙。新 TCP 连接切换出口，已有连接保留；HTTP/2 新流仍可复用旧连接。不提供 Worker 每请求出口版本保证。
-- DNS 转发组件不缓存，按来源选择对应本地 SOCKS 入口，通过账号出站访问固定 DoH 地址，验证 TLS；无宿主机 DNS 兜底。UDP/TCP 53 均受来源限制。无缓存替代了设计中的按代理版本隔离缓存。
-- 控制器在私有目录保存共享状态及迁移日志；ready 绑定 app/Xray 启动身份和账号 revision。控制器或 Xray 重启逐账号恢复；失败的新配置由核心既有重试链处理，不能假报旧 revision 已成功。
-- 首次迁移等待 CLI/网络空闲，停止并启动原 app，保持 ID 和数据卷；不是零中断迁移。成功后停止但保留旧 egress 供回滚。失败尝试恢复旧路径，未完成日志在恢复时回退到来源后端。被停用账号可离线回迁，不因此启动容器（2026-10-21 起停用账号的容器照常运行，§49.22；离线回迁仍适用于已停止的容器）。
-- 单账号删除只撤销自己的共享绑定。无引用旧出站在整个共享出口无 established TCP 时保守回收；至多保留 256 个出站，达到上限拒绝继续增加而非无限增长。共享服务及旧 egress 容器的最终删除属于维护操作。
-- 已迁移账号要修改网络池时先回迁旧后端；账号代理和授权变更仍走现有入口。控制器自升级拒绝降级到不声明共享状态兼容的镜像；手动替换或外部安装器也必须先回迁全部共享账号。
-- 操作步骤、维护边界见 [迁移方案](CCGATEWAY-XRAY-MIGRATION.md)。部署是否完成以环境运行记录为准。
+- 代理修改复用原配置事件；控制器按不可变出站 tag 合成全量路由，串行更新 Xray、DNS 和防火墙，网关不重启。新 TCP 连接切换出口，已有连接保留；HTTP/2 新流仍可复用旧连接。不提供 Worker 每请求出口版本保证。
+- DNS 转发组件不缓存，按来源选择对应本地 SOCKS 入口，通过账号出站访问固定 DoH 地址，验证 TLS；无宿主机 DNS 兜底。UDP/TCP 53 均受来源限制。
+- 控制器在私有目录保存共享状态；ready 绑定 app/Xray 启动身份和账号 revision。控制器或 Xray 重启逐账号恢复；失败的新配置由核心既有重试链处理，不能假报旧 revision 已成功。
+- 修改网络池时，控制器先让网关离开账号的旧内部网，再重建网络和容器并重新绑定；数据卷与授权保留。
+- 旧宿主机上 sing-box 时代的遗留（账号的 `-egress` 容器、`-uplink` 网络、`sing-box.json`/`firewall.nft`、状态里的 `uplink_ip`/`legacy_gateway_ip`/`egress_migration`）由控制器后台按归属标签自动清理，每个进程每个运行环境一次；失败只记日志、下一轮再试，不让账号下线。网关自己的 `xray-uplink` 网络不在清理范围。删除账号、运行环境清理（§53）同样会删掉这些遗留。
+- 单账号删除只撤销自己的共享绑定。无引用旧出站在整个共享出口无 established TCP 时保守回收；至多保留 256 个出站，达到上限拒绝继续增加而非无限增长。
+- 控制器自升级拒绝降级到不声明共享网关（镜像无上述标签）的控制器镜像。控制器仍在账号状态里写 `egress_backend: shared_xray`（只有 0.1.117 及更早的控制器读它）：插件回滚到这些版本时，旧控制器把已绑定共享网关的账号照常当共享账号处理；新建账号会回到 sing-box，因此回滚只作应急。
+- 部署是否完成以环境运行记录为准。
 
 ## 58. 核心通用失败处理
 
