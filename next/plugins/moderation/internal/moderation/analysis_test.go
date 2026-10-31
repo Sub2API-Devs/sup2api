@@ -41,6 +41,11 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 			if !strings.Contains(string(req.Body["system"]), "【类别字典】") || !strings.Contains(string(req.Body["tools"]), "submit_analysis") {
 				t.Errorf("first step: system/tools missing")
 			}
+			// Signed, so a channel pointing back at this gateway does not
+			// moderate the analysis (its tool results are user text).
+			if !strings.Contains(string(req.Body["messages"]), `moderation-content id=\"`) {
+				t.Errorf("kickoff without the self marker: %s", req.Body["messages"])
+			}
 			return 200, scriptTurn{Text: "先看概况", Usage: u, Calls: []llmToolCall{
 				{ID: "t1", Name: "get_user_summary", Args: []byte(`{}`)},
 				{ID: "t2", Name: "list_suspicious_records", Args: []byte(`{"limit":10}`)}}}
@@ -137,22 +142,71 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 	if src[SourceAnalysis].Cost() != "0.00126000" || src[SourceAnalysis].PricedCalls != 3 || src[SourceAudit].FreeCalls != 2 || costs.Totals.Cost() != "0.00126000" {
 		t.Fatalf("costs = %+v", costs)
 	}
-	// A manual analysis; the mild conclusion removes the user.
-	if r := h.Do("POST", "/watchlist/3/analyze", nil, nil); r.GetStatus() != 202 {
-		t.Fatalf("analyze = %d %s", r.GetStatus(), r.GetBody())
+	// A manual analysis with a mild conclusion: the user is at enforce, so a
+	// release only downgrades to observe (0.6.0).
+	latest := func() Watch {
+		d := decodeData[UserDetail](t, h.Do("GET", "/users/3", nil, nil))
+		if d.Watch == nil {
+			return Watch{}
+		}
+		return *d.Watch
 	}
-	waitFor(t, "user removed by the analysis", func() bool {
-		return decodeData[UserDetail](t, h.Do("GET", "/users/3", nil, nil)).Watch == nil
-	})
+	analyze := func(after int64) Watch {
+		t.Helper()
+		if r := h.Do("POST", "/watchlist/3/analyze", nil, nil); r.GetStatus() != 202 {
+			t.Fatalf("analyze = %d %s", r.GetStatus(), r.GetBody())
+		}
+		var w Watch
+		waitFor(t, "manual analysis applied", func() bool {
+			w = latest()
+			return w.UserID == 0 || w.LatestAnalysisID > after
+		})
+		return w
+	}
+	w = analyze(w.LatestAnalysisID)
+	if w.Level != LevelObserve || w.Source != "analysis" || w.LatestTrend != TrendLikelyFalsePositive {
+		t.Fatalf("after a release at enforce = %+v", w)
+	}
+	if hist := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/3/events", nil, nil)); hist[0].Action != ActionAutoDowngrade {
+		t.Fatalf("history = %+v", hist[0])
+	}
+	// At observe, removal is off by default.
+	w = analyze(w.LatestAnalysisID)
+	if w.Level != LevelObserve {
+		t.Fatalf("removed although analysis_allow_remove is off: %+v", w)
+	}
+	if hist := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/3/events", nil, nil)); hist[0].Action != ActionAutoNotAllowed || hist[0].Reason != "auto_remove:likely_false_positive" {
+		t.Fatalf("history = %+v", hist[0])
+	}
+	// Allowed, but a high-severity record nobody marked as a false positive
+	// keeps the user on the list.
+	if errs := h.Configure(map[string]any{"mode": ModeObserve, "analysis_every_violations": 2, "analysis_channel_id": 2, "analysis_allow_remove": true}, nil); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	w = analyze(w.LatestAnalysisID)
+	if w.Level != LevelObserve {
+		t.Fatalf("removed with an unreviewed high-severity record: %+v", w)
+	}
+	if hist := decodeData[[]WatchEvent](t, h.Do("GET", "/watchlist/3/events", nil, nil)); hist[0].Action != ActionDowngradeSkipped || hist[0].Reason != "high_severity:likely_false_positive" {
+		t.Fatalf("history = %+v", hist[0])
+	}
+	var pending []int64
+	for _, e := range decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"user_id": "3", "result": "suspicious"}, nil)) {
+		pending = append(pending, e.ID)
+	}
+	decodeData[map[string]any](t, h.Do("POST", "/events/review", nil, map[string]any{"ids": pending, "status": "false_positive"}))
+	if w = analyze(w.LatestAnalysisID); w.UserID != 0 {
+		t.Fatalf("not removed: %+v", w)
+	}
 	if r := h.Do("POST", "/watchlist/3/analyze", nil, nil); r.GetStatus() != 404 {
 		t.Fatalf("analyze a removed user = %d", r.GetStatus())
 	}
 	all := decodeData[[]AnalysisView](t, h.Do("GET", "/watchlist/3/analyses", nil, nil))
-	if len(all) != 2 || all[0].Source != AnalysisSourceManual || all[0].Trend != TrendLikelyFalsePositive {
+	if len(all) != 5 || all[0].Source != AnalysisSourceManual || all[0].Trend != TrendLikelyFalsePositive {
 		t.Fatalf("analyses = %+v", all)
 	}
 	pr := decodeData[PromptPreview](t, h.Do("GET", "/analysis/prompt", map[string]string{"group_id": "0"}, nil))
-	if pr.Flow == nil || !strings.Contains(pr.Prompt, "第 1 级 初审") || len(pr.Dict) != 13 {
+	if pr.Flow == nil || !strings.Contains(pr.Prompt, "第 1 级 初审") || len(pr.Dict) != 13 || !strings.Contains(pr.Prompt, userTextOpen) {
 		t.Fatalf("prompt preview = %+v", pr)
 	}
 	if n := len(decodeData[[]ToolView](t, h.Do("GET", "/analysis/tools", nil, nil))); n != 5 {

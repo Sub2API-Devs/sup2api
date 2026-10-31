@@ -3,8 +3,11 @@ package moderation
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -48,30 +51,39 @@ func invalidJSON() *pluginv1.HTTPResponse {
 	return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "invalid JSON body / 请求体不是合法 JSON")
 }
 
-// testInput reads a testBody into an Input, normalized like a request.
-func testInput(req *pluginv1.HTTPRequest, c *config) (*Input, *pluginv1.HTTPResponse) {
+// testInput reads a testBody into chunks, normalized and chunked like a
+// request (one user message).
+func testInput(req *pluginv1.HTTPRequest, c *config) ([]*chunk, *pluginv1.HTTPResponse) {
 	var in testBody
 	if err := json.Unmarshal(req.GetBody(), &in); err != nil {
 		return nil, invalidJSON()
 	}
-	return in.input(c)
+	return in.chunks(c)
 }
 
-func (in testBody) input(c *config) (*Input, *pluginv1.HTTPResponse) {
-	var b inputBuilder
-	b.addText(in.Text)
-	content := []any{map[string]any{"type": "text", "text": in.Text}}
+// chunks builds the chunks of {text, images}: the text is one user
+// segment, each image one more.
+func (in testBody) chunks(c *config) ([]*chunk, *pluginv1.HTTPResponse) {
+	var e extractor
+	e.text(RoleUser, in.Text)
 	for _, u := range in.Images {
-		b.addImage(imageFromURL(strings.TrimSpace(u)))
-		content = append(content, map[string]any{"type": "image_url", "image_url": map[string]string{"url": u}})
+		e.image(RoleUser, imageFromURL(strings.TrimSpace(u)))
 	}
-	msgs, _ := json.Marshal([]any{map[string]any{"role": "user", "content": content}})
-	input := b.build(FormatMessages, msgs, c.InputMaxChars)
-	if input.Empty() {
+	pl := buildRequest(e.pieces).makePlan(c.limits, nil)
+	if len(pl.chunks) == 0 {
 		return nil, pluginsdk.FieldErrorResponse("invalid test input / 测试输入无效",
 			pluginsdk.FieldErrors{}.Add("text", "required", "text or images is required / 请输入要审核的文本或图片"))
 	}
-	return input, nil
+	return pl.chunks, nil
+}
+
+// input is the first chunk of the body (an auditor try is one call).
+func (in testBody) input(c *config) (*Input, *pluginv1.HTTPResponse) {
+	chunks, bad := in.chunks(c)
+	if bad != nil {
+		return nil, bad
+	}
+	return chunks[0].in, nil
 }
 
 // TestResult is the POST /test response data.
@@ -93,7 +105,7 @@ type TestResult struct {
 // (default: the group 0 flow). Nothing is cached, recorded or counted.
 func (p *Plugin) testModeration(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	c := p.cfg.Load()
-	input, bad := testInput(req, c)
+	chunks, bad := testInput(req, c)
 	if bad != nil {
 		return bad, nil
 	}
@@ -110,7 +122,7 @@ func (p *Plugin) testModeration(ctx context.Context, req *pluginv1.HTTPRequest) 
 		return pluginsdk.ErrorResponse(http.StatusBadRequest, "not_configured",
 			"no published and enabled flow to test (bind one to the default group, or pass flow_id) / 没有可测试的已发布流程（请绑定默认分组或指定 flow_id）"), nil
 	}
-	m := &moderation{cfg: c, flow: flow, snap: snap, in: input, timing: TimingPre, source: SourceTest}
+	m := &moderation{cfg: c, flow: flow, snap: snap, chunks: chunks, timing: TimingPre, source: SourceTest}
 	return pluginsdk.DataResponse(p.testResult(ctx, m)), nil
 }
 
@@ -124,13 +136,15 @@ func (p *Plugin) testResult(ctx context.Context, m *moderation) TestResult {
 	if out.Categories == nil {
 		out.Categories = []HitCategory{}
 	}
-	for i := range out.Trace.Stages {
-		for j := range out.Trace.Stages[i].Outcomes {
-			o := &out.Trace.Stages[i].Outcomes[j]
-			if o.Err != nil && o.ErrType == "" {
-				o.ErrType = ErrType(o.Err)
+	for _, run := range out.Trace.runs() {
+		for i := range run.Stages {
+			for j := range run.Stages[i].Outcomes {
+				o := &run.Stages[i].Outcomes[j]
+				if o.Err != nil && o.ErrType == "" {
+					o.ErrType = ErrType(o.Err)
+				}
+				out.Cost = sumCost(out.Cost, o.Cost)
 			}
-			out.Cost = sumCost(out.Cost, o.Cost)
 		}
 	}
 	return out
@@ -185,11 +199,53 @@ type importDoc struct {
 		ReviewImages *bool              `json:"review_images"`
 	} `json:"auditors"`
 	JevDefaultSet *JevQuestions `json:"jev_default_set"`
+	// AnalysisGuidelines is returned like the Jev default set: both are
+	// settings, which the core stores, so the console saves them.
+	AnalysisGuidelines *string `json:"analysis_guidelines"`
 }
 
-// importConfig: {data, preview}. Imported channels are disabled and have no
-// key; the administrator fills the key and enables them. The Jev default
-// set is only returned (it is a setting the administrator saves).
+// importFields are the fields POST /import reads, per level; anything else
+// is reported in "unsupported" (CONTRACTS §72.12).
+var importFields = map[string][]string{
+	"":         {"channels", "auditors", "jev_default_set", "analysis_guidelines"},
+	"channels": {"type", "protocol", "name", "base_url", "model", "timeout_ms", "api_key", "billing_model"},
+	"auditors": {"name", "type", "channel_ref", "thresholds", "questions", "review_images"},
+}
+
+// unsupportedImportFields lists the paths of the fields of raw that the
+// import ignores ("proxy", "channels[0].enabled", ...).
+func unsupportedImportFields(raw json.RawMessage) []string {
+	out := []string{}
+	var top map[string]json.RawMessage
+	if json.Unmarshal(raw, &top) != nil {
+		return out
+	}
+	for _, k := range slices.Sorted(maps.Keys(top)) {
+		if !slices.Contains(importFields[""], k) {
+			out = append(out, k)
+		}
+	}
+	for _, list := range []string{"channels", "auditors"} {
+		var items []map[string]json.RawMessage
+		if json.Unmarshal(top[list], &items) != nil {
+			continue
+		}
+		for i, it := range items {
+			for _, k := range slices.Sorted(maps.Keys(it)) {
+				if !slices.Contains(importFields[list], k) {
+					out = append(out, fmt.Sprintf("%s[%d].%s", list, i, k))
+				}
+			}
+		}
+	}
+	return out
+}
+
+// importConfig: {data, preview}. Imported channels are disabled; a channel
+// key in the document is sealed (§72.13.7), otherwise the administrator
+// fills it. The Jev default set and the analysis guidelines are only
+// returned: they are settings the administrator saves. Fields the import
+// does not read are listed in "unsupported".
 func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	var in struct {
 		Data    importDoc `json:"data"`
@@ -198,6 +254,10 @@ func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*
 	if err := json.Unmarshal(req.GetBody(), &in); err != nil {
 		return pluginsdk.ErrorResponse(http.StatusBadRequest, "invalid_argument", "invalid JSON body / 请求体不是合法 JSON"), nil
 	}
+	var rawDoc struct {
+		Data json.RawMessage `json:"data"`
+	}
+	_ = json.Unmarshal(req.GetBody(), &rawDoc)
 	var errs pluginsdk.FieldErrors
 	chans := make([]channelInput, len(in.Data.Channels))
 	for i, ch := range in.Data.Channels {
@@ -233,6 +293,14 @@ func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*
 			errs = errs.Add("jev_default_set", "invalid", err.Error())
 		}
 	}
+	var guidelines *string
+	if in.Data.AnalysisGuidelines != nil {
+		g := strings.TrimSpace(*in.Data.AnalysisGuidelines)
+		if len(g) > maxAnalysisGuidelines {
+			errs = errs.Add("analysis_guidelines", "too_long", fmt.Sprintf("analysis_guidelines must not exceed %d bytes / 分析准则不能超过 %d 字节", maxAnalysisGuidelines, maxAnalysisGuidelines))
+		}
+		guidelines = &g
+	}
 	if len(errs) > 0 {
 		return pluginsdk.FieldErrorResponse("invalid import / 导入内容无效", errs), nil
 	}
@@ -242,7 +310,8 @@ func (p *Plugin) importConfig(ctx context.Context, req *pluginv1.HTTPRequest) (*
 			keys++
 		}
 	}
-	out := map[string]any{"channels": len(chans), "auditors": len(auds), "keys": keys, "jev_default_set": in.Data.JevDefaultSet, "preview": in.Preview}
+	out := map[string]any{"channels": len(chans), "auditors": len(auds), "keys": keys, "jev_default_set": in.Data.JevDefaultSet,
+		"analysis_guidelines": guidelines, "unsupported": unsupportedImportFields(rawDoc.Data), "preview": in.Preview}
 	if in.Preview {
 		return pluginsdk.DataResponse(out), nil
 	}
@@ -300,9 +369,19 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 	if _, err := db.Exec(ctx, BackfillLegacySQL); err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup backfill: %v", err)
 	}
-	events, err := p.purgeRetention(ctx, db, now)
+	// The expiries come first: they are small and decide who is moderated
+	// and refused; the purge may take long and gets what is left of the job
+	// time, minus a reserve (purgeBudget).
+	watch, err := p.expireWatch(ctx, now)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "cleanup: %v", err)
+		return nil, status.Errorf(codes.Internal, "cleanup watch list: %v", err)
+	}
+	if watch > 0 {
+		p.watchChanged(ctx)
+	}
+	blocks, err := p.expireBlocks(ctx, db, now)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "cleanup blocks: %v", err)
 	}
 	// analysis_keep_per_user may have been lowered since a user's last analysis.
 	if _, err := db.Exec(ctx, `DELETE FROM user_analyses WHERE id IN (SELECT id FROM (
@@ -310,12 +389,38 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 		p.cfg.Load().AnalysisKeepPerUser); err != nil {
 		return nil, status.Errorf(codes.Internal, "cleanup analyses: %v", err)
 	}
-	watch, err := p.expireWatch(ctx, now)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "cleanup watch list: %v", err)
+	pctx, cancel := purgeBudget(ctx)
+	defer cancel()
+	events, err := p.purgeRetention(pctx, db, now)
+	partial := ""
+	switch {
+	case err != nil && ctx.Err() == nil && pctx.Err() != nil:
+		// Out of time: the next run goes on where this one stopped.
+		partial = " (retention purge stopped at the time limit, continued by the next run)"
+		p.log.Warn("moderation: retention purge stopped at the time limit", "deleted", events)
+	case err != nil:
+		return nil, status.Errorf(codes.Internal, "cleanup: %v", err)
 	}
+	return &pluginv1.RunJobResponse{Message: fmt.Sprintf("deleted %d events, %d expired watch entries and %d expired blocks%s", events, watch, blocks, partial)}, nil
+}
+
+// purgeReserve is the job time kept back from the retention purge.
+const purgeReserve = 30 * time.Second
+
+// purgeBudget is the context of the retention purge: the job's deadline
+// minus purgeReserve (the whole context without a deadline).
+func purgeBudget(ctx context.Context) (context.Context, context.CancelFunc) {
+	if dl, ok := ctx.Deadline(); ok {
+		return context.WithDeadline(ctx, dl.Add(-min(purgeReserve, time.Until(dl)/2)))
+	}
+	return context.WithCancel(ctx)
+}
+
+// expireBlocks lifts the expired bans (an expiry counts as an unblock at
+// its time) and forgets unblocks older than a year.
+func (p *Plugin) expireBlocks(ctx context.Context, db *pgxpool.Pool, now time.Time) (int64, error) {
 	var blocks int64
-	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+	err := pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT user_id FROM blocks WHERE expires_at <= $1
 			UNION SELECT user_id FROM unblocks WHERE at < $2 ORDER BY user_id`, now, now.Add(-366*24*time.Hour))
 		if err != nil {
@@ -341,13 +446,10 @@ func (p *Plugin) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plugi
 		_, err = tx.Exec(ctx, `DELETE FROM unblocks WHERE user_id = ANY($2) AND at < $1`, now.Add(-366*24*time.Hour), users)
 		return err
 	})
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "cleanup blocks: %v", err)
+	if err == nil && blocks > 0 {
+		p.blocksChanged(ctx)
 	}
-	if watch > 0 {
-		p.watchChanged(ctx)
-	}
-	return &pluginv1.RunJobResponse{Message: fmt.Sprintf("deleted %d events, %d expired watch entries and %d expired blocks", events, watch, blocks)}, nil
+	return blocks, err
 }
 
 // Retention purge batches (new-api cleanup.go cleanupBatch / cleanupPause):
@@ -358,32 +460,42 @@ var (
 	purgePause = 50 * time.Millisecond
 )
 
-// purgeLockKey is the session advisory lock that keeps the retention purge
-// on one node at a time (Configure starts it on every node); the schema
-// tells installs sharing a database apart.
+// purgeLockKey is the advisory lock that keeps the retention purge on one
+// node at a time (Configure starts it on every node); the schema tells
+// installs sharing a database apart.
 const purgeLockKey = `hashtextextended('moderation.retention_purge:' || current_schema(), 0)`
 
 // purgeRetention deletes the records past their keep_until or older than
 // the current retention of their result, and the statistics past
 // stats_retention_days: a shortened retention also applies to the rows
 // already stored (new-api cleanup.go). It runs on the node that takes the
-// advisory lock; the others return 0 at once. It returns the records deleted.
+// lock; the others return 0 at once. It returns the records deleted.
+//
+// The lock is transaction-level (pg_try_advisory_xact_lock) in a
+// transaction held open while the batches run on other connections, so it
+// is released with the transaction whatever happens, also behind a
+// transaction-mode pooler (Supabase 6543), where a session lock taken on one
+// server connection can stay with it after the client is gone. If the
+// server ends the idle transaction early, another node may purge at the same
+// time: the deletes are idempotent.
 func (p *Plugin) purgeRetention(ctx context.Context, db *pgxpool.Pool, now time.Time) (int64, error) {
-	conn, err := db.Acquire(ctx)
+	tx, err := db.Begin(ctx)
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Release()
-	var locked bool
-	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock(`+purgeLockKey+`)`).Scan(&locked); err != nil || !locked {
-		return 0, err
-	}
 	defer func() {
-		// A connection still holding the lock must not go back to the pool.
-		if _, err := conn.Exec(context.Background(), `SELECT pg_advisory_unlock(`+purgeLockKey+`)`); err != nil {
-			_ = conn.Conn().Close(context.Background())
+		// Ending the transaction releases the lock; pgx closes the
+		// connection when the rollback fails, so a lock is never pooled.
+		rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if err := tx.Rollback(rctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			p.log.Warn("moderation: retention purge lock release failed", "error", err.Error())
 		}
 	}()
+	var locked bool
+	if err := tx.QueryRow(ctx, `SELECT pg_try_advisory_xact_lock(`+purgeLockKey+`)`).Scan(&locked); err != nil || !locked {
+		return 0, err
+	}
 	deleted, err := deleteBatches(ctx, db, "events", `SELECT ctid FROM events WHERE keep_until < $1`, now)
 	if err != nil {
 		return deleted, fmt.Errorf("events: %w", err)

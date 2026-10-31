@@ -24,7 +24,8 @@
 - 统计（小时统计表、延迟分桶、漏斗、健康度、性能）、通知告警、流程画布、记录详情、观察名单详情和筛选排序都已实现。
 - 原"已知 bug"（发布流程时把自动算出的总超时写回草稿）已修：草稿保持 0，发布的版本存算出的值（`stats_api_test.go` TestFlowDraftTimeoutAndDelete）。
 - 剩下要等核心的只有按权限通知管理员；用户校验、管理审计、设置页权限已由核心 §75 补上。
-- 有意不同：统计里用户每日计数（`user_daily`）按 UTC 日期；结尾 user 消息最多取 16 条（§72.4）；手动分析排队、不返回 503。
+- 有意不同：统计里用户每日计数（`user_daily`）按 UTC 日期；手动分析排队、不返回 503。
+- 0.6.0（2026-10-31 团队审核后）：不再只审"结尾连续 user 消息、最多 16 条"，改为审请求里客户端可控的全部内容，按内容片段缓存、超长分块（§72.4）；new-api 仍只审结尾的 user 消息，这一点现在是有意不同。
 
 ## 1. 各区域对照
 
@@ -49,7 +50,7 @@
 | new-api 功能 | 插件现状 | 插件实现位置 |
 |---|---|---|
 | 筛选 result、severity、review、ai_verdict、verdict、timing、watch、flow、时间 | 已有 | `routes.go` eventFilter |
-| 筛选 group、token、用户名、request id | 已有（用户名经核心 `/users?q=` 换成 id；q 搜 request id、原因和原文） | `EventsTab.vue`、`users.ts` |
+| 筛选 group、token、用户名、request id | 已有（用户名经核心 `/users?q=` 换成 id，**需要查看者有核心 `user:read` 权限**；只有 `moderation:read` 的审核员不能按用户名筛选，只能按用户 id；q 搜 request id、原因和原文） | `EventsTab.vue`、`users.ts` |
 | 筛选 endpoint、session_fp；详情显示端点和粘性会话，可点击只看同一会话 | 已有（`RequestMeta.endpoint`、`session_fingerprint`，迁移 `0007_endpoint_session.sql`）；new-api 的会话规则名 `session_rule` 没有（核心只给指纹） | `routes.go` eventFilter；`EventsTab.vue`、`EventDetail.vue` |
 | 列表列：流程名@版本（旧版本提示"现为 vN"）、各级路径、接近阈值的分数、后台排队耗时 | 已有 | `FlowRef.vue`、`StagePath.vue`、`ScoreChips.vue` |
 | 详情：同一请求的其他记录、流程快照、名单状态、豁免、是否管理员、AI 结论及分析时间 | 已有 | `GET /events/:id`（related、flow_snapshot、user_state、ai_analyzed_at）；`EventDetail.vue` |
@@ -365,8 +366,8 @@
 
 | 需要 | new-api 用在哪里 | 现状和建议 |
 |---|---|---|
-| 按 id 批量取用户名、分组、角色、状态 | 名单、记录详情、通知、历史里的操作人 | 已有：`GetUsers`（Host API 8，`users.read`）；插件 `GET /users?ids=` 每次最多 500 个，只返回 id、显示名、状态，只回答插件表里出现过的用户；界面按页合并请求；未授予（503 `users_unavailable`）时界面退回逐个调核心 `/users/:id`（邮箱、角色只从这里来） |
-| 按用户名查用户 | 记录和名单的搜索 | 界面先用 `/users?q=` 查到 id，再用 id 搜 |
+| 按 id 批量取用户名、分组、角色、状态 | 名单、记录详情、通知、历史里的操作人 | 已有：`GetUsers`（Host API 8，`users.read`）；插件 `GET /users?ids=` 每次最多 500 个，只返回 id、显示名、状态，只回答插件的审核表（记录、名单及其历史、封禁、分析）里出现过的用户，0.6.0 起不再因为 `user_daily` 有行就回答；界面按页合并请求；未授予（503 `users_unavailable`）时界面退回逐个调核心 `/users/:id`（邮箱、角色只从这里来） |
+| 按用户名查用户 | 记录和名单的搜索 | 界面先用核心 `/users?q=` 查到 id，再用 id 搜。**这一步需要查看者有核心 `user:read` 权限**：插件的 `GET /users` 只按 id 回答（不能按名字搜，也不能列出用户），所以只有 `moderation:read` 的审核员只能按用户 id 筛选。要让他们也能按用户名筛选，需要核心给插件一个按名字查用户的宿主调用（同样只回答插件表里出现过的用户），目前没有 |
 | 识别管理员 | 名单、统计 | 已用 `AuthzCheck(moderation:read)` 实现（`staff.go`） |
 | 用户当前所在的分组 | 上下文条 | 取该用户最近一条记录的分组 |
 | 全部分组列表 | 找出未绑定流程的分组、已失效的分组 | 界面调 `/groups`（需要 group:read 权限） |

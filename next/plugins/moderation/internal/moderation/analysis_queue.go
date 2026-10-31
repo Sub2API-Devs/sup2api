@@ -211,8 +211,11 @@ const (
 // escalationOf decides what a successful analysis does to the entry (new-api
 // escalate.go; its block level is our enforce). Upgrade: block + persistent
 // or escalating + at least one violation at observe. Remove: release + a
-// mild trend + no violation. Downgrade: observe + a mild trend + no
-// violation at enforce. A refused release or downgrade is downgrade_skipped.
+// mild trend + no violation, at observe only: at enforce a release only
+// downgrades (0.6.0, CONTRACTS §72.13.4; the analysed records are user text
+// that may talk the model into a release). Downgrade: observe or release + a
+// mild trend + no violation at enforce. A refused release or downgrade is
+// downgrade_skipped.
 func escalationOf(level, trend, suggestion string, violations int) string {
 	if level != LevelObserve && level != LevelEnforce {
 		return ""
@@ -229,10 +232,13 @@ func escalationOf(level, trend, suggestion string, violations int) string {
 		}
 		return ActionAutoUpgrade
 	case SuggestRelease:
-		if mild && violations == 0 {
-			return ActionAutoRemove
+		switch {
+		case !mild || violations != 0:
+			return ActionDowngradeSkipped
+		case level == LevelEnforce:
+			return ActionAutoDowngrade
 		}
-		return ActionDowngradeSkipped
+		return ActionAutoRemove
 	case SuggestObserve:
 		if level != LevelEnforce {
 			return ""
@@ -367,8 +373,21 @@ type escalation struct {
 // otherwise auto_not_allowed; every action goes to the history.
 func escalateWatch(ctx context.Context, tx pgx.Tx, c *config, w Watch, a *Analysis, id int64, now time.Time) (escalation, error) {
 	action, denied := decideEscalation(c, w.Level, a.Trend, a.Suggestion, int(a.VerdictCounts.Violation))
-	esc := escalation{action: action, from: w.Level, to: w.Level}
 	reason := "trend:" + a.Trend
+	if action == ActionAutoRemove {
+		// The model's verdicts are not enough to take a user off the list:
+		// a high-severity record of the watch window that no administrator
+		// marked as a false positive keeps the user on it.
+		var high bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM events WHERE user_id = $1 AND `+suspiciousResult+`
+			AND severity = 'high' AND review_status <> 'false_positive' AND created_at >= $2)`, w.UserID, now.Add(-c.watchFor)).Scan(&high); err != nil {
+			return escalation{}, err
+		}
+		if high {
+			action, reason = ActionDowngradeSkipped, "high_severity:"+a.Trend
+		}
+	}
+	esc := escalation{action: action, from: w.Level, to: w.Level}
 	switch action {
 	case "":
 		return esc, nil

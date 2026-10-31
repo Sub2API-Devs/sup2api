@@ -1,6 +1,7 @@
 package moderation
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 )
@@ -25,11 +26,13 @@ var base64Signatures = []struct{ prefix, mime string }{
 	{"iVBORw0KGgo", "image/png"}, {"/9j/", "image/jpeg"}, {"R0lGOD", "image/gif"}, {"UklGR", "image/webp"},
 }
 
-// MessageParts reads a saved input_message for display; format is the
-// record's input_format (the client protocol). The parts are what the hook
-// moderated (walkParts). ok = false: the JSON cannot be read and only the
-// raw text is shown.
-func MessageParts(format, raw string) ([]MessagePart, bool) {
+// MessageParts reads a saved input_message for display. Records since 0.6.0
+// store the moderated chunk as chat messages (chunk.messages: role and
+// text / image_url parts, every role); older records stored the client's
+// trailing user messages as sent, in the format of their client protocol
+// (Gemini {parts} items are recognised by their shape). ok = false: the JSON
+// cannot be read and only the raw text is shown.
+func MessageParts(_ string, raw string) ([]MessagePart, bool) {
 	if raw == "" || !json.Valid([]byte(raw)) {
 		return nil, false
 	}
@@ -45,23 +48,132 @@ func MessageParts(format, raw string) ([]MessagePart, bool) {
 	if json.Unmarshal([]byte(raw), &items) != nil {
 		items = []json.RawMessage{json.RawMessage(raw)} // a single message
 	}
-	walkFormat := FormatMessages
-	if strings.HasPrefix(format, FormatGemini) {
-		walkFormat = FormatGemini
-	}
 	for _, item := range items {
-		walkParts(walkFormat, item, func(role string, p msgPart) {
+		var m struct {
+			Role    string          `json:"role"`
+			Type    string          `json:"type"`
+			Content json.RawMessage `json:"content"`
+			Parts   json.RawMessage `json:"parts"`
+		}
+		if json.Unmarshal(item, &m) != nil {
+			continue
+		}
+		role := m.Role
+		if m.Type != "" && m.Type != "message" {
+			role = RoleTool
+		}
+		emit := func(text string, img Image) {
 			switch {
-			case p.img.URL != "":
-				parts = append(parts, imagePart(role, p.img.URL, p.img.MediaType))
-			case p.img.Data != "":
-				parts = append(parts, imagePart(role, p.img.Data, p.img.MediaType))
-			case p.text != "":
-				parts = append(parts, MessagePart{Role: role, Type: "text", Text: p.text})
+			case img.URL != "":
+				parts = append(parts, imagePart(role, img.URL, img.MediaType))
+			case img.Data != "":
+				parts = append(parts, imagePart(role, img.Data, img.MediaType))
+			case text != "":
+				parts = append(parts, MessagePart{Role: role, Type: "text", Text: text})
 			}
-		})
+		}
+		if len(m.Parts) > 0 && len(m.Content) == 0 {
+			role = geminiRole(m.Role)
+			displayGeminiParts(m.Parts, emit)
+			continue
+		}
+		displayContent(m.Content, emit)
 	}
 	return parts, true
+}
+
+// displayContent reads {content: string | [blocks]} of a saved message.
+func displayContent(c json.RawMessage, emit func(string, Image)) {
+	c = bytes.TrimSpace(c)
+	if len(c) == 0 {
+		return
+	}
+	if c[0] == '"' {
+		var s string
+		_ = json.Unmarshal(c, &s)
+		emit(s, Image{})
+		return
+	}
+	var blocks []struct {
+		Type     string          `json:"type"`
+		Text     string          `json:"text"`
+		Source   json.RawMessage `json:"source"`
+		ImageURL json.RawMessage `json:"image_url"`
+	}
+	if json.Unmarshal(c, &blocks) != nil {
+		return
+	}
+	for _, bl := range blocks {
+		switch bl.Type {
+		case "text", "input_text":
+			emit(bl.Text, Image{})
+		case "image":
+			var src struct {
+				Type      string `json:"type"`
+				MediaType string `json:"media_type"`
+				Data      string `json:"data"`
+				URL       string `json:"url"`
+			}
+			if json.Unmarshal(bl.Source, &src) == nil {
+				if src.Type == "url" {
+					emit("", Image{URL: src.URL})
+				} else {
+					emit("", Image{MediaType: src.MediaType, Data: src.Data})
+				}
+			}
+		case "image_url", "input_image":
+			var url string
+			if json.Unmarshal(bl.ImageURL, &url) != nil {
+				var o struct {
+					URL string `json:"url"`
+				}
+				_ = json.Unmarshal(bl.ImageURL, &o)
+				url = o.URL
+			}
+			emit("", imageFromURL(url))
+		}
+	}
+}
+
+// displayGeminiParts reads the {parts} of a saved Gemini message (records
+// before 0.6.0).
+func displayGeminiParts(raw json.RawMessage, emit func(string, Image)) {
+	type blob struct {
+		MimeType string `json:"mimeType"`
+		Mime2    string `json:"mime_type"`
+		Data     string `json:"data"`
+		FileURI  string `json:"fileUri"`
+		FileURI2 string `json:"file_uri"`
+	}
+	var parts []struct {
+		Text        string `json:"text"`
+		InlineData  *blob  `json:"inlineData"`
+		InlineData2 *blob  `json:"inline_data"`
+		FileData    *blob  `json:"fileData"`
+		FileData2   *blob  `json:"file_data"`
+	}
+	if json.Unmarshal(raw, &parts) != nil {
+		return
+	}
+	pick := func(a, b *blob) *blob {
+		if a != nil {
+			return a
+		}
+		return b
+	}
+	for _, p := range parts {
+		emit(p.Text, Image{})
+		if d := pick(p.InlineData, p.InlineData2); d != nil {
+			if mt := d.MimeType + d.Mime2; strings.HasPrefix(mt, "image/") {
+				emit("", Image{MediaType: mt, Data: d.Data})
+			}
+		}
+		if f := pick(p.FileData, p.FileData2); f != nil {
+			if mt, uri := f.MimeType+f.Mime2, f.FileURI+f.FileURI2; strings.HasPrefix(mt, "image/") && uri != "" {
+				emit("", Image{MediaType: mt, URL: uri})
+			}
+		}
+	}
 }
 
 // imageExcerpt stands for an image in MessageText.

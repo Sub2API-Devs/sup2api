@@ -245,7 +245,7 @@ func (p *Plugin) simulateFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*
 		return pluginsdk.Unavailable(err.Error()), nil
 	}
 	c := p.cfg.Load()
-	var input *Input
+	var chunks []*chunk
 	if sel.EventID > 0 {
 		var text *string
 		err := db.QueryRow(ctx, `SELECT text FROM events WHERE id = $1`, sel.EventID).Scan(&text)
@@ -258,12 +258,13 @@ func (p *Plugin) simulateFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*
 		if text == nil || *text == "" {
 			return pluginsdk.ErrorResponse(http.StatusBadRequest, "no_text", "the record has no saved text / 该记录没有保存原文"), nil
 		}
-		var b inputBuilder
-		b.addText(*text)
-		input = b.build(FormatMessages, nil, c.InputMaxChars)
+		var bad *pluginv1.HTTPResponse
+		if chunks, bad = (testBody{Text: *text}).chunks(c); bad != nil {
+			return bad, nil
+		}
 	} else {
 		var bad *pluginv1.HTTPResponse
-		if input, bad = testInput(req, c); bad != nil {
+		if chunks, bad = testInput(req, c); bad != nil {
 			return bad, nil
 		}
 	}
@@ -306,7 +307,7 @@ func (p *Plugin) simulateFlow(ctx context.Context, req *pluginv1.HTTPRequest) (*
 		return nil, err
 	}
 	f := &liveFlow{ID: id, Name: name, Version: version, Spec: spec, timeout: time.Duration(spec.TotalTimeoutMs) * time.Millisecond}
-	m := &moderation{cfg: c, flow: f, snap: p.snap.Load(), in: input, timing: timing, source: SourceSimulate}
+	m := &moderation{cfg: c, flow: f, snap: p.snap.Load(), chunks: chunks, timing: timing, source: SourceSimulate}
 	out := p.testResult(ctx, m)
 	out.Timing, out.Refused = timing, timing == TimingPre && out.Result == ResultHit
 	return pluginsdk.DataResponse(out), nil

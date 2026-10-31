@@ -183,19 +183,75 @@ type StageTrace struct {
 }
 
 // Trace is one run: events.trace and the source of result, categories and
-// severity.
+// severity. A request moderated in several chunks (CONTRACTS §72.4) has one
+// run per chunk: the trace is the deciding chunk's run (Chunk is its
+// 1-based index) with the other runs in Chunks, and Errored / Skipped /
+// LatencyMs cover them all.
 type Trace struct {
-	Stages       []StageTrace `json:"stages"`
-	Final        string       `json:"final"`
-	Decider      int          `json:"decider"` // last stage that decided hit; -1 = none
-	Overturned   bool         `json:"overturned,omitempty"`
-	Errored      bool         `json:"errored,omitempty"`
-	Skipped      bool         `json:"skipped,omitempty"`
-	TruncatedRun bool         `json:"truncated_run,omitempty"`
-	LatencyMs    int64        `json:"latency_ms"`
+	Stages     []StageTrace `json:"stages"`
+	Final      string       `json:"final"`
+	Decider    int          `json:"decider"` // last stage that decided hit; -1 = none
+	Overturned bool         `json:"overturned,omitempty"`
+	Errored    bool         `json:"errored,omitempty"`
+	Skipped    bool         `json:"skipped,omitempty"`
+	// TruncatedRun is only found in records before 0.6.0 (16 trailing user
+	// messages).
+	TruncatedRun bool  `json:"truncated_run,omitempty"`
+	LatencyMs    int64 `json:"latency_ms"`
 	// InputMessageDropped says why the record has no input message although
 	// the first stage hit: save_failed (the batch was written again without).
 	InputMessageDropped string `json:"input_message_dropped,omitempty"`
+
+	Chunk  int         `json:"chunk,omitempty"`
+	Chunks []Trace     `json:"chunks,omitempty"`
+	Input  *InputTrace `json:"input,omitempty"`
+}
+
+// runs returns the trace's own run and the other chunks' runs.
+func (t *Trace) runs() []*Trace {
+	out := []*Trace{t}
+	for i := range t.Chunks {
+		out = append(out, &t.Chunks[i])
+	}
+	return out
+}
+
+// combineTraces makes one trace of the chunk runs (trs[i] is chunk i+1): the
+// first chunk that hit decides; without a hit the first overturned, then
+// the first errored, then the first chunk is shown.
+func combineTraces(trs []Trace) Trace {
+	if len(trs) == 1 {
+		return trs[0]
+	}
+	pick := -1
+	for _, cond := range []func(*Trace) bool{
+		func(t *Trace) bool { return t.Final == Hit },
+		func(t *Trace) bool { return t.Overturned },
+		func(t *Trace) bool { return t.Errored },
+	} {
+		for i := range trs {
+			if pick < 0 && cond(&trs[i]) {
+				pick = i
+			}
+		}
+	}
+	pick = max(pick, 0)
+	out := trs[pick]
+	out.Chunk = pick + 1
+	out.Chunks = nil
+	skipped := true
+	for i := range trs {
+		t := trs[i]
+		t.Chunk = i + 1
+		out.Errored = out.Errored || t.Errored
+		skipped = skipped && t.Skipped
+		out.LatencyMs = max(out.LatencyMs, t.LatencyMs)
+		if i != pick {
+			out.Chunks = append(out.Chunks, t)
+		}
+	}
+	out.Skipped = skipped
+	return out
 }
 
 // auditFunc runs one auditor of the flow.

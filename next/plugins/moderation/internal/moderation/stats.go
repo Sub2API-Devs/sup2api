@@ -368,25 +368,29 @@ func (p *Plugin) countRun(m *moderation, tr Trace) {
 		fc.errors++
 	}
 	fc.observe(tr.LatencyMs)
-	for i, st := range tr.Stages {
-		sk := k
-		sk.stage = i + 1
-		sc := p.hourly.row(sk)
-		sc.audited++
-		if st.Result == Hit {
-			sc.hit++
-		}
-		if st.Errored {
-			sc.errors++
-		}
-		for j := range st.Outcomes {
-			o := &st.Outcomes[j]
-			ak := sk
-			ak.auditor = o.AuditorID
-			p.hourly.row(ak).countOutcome(o)
-			if ch := m.snap.channels[o.ChannelID]; ch != nil && metered(o.EngineResult, o.Err) {
-				items = append(items, priceItem{key: costKey{hour: k.hour, channel: ch.ID, source: SourceAudit}, auditor: ak, ch: ch,
-					usage: o.Usage, calls: int64(max(o.Calls, 1))})
+	// A request moderated in chunks counts once on the flow row and once per
+	// chunk on the stage and auditor rows (each chunk is a run of the flow).
+	for _, run := range tr.runs() {
+		for i, st := range run.Stages {
+			sk := k
+			sk.stage = i + 1
+			sc := p.hourly.row(sk)
+			sc.audited++
+			if st.Result == Hit {
+				sc.hit++
+			}
+			if st.Errored {
+				sc.errors++
+			}
+			for j := range st.Outcomes {
+				o := &st.Outcomes[j]
+				ak := sk
+				ak.auditor = o.AuditorID
+				p.hourly.row(ak).countOutcome(o)
+				if ch := m.snap.channels[o.ChannelID]; ch != nil && metered(o.EngineResult, o.Err) {
+					items = append(items, priceItem{key: costKey{hour: k.hour, channel: ch.ID, source: SourceAudit}, auditor: ak, ch: ch,
+						usage: o.Usage, calls: int64(max(o.Calls, 1))})
+				}
 			}
 		}
 	}

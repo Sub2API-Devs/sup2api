@@ -302,19 +302,21 @@ var openAIImageTypes = []string{"image/png", "image/jpeg", "image/gif", "image/w
 
 // openAIAudit calls POST {base}/v1/moderations with the text, or the text plus
 // one random image (the API takes one). A 400 with the image is retried once
-// with the text only.
+// with the text only. Only the chosen image becomes a data URL (one copy of
+// one image, not of all of them).
 func openAIAudit(ctx context.Context, ch *liveChannel, in *Input) (EngineResult, error) {
-	urls := openAIImageURLs(in.Images)
+	usable := openAIUsableImages(in.Images)
 	res := EngineResult{SkippedImages: len(in.Images)}
-	if in.Text == "" && len(urls) == 0 {
+	if in.Text == "" && len(usable) == 0 {
 		return res, ErrNoInput
 	}
 	img := ""
-	if len(urls) > 0 {
-		img = urls[0]
-		if n, err := rand.Int(rand.Reader, big.NewInt(int64(len(urls)))); err == nil {
-			img = urls[n.Int64()]
+	if len(usable) > 0 {
+		pick := usable[0]
+		if n, err := rand.Int(rand.Reader, big.NewInt(int64(len(usable)))); err == nil {
+			pick = usable[n.Int64()]
 		}
+		img = openAIImageURL(pick)
 		res.SentImages, res.SkippedImages = 1, res.SkippedImages-1
 	}
 	res.Calls = 1
@@ -356,27 +358,35 @@ func callModerations(ctx context.Context, ch *liveChannel, text, img string) (ma
 	return out.Results[0].CategoryScores, out.Model, nil
 }
 
-// openAIImageURLs: URLs as they are; base64 becomes a data URL, with the
-// type sniffed when the client gave none.
-func openAIImageURLs(images []Image) []string {
-	urls := make([]string, 0, len(images))
+// openAIUsableImages are the images the API can take, with the MIME type of
+// bare base64 sniffed when the client gave none: URLs as they are, inline
+// data of a known image type.
+func openAIUsableImages(images []Image) []Image {
+	out := make([]Image, 0, len(images))
 	for _, img := range images {
 		if img.URL != "" {
-			urls = append(urls, img.URL)
+			out = append(out, img)
 			continue
 		}
-		mt := img.MediaType
-		if mt == "" {
+		if img.MediaType == "" {
 			head, _ := base64.StdEncoding.DecodeString(img.Data[:min(len(img.Data), 684)])
 			if s := http.DetectContentType(head); slices.Contains(openAIImageTypes, s) {
-				mt = s
+				img.MediaType = s
 			}
 		}
-		if mt != "" {
-			urls = append(urls, "data:"+mt+";base64,"+img.Data)
+		if img.MediaType != "" {
+			out = append(out, img)
 		}
 	}
-	return urls
+	return out
+}
+
+// openAIImageURL is the image as sent: a URL, or a data URL.
+func openAIImageURL(img Image) string {
+	if img.URL != "" {
+		return img.URL
+	}
+	return "data:" + img.MediaType + ";base64," + img.Data
 }
 
 // ---------------------------------------------------------------- typesafe (Jev)

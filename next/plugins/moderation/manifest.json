@@ -9,7 +9,7 @@
     "en": "Moderates gateway requests with flows of auditors (OpenAI moderation, TypeSafe Jev, LLM verdict) bound to groups. Users on the watch list at the enforce level are moderated before the upstream call and refused on a hit; the others are moderated in the background. Suspicious users join the watch list automatically; an AI analysis reviews their records and can adjust the watch level; repeated violations can ban them. The cost of every moderation call is shown with the core model prices.",
     "zh": "按分组绑定的审核流程（OpenAI 内容审核、TypeSafe Jev、大模型判定）审核网关请求。观察名单中拦截级的用户先审后发、命中即拒绝，其余请求在后台审核。可疑用户自动进入观察名单，AI 分析复核其记录并可调整名单级别，多次违规可自动封禁。每次审核调用的费用按核心的模型价格展示。"
   },
-  "version": "0.5.1",
+  "version": "0.6.0",
   "publisher": "sub2api",
   "icon": "text:M",
   "runtime": "grpc",
@@ -36,6 +36,13 @@
   ],
   "hooks": [
     {
+      "id": "ban",
+      "point": "gateway.request",
+      "order": 199,
+      "timeoutMs": 2000,
+      "failure": "open"
+    },
+    {
       "id": "moderation",
       "point": "gateway.request",
       "order": 200,
@@ -46,15 +53,24 @@
           "openai.responses",
           "openai.responses_ws",
           "gemini.generate",
-          "gemini.stream_generate"
+          "gemini.stream_generate",
+          "volcengine.images",
+          "volcengine.video_submit"
         ]
       },
       "needs": [
         "model",
-        "messages|@reverse|[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]",
-        "input|@reverse|[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]",
-        "[input]|#(%\"*\")",
-        "contents|@reverse|[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]"
+        "system|@this",
+        "messages|@this",
+        "tools|@this",
+        "input|@this",
+        "instructions|@this",
+        "contents|@this",
+        "systemInstruction|@this",
+        "system_instruction|@this",
+        "prompt|@this",
+        "content|@this",
+        "image|@this"
       ],
       "timeoutMs": 30000,
       "failure": "open"
@@ -519,15 +535,22 @@
         ],
         "fields": [
           "model",
-          "messages|@reverse|[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]",
-          "input|@reverse|[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]",
-          "[input]|#(%\"*\")",
-          "contents|@reverse|[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]"
+          "system|@this",
+          "messages|@this",
+          "tools|@this",
+          "input|@this",
+          "instructions|@this",
+          "contents|@this",
+          "systemInstruction|@this",
+          "system_instruction|@this",
+          "prompt|@this",
+          "content|@this",
+          "image|@this"
         ]
       },
       "reason": {
-        "en": "Read the model and the trailing user messages (text and images) of gateway requests to moderate them, and refuse violating requests",
-        "zh": "读取网关请求的模型和末尾连续的用户消息（文字和图片）进行审核，并拒绝违规请求"
+        "en": "Read the model and the client-controlled content of gateway requests (messages of every role, system prompt or instructions, tool calls, results and definitions, documents, images, image and video prompts) to moderate it, refuse violating requests, and refuse banned users on every protocol",
+        "zh": "读取网关请求的模型和客户端可控的全部内容（各角色的消息、系统提示词或 instructions、工具调用、结果与定义、文档、图片、生图和视频提示词）进行审核，拒绝违规请求，并在所有协议上拒绝被封禁的用户"
       }
     },
     {

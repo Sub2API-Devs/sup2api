@@ -108,6 +108,29 @@ func dropInputMessages(evs []eventRec, reason string) bool {
 
 func (r *eventRec) suspicious() bool { return r.Result == ResultHit || r.Result == ResultBlock }
 
+// storable makes every text value of the record acceptable to PostgreSQL:
+// text columns reject NUL and invalid UTF-8, jsonb also the \u0000 escape.
+// The moderated text is normalized already (normalizeText); the metadata
+// and the upstream answers in the trace are not under our control.
+func (r *eventRec) storable() {
+	for _, s := range []*string{&r.RequestID, &r.Model, &r.Protocol, &r.Endpoint, &r.SessionFp, &r.Mode, &r.Timing,
+		&r.Result, &r.Severity, &r.HighestCategory, &r.InputFormat, &r.TextHash} {
+		*s = pgText(*s)
+	}
+	for i := range r.HitCategories {
+		r.HitCategories[i] = pgText(r.HitCategories[i])
+	}
+	if r.Text != nil {
+		t := pgText(*r.Text)
+		r.Text = &t
+	}
+	if r.InputMessage != nil {
+		m := string(pgJSON([]byte(*r.InputMessage)))
+		r.InputMessage, r.InputMessageSize = &m, len(m)
+	}
+	r.Trace = pgJSON(r.Trace)
+}
+
 // storeEvents writes records and applies them to the watch list and the
 // bans. When the write fails the records are written again without their
 // input messages: those are the largest and least checked part of a record
@@ -153,7 +176,9 @@ func (p *Plugin) writeEvents(ctx context.Context, evs []eventRec) ([]int64, erro
 		return nil, err
 	}
 	b := &pgx.Batch{}
-	for _, e := range evs {
+	for i := range evs {
+		evs[i].storable()
+		e := evs[i]
 		verdict, action := e.legacyColumns()
 		mode := e.Mode
 		if mode != ModeEnforce {

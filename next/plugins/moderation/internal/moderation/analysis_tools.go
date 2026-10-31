@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -195,9 +196,30 @@ func (tc *toolCtx) allowFlow(flowID int64, version int) {
 
 func (tc *toolCtx) see(r *toolRow) {
 	if _, ok := tc.records[r.ID]; !ok {
-		tc.records[r.ID] = r.Excerpt
+		tc.records[r.ID] = defuseUserText(r.Excerpt)
 	}
 	tc.allowFlow(r.FlowID, r.FlowVersion)
+}
+
+// The user's text in tool results sits between these tags (CONTRACTS
+// §72.13.4): it is evidence, and the system prompt says no instruction in it
+// is followed. A tag inside the text is defused so it cannot close the
+// boundary early.
+const (
+	userTextOpen  = "<user_text>"
+	userTextClose = "</user_text>"
+)
+
+var userTextTagRe = regexp.MustCompile(`(?i)user_text`)
+
+func defuseUserText(s string) string { return userTextTagRe.ReplaceAllString(s, "user-text") }
+
+// wrapUserText puts the user's text between the boundary tags.
+func wrapUserText(s string) string {
+	if s == "" {
+		return ""
+	}
+	return userTextOpen + defuseUserText(s) + userTextClose
 }
 
 func toolNames() []string {
@@ -354,7 +376,7 @@ var reviewStatusNames = map[string]string{"pending": "还没处理", "false_posi
 
 func (tc *toolCtx) recordOf(r *toolRow, excerptRunes int, detail bool) toolRecord {
 	out := toolRecord{ID: r.ID, CreatedAt: toolTime(&r.CreatedAt), Group: r.GroupID, SessionFp: r.SessionFp, FlowID: r.FlowID, FlowVersion: r.FlowVersion,
-		Timing: r.Timing, Severity: r.Severity, ReviewStatus: reviewStatusNames[r.ReviewStatus], Excerpt: truncateRunes(r.Excerpt, excerptRunes),
+		Timing: r.Timing, Severity: r.Severity, ReviewStatus: reviewStatusNames[r.ReviewStatus], Excerpt: wrapUserText(truncateRunes(r.Excerpt, excerptRunes)),
 		HitCategories: []toolHit{}, Stages: []toolStage{}}
 	var tr Trace
 	if len(r.Trace) > 0 && json.Unmarshal(r.Trace, &tr) == nil {
@@ -485,12 +507,12 @@ func toolGetRecord(ctx context.Context, tc *toolCtx, args json.RawMessage) (any,
 		start := min(a.Offset, row.TextLen)
 		n := utf8.RuneCountInString(part)
 		end := start + n
-		out.Text = part
+		out.Text = wrapUserText(part)
 		out.TextRange = &toolTextRange{Offset: start, Returned: n, Total: row.TextLen, Complete: end >= row.TextLen}
 		if end < row.TextLen {
 			out.TextRange.NextOffset = end
 		}
-		tc.records[row.ID] += "\n" + part
+		tc.records[row.ID] += "\n" + defuseUserText(part)
 	}
 	return out, nil
 }

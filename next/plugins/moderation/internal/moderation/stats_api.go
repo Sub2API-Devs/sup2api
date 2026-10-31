@@ -165,9 +165,11 @@ func (p *Plugin) clockOf(req *pluginv1.HTTPRequest) clock {
 	return c
 }
 
-// dayStart is the caller's local midnight (as UTC) of t.
+// dayStart is the caller's local midnight (as UTC) of t. t is taken as UTC
+// first: pgx reads timestamptz in the host's local zone, and the calendar
+// fields of a non-UTC time would shift the day (Truncate is zone-free).
 func (c clock) dayStart(t time.Time) time.Time {
-	l := t.Add(c.offset)
+	l := t.UTC().Add(c.offset)
 	return time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, time.UTC).Add(-c.offset)
 }
 

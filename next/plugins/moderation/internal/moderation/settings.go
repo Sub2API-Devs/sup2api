@@ -63,6 +63,13 @@ type Settings struct {
 	QueueSize       int `json:"queue_size"`
 	TTFTTimeoutMs   int `json:"ttft_timeout_ms"`
 
+	// Chunking and admission (CONTRACTS §72.4, §72.5; 0.6.0).
+	InputMaxChunks    int    `json:"input_max_chunks"`
+	InputOverflow     string `json:"input_overflow"`
+	InputMaxImages    int    `json:"input_max_images"`
+	MaxInflightMB     int    `json:"max_inflight_mb"`
+	ErrorTextMaxChars int    `json:"error_text_max_chars"`
+
 	BlockStatus  int    `json:"block_status"`
 	BlockMessage string `json:"block_message"`
 
@@ -128,19 +135,27 @@ const maxAnalysisGuidelines = 16 << 10
 // DefaultBlockMessage is the default deny message of a hit.
 const DefaultBlockMessage = "提示词审核未通过，请调整输入后重试"
 
+// input_overflow: what a request with more chunks than input_max_chunks
+// gets (CONTRACTS §72.4).
+const (
+	OverflowSample = "sample" // the first, the last and evenly spread chunks run
+	OverflowBlock  = "block"  // pre: refused; post: sampled like OverflowSample
+)
+
 // DefaultSettings returns the schema defaults.
 func DefaultSettings() Settings {
 	return Settings{
 		Mode:          ModeOff,
 		InputMaxChars: 12000, MinChars: 2,
-		CacheTTLSeconds: 3600, CacheEntries: 100000,
+		CacheTTLSeconds: 86400, CacheEntries: 100000,
 		MaxConcurrency: 16, QueueSize: 1000, TTFTTimeoutMs: 10000,
+		InputMaxChunks: 8, InputOverflow: OverflowSample, InputMaxImages: 8, MaxInflightMB: 128, ErrorTextMaxChars: 2000,
 		BlockStatus: 403, BlockMessage: DefaultBlockMessage,
 		RecordOverturned: true, RecordErrors: true, StoreText: true,
 		HitRetentionDays: 180, OverturnedRetentionDays: 30, ErrorRetentionDays: 7, PassRetentionDays: 3,
 		AutoWatch: true, WatchDays: 30, AnalysisEveryViolations: 30,
 		AnalysisTimeoutMs: 60000, AnalysisConcurrency: 2, AnalysisContextKB: 64, AnalysisKeepPerUser: 20,
-		AnalysisAllowUpgrade: true, AnalysisAllowDowngrade: true, AnalysisAllowRemove: true,
+		AnalysisAllowUpgrade: true, AnalysisAllowDowngrade: true, AnalysisAllowRemove: false,
 		BanWindowHours: 24, BanDurationHours: 24,
 		ErrorRateAlertPercent: 5, StatsRetentionDays: 90,
 		ToolChoice: "required", MaxTurns: 3, MaxTokens: 512, TimeoutMs: 10000, OnError: "allow",
@@ -263,6 +278,11 @@ func (d decoder) general(s *Settings) {
 	d.integer("max_concurrency", &s.MaxConcurrency, 1, 256)
 	d.integer("ttft_timeout_ms", &s.TTFTTimeoutMs, 1000, 60000)
 	d.integer("queue_size", &s.QueueSize, 1, 100000)
+	d.integer("input_max_chunks", &s.InputMaxChunks, 1, 32)
+	d.enum("input_overflow", &s.InputOverflow, OverflowSample, OverflowBlock)
+	d.integer("input_max_images", &s.InputMaxImages, 0, 32)
+	d.integer("max_inflight_mb", &s.MaxInflightMB, 16, 4096)
+	d.integer("error_text_max_chars", &s.ErrorTextMaxChars, 0, 100000)
 	d.integer("block_status", &s.BlockStatus, 400, 599)
 	d.str("block_message", &s.BlockMessage)
 	s.BlockMessage = textutil.TruncateRunes(strings.TrimSpace(s.BlockMessage), 500)
@@ -412,12 +432,16 @@ type config struct {
 	retention       map[string]time.Duration // by result
 	legacyReady     bool                     // the 0.1 setup is complete enough to convert
 	jevDefault      JevQuestions
+	limits          planLimits // chunking of the moderated content
+	maxInflight     int64      // bytes of hook requests in progress (max_inflight_mb)
 }
 
 // compile derives the runtime config from settings.
 func compile(s Settings) *config {
 	c := &config{Settings: s}
 	c.enabled = s.Mode != ModeOff
+	c.limits = planLimits{maxChars: s.InputMaxChars, maxChunks: s.InputMaxChunks, maxImages: s.InputMaxImages}
+	c.maxInflight = int64(s.MaxInflightMB) << 20
 	c.exempt = map[int64]bool{}
 	for _, u := range s.ExemptUserIDs {
 		if id, err := strconv.ParseInt(u, 10, 64); err == nil {

@@ -42,7 +42,9 @@ type ChannelView struct {
 	// List and detail only.
 	PriceState *PriceState  `json:"price_state,omitempty"`
 	Cost30d    *CostSummary `json:"cost_30d,omitempty"`
-	Stats      *ChannelStat `json:"stats,omitempty"`
+	// Cost30dFrom: stats_retention_days is under 30, cost_30d starts here.
+	Cost30dFrom *time.Time   `json:"cost_30d_from,omitempty"`
+	Stats       *ChannelStat `json:"stats,omitempty"`
 	// UsedBy lists the auditors on the channel; Analysis = it is the AI
 	// analysis channel.
 	UsedBy   []AuditorRef `json:"used_by,omitempty"`
@@ -226,6 +228,8 @@ func (p *Plugin) decorateChannel(ctx context.Context, c *ChannelView, costs map[
 	c.PriceState = &st
 	sum := costs[c.ID]
 	c.Cost30d = &sum
+	now := p.now().UTC()
+	c.Cost30dFrom = p.retainedFrom(now, now.Add(-30*24*time.Hour))
 }
 
 func (p *Plugin) getChannel(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {

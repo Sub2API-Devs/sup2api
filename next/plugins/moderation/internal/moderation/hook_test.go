@@ -77,6 +77,15 @@ type fakeMod struct {
 	srv   *httptest.Server
 	calls sync.Map     // path -> *atomic.Int64
 	delay atomic.Int64 // nanoseconds before answering
+	mu    sync.Mutex
+	texts []string // request bodies of /v1/moderations
+}
+
+// moderated returns the /v1/moderations request bodies so far.
+func (f *fakeMod) moderated() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.texts...)
 }
 
 var hitToken = regexp.MustCompile(`MOD-HIT-([a-z/_-]+)`)
@@ -91,6 +100,11 @@ func newFakeMod(t *testing.T) *fakeMod {
 		}
 		body, _ := io.ReadAll(r.Body)
 		text := string(body)
+		if r.URL.Path == "/v1/moderations" {
+			f.mu.Lock()
+			f.texts = append(f.texts, text)
+			f.mu.Unlock()
+		}
 		if strings.Contains(text, "MOD-500") {
 			w.WriteHeader(500)
 			_, _ = io.WriteString(w, `{"error":{"message":"boom"}}`)
@@ -598,11 +612,18 @@ func TestCleanupAndImport(t *testing.T) {
 		t.Fatalf("records younger than the retention = %d %v", left, err)
 	}
 	doc := map[string]any{"data": map[string]any{
-		"channels": []any{map[string]any{"type": "openai", "name": "omni", "base_url": "https://api.openai.com"}},
-		"auditors": []any{map[string]any{"name": "a", "type": "openai", "channel_ref": 0, "thresholds": map[string]float64{"sexual": 0.5}}},
+		"channels":            []any{map[string]any{"type": "openai", "name": "omni", "base_url": "https://api.openai.com", "proxy": "socks5://x"}},
+		"auditors":            []any{map[string]any{"name": "a", "type": "openai", "channel_ref": 0, "thresholds": map[string]float64{"sexual": 0.5}}},
+		"analysis_guidelines": "  my guidelines  ",
+		"flows":               []any{},
 	}, "preview": true}
 	prev := decodeData[map[string]any](t, h.Do("POST", "/import", nil, doc))
 	if prev["channels"] != float64(1) || len(decodeData[[]ChannelView](t, h.Do("GET", "/channels", nil, nil))) != 0 {
+		t.Fatalf("preview = %v", prev)
+	}
+	// The guidelines come back for the console to save; what the import
+	// does not read is reported, not dropped silently.
+	if prev["analysis_guidelines"] != "my guidelines" || fmt.Sprint(prev["unsupported"]) != "[flows channels[0].proxy]" {
 		t.Fatalf("preview = %v", prev)
 	}
 	doc["preview"] = false

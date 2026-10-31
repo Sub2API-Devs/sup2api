@@ -286,6 +286,13 @@ func waitStepRetry(ctx context.Context, err error) bool {
 func (p *Plugin) runAgent(ctx context.Context, ch *liveChannel, system string, tc *toolCtx, c *config, a *Analysis) error {
 	proto := protocolOf(ch)
 	kickoff := "请分析用户 #" + strconv.FormatInt(tc.userID, 10) + " 的近期可疑记录：用工具查看，逐条复核，最后调用 submit_analysis 提交结论。信息够了就提交。"
+	// The tool results carry the user's suspicious text: an analysis
+	// channel that points back at this gateway would have it moderated
+	// (0.6.0 moderates tool results) and refused or put on the watch list.
+	// The signed marker makes the hook recognise its own call.
+	if len(ch.markerKey) > 0 {
+		kickoff += "\n" + selfMarker(ch.markerKey)
+	}
 	conv := conversation{proto: proto, kickoff: llmUserMessage(kickoff)}
 	tools := llmTools()
 	budgetLimit := c.AnalysisContextKB << 10

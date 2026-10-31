@@ -4,109 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"image"
 	"image/png"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/tidwall/gjson"
 )
-
-// hookFields evaluates the manifest needs on a request body exactly like the
-// core (gjson.GetBytes(...).Raw).
-func hookFields(body string) map[string]string {
-	out := map[string]string{}
-	for _, f := range []string{FieldModel, FieldMessages, FieldInput, FieldInputString, FieldGeminiContent} {
-		if r := gjson.Get(body, f); r.Exists() {
-			out[f] = r.Raw
-		}
-	}
-	return out
-}
-
-func extract(t *testing.T, body string) *Input {
-	t.Helper()
-	return extractInput(hookFields(body), 12000)
-}
-
-func TestExtractTrailingUserRun(t *testing.T) {
-	png1 := "iVBORw0KGgo="
-	for _, tc := range []struct {
-		name, body, text string
-		images           int
-		format           string
-	}{
-		{"anthropic run", `{"messages":[{"role":"user","content":"old"},{"role":"assistant","content":"a"},
-			{"role":"user","content":[{"type":"tool_result","content":"tool out"}]},
-			{"role":"user","content":[{"type":"text","text":"hello"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + png1 + `"}}]}]}`,
-			"hello", 1, FormatMessages},
-		{"last is assistant", `{"messages":[{"role":"user","content":"q"},{"role":"assistant","content":"prefill"}]}`, "", 0, ""},
-		{"openai chat image_url", `{"messages":[{"role":"system","content":"s"},{"role":"user","content":[{"type":"text","text":"look  at\n this"},{"type":"image_url","image_url":{"url":"https://x/y.png"}}]}]}`,
-			"look at this", 1, FormatMessages},
-		{"system reminder kept", `{"messages":[{"role":"user","content":"<system-reminder>ctx</system-reminder> hi"}]}`, "<system-reminder>ctx</system-reminder> hi", 0, FormatMessages},
-		{"responses tool turn ends run", `{"input":[{"role":"user","content":"old"},{"type":"function_call_output","output":"x"},
-			{"role":"user","content":[{"type":"input_text","text":"new"},{"type":"input_image","image_url":"data:image/png;base64,` + png1 + `"}]}]}`,
-			"new", 1, FormatResponses},
-		{"responses string", `{"input":"just text"}`, "just text", 0, FormatResponses},
-		{"responses websocket turn", `{"type":"response.create","model":"m","previous_response_id":"r1","input":[{"role":"user","content":[{"type":"input_text","text":"ws turn"}]}]}`,
-			"ws turn", 0, FormatResponses},
-		{"gemini", `{"contents":[{"role":"model","parts":[{"text":"m"}]},{"parts":[{"text":"g1"},{"inlineData":{"mimeType":"image/jpeg","data":"abc"}},{"functionResponse":{}}]}]}`,
-			"g1", 1, FormatGemini},
-		{"two user messages joined", `{"messages":[{"role":"assistant","content":"a"},{"role":"user","content":"one"},{"role":"user","content":"two"}]}`, "one two", 0, FormatMessages},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			in := extract(t, tc.body)
-			if in.Text != tc.text || len(in.Images) != tc.images || (tc.format != "" && in.Format != tc.format) {
-				t.Fatalf("got text %q images %d format %q", in.Text, len(in.Images), in.Format)
-			}
-		})
-	}
-}
-
-func TestExtractMessagesAndHash(t *testing.T) {
-	in := extract(t, `{"messages":[{"role":"assistant","content":"a"},{"role":"user","content":"one"},{"role":"user","content":"two"}]}`)
-	var msgs []map[string]any
-	if err := json.Unmarshal(in.Messages, &msgs); err != nil || len(msgs) != 2 || msgs[0]["content"] != "one" || msgs[1]["content"] != "two" {
-		t.Fatalf("messages = %s", in.Messages)
-	}
-	again := extract(t, `{"messages":[{"role":"user","content":"one   two"}]}`)
-	if again.Text != in.Text || again.Hash != in.Hash {
-		t.Fatal("same normalized text must hash the same")
-	}
-	img := extract(t, `{"messages":[{"role":"user","content":[{"type":"text","text":"one two"},{"type":"image_url","image_url":{"url":"https://a/b"}}]}]}`)
-	if img.Hash == in.Hash || !img.HasURLImage {
-		t.Fatal("an image changes the hash and marks the URL image")
-	}
-	// 20 user messages: only 16 reach the plugin, the run is marked truncated.
-	var b strings.Builder
-	b.WriteString(`{"messages":[`)
-	for i := 0; i < 20; i++ {
-		if i > 0 {
-			b.WriteByte(',')
-		}
-		b.WriteString(`{"role":"user","content":"m` + string(rune('a'+i)) + `"}`)
-	}
-	b.WriteString(`]}`)
-	long := extract(t, b.String())
-	if !long.TruncatedRun || !strings.HasPrefix(long.Text, "me ") || !strings.HasSuffix(long.Text, " mt") {
-		t.Fatalf("truncated = %v text %q", long.TruncatedRun, long.Text)
-	}
-}
-
-func TestNormalizeText(t *testing.T) {
-	if got := normalizeText([]string{"  a \n b ", "c"}, 0); got != "a b c" {
-		t.Fatalf("%q", got)
-	}
-	if got := normalizeText([]string{"abcdef"}, 3); got != "abc" {
-		t.Fatalf("%q", got)
-	}
-	if got := normalizeText([]string{"ab", "cd"}, 3); got != "ab " {
-		t.Fatalf("%q", got)
-	}
-}
 
 func TestSampled(t *testing.T) {
 	var h [32]byte
@@ -325,7 +229,10 @@ func TestJevAssetsAndOpenAIImages(t *testing.T) {
 	if a := jevAssets(in); len(a) != 1 || a[0].Format != "png" {
 		t.Fatalf("assets = %d", len(a))
 	}
-	urls := openAIImageURLs([]Image{{Data: ok}, {URL: "https://x/y.png"}, {Data: "bm90IGFuIGltYWdl"}})
+	urls := []string{}
+	for _, img := range openAIUsableImages([]Image{{Data: ok}, {URL: "https://x/y.png"}, {Data: "bm90IGFuIGltYWdl"}}) {
+		urls = append(urls, openAIImageURL(img))
+	}
 	if len(urls) != 2 || !strings.HasPrefix(urls[0], "data:image/png;base64,") || urls[1] != "https://x/y.png" {
 		t.Fatalf("urls = %v", urls)
 	}
@@ -352,6 +259,9 @@ func TestSelfMarker(t *testing.T) {
 	s := &snapshot{markers: [][]byte{markerKey("other"), k}}
 	if !s.isSelf(wrapped) {
 		t.Fatal("snapshot markers")
+	}
+	if !s.isSelf("analysis kickoff\n"+selfMarker(k)) || s.isSelf(selfMarker(markerKey("sk-x"))) {
+		t.Fatal("bare self marker")
 	}
 }
 

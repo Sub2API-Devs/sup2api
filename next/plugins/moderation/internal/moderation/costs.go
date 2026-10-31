@@ -274,6 +274,20 @@ type CostReport struct {
 	ByChannel []ChannelCost `json:"by_channel"`
 	BySource  []SourceCost  `json:"by_source"`
 	Trend     []CostPoint   `json:"trend"`
+	// DataFrom is set when stats_retention_days keeps less than the range:
+	// the statistics before it are deleted, so the sums start there
+	// (CONTRACTS §72.13.3).
+	DataFrom *time.Time `json:"data_from,omitempty"`
+}
+
+// retainedFrom is the earliest statistics hour stats_retention_days keeps
+// when that is after from, nil otherwise.
+func (p *Plugin) retainedFrom(now, from time.Time) *time.Time {
+	keep := time.Duration(p.cfg.Load().StatsRetentionDays) * 24 * time.Hour
+	if cut := now.Add(-keep).Truncate(time.Hour); cut.After(from) {
+		return &cut
+	}
+	return nil
 }
 
 // costSums selects a CostSummary (targets) from costs rows.
@@ -309,6 +323,7 @@ func (p *Plugin) getCosts(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 	if err := p.loadCostReport(ctx, db, &r, ck); err != nil {
 		return nil, err
 	}
+	r.DataFrom = p.retainedFrom(now, r.From)
 	return pluginsdk.DataResponse(r), nil
 }
 

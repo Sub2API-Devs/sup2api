@@ -65,7 +65,7 @@ func TestManifest(t *testing.T) {
 	if fields, ok := check.Fields(check.Validate(&m, files, check.ValidateOptions{Tooling: true})); ok {
 		t.Fatalf("manifest check: %+v", fields)
 	}
-	if m.Key != "moderation" || m.Version != "0.5.1" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
+	if m.Key != "moderation" || m.Version != "0.6.0" || m.HostUICompat == "" || m.UI == nil || m.UI.Native == nil ||
 		m.UI.Native.Entry != "ui/native/entry.js" || m.Database == nil || m.Database.Schema != "plg_moderation" {
 		t.Fatalf("manifest = %+v", m)
 	}
@@ -130,21 +130,27 @@ func TestManifest(t *testing.T) {
 	if m.UI.Settings == nil || m.UI.Settings.Permission != "moderation:manage" {
 		t.Errorf("ui.settings = %+v", m.UI.Settings)
 	}
-	if len(m.Hooks) != 1 {
+	if len(m.Hooks) != 2 {
 		t.Fatalf("hooks = %+v", m.Hooks)
 	}
-	hook := m.Hooks[0]
-	wantNeeds := []string{moderation.FieldModel, moderation.FieldMessages, moderation.FieldInput, moderation.FieldInputString, moderation.FieldGeminiContent}
-	if hook.ID != "moderation" || hook.Point != "gateway.request" || hook.Order != 200 || hook.TimeoutMs != 30000 ||
+	// The ban hook matches every protocol (an empty match, CONTRACTS §72.3):
+	// banned users are refused on embeddings, count_tokens, task queries and
+	// platform plugins' protocols too. It asks for no field.
+	ban := m.Hooks[0]
+	if ban.ID != moderation.HookBan || ban.Point != "gateway.request" || ban.Order >= m.Hooks[1].Order || len(ban.Needs) != 0 ||
+		len(ban.Match.Protocols) != 0 || len(ban.Match.Models) != 0 || len(ban.Match.Groups) != 0 || ban.Failure != "open" {
+		t.Fatalf("ban hook = %+v", ban)
+	}
+	hook := m.Hooks[1]
+	wantNeeds := moderation.HookFields
+	if hook.ID != moderation.HookModeration || hook.Point != "gateway.request" || hook.Order != 200 || hook.TimeoutMs != 30000 ||
 		hook.Failure != "open" || !slices.Equal(hook.Needs, wantNeeds) {
 		t.Fatalf("hook = %+v", hook)
 	}
-	// Every chat-style protocol, including the per-turn Responses WebSocket
-	// (CONTRACTS §72.2); a missing one lets enforce-level and banned users
-	// bypass moderation on it.
-	wantProtocols := []string{"anthropic.messages", "openai.chat", "openai.responses", "openai.responses_ws", "gemini.generate", "gemini.stream_generate"}
-	if !slices.Equal(hook.Match.Protocols, wantProtocols) {
-		t.Fatalf("hook protocols = %v, want %v", hook.Match.Protocols, wantProtocols)
+	// Every protocol whose content is moderated, including the per-turn
+	// Responses WebSocket and the volcengine image and video prompts.
+	if !slices.Equal(hook.Match.Protocols, moderation.ModeratedProtocols) {
+		t.Fatalf("hook protocols = %v, want %v", hook.Match.Protocols, moderation.ModeratedProtocols)
 	}
 	fields, _ := granted["gateway.hook"].Scope["fields"].([]any)
 	if len(fields) != len(wantNeeds) {

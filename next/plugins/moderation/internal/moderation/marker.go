@@ -51,6 +51,12 @@ func wrapUserContent(key []byte, text string) string {
 	return userPreamble + "\n" + contentTagOpen + newMarkerID(key) + "\">\n" + text + "\n" + contentTagClose
 }
 
+// selfMarker is an empty signed tag: a request of the plugin that carries no
+// content to wrap (AI analysis) is still recognised as its own.
+func selfMarker(key []byte) string {
+	return contentTagOpen + newMarkerID(key) + "\">" + contentTagClose
+}
+
 // isSelfRequest reports whether text carries a marker signed with key.
 func isSelfRequest(key []byte, text string) bool {
 	if len(key) == 0 {

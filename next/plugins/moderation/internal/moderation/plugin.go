@@ -65,10 +65,17 @@ type Plugin struct {
 	poolMu sync.RWMutex
 	// queuedBytes is what the queued requests hold; enqueue refuses beyond
 	// maxQueueBytes so a burst of image requests cannot exhaust memory.
-	queuedBytes   atomic.Int64
+	queuedBytes atomic.Int64
+	// inflightBytes is what the hook requests in progress hold; the hook
+	// answers at once beyond max_inflight_mb (admitBytes, CONTRACTS §72.5).
+	inflightBytes atomic.Int64
 	pool          *workerPool
 	closed        bool
 	eventsStopped bool
+	// postCtx runs the post jobs; Shutdown cancels it once the queue had
+	// shutdownDrain to finish (CONTRACTS §72.5 step 9).
+	postCtx    context.Context
+	postCancel context.CancelFunc
 
 	eventWriter *batch.Writer[eventRec]
 
@@ -94,6 +101,7 @@ type Plugin struct {
 		calls, errors, cacheHits, dropped, droppedEvents, kvErrors atomic.Int64
 		inflight, latencyMsSum                                     atomic.Int64
 		droppedNotices, noticeErrors                               atomic.Int64
+		busy, shutdownDropped, suspiciousRetries                   atomic.Int64
 	}
 
 	bg     context.Context
@@ -117,6 +125,7 @@ func New() *Plugin {
 		priceCache:   map[string]priceStateEntry{},
 	}
 	p.bg, p.cancel = context.WithCancel(context.Background())
+	p.postCtx, p.postCancel = context.WithCancel(context.Background())
 	c := compile(DefaultSettings())
 	p.cfg.Store(c)
 	p.cache.Store(newLRU(c.CacheEntries))
@@ -218,21 +227,30 @@ func (p *Plugin) Configure(_ context.Context, cfg pluginsdk.Config) error {
 func (p *Plugin) Health(context.Context) (*pluginv1.HealthResponse, error) {
 	qlen, _ := p.queueLen()
 	return &pluginv1.HealthResponse{Healthy: true, Metrics: map[string]float64{
-		"calls":          float64(p.stats.calls.Load()),
-		"errors":         float64(p.stats.errors.Load()),
-		"queue":          float64(qlen),
-		"dropped":        float64(p.stats.dropped.Load()),
-		"dropped_events": float64(p.stats.droppedEvents.Load()),
-		"cache_hits":     float64(p.stats.cacheHits.Load()),
-		"inflight":       float64(p.stats.inflight.Load()),
-		"blocked_users":  float64(p.blockedCount()),
-		"watched_users":  float64(len(*p.watch.Load())),
+		"calls":            float64(p.stats.calls.Load()),
+		"errors":           float64(p.stats.errors.Load()),
+		"queue":            float64(qlen),
+		"dropped":          float64(p.stats.dropped.Load()),
+		"dropped_events":   float64(p.stats.droppedEvents.Load()),
+		"cache_hits":       float64(p.stats.cacheHits.Load()),
+		"inflight":         float64(p.stats.inflight.Load()),
+		"inflight_bytes":   float64(p.inflightBytes.Load()),
+		"busy":             float64(p.stats.busy.Load()),
+		"shutdown_dropped": float64(p.stats.shutdownDropped.Load()),
+		"blocked_users":    float64(p.blockedCount()),
+		"watched_users":    float64(len(*p.watch.Load())),
 	}}, nil
 }
 
-// Shutdown implements pluginsdk.Shutdowner: stops the workers, waits for
-// them and the tracked goroutines (goTracked), then flushes the pending
-// event records. A record concluded after that is stored by finish itself.
+// shutdownDrain is how long Shutdown lets the post workers work through the
+// queue before the remaining jobs are dropped (and counted).
+var shutdownDrain = 5 * time.Second
+
+// Shutdown implements pluginsdk.Shutdowner: the post workers get
+// shutdownDrain to finish the queued jobs (no new ones are taken), then the
+// rest are dropped and counted; it waits for the tracked goroutines
+// (goTracked), then flushes the pending event records. A record concluded
+// after that is stored by finish itself.
 func (p *Plugin) Shutdown(ctx context.Context) error {
 	p.cancel()
 	p.poolMu.Lock()
@@ -240,16 +258,33 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 	var pool *workerPool
 	pool, p.pool = p.pool, nil
 	p.poolMu.Unlock()
-	done := make(chan struct{})
+	queued := 0
+	if pool != nil {
+		queued = len(pool.ch)
+	}
+	drained := make(chan struct{})
 	go func() {
 		if pool != nil {
 			close(pool.ch)
 			pool.wg.Wait()
 		}
+		close(drained)
+	}()
+	var err error
+	drain := time.NewTimer(shutdownDrain)
+	defer drain.Stop()
+	select {
+	case <-drained:
+	case <-ctx.Done():
+	case <-drain.C:
+	}
+	p.postCancel() // the jobs still queued are dropped (postWorker counts them)
+	done := make(chan struct{})
+	go func() {
+		<-drained
 		p.wg.Wait()
 		close(done)
 	}()
-	var err error
 	select {
 	case <-done:
 		p.flushStats(ctx)
@@ -257,6 +292,9 @@ func (p *Plugin) Shutdown(ctx context.Context) error {
 		err = ctx.Err()
 	case <-time.After(5 * time.Second):
 		err = errors.New("moderation: workers did not stop in time")
+	}
+	if n := p.stats.shutdownDropped.Load(); n > 0 || queued > 0 {
+		p.log.Warn("moderation: shutdown", "queued_jobs", queued, "dropped_jobs", n)
 	}
 	p.poolMu.Lock()
 	p.eventsStopped = true
@@ -400,9 +438,41 @@ func (p *Plugin) queueLen() (length, capacity int) {
 func (p *Plugin) postWorker(pool *workerPool) {
 	defer pool.wg.Done()
 	for m := range pool.ch {
-		if p.bg.Err() == nil {
+		if p.postCtx.Err() == nil {
 			p.runPost(m)
+		} else {
+			p.stats.shutdownDropped.Add(1)
 		}
 		p.queuedBytes.Add(-m.size)
 	}
+}
+
+// Background store of suspicious records the event writer could not take
+// (CONTRACTS §72.5 step 10): the hook never waits for it. Each record is
+// tried suspiciousAttempts times with growing pauses.
+var (
+	suspiciousAttempts = 4
+	suspiciousPause    = time.Second
+)
+
+func (p *Plugin) storeSuspicious(rec eventRec) {
+	p.goTracked(func() {
+		pause := suspiciousPause
+		var err error
+		for attempt := 1; attempt <= suspiciousAttempts; attempt++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			err = p.storeEvents(ctx, []eventRec{rec})
+			cancel()
+			if err == nil {
+				return
+			}
+			p.stats.suspiciousRetries.Add(1)
+			if attempt < suspiciousAttempts {
+				time.Sleep(pause)
+				pause *= 2
+			}
+		}
+		p.stats.droppedEvents.Add(1)
+		p.log.Warn("moderation: suspicious record lost", "user_id", rec.UserID, "request_id", rec.RequestID, "error", err.Error())
+	})
 }

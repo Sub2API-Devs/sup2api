@@ -56,10 +56,12 @@ func (p *Plugin) missingUser(ctx context.Context, uid int64) *pluginv1.HTTPRespo
 }
 
 // getUsers: GET /users?ids=1,2 (at most 500) -> the users the core knows
-// among those the plugin's records name (records, watch list and its
-// history, blocks, analyses, daily statistics), so a moderator cannot list
-// the users of the core through it. 503 users_unavailable when the host
-// cannot look users up.
+// among those the plugin's moderation tables name: records, the watch list
+// and its history (users and operators), bans and unbans, analyses. The
+// daily statistics (user_daily) do not count: every moderated user has a
+// row there, so it would answer for nearly every active user and let a
+// moderator list them (CONTRACTS §72.14). 503 users_unavailable when the
+// host cannot look users up.
 func (p *Plugin) getUsers(ctx context.Context, req *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
 	ids, valid := parseIDList(pluginsdk.Query(req, "ids"))
 	if !valid {
@@ -74,7 +76,7 @@ func (p *Plugin) getUsers(ctx context.Context, req *pluginv1.HTTPRequest) (*plug
 		EXISTS (SELECT 1 FROM events WHERE user_id = u) OR EXISTS (SELECT 1 FROM watchlist WHERE user_id = u)
 		OR EXISTS (SELECT 1 FROM watch_events WHERE user_id = u) OR EXISTS (SELECT 1 FROM watch_events WHERE operator_id = u)
 		OR EXISTS (SELECT 1 FROM blocks WHERE user_id = u) OR EXISTS (SELECT 1 FROM unblocks WHERE user_id = u)
-		OR EXISTS (SELECT 1 FROM user_analyses WHERE user_id = u) OR EXISTS (SELECT 1 FROM user_daily WHERE user_id = u)`, ids)
+		OR EXISTS (SELECT 1 FROM user_analyses WHERE user_id = u)`, ids)
 	if err == nil {
 		ids, err = pgx.CollectRows(rows, pgx.RowTo[int64])
 	}

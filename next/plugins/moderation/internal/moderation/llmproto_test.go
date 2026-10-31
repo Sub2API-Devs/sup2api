@@ -291,7 +291,10 @@ func TestEscalationOf(t *testing.T) {
 		{LevelObserve, TrendOccasional, SuggestBlock, 3, ""},
 		{LevelEnforce, TrendPersistent, SuggestBlock, 3, ""},
 		{LevelObserve, TrendOccasional, SuggestRelease, 0, ActionAutoRemove},
-		{LevelEnforce, TrendLikelyFalsePositive, SuggestRelease, 0, ActionAutoRemove},
+		// A release at enforce only downgrades (0.6.0): the AI cannot take an
+		// enforce-level user off the list in one step.
+		{LevelEnforce, TrendLikelyFalsePositive, SuggestRelease, 0, ActionAutoDowngrade},
+		{LevelEnforce, TrendPersistent, SuggestRelease, 0, ActionDowngradeSkipped},
 		{LevelObserve, TrendOccasional, SuggestRelease, 1, ActionDowngradeSkipped},
 		{LevelEnforce, TrendOccasional, SuggestObserve, 0, ActionAutoDowngrade},
 		{LevelEnforce, TrendPersistent, SuggestObserve, 0, ActionDowngradeSkipped},
@@ -302,6 +305,9 @@ func TestEscalationOf(t *testing.T) {
 		}
 	}
 	c := compile(DefaultSettings())
+	if a, d := decideEscalation(c, LevelObserve, TrendOccasional, SuggestRelease, 0); a != ActionAutoNotAllowed || d != ActionAutoRemove {
+		t.Fatalf("removal must be off by default: %s %s", a, d)
+	}
 	c.AnalysisAllowUpgrade = false
 	if a, d := decideEscalation(c, LevelObserve, TrendPersistent, SuggestBlock, 2); a != ActionAutoNotAllowed || d != ActionAutoUpgrade {
 		t.Fatalf("not allowed: %s %s", a, d)

@@ -110,7 +110,7 @@ func TestFlowDraftTimeoutAndDelete(t *testing.T) {
 
 func TestWatchListFiltersAndSeen(t *testing.T) {
 	mod := newFakeMod(t)
-	_, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve})
+	p, h, fh := startDB(t, nil, map[string]any{"mode": ModeObserve})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	mustHook(t, h, hookReqAs(11, "", "MOD-HIT-violence one"))
 	mustHook(t, h, hookReqAs(12, "", "MOD-HIT-sexual one"))
@@ -204,6 +204,15 @@ func TestWatchListFiltersAndSeen(t *testing.T) {
 	}
 	if us := decodeData[[]CoreUser](t, h.Do("GET", "/users", map[string]string{"ids": "31,32,999"}, nil)); len(us) != 1 || us[0].ID != 31 || us[0].DisplayName != "user 31" {
 		t.Fatalf("users = %+v", us)
+	}
+	// A daily statistics row alone (every moderated user has one) does not
+	// make a user answerable: it would let a moderator list active users.
+	db, _ := p.db(context.Background())
+	if _, err := db.Exec(context.Background(), `INSERT INTO user_daily (day, user_id, audited) VALUES (current_date, 33, 1)`); err != nil {
+		t.Fatal(err)
+	}
+	if us := decodeData[[]CoreUser](t, h.Do("GET", "/users", map[string]string{"ids": "33"}, nil)); len(us) != 0 {
+		t.Fatalf("user_daily alone answered: %+v", us)
 	}
 }
 
@@ -351,18 +360,18 @@ func testRec(uid int64, requestID, result, highest string, cats ...string) event
 }
 
 // Suspicious records drive the watch list and must not be lost: a failed
-// batch writes them again one by one, a full queue writes them at once.
+// batch writes them again one by one, a full queue stores them in the
+// background (the hook does not wait).
 func TestSuspiciousRecordsAreKept(t *testing.T) {
 	mod := newFakeMod(t)
 	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "record_pass": true})
 	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
 	ctx := context.Background()
 	bad := testRec(40, "bad", ResultPass, "")
-	text := "nul \x00 byte"
-	bad.Text = &text
+	bad.Trace = []byte(`not json`) // jsonb refuses it
 	evs := []eventRec{bad, testRec(41, "kept", ResultHit, "violence", "violence")}
 	if err := p.storeEvents(ctx, evs); err == nil {
-		t.Fatal("a batch with a NUL byte was written")
+		t.Fatal("a batch with an invalid trace was written")
 	}
 	if kept := p.retrySuspicious(ctx, evs); kept != 1 {
 		t.Fatalf("retried %d suspicious records", kept)
@@ -392,6 +401,45 @@ func TestSuspiciousRecordsAreKept(t *testing.T) {
 	})
 	if n := len(decodeData[[]EventListItem](t, h.Do("GET", "/events", map[string]string{"request_id": "full-pass"}, nil))); n != 0 {
 		t.Fatalf("pass written while the queue was full: %d", n)
+	}
+}
+
+// A prompt with NUL bytes (and invalid UTF-8) is stored: PostgreSQL text
+// and jsonb columns refuse them, and a lost suspicious record would keep the
+// user off the watch list and out of the ban count (team review 2026-10-31
+// P1-5).
+func TestSuspiciousRecordWithNULIsStored(t *testing.T) {
+	mod := newFakeMod(t)
+	p, h, _ := startDB(t, nil, map[string]any{"mode": ModeObserve, "ban_threshold": 1})
+	setupFlow(t, h, mod.srv.URL, []int64{9}, CombineAny, []string{AuditorOpenAI})
+	// Through the hook: the text, the stored first-stage messages and the
+	// metadata all carry NUL.
+	req := hookReqAs(43, "nul\x00-hit", "MOD-HIT-violence \x00 with \xff nul")
+	req.Meta.Endpoint, req.Meta.SessionFingerprint = "/v1/messages\x00", "fp\x00"
+	mustHook(t, h, req)
+	ev := waitEvents(t, h, map[string]string{"user_id": "43", "result": "hit"}, 1)
+	if ev[0].RequestID != "nul-hit" || ev[0].Endpoint != "/v1/messages" {
+		t.Fatalf("record = %+v", ev[0].Event)
+	}
+	in := decodeData[map[string]any](t, h.Do("GET", fmt.Sprintf("/events/%d/input", ev[0].ID), nil, nil))
+	if !strings.Contains(fmt.Sprint(in["messages"]), "MOD-HIT-violence") {
+		t.Fatalf("input = %v", in)
+	}
+	waitFor(t, "watch entry and ban", func() bool { return p.isBlocked(43) })
+	if d := decodeData[UserDetail](t, h.Do("GET", "/users/43", nil, nil)); d.Watch == nil {
+		t.Fatal("the hit did not reach the watch list")
+	}
+	// Directly: an upstream reason with \u0000 in the trace, NUL in the text.
+	rec := testRec(44, "direct\x00", ResultHit, "violence", "violence\x00")
+	text := "nul \x00 byte"
+	msg := `[{"role":"user","content":"a\u0000b"}]`
+	rec.Text, rec.InputMessage, rec.InputMessageSize = &text, &msg, len(msg)
+	rec.Trace = []byte(`{"stages":[{"outcomes":[{"reason":"x\u0000y"}]}],"final":"hit"}`)
+	if err := p.storeEvents(context.Background(), []eventRec{rec}); err != nil {
+		t.Fatalf("store: %v", err)
+	}
+	if ev := waitEvents(t, h, map[string]string{"user_id": "44"}, 1); ev[0].RequestID != "direct" {
+		t.Fatalf("record = %+v", ev[0].Event)
 	}
 }
 
@@ -503,5 +551,20 @@ func TestCostDaysFollowCallerOffset(t *testing.T) {
 	}
 	if local := days("480"); len(local) != 2 || local[y.Add(-8*time.Hour)] != "1.00000000" || local[y.Add(16*time.Hour)] != "2.00000000" {
 		t.Fatalf("UTC+8 days = %v", local)
+	}
+}
+
+// TestDayStartIgnoresTimeZoneOfTime: pgx hands timestamptz back in the
+// host's zone; the caller's day must not depend on it.
+func TestDayStartIgnoresTimeZoneOfTime(t *testing.T) {
+	utc := time.Date(2026, 10, 30, 17, 0, 0, 0, time.UTC) // 01:00 on the 31st at UTC+8
+	for _, zone := range []*time.Location{time.UTC, time.FixedZone("west", -7*3600), time.FixedZone("east", 9*3600)} {
+		at := utc.In(zone)
+		if got := (clock{}).dayStart(at); !got.Equal(time.Date(2026, 10, 30, 0, 0, 0, 0, time.UTC)) {
+			t.Errorf("UTC day of %v = %v", at, got)
+		}
+		if got := (clock{offset: 8 * time.Hour}).dayStart(at); !got.Equal(time.Date(2026, 10, 30, 16, 0, 0, 0, time.UTC)) {
+			t.Errorf("UTC+8 day of %v = %v", at, got)
+		}
 	}
 }
