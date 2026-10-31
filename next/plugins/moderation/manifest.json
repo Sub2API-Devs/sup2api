@@ -18,7 +18,7 @@
       "binaries": "runtimes/{os}-{arch}/plugin"
     }
   },
-  "hostCompat": ">=0.1.221 <0.2.0",
+  "hostCompat": ">=0.1.222 <0.2.0",
   "hostUICompat": "^3.3",
   "capabilities": [
     {
