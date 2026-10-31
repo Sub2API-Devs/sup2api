@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/coder/websocket"
 	"github.com/tidwall/gjson"
@@ -326,8 +327,15 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		s.sendError(ctx, e)
 		return nil, false
 	}
-	if !gjson.ValidBytes(m.data) || !gjson.ParseBytes(m.data).IsObject() {
+	shape := scanJSONShape(m.data)
+	if shape.tooDeep {
+		return reject(nil, jsonShapeError(shape, "message"))
+	}
+	if !utf8.Valid(m.data) || !gjson.ValidBytes(m.data) || !gjson.ParseBytes(m.data).IsObject() {
 		return reject(nil, &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code, Message: "message is not a JSON object"})
+	}
+	if e := jsonShapeError(shape, "message"); e != nil {
+		return reject(nil, e)
 	}
 	if typ := gjson.GetBytes(m.data, "type").String(); typ != "response.create" {
 		return reject(nil, &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,

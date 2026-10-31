@@ -174,12 +174,23 @@ func (h *hookRuntime) recordResult(ctx context.Context, k hookKey, failed bool) 
 // this size is the plugin refusing our request.
 const grpcDefaultMaxRecv = 4 << 20
 
+// grpcRecvTooLarge starts the status message grpc-go's server answers with
+// when a request is above its receive limit (rpc_util.go recv). A plugin
+// shedding load with RESOURCE_EXHAUSTED of its own says something else.
+const grpcRecvTooLarge = "grpc: received message larger than max"
+
 // requestTooLarge tells whether a hook call failed because the request was
 // above the plugin's receive limit. That says nothing about the plugin's
-// health, so it is neither a failure nor a success for the breaker. An
-// oversize response is the plugin's fault and does not qualify.
+// health, so it is neither a failure nor a success for the breaker. It
+// needs all three: RESOURCE_EXHAUSTED, grpc-go's own message for it, and a
+// request actually above the default limit. A plugin overloaded and
+// answering RESOURCE_EXHAUSTED itself, even to a large request, still
+// counts as failed.
 func requestTooLarge(req proto.Message, err error) bool {
-	return status.Code(err) == codes.ResourceExhausted && proto.Size(req) > grpcDefaultMaxRecv
+	st, ok := status.FromError(err)
+	return ok && st.Code() == codes.ResourceExhausted &&
+		strings.HasPrefix(st.Message(), grpcRecvTooLarge) &&
+		proto.Size(req) > grpcDefaultMaxRecv
 }
 
 type hookOutcome int
@@ -568,8 +579,15 @@ func applyPatches(body []byte, patches []*pluginv1.BodyPatch) ([]byte, error) {
 			out, err = sjson.DeleteBytes(out, path)
 		case pluginv1.BodyPatch_OP_SET:
 			v := p.GetValueJson()
-			if !gjson.Valid(v) {
+			// The shape scan comes first (gjson's validator recurses), and
+			// the body stays free of repeated keys after a patch too, so a
+			// later hook reads what the upstream will (CONTRACTS §25.9).
+			s := scanJSONShape([]byte(v))
+			if s.tooDeep || !gjson.Valid(v) {
 				return nil, fmt.Errorf("patch %q: value_json is not valid JSON", path)
+			}
+			if s.dup {
+				return nil, fmt.Errorf("patch %q: value_json repeats the object key %q", path, truncateUTF8(s.dupKey, maxDupKeyShown))
 			}
 			out, err = sjson.SetRawBytes(out, path, []byte(v))
 		default:

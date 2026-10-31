@@ -360,20 +360,47 @@ func (c *call) readBody() *gwError {
 		}
 		c.body = body
 	}
-	// JSON text is UTF-8 (RFC 8259 §8.1) and gjson's validator does not check
-	// that, so a body with a stray byte inside a string would pass here and
-	// then poison every proto string it is copied into - RequestMeta.model
-	// from request.modelPath, the fields of BuildUpstreamRequest / ResolveModel
-	// / ExtractUsage, price params - and proto.Marshal refuses invalid UTF-8,
-	// which makes every plugin call of the request fail: one curl, a stable
-	// 5xx, and a usage row PostgreSQL refuses as well (CONTRACTS §25.1). It is
-	// not valid JSON; say so, once, here.
-	if len(c.body) > 0 && (!utf8.Valid(c.body) || !gjson.ValidBytes(c.body)) {
-		return &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
-			Message: "request body is not valid JSON", RecordType: errTypeInvalidRequest}
+	return c.checkBodyJSON()
+}
+
+// checkBodyJSON accepts an empty body or one JSON text.
+//
+// JSON text is UTF-8 (RFC 8259 §8.1) and gjson's validator does not check
+// that, so a body with a stray byte inside a string would pass here and
+// then poison every proto string it is copied into - RequestMeta.model
+// from request.modelPath, the fields of BuildUpstreamRequest / ResolveModel
+// / ExtractUsage, price params - and proto.Marshal refuses invalid UTF-8,
+// which makes every plugin call of the request fail: one curl, a stable
+// 5xx, and a usage row PostgreSQL refuses as well (CONTRACTS §25.1). It is
+// not valid JSON; say so, once, here.
+//
+// The shape scan runs before gjson: gjson's validator recurses, and a deeply
+// nested body would overflow the stack (fatal, not a recoverable panic). A
+// valid body with a repeated object key is refused too (CONTRACTS §25.9), on
+// every endpoint: hooks read the first copy with gjson, the upstream and the
+// protocol converters read the last. The body is never rewritten.
+func (c *call) checkBodyJSON() *gwError {
+	if len(c.body) == 0 {
+		return nil
+	}
+	if !utf8.Valid(c.body) {
+		return errBodyNotJSON
+	}
+	shape := scanJSONShape(c.body)
+	if shape.tooDeep {
+		return jsonShapeError(shape, "request body")
+	}
+	if !gjson.ValidBytes(c.body) {
+		return errBodyNotJSON
+	}
+	if e := jsonShapeError(shape, "request body"); e != nil {
+		return e
 	}
 	return nil
 }
+
+var errBodyNotJSON = &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
+	Message: "request body is not valid JSON", RecordType: errTypeInvalidRequest}
 
 // checkModel (re)reads model and stream and applies the group allowlist.
 // The model comes from the path parameter request.modelParam when declared

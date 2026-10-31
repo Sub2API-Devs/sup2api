@@ -235,8 +235,10 @@ func (h *Handler) serveAPI(c *gin.Context) {
 	}
 	answered := false
 	if h.audit != nil && chosen.Route.Scope == "admin" && auditedMethods[c.Request.Method] {
-		// After the answer: flushed first, so the row costs the caller nothing.
-		// No answer means a panic, which the recovery middleware answers 500.
+		// After the answer: the auditor only queues the row (CONTRACTS
+		// §75.2), so the handler returns and the response ends without
+		// waiting on the database. No answer means a panic, which the
+		// recovery middleware answers 500.
 		defer func() {
 			status := http.StatusInternalServerError
 			if answered {

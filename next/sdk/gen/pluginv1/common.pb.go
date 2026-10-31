@@ -1024,21 +1024,25 @@ type RequestMeta struct {
 	// by name when more), keys cut to 64 bytes and values to 512 bytes on a
 	// UTF-8 boundary, invalid UTF-8 dropped.
 	Query map[string]string `protobuf:"bytes,11,rep,name=query,proto3" json:"query,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	// Resolved environment variables of this attempt (CONTRACTS §74.3): the
-	// nearest of account, group, global and process layers for every key some
-	// layer sets. Set on every request of an attempt on an account (build,
-	// execute, classify, usage extraction); a missing key means the plugin's
-	// own default.
+	// Resolved environment variables (CONTRACTS §74.3): the nearest of
+	// account, group, global and process layers for every key some layer
+	// sets; a missing key means the plugin's own default. Set on every call
+	// that carries RequestMeta. Calls of an attempt on an account (build,
+	// execute, classify, usage extraction) include the account layer; calls
+	// made before an account is chosen (gateway.request hooks, model
+	// resolution, usage estimation, scheduler.rank) resolve without it.
 	Environment map[string]int64 `protobuf:"bytes,12,rep,name=environment,proto3" json:"environment,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 	// Path pattern of the matched client-facing endpoint, e.g. "/v1/messages"
 	// or "/v1beta/models/:model:generateContent" - the endpoint the usage log
 	// records. Set on every request.
 	Endpoint string `protobuf:"bytes,13,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
-	// Opaque id of the request's sticky session (CONTRACTS §25.1): hex SHA-256
-	// of the sticky key the first matching rule derives (the raw session value
-	// never leaves the core), so requests of one session share it. Derived
-	// once, before the gateway.request hooks run. Empty when no rule yields a
-	// session value.
+	// Opaque id of the request's sticky session (CONTRACTS §25.1): hex
+	// HMAC-SHA-256 of the sticky key the first matching rule derives, keyed
+	// with a key derived from the core's master key, so requests of one
+	// session share it while the raw session value never leaves the core and
+	// the id cannot be recomputed (or matched against a guessed session
+	// value) without the master key. Derived once, before the gateway.request
+	// hooks run. Empty when no rule yields a session value.
 	SessionFingerprint string `protobuf:"bytes,14,opt,name=session_fingerprint,json=sessionFingerprint,proto3" json:"session_fingerprint,omitempty"`
 }
 

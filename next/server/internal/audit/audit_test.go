@@ -139,6 +139,9 @@ func TestPluginWritesAndList(t *testing.T) {
 	w := &PluginWrites{DB: db, Retention: 24 * time.Hour}
 	w.AuditPluginWrite(ctx, core.PluginWrite{UserID: uid, Plugin: "demo", Method: "PUT", Path: "/rules/7",
 		Route: "/rules/:id", Status: 200, RequestID: "req-1", ClientIP: "203.0.113.9", Body: []byte(`{"name":"r","token":"t"}`)})
+	if !w.Flush(ctx) {
+		t.Fatal("flush")
+	}
 	if err := w.Purge(ctx); err != nil {
 		t.Fatal(err)
 	}

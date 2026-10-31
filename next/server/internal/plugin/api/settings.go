@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -37,7 +38,11 @@ type SettingsView struct {
 	Page      string          `json:"page,omitempty"`
 	Component string          `json:"component,omitempty"`
 	Values    map[string]any  `json:"values"`
-	Secrets   []string        `json:"secret_fields"`
+	// Secrets lists the masked fields as pointers below values ("a/b" for
+	// nested ones), credentials and sensitive addresses alike.
+	Secrets []string      `json:"secret_fields"`
+	fields  []secretField // the same, classified
+
 	// Permission is the RBAC key of ui.settings.permission: its holders may
 	// read and edit these settings too (CONTRACTS §75.1).
 	Permission string `json:"permission,omitempty"`
@@ -78,7 +83,10 @@ func (a *API) settingsForm(c *gin.Context, key, corePerm string) (*SettingsView,
 	}
 	if b, ok := p.Files[f.Schema]; ok {
 		v.Schema = b
-		v.Secrets = secretFields(b)
+		v.fields = secretFields(b)
+		for _, f := range v.fields {
+			v.Secrets = append(v.Secrets, f.pointer())
+		}
 	}
 	if f.UISchema != "" {
 		if b, ok := p.Files[f.UISchema]; ok {
@@ -88,25 +96,157 @@ func (a *API) settingsForm(c *gin.Context, key, corePerm string) (*SettingsView,
 	return v, true
 }
 
-// secretFields lists top-level properties marked writeOnly, format
-// password or x-sensitive.
-func secretFields(schema []byte) []string {
-	var s struct {
-		Properties map[string]struct {
-			WriteOnly bool   `json:"writeOnly"`
-			Format    string `json:"format"`
-			Sensitive bool   `json:"x-sensitive"`
-		} `json:"properties"`
+// secretField is a masked setting (CONTRACTS §75.1). Credentials
+// (writeOnly or format password) are values the plugin presents to someone
+// else; sensitive fields (x-sensitive only) are addresses such as webhook
+// URLs: masked on read, but not credentials themselves.
+type secretField struct {
+	Path       []string
+	Credential bool
+}
+
+// pointer is the field's JSON pointer below values ("a/b"; "~" and "/" in
+// names escaped as in RFC 6901), the form schema errors use too.
+func (f secretField) pointer() string {
+	parts := make([]string, len(f.Path))
+	for i, p := range f.Path {
+		parts[i] = strings.NewReplacer("~", "~0", "/", "~1").Replace(p)
 	}
-	_ = json.Unmarshal(schema, &s)
-	out := []string{}
-	for k, p := range s.Properties {
-		if p.WriteOnly || p.Format == "password" || p.Sensitive {
-			out = append(out, k)
+	return strings.Join(parts, "/")
+}
+
+// maxSecretDepth bounds the walk through nested object properties.
+const maxSecretDepth = 8
+
+// secretFields lists the properties, nested object properties included,
+// marked writeOnly, format password or x-sensitive, sorted by pointer.
+func secretFields(schema []byte) []secretField {
+	var root map[string]any
+	_ = json.Unmarshal(schema, &root)
+	out := []secretField{}
+	var walk func(node map[string]any, path []string)
+	walk = func(node map[string]any, path []string) {
+		if len(path) >= maxSecretDepth {
+			return
+		}
+		props, _ := node["properties"].(map[string]any)
+		for k, raw := range props {
+			p, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			sub := append(slices.Clone(path), k)
+			writeOnly, _ := p["writeOnly"].(bool)
+			format, _ := p["format"].(string)
+			sensitive, _ := p["x-sensitive"].(bool)
+			switch {
+			case writeOnly || format == "password":
+				out = append(out, secretField{Path: sub, Credential: true})
+			case sensitive:
+				out = append(out, secretField{Path: sub})
+			}
+			walk(p, sub)
 		}
 	}
-	sort.Strings(out)
+	if root != nil {
+		walk(root, nil)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].pointer() < out[j].pointer() })
 	return out
+}
+
+// valueAt returns the value at path inside nested objects.
+func valueAt(m map[string]any, path []string) (any, bool) {
+	var cur any = m
+	for _, p := range path {
+		obj, ok := cur.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		if cur, ok = obj[p]; !ok {
+			return nil, false
+		}
+	}
+	return cur, true
+}
+
+// parentOf returns the object holding the last element of path.
+func parentOf(m map[string]any, path []string) (map[string]any, bool) {
+	if len(path) == 0 {
+		return nil, false
+	}
+	v, ok := valueAt(m, path[:len(path)-1])
+	if !ok {
+		return nil, false
+	}
+	obj, ok := v.(map[string]any)
+	return obj, ok
+}
+
+// maskValues replaces every non-empty secret value in values with Mask.
+func maskValues(fields []secretField, values map[string]any) {
+	for _, f := range fields {
+		if obj, ok := parentOf(values, f.Path); ok {
+			if val, ok := obj[f.Path[len(f.Path)-1]]; ok && val != nil && val != "" {
+				obj[f.Path[len(f.Path)-1]] = Mask
+			}
+		}
+	}
+}
+
+// mergeSettings resolves masked values in in against the stored old values
+// and returns the top-level keys that change. A caller holding only the
+// plugin's own permission (manager false) keeps a stored credential only
+// when nothing at all changes: re-entering another credential, editing a
+// sensitive address or any plain setting needs every kept credential typed
+// again, or it could point an address at itself and have the stored
+// credential sent there. A masked sensitive address is kept freely: it is
+// not a credential and stays where it was (CONTRACTS §75.1).
+func mergeSettings(fields []secretField, old, in map[string]any, manager bool, validate func(map[string]any) error) ([]string, error) {
+	var kept []secretField
+	for _, f := range fields {
+		obj, ok := parentOf(in, f.Path)
+		name := f.Path[len(f.Path)-1]
+		if !ok || obj[name] != Mask {
+			continue
+		}
+		if ov, ok := valueAt(old, f.Path); ok {
+			obj[name] = ov
+			if f.Credential {
+				kept = append(kept, f)
+			}
+		} else {
+			delete(obj, name)
+		}
+	}
+	if validate != nil {
+		if err := validate(in); err != nil {
+			return nil, err
+		}
+	}
+	var changed []string
+	for k, v := range in {
+		ob, _ := json.Marshal(old[k])
+		nb, _ := json.Marshal(v)
+		if _, had := old[k]; !had || !bytes.Equal(ob, nb) {
+			changed = append(changed, k)
+		}
+	}
+	for k := range old {
+		if _, ok := in[k]; !ok {
+			changed = append(changed, k)
+		}
+	}
+	sort.Strings(changed)
+	if !manager && len(kept) > 0 && len(changed) > 0 {
+		errs := make([]core.FieldError, 0, len(kept))
+		for _, f := range kept {
+			errs = append(errs, core.FieldError{Field: "values/" + f.pointer(), Code: "reenter",
+				Message: "re-enter this secret to change settings"})
+		}
+		return nil, core.InvalidFields(errs...)
+	}
+	return changed, nil
 }
 
 func (a *API) loadValues(c *gin.Context, q store.Querier, key string, forUpdate bool) (map[string]any, error) {
@@ -154,11 +294,7 @@ func (a *API) renderSettings(c *gin.Context, key string, v *SettingsView) {
 		httpapi.Fail(c, err)
 		return
 	}
-	for _, s := range v.Secrets {
-		if val, ok := values[s]; ok && val != nil && val != "" {
-			values[s] = Mask
-		}
-	}
+	maskValues(v.fields, values)
 	v.Values = values
 	httpapi.OK(c, v)
 }
@@ -190,45 +326,12 @@ func (a *API) putSettings(c *gin.Context) {
 		if err != nil {
 			return err
 		}
-		var kept []string
-		for _, s := range form.Secrets {
-			if in.Values[s] == Mask {
-				if ov, ok := old[s]; ok {
-					in.Values[s] = ov
-					kept = append(kept, s)
-				} else {
-					delete(in.Values, s)
-				}
-			}
-		}
+		var validate func(map[string]any) error
 		if form.Mode == "schema" && len(form.Schema) > 0 && string(form.Schema) != "null" {
-			if err := validateSettings(form.Schema, in.Values); err != nil {
-				return err
-			}
+			validate = func(v map[string]any) error { return validateSettings(form.Schema, v) }
 		}
-		for k, v := range in.Values {
-			ob, _ := json.Marshal(old[k])
-			nb, _ := json.Marshal(v)
-			if _, had := old[k]; !had || !bytes.Equal(ob, nb) {
-				changed = append(changed, k)
-			}
-		}
-		for k := range old {
-			if _, ok := in.Values[k]; !ok {
-				changed = append(changed, k)
-			}
-		}
-		sort.Strings(changed)
-		// A caller authorized only by the plugin's own permission keeps a
-		// stored secret only while nothing else changes: otherwise it could
-		// point a URL setting elsewhere and have the secret sent there.
-		if !manager && len(kept) > 0 && slices.ContainsFunc(changed, func(k string) bool { return !slices.Contains(form.Secrets, k) }) {
-			errs := make([]core.FieldError, 0, len(kept))
-			for _, s := range kept {
-				errs = append(errs, core.FieldError{Field: "values/" + s, Code: "reenter",
-					Message: "re-enter this secret to change other settings"})
-			}
-			return core.InvalidFields(errs...)
+		if changed, err = mergeSettings(form.fields, old, in.Values, manager, validate); err != nil {
+			return err
 		}
 		plain, err := json.Marshal(in.Values)
 		if err != nil {
