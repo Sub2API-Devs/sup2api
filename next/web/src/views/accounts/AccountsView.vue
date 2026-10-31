@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SBulkBar, SButton, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SBadge, SBulkBar, SButton, SCode, SCopyButton, SDescItem, SDescriptions, SDropdown, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SPagination, SSectionTitle, SSelect, SSpinner, SSwitch, STable, STabs, STooltip, confirm, toast, type SelectOption, type TableColumn } from '@sub2api/ui'
 import type { Account, AccountAction, AccountLastTest, AccountType } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useGroupsLookup } from '@/composables/lookups'
@@ -143,7 +143,8 @@ function statusOf(a: Account): StatusView {
   }
   const reason = a.orphaned ? t('accounts.orphanedHint', { plugin: a.plugin_key }) : (cooling && a.cooldown_reason) || statusReason
   const view: StatusView = { tone: accountStatusTone(a), label: t(`accounts.status.${key}`), detail: reason || undefined }
-  // Auto-disabled reads as one yellow badge; why, and when it comes back, show on hover.
+  // Auto-disabled reads as one yellow badge; why, and when it comes back, show in its
+  // tooltip (hover or keyboard focus) and in the detail drawer.
   if (key === 'auto_disabled' && a.auto_disabled_until) {
     const release = t('accounts.autoReleaseAt', { time: formatDateTime(a.auto_disabled_until) })
     view.detail = view.detail ? `${view.detail}\n${release}` : release
@@ -622,7 +623,12 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
         <SHint v-else inline>-</SHint>
       </template>
       <template #cell-status="{ row }">
-        <SBadge :tone="statusOf(row).tone" dot :title="statusOf(row).detail" data-testid="account-status">{{ statusOf(row).label }}</SBadge>
+        <STooltip :content="statusOf(row).detail" :disabled="!statusOf(row).detail" placement="bottom" :delay="150" max-width="24rem">
+          <!-- Focusable when there is a reason: keyboard focus shows it too, not only hover (§73.4); the detail drawer lists it for touch. -->
+          <span :tabindex="statusOf(row).detail ? 0 : undefined" class="inline-flex rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40" data-testid="account-status-tip">
+            <SBadge :tone="statusOf(row).tone" dot data-testid="account-status">{{ statusOf(row).label }}</SBadge>
+          </span>
+        </STooltip>
         <SBadge v-if="row.auto_disable === false" tone="gray" class="ml-1" :title="t('accounts.editorUi.autoDisableHint')">{{ t('accounts.noAutoDisable') }}</SBadge>
         <SHint v-if="statusOf(row).note" size="xs" class="mt-0.5 block" data-testid="account-status-note">{{ statusOf(row).note }}</SHint>
         <SLink v-if="(row.status !== 'active' || row.status_reason || coolingDown(row)) && canResetStatus(row)" as="button" class="mt-1 inline-flex items-center gap-1 text-xs" :title="t('accounts.resetStatusHint')" data-testid="account-reset-status" @click="resetStatus(row)">
@@ -726,7 +732,7 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
               <SDescItem :label="t('common.status')">
                 <SBadge :tone="statusOf(detail).tone" dot>{{ statusOf(detail).label }}</SBadge>
                 <SHint v-if="statusOf(detail).note" inline size="xs" class="ml-2">{{ statusOf(detail).note }}</SHint>
-                <SHint v-if="statusOf(detail).detail" inline size="xs" class="ml-2">{{ statusOf(detail).detail }}</SHint>
+                <SHint v-if="statusOf(detail).detail" inline size="xs" class="ml-2 whitespace-pre-line" data-testid="account-detail-status-reason">{{ statusOf(detail).detail }}</SHint>
                 <SLink v-if="coolingDown(detail) && canResetStatus(detail)" as="button" class="ml-2 text-xs" :title="t('accounts.resetStatusHint')" @click="resetStatus(detail)">{{ t('accounts.resetStatus') }}</SLink>
               </SDescItem>
               <SDescItem :label="t('accounts.groups')">{{ groupNames(detail.group_ids, detail.groups) }}</SDescItem>

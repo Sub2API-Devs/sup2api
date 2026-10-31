@@ -51,7 +51,13 @@ export default {
     subject: 'Subject',
     attempts: 'try {n}',
     status: { pending: 'Pending', sending: 'Sending', sent: 'Sent', failed: 'Failed' },
-    severity: { info: 'Info', warning: 'Warning', critical: 'Critical' }
+    severity: { info: 'Info', warning: 'Warning', critical: 'Critical' },
+    errors: {
+      unknown_channel: 'No such notification channel; the plugin providing it may be disabled',
+      recipients_count: 'Give 1-20 recipients',
+      recipient_too_long: 'A recipient is longer than 320 bytes',
+      invalid_recipient: 'A recipient does not match the format of this channel'
+    }
   },
   environment: {
     title: 'Environment variables',

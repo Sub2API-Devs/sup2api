@@ -25,6 +25,12 @@ export class ApiError extends Error {
   readonly details: Record<string, any>
   /** field path -> message, from details.fields of invalid_argument errors */
   readonly fields: Record<string, string>
+  /**
+   * field path -> machine code of the same field errors ("invalid" when the
+   * server gave none). Pages translate known codes (fieldErrorText) instead of
+   * showing the server's message, which may be English only.
+   */
+  readonly fieldCodes: Record<string, string>
 
   constructor(status: number, body: ApiErrorBody) {
     super(body.message || body.code)
@@ -33,10 +39,14 @@ export class ApiError extends Error {
     this.code = body.code || 'internal'
     this.details = body.details || {}
     const fields: Record<string, string> = {}
+    const fieldCodes: Record<string, string> = {}
     for (const f of body.details?.fields || []) {
-      if (f && f.field) fields[f.field] = localizedText(f.message) || f.code || 'invalid'
+      if (!f || !f.field) continue
+      fields[f.field] = localizedText(f.message) || f.code || 'invalid'
+      fieldCodes[f.field] = f.code || 'invalid'
     }
     this.fields = fields
+    this.fieldCodes = fieldCodes
   }
 }
 
@@ -471,7 +481,9 @@ export async function requestList<T = any>(path: string, query?: Query, opts: Re
 /**
  * Every item of a paginated list, fetched page by page at the core's largest
  * page size, up to `max` items (unbounded by default). A failed page rejects:
- * a partial list is never returned.
+ * a partial list is never returned. A route that caps the page size lower
+ * answers with its own `page.page_size`: a full page of that size is not the
+ * last one, so the walk ends on a short (or empty) page or at `page.total`.
  */
 export async function listAll<T = any>(client: ApiClient, path: string, opts: { query?: Query; max?: number } = {}): Promise<T[]> {
   const PAGE = 200
@@ -480,7 +492,10 @@ export async function listAll<T = any>(client: ApiClient, path: string, opts: { 
   for (let page = 1; out.length < max; page++) {
     const r = await client.list<T>(path, { ...opts.query, page, page_size: PAGE })
     out.push(...r.items)
-    if (!r.paged || r.items.length < PAGE || out.length >= r.page.total) break
+    if (!r.paged || r.items.length === 0) break
+    const size = Number(r.page.page_size) > 0 ? Math.min(Number(r.page.page_size), PAGE) : PAGE
+    const total = Number(r.page.total)
+    if (r.items.length < size || (total > 0 && out.length >= total)) break
   }
   return out.slice(0, max)
 }

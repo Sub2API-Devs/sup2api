@@ -9,7 +9,7 @@ import { SAlert, SButton, SHint, SInput, SSegmented, SSettingRow, SSettingsGroup
 import type { AccountUsage, AccountUsageLimit, UsageLimitPeriod } from '@/api/types'
 import { fromLocalInput, toLocalInput } from '@/api/admin'
 import { formatDateTime, formatMoney } from '@/utils/format'
-import { PERIOD_COUNT_MAX } from './accountUsage'
+import { anchorFloor, PERIOD_COUNT_MAX } from './accountUsage'
 import type { UsageLimitStatus } from './useUsageLimitEdit'
 
 const model = defineModel<AccountUsageLimit>({ required: true })
@@ -25,12 +25,17 @@ const { t } = useI18n()
 const periods: UsageLimitPeriod[] = ['hour', 'day', 'week', 'month', 'none']
 const periodOptions = computed(() => periods.map((p) => ({ value: p, label: t(`accounts.usageLimit.periods.${p}`) })))
 const locked = computed(() => props.disabled || props.status !== 'ready')
-const set = <K extends keyof AccountUsageLimit>(key: K, value: AccountUsageLimit[K]) => (model.value = { ...model.value, [key]: value })
+const set = (patch: Partial<AccountUsageLimit>) => (model.value = { ...model.value, ...patch })
+/** "none" (lifetime) has no period length: it goes back to 1 so nothing hidden can block saving. */
+const setPeriod = (p: UsageLimitPeriod) => set(p === 'none' ? { period: p, period_count: 1 } : { period: p })
 
-/** Periods start on whole hours: the datetime-local value keeps the hour only. */
-const toHour = (v: string) => (v ? `${v.slice(0, 13)}:00` : '')
-const anchorInput = computed(() => toHour(toLocalInput(model.value.anchor)))
-const setAnchor = (v: unknown) => set('anchor', fromLocalInput(typeof v === 'string' ? toHour(v) : ''))
+/**
+ * The anchor shows the stored moment in local wall time, minutes included: a
+ * whole UTC hour is HH:30 in Asia/Kolkata. A picked time is floored the way
+ * the server stores it (anchorFloor; editing it moves the zone to the browser's).
+ */
+const anchorInput = computed(() => toLocalInput(model.value.anchor))
+const setAnchor = (v: unknown) => set({ anchor: anchorFloor(fromLocalInput(typeof v === 'string' ? v : ''), model.value.period) })
 
 const current = computed(() => props.usage?.limit ?? null)
 </script>
@@ -45,10 +50,10 @@ const current = computed(() => props.usage?.limit ?? null)
     </div>
     <SHint v-else-if="status !== 'ready'" size="xs" class="px-4 py-3" data-testid="usage-limit-loading">{{ t('common.loading') }}</SHint>
     <SSettingRow :label="t('accounts.usageLimit.rawCost')" :description="t('accounts.usageLimit.rawCostHint')">
-      <SSwitch :model-value="model.raw_cost_accounting" :disabled="locked" data-testid="usage-limit-raw" @update:model-value="set('raw_cost_accounting', $event)" />
+      <SSwitch :model-value="model.raw_cost_accounting" :disabled="locked" data-testid="usage-limit-raw" @update:model-value="set({ raw_cost_accounting: $event })" />
     </SSettingRow>
     <SSettingRow :label="t('accounts.usageLimit.enabled')" :description="t('accounts.usageLimit.enabledHint')">
-      <SSwitch :model-value="model.enabled" :disabled="locked" data-testid="usage-limit-enabled" @update:model-value="set('enabled', $event)" />
+      <SSwitch :model-value="model.enabled" :disabled="locked" data-testid="usage-limit-enabled" @update:model-value="set({ enabled: $event })" />
     </SSettingRow>
     <template v-if="model.enabled">
       <SSettingRow
@@ -56,17 +61,17 @@ const current = computed(() => props.usage?.limit ?? null)
         :description="t('accounts.usageLimit.amountHint', { basis: t(model.raw_cost_accounting ? 'accounts.usageLimit.basisRaw' : 'accounts.usageLimit.basisCost') })"
         :error="errors.amount"
       >
-        <SInput :model-value="model.amount" type="number" min="0" step="0.01" inputmode="decimal" :suffix="t('accounts.usageLimit.unit')" :disabled="locked" class="w-full sm:w-48" data-testid="usage-limit-amount" @update:model-value="set('amount', String($event ?? ''))" />
+        <SInput :model-value="model.amount" type="number" min="0" step="any" inputmode="decimal" :suffix="t('accounts.usageLimit.unit')" :disabled="locked" class="w-full sm:w-48" data-testid="usage-limit-amount" @update:model-value="set({ amount: String($event ?? '') })" />
       </SSettingRow>
       <SSettingRow :label="t('accounts.usageLimit.period')" :description="t('accounts.usageLimit.periodHint')" :error="errors.period">
-        <SSegmented :model-value="model.period" :options="periodOptions" size="sm" :disabled="locked" :aria-label="t('accounts.usageLimit.period')" data-testid="usage-limit-period" @update:model-value="set('period', $event as UsageLimitPeriod)" />
+        <SSegmented :model-value="model.period" :options="periodOptions" size="sm" :disabled="locked" :aria-label="t('accounts.usageLimit.period')" data-testid="usage-limit-period" @update:model-value="setPeriod($event as UsageLimitPeriod)" />
       </SSettingRow>
       <template v-if="model.period !== 'none'">
         <SSettingRow :label="t('accounts.usageLimit.periodCount')" :description="t('accounts.usageLimit.periodCountHint')" :error="errors.period_count">
-          <SInput :model-value="model.period_count" type="number" min="1" :max="PERIOD_COUNT_MAX[model.period]" :suffix="t('accounts.usageLimit.periodCountUnit')" :disabled="locked" class="w-full sm:w-48" data-testid="usage-limit-count" @update:model-value="set('period_count', Number($event) || 0)" />
+          <SInput :model-value="model.period_count" type="number" min="1" :max="PERIOD_COUNT_MAX[model.period]" :suffix="t('accounts.usageLimit.periodCountUnit')" :disabled="locked" class="w-full sm:w-48" data-testid="usage-limit-count" @update:model-value="set({ period_count: Number($event) || 0 })" />
         </SSettingRow>
         <SSettingRow :label="t('accounts.usageLimit.anchor')" :description="t('accounts.usageLimit.anchorHint')" :error="errors.anchor">
-          <SInput :model-value="anchorInput" type="datetime-local" step="3600" min="2000-01-01T00:00" max="2099-12-31T23:00" :disabled="locked" class="w-full sm:w-56" clearable data-testid="usage-limit-anchor" @update:model-value="setAnchor" />
+          <SInput :model-value="anchorInput" type="datetime-local" min="2000-01-01T00:00" max="2099-12-31T23:59" :disabled="locked" class="w-full sm:w-56" clearable data-testid="usage-limit-anchor" @update:model-value="setAnchor" />
         </SSettingRow>
         <p class="px-4 py-2 text-xs text-fg-muted" data-testid="usage-limit-timezone">{{ t('accounts.usageLimit.timezone', { zone: model.timezone }) }}</p>
       </template>

@@ -32,9 +32,13 @@ function render() {
     SLink: { template: '<button><slot /></button>' },
     SBadge: { template: '<span><slot /></span>' },
     SHint: { template: '<span><slot /></span>' },
+    STooltip: { props: ['content', 'disabled'], template: '<span :data-tip="disabled ? undefined : content"><slot /></span>' },
     SSwitch: { props: ['modelValue'], emits: ['update:modelValue'], template: '<button role="switch" :aria-checked="modelValue" @click="$emit(\'update:modelValue\', !modelValue)" />' },
   } } })
 }
+
+/** The reason of the status badge: its tooltip (hover or keyboard focus), CONTRACTS §73.4. */
+const statusTip = (w: ReturnType<typeof render>) => w.get('[data-tip]').attributes('data-tip')
 
 describe('account automatic disabling policy', () => {
   const account = { id: 23, name: 'test', auto_disable: true, models: [], model_mapping: {}, credentials: {} } as unknown as Account
@@ -235,12 +239,14 @@ describe('account status recovery', () => {
     expect(orphaned.find('[data-testid="account-reset-status"]').exists()).toBe(false)
   })
 
-  it('shows an automatic disable as a plain badge, with the reason and the enable time only on hover', () => {
+  it('shows an automatic disable as a plain badge, with the reason and the enable time in a focusable tooltip', () => {
     Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'rate limited until 2026-10-12T08:00:00Z', auto_disabled_until: '2026-10-12T08:00:00Z' })
     const w = render()
     const badge = w.get('[data-testid="account-status"]')
     expect(badge.text()).toBe('自动禁用')
-    const [reason, release] = badge.attributes('title')!.split('\n')
+    expect(badge.attributes('title')).toBeUndefined()
+    expect(w.get('[data-testid="account-status-tip"]').attributes('tabindex')).toBe('0')
+    const [reason, release] = statusTip(w)!.split('\n')
     expect(reason).toBe('rate limited until 2026-10-12T08:00:00Z')
     expect(release).toMatch(/自动启用$/)
     expect(w.find('[data-testid="account-status-note"]').exists()).toBe(false)
@@ -248,26 +254,33 @@ describe('account status recovery', () => {
     expect(w.get('[data-testid="account-schedulable-switch"]').attributes('aria-checked')).toBe('true')
   })
 
+  it('keeps a badge without a reason out of the tab order', () => {
+    Object.assign(list.items.value[0], { status: 'active', schedulable: true, status_reason: '', cooldown_until: null })
+    const w = render()
+    expect(w.get('[data-testid="account-status-tip"]').attributes('tabindex')).toBeUndefined()
+    expect(w.find('[data-tip]').exists()).toBe(false)
+  })
+
   it('words the reason of the usage limit from the usage figures (CONTRACTS §73)', () => {
     const usage = { raw_cost_accounting: false, limit_disabled: true, limit: { amount: '200', used: '200.004', period: 'week', period_count: 1, window_start: null, window_end: null, waived: false } }
     Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'usage limit reached: $200.00 / $200.00 (per week)', auto_disabled_until: null, usage })
-    expect(render().get('[data-testid="account-status"]').attributes('title')).toBe('用量已达上限：$200.00 / $200.00（每周）')
+    expect(statusTip(render())).toBe('用量已达上限：$200.00 / $200.00（每周）')
     i18n.global.locale.value = 'en'
     usage.limit.period_count = 2
-    expect(render().get('[data-testid="account-status"]').attributes('title')).toBe('Usage limit reached: $200.00 / $200.00 (per 2 weeks)')
+    expect(statusTip(render())).toBe('Usage limit reached: $200.00 / $200.00 (per 2 weeks)')
     Object.assign(list.items.value[0], { usage: { ...usage, limit: null } })
-    expect(render().get('[data-testid="account-status"]').attributes('title')).toBe('Usage limit reached')
+    expect(statusTip(render())).toBe('Usage limit reached')
   })
 
   it('keeps the server reason when the usage limit did not disable the account', () => {
     Object.assign(list.items.value[0], { status: 'auto_disabled', status_reason: 'usage limit reached: $1 / $1 (total)', auto_disabled_until: null, usage: { limit_disabled: false, limit: null } })
-    expect(render().get('[data-testid="account-status"]').attributes('title')).toBe('usage limit reached: $1 / $1 (total)')
+    expect(statusTip(render())).toBe('usage limit reached: $1 / $1 (total)')
   })
 
   it('shows a manual disable as a plain badge without the reason or a note', () => {
     const w = render()
     expect(w.get('[data-testid="account-status"]').text()).toBe('禁用')
-    expect(w.get('[data-testid="account-status"]').attributes('title')).toBe('credentials rejected')
+    expect(statusTip(w)).toBe('credentials rejected')
     expect(w.text()).not.toContain('credentials rejected')
     expect(w.find('[data-testid="account-status-note"]').exists()).toBe(false)
   })
@@ -285,7 +298,7 @@ describe('account status recovery', () => {
     Object.assign(list.items.value[0], { status: 'active', schedulable: true, status_reason: '', cooldown_until: new Date(Date.now() + 60_000).toISOString(), cooldown_reason: 'upstream 529' })
     const w = render()
     expect(w.get('[data-testid="account-status"]').text()).toBe('启用')
-    expect(w.get('[data-testid="account-status"]').attributes('title')).toBe('upstream 529')
+    expect(statusTip(w)).toBe('upstream 529')
     expect(w.get('[data-testid="account-status-note"]').text()).toMatch(/^冷却至 /)
   })
 

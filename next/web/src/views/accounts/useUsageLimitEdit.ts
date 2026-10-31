@@ -3,14 +3,15 @@
 // account and saved after the account when it changed. The PUT replaces the
 // whole config, so until the GET succeeded the card is read-only and nothing
 // is saved. Periods follow the browser's time zone once the period, its
-// length or its start is edited; other edits keep the saved zone.
+// length or its start is edited; other edits keep the saved zone. A limit the
+// account never saved (loadedUsageLimit) starts in the browser's zone.
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Account, AccountUsageLimit } from '@/api/types'
 import { browserTZ } from '@/components/stats/stats'
 import { errorMessage } from '@/utils/errors'
 import { formatMoney } from '@/utils/format'
-import { defaultUsageLimit, fetchUsageLimit, PERIOD_COUNT_MAX, saveUsageLimit, usageLimitError, usagePeriodLabel } from './accountUsage'
+import { defaultUsageLimit, fetchUsageLimit, loadedUsageLimit, PERIOD_COUNT_MAX, saveUsageLimit, usageLimitBody, usageLimitError, usagePeriodLabel } from './accountUsage'
 
 /** idle: a saved account's limit not asked for yet; only `ready` is editable and saved. */
 export type UsageLimitStatus = 'idle' | 'loading' | 'ready' | 'failed'
@@ -25,6 +26,8 @@ export function useUsageLimitEdit(accountId: () => number | undefined, shown: ()
   const { t } = useI18n()
   const value = ref<AccountUsageLimit>(defaultUsageLimit())
   const saved = ref('')
+  /** The amount last loaded or saved: what a switched-off limit with no amount sends. */
+  let savedAmount = '0'
   const status = ref<UsageLimitStatus>('ready')
   const loadError = ref('')
   const errors = ref<Record<string, string>>({})
@@ -40,6 +43,7 @@ export function useUsageLimitEdit(accountId: () => number | undefined, shown: ()
   function reset(v: AccountUsageLimit, next: UsageLimitStatus) {
     value.value = v
     saved.value = fingerprint(v)
+    savedAmount = String(v.amount ?? '').trim() || '0'
     status.value = next
     errors.value = {}
   }
@@ -50,7 +54,7 @@ export function useUsageLimitEdit(accountId: () => number | undefined, shown: ()
     const my = ++seq
     status.value = 'loading'
     try {
-      const loaded = { ...defaultUsageLimit(), ...(await fetchUsageLimit(id)) }
+      const loaded = loadedUsageLimit(await fetchUsageLimit(id))
       if (my === seq) reset(loaded, 'ready')
     } catch (e) {
       if (my !== seq) return
@@ -82,7 +86,7 @@ export function useUsageLimitEdit(accountId: () => number | undefined, shown: ()
   /** Saves the limit of the saved account when it loaded and changed. */
   async function save(a: Account) {
     if (status.value !== 'ready' || fingerprint(value.value) === saved.value) return
-    const body = value.value
+    const body = usageLimitBody(value.value, savedAmount)
     await saveUsageLimit(a.id, body)
     reset(body, 'ready')
   }

@@ -23,15 +23,25 @@ export function notifyError(e: unknown) {
 }
 
 /**
- * Extracts field errors of an invalid_argument error. `strip` removes a
- * prefix such as "credentials." so plugin form fields line up.
+ * i18n keys of the field error codes a page knows: code → key. A code that is
+ * not listed shows the server's message (it may be English only).
  */
-export function fieldErrors(e: unknown, strip?: string): Record<string, string> {
+export type FieldCodeMessages = Record<string, string>
+
+/**
+ * Extracts field errors of an invalid_argument error. `strip` removes a
+ * prefix such as "credentials." so plugin form fields line up. With `codes`,
+ * a field whose code is listed shows that translation instead of the
+ * server's message.
+ */
+export function fieldErrors(e: unknown, strip?: string, codes?: FieldCodeMessages): Record<string, string> {
   if (!(e instanceof ApiError) || e.code !== 'invalid_argument') return {}
-  if (!strip) return { ...e.fields }
+  const t = i18n.global.t
   const out: Record<string, string> = {}
   for (const [k, v] of Object.entries(e.fields)) {
-    if (k.startsWith(strip)) out[k.slice(strip.length)] = v
+    if (strip && !k.startsWith(strip)) continue
+    const key = codes?.[e.fieldCodes?.[k] ?? '']
+    out[strip ? k.slice(strip.length) : k] = key ? t(key) : v
   }
   return out
 }

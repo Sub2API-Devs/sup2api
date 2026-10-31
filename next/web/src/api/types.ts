@@ -462,8 +462,10 @@ export interface AccountUsageLimit {
   period_count: number
   /** Periods are counted from here (whole hours, from 2000 up to 2100); null = 2024-01-01 00:00 in `timezone`. */
   anchor: string | null
-  /** IANA time zone of the periods' boundaries (server default "UTC"); the console saves the browser's. */
+  /** IANA time zone of the periods' boundaries ("" while never saved; an older core sends "UTC"); the console saves the browser's. */
   timezone: string
+  /** Whether the account ever saved a limit (sent by GET; ignored by PUT); absent from an older core. */
+  configured?: boolean
 }
 
 /** Success-rate figure of an account (CONTRACTS §73.1): the upstream's 400s, cancellations and local failures are not failures. */

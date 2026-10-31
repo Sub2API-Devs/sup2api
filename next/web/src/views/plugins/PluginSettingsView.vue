@@ -28,28 +28,35 @@ const settings = ref<PluginSettings | null>(null)
 const loading = ref(true)
 const error = ref('')
 const denied = ref(false)
+/** Only the latest load applies: a late answer for the plugin left behind must not show here. */
+let seq = 0
 
 async function load() {
+  const my = ++seq
   error.value = ''
   denied.value = false
   if (coreSettings.value) {
+    settings.value = null
     loading.value = false
     return
   }
   try {
     const s = await api.get<PluginSettings>(`/plugins/${encodeURIComponent(key.value)}/settings`)
+    if (my !== seq) return
     settings.value = s && s.schema ? s : null
   } catch (e) {
+    if (my !== seq) return
     settings.value = null
     if (isApiError(e) && e.status === 403) denied.value = true
     else error.value = errorMessage(e)
   } finally {
-    loading.value = false
+    if (my === seq) loading.value = false
   }
 }
 
 watch(key, () => {
   loading.value = true
+  settings.value = null
   load()
 })
 onMounted(load)

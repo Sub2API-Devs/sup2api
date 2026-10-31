@@ -38,13 +38,13 @@ export default {
     anchor: 'Periods start at', anchorHint: 'Periods are counted from here (whole hours, years 2000-2099); empty = 2024-01-01 00:00, so days, weeks and months fall on their natural boundaries. Hourly periods start on whole UTC hours: in a half-hour zone (such as India) half an hour earlier.',
     timezone: 'Periods follow {zone}',
     current: 'Used this period ({start} → {end})', currentTotal: 'Used in total', summary: 'Usage limit {amount} {period}', saveFailed: 'The account was saved, but the usage limit was not: {error}',
-    amountInvalid: 'An enabled usage limit needs an amount above 0 and up to 1000000000', periodCountInvalid: 'Period length must be 1-{max}',
+    amountInvalid: 'The limit must be 0-1000000000 with at most 8 decimals, and above 0 when enabled', periodCountInvalid: 'Period length must be 1-{max}',
     loadFailed: 'Could not load the usage limit, so it cannot be edited: {error}', retry: 'Retry', waived: 'Released by hand for this period'
   },
   successRate: {
     column: 'Success · 1 min', title: 'Success rate (last 60 seconds)', success: 'Successful requests', failed: 'Failed attempts',
-    requests: '{success} / {total}', idle: 'No requests in the last minute',
-    hint: 'Success rate = successes ÷ (successes + failures) over a rolling 60-second window. Every failed upstream attempt counts once, judged by the status the upstream answered: an upstream 400 (the request itself is wrong), a client cancellation and local failures the account is not to blame for (the gateway\'s own rate limiting or errors) are not failures; a failure without an upstream answer (connection failure, timeout) is.'
+    requests: '{success} / {total} attempts', idle: 'No requests in the last minute',
+    hint: 'Success rate = successes ÷ attempts (successes + failures) over a rolling 60-second window. Every failed upstream attempt counts once, so a retried request counts several attempts and there may be more attempts than requests. Failures are judged by the status the upstream answered: an upstream 400 (the request itself is wrong), a client cancellation and local failures the account is not to blame for (the gateway\'s own rate limiting or errors) are not failures; a failure without an upstream answer (connection failure, timeout) is.'
   },
   modelLimits: {
     title: 'Model limits',

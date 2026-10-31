@@ -50,7 +50,13 @@ export default {
     subject: '主题',
     attempts: '第 {n} 次',
     status: { pending: '等待发送', sending: '发送中', sent: '已发送', failed: '失败' },
-    severity: { info: '信息', warning: '警告', critical: '严重' }
+    severity: { info: '信息', warning: '警告', critical: '严重' },
+    errors: {
+      unknown_channel: '没有这个通知渠道，可能提供它的插件已停用',
+      recipients_count: '收件人需为 1-20 个',
+      recipient_too_long: '单个收件人不能超过 320 字节',
+      invalid_recipient: '收件人格式不符合该渠道的要求'
+    }
   },
   environment: {
     title: '环境变量',

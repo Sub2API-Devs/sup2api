@@ -379,7 +379,8 @@ export default {
     unsaved: '有未保存的修改',
     pageHint: '本插件的设置。插件声明的权限允许你的角色编辑这些设置。',
     denied: '你无权打开本插件的设置。',
-    none: '本插件没有设置。'
+    none: '本插件没有设置。',
+    reenter: '要修改其他设置，需要重新填写这个密钥'
   },
 
   retired: {

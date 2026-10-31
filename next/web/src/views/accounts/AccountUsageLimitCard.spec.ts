@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { enableAutoUnmount, mount, type VueWrapper } from '@vue/test-utils'
+import { nextTick } from 'vue'
+import { SSegmented } from '@sub2api/ui'
 import type { AccountUsageLimit } from '@/api/types'
 import { i18n } from '@/i18n'
 import AccountUsageLimitCard from './AccountUsageLimitCard.vue'
@@ -40,6 +42,48 @@ describe('AccountUsageLimitCard', () => {
     expect(input(w, 'usage-limit-count').attributes('max')).toBe('8784')
     await w.setProps({ modelValue: limit({ period: 'month' }) })
     expect(input(w, 'usage-limit-count').attributes('max')).toBe('12')
+  })
+
+  it('takes any number of decimals in the browser, leaving the 8-decimal check to the editor', () => {
+    expect(input(render(limit()), 'usage-limit-amount').attributes('step')).toBe('any')
+  })
+
+  it('resets the hidden period length to 1 on "never"', async () => {
+    const w = render(limit({ period: 'month', period_count: 13 }))
+    w.getComponent(SSegmented).vm.$emit('update:modelValue', 'none')
+    await nextTick()
+    expect(w.props('modelValue')).toMatchObject({ period: 'none', period_count: 1 })
+    expect(w.find('[data-testid="usage-limit-count"]').exists()).toBe(false)
+    w.getComponent(SSegmented).vm.$emit('update:modelValue', 'week')
+    await nextTick()
+    expect(w.props('modelValue')).toMatchObject({ period: 'week', period_count: 1 })
+  })
+
+  describe('in a half-hour zone (Asia/Kolkata)', () => {
+    const tz = process.env.TZ
+    beforeEach(() => {
+      process.env.TZ = 'Asia/Kolkata'
+    })
+    afterEach(() => {
+      if (tz === undefined) delete process.env.TZ
+      else process.env.TZ = tz
+    })
+
+    it('shows the stored start as it is, minutes included', () => {
+      // An hourly limit starts on a whole UTC hour: 03:00 UTC is 08:30 IST, not 08:00.
+      const w = render(limit({ period: 'hour', anchor: '2026-01-05T03:00:00Z' }))
+      expect((input(w, 'usage-limit-anchor').element as HTMLInputElement).value).toBe('2026-01-05T08:30')
+    })
+
+    it('floors a picked start the way the server stores it', async () => {
+      const w = render(limit({ period: 'hour' }))
+      await input(w, 'usage-limit-anchor').setValue('2026-03-01T09:45')
+      expect(w.props('modelValue').anchor).toBe('2026-03-01T04:00:00.000Z')
+      expect((input(w, 'usage-limit-anchor').element as HTMLInputElement).value).toBe('2026-03-01T09:30')
+      await w.setProps({ modelValue: limit({ period: 'day' }) })
+      await input(w, 'usage-limit-anchor').setValue('2026-03-01T09:45')
+      expect(w.props('modelValue').anchor).toBe('2026-03-01T03:30:00.000Z')
+    })
   })
 
   it('names the time zone the periods follow', () => {

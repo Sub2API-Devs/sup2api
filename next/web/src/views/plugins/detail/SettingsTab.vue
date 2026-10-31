@@ -14,6 +14,12 @@ import { settingsFieldErrors, type PluginSettings } from '../pluginUtil'
 // Host widgets (proxy-select, group-select) are injected app-wide.
 const props = defineProps<{ pluginKey: string; settings: PluginSettings }>()
 const emit = defineEmits<{ (e: 'saved'): void }>()
+/**
+ * Field error codes of the core's own settings checks; the schema messages
+ * (a plugin's own wording) stay as sent. "reenter": a caller with only the
+ * plugin's permission must type a kept secret again to change anything else.
+ */
+const SETTINGS_ERROR_CODES = { reenter: 'plugins.settings.reenter' }
 const { t } = useI18n()
 const auth = useAuthStore()
 const canManage = computed(() => auth.has(['plugin:manage', ...(props.settings.permission ? [props.settings.permission] : [])]))
@@ -60,7 +66,7 @@ async function save() {
     loaded.value = JSON.stringify(values.value)
     emit('saved')
   } catch (e) {
-    const { fields, root } = settingsFieldErrors(fieldErrors(e))
+    const { fields, root } = settingsFieldErrors(fieldErrors(e, undefined, SETTINGS_ERROR_CODES))
     errors.value = fields
     // Errors of the whole object have no field to show at.
     if (root.length) toast(root.join('; '), 'error')

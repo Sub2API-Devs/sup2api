@@ -466,7 +466,8 @@ function outcomesOf(a: any) {
   return { success, failed }
 }
 const usageLimits = new Map<number, any>()
-const defaultLimit = () => ({ raw_cost_accounting: false, enabled: false, amount: '0', period: 'month', period_count: 1, anchor: null, timezone: 'UTC' })
+/** The limit of an account that never saved one: timezone "" (the console then uses the browser's zone). */
+const defaultLimit = () => ({ raw_cost_accounting: false, enabled: false, amount: '0', period: 'month', period_count: 1, anchor: null, timezone: '' })
 /** Largest period_count per period: one period spans at most 366 days. */
 const PERIOD_COUNT_MAX: Record<string, number> = { hour: 8784, day: 366, week: 52, month: 12, none: 1000 }
 function usageFigures(a: any, scale: number) {
@@ -486,7 +487,7 @@ function usageOf(a: any) {
     raw_cost_accounting: l.raw_cost_accounting,
     total,
     today: usageFigures(a, 0.3),
-    limit: l.enabled ? { amount: l.amount, used: used.toFixed(8), period: l.period, period_count: l.period_count, window_start: l.period === 'none' ? null : start.toISOString(), window_end: l.period === 'none' ? null : end.toISOString() } : null,
+    limit: l.enabled ? { amount: l.amount, used: used.toFixed(8), period: l.period, period_count: l.period_count, window_start: l.period === 'none' ? null : start.toISOString(), window_end: l.period === 'none' ? null : end.toISOString(), waived: Boolean(l.waived) } : null,
     // The mock does not disable accounts: the status poll of the server does.
     limit_disabled: a.status === 'auto_disabled' && String(a.status_reason || '').startsWith('usage limit reached')
   }
@@ -898,19 +899,32 @@ on('GET', '/accounts/:id/usage', (req) => {
 on('GET', '/accounts/:id/usage-limit', (req) => {
   const r = scopedAccount(req, 'read')
   if (!('a' in r)) return r
-  return usageLimits.get(r.a.id) || defaultLimit()
+  const { waived: _waived, ...l } = usageLimits.get(r.a.id) || defaultLimit()
+  return l
 })
+// Same checks and error shape as the core's validateUsageLimit: 400
+// invalid_argument with one field error per problem. A switched-off limit may
+// have no amount; "none" has no period length to check.
 on('PUT', '/accounts/:id/usage-limit', (req) => {
   const r = scopedAccount(req, 'update')
   if (!('a' in r)) return r
   const b = req.body || {}
-  const invalid = (field: string, message: string) => fail(400, 'validation_failed', 'invalid', { fields: [{ field, code: 'invalid', message }] })
-  if (b.enabled && !(Number(b.amount) > 0)) return invalid('amount', 'set an amount above 0 to enable the usage limit')
+  const fields: { field: string; code: string; message: string }[] = []
+  const invalid = (field: string, message: string) => fields.push({ field, code: 'invalid', message })
   const max = PERIOD_COUNT_MAX[b.period]
-  if (max && !(b.period_count >= 1 && b.period_count <= max)) return invalid('period_count', `period_count must be 1-${max} for ${b.period}`)
+  if (!max) invalid('period', 'period must be hour, day, week, month or none')
+  else if (b.period !== 'none' && !(b.period_count >= 1 && b.period_count <= max)) invalid('period_count', `period count must be 1-${max} (one period lasts at most 366 days)`)
+  const raw = String(b.amount ?? '').trim()
+  const amount = raw === '' && !b.enabled ? 0 : Number(raw)
+  const decimals = (raw.split('.')[1] || '').replace(/0+$/, '').length
+  if (raw === '' && b.enabled) invalid('amount', 'set an amount above 0 to enable the usage limit')
+  else if (!(amount >= 0 && amount <= 1e9) || decimals > 8) invalid('amount', 'amount must be 0-1000000000 USD with at most 8 decimals')
+  else if (b.enabled && !(amount > 0)) invalid('amount', 'set an amount above 0 to enable the usage limit')
   const year = b.anchor ? new Date(b.anchor).getUTCFullYear() : 2024
-  if (!(year >= 2000 && year < 2100)) return invalid('anchor', 'anchor must be between 2000 and 2100')
-  usageLimits.set(r.a.id, { ...defaultLimit(), ...b, timezone: b.timezone || 'UTC' })
+  if (!(year >= 2000 && year < 2100)) invalid('anchor', 'anchor must be between 2000 and 2100')
+  if (!b.timezone) invalid('timezone', 'timezone must be an IANA time zone name')
+  if (fields.length) return fail(400, 'invalid_argument', 'invalid argument', { fields })
+  usageLimits.set(r.a.id, { ...defaultLimit(), ...b, amount: raw || '0', period_count: b.period === 'none' ? Math.max(1, Number(b.period_count) || 1) : b.period_count, waived: false })
   const u = usageOf(r.a)
   return { ...u, last_7_days: usageFigures(r.a, 2), last_30_days: usageFigures(r.a, 7) }
 })
@@ -950,6 +964,9 @@ on('POST', '/accounts/:id/refresh-credentials', (req) => {
 on('POST', '/accounts/:id/reset-status', (req) => {
   const r = scopedAccount(req, 'update')
   if (!('a' in r)) return r
+  // Releasing an account the usage limit disabled waives the limit for that period (§73.4).
+  const l = usageLimits.get(r.a.id)
+  if (l && usageOf(r.a).limit_disabled) l.waived = true
   r.a.status = 'active'
   r.a.status_reason = ''
   r.a.auto_disabled_until = null

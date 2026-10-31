@@ -53,6 +53,33 @@ describe('envelope', () => {
     expect(f).toHaveBeenCalledTimes(5)
   })
 
+  it('listAll follows a route that caps the page size lower than asked', async () => {
+    const f = stubFetch((url) => {
+      const page = Number(new URL(url, 'http://x').searchParams.get('page'))
+      const items = Array.from({ length: page < 3 ? 50 : 7 }, (_, i) => (page - 1) * 50 + i)
+      return new Response(JSON.stringify({ data: items, page: { page, page_size: 50, total: 107 } }))
+    })
+    const all = await http.listAll<number>(http.api, '/capped')
+    expect(all).toHaveLength(107)
+    expect(all.at(-1)).toBe(106)
+    expect(f).toHaveBeenCalledTimes(3)
+  })
+
+  it('listAll stops on a short page when the total is unknown, and on an empty page', async () => {
+    let f = stubFetch((url) => {
+      const page = Number(new URL(url, 'http://x').searchParams.get('page'))
+      return new Response(JSON.stringify({ data: Array.from({ length: page < 2 ? 100 : 30 }, () => page), page: { page, page_size: 100, total: 0 } }))
+    })
+    expect(await http.listAll<number>(http.api, '/nototal')).toHaveLength(130)
+    expect(f).toHaveBeenCalledTimes(2)
+    f = stubFetch((url) => {
+      const page = Number(new URL(url, 'http://x').searchParams.get('page'))
+      return new Response(JSON.stringify({ data: page < 2 ? Array.from({ length: 100 }, () => 1) : [], page: { page, page_size: 100, total: 0 } }))
+    })
+    expect(await http.listAll<number>(http.api, '/exact')).toHaveLength(100)
+    expect(f).toHaveBeenCalledTimes(2)
+  })
+
   it('builds query strings: drops empty values, repeats arrays', async () => {
     const f = stubFetch(() => json(null))
     await http.api.get('/q', { a: 1, b: '', c: null, d: undefined, e: ['x', 'y'], f: false })
@@ -66,7 +93,7 @@ describe('envelope', () => {
         {
           code: 'invalid_argument',
           message: 'bad',
-          details: { fields: [{ field: 'name', message: 'required' }, { field: 'expr', message: { en: 'syntax', zh: '语法' } }] }
+          details: { fields: [{ field: 'name', message: 'required' }, { field: 'expr', code: 'syntax', message: { en: 'syntax', zh: '语法' } }] }
         },
         400
       )
@@ -75,6 +102,7 @@ describe('envelope', () => {
     expect(http.isApiError(err)).toBe(true)
     expect(err.code).toBe('invalid_argument')
     expect(err.fields).toEqual({ name: 'required', expr: '语法' })
+    expect(err.fieldCodes).toEqual({ name: 'invalid', expr: 'syntax' })
   })
 
   it('maps HTTP status when the body has no error code', async () => {

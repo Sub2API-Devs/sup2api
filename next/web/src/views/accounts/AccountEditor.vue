@@ -27,7 +27,7 @@ import AccountFeatureSettings from '@/views/ccgateway/AccountFeatureSettings.vue
 import type { AccountFeaturePolicy } from '@/views/ccgateway/requestPolicy'
 import { assetURL, usePluginStore } from '@/stores/plugins'
 import { useAuthStore } from '@/stores/auth'
-import { useProxiesLookup } from '@/composables/lookups'
+import { useEnvironmentLayer, useProxiesLookup } from '@/composables/lookups'
 import { ACCOUNT_KEYS, useOwnership } from '@/composables/useOwnership'
 import { errorMessage, fieldErrors, notifyError } from '@/utils/errors'
 import { looksLikeProxyURL, parseProxyURL } from '@/utils/proxyUrl'
@@ -141,6 +141,8 @@ onBeforeUnmount(() => {
 const activeSection = ref<EditorSection>('connection')
 // Usage limit (CONTRACTS §73): loaded when the scheduling section is shown, saved after the account.
 const usageLimit = useUsageLimitEdit(() => props.account?.id, () => activeSection.value === 'scheduling')
+/** The environment card shows only when the caller may read the declared variables (403 for some roles) and the account layer has any. */
+const showEnvironment = useEnvironmentLayer('account')
 const { limit: usageLimitModel, status: usageLimitStatus, loadError: usageLimitLoadError, errors: usageLimitErrors } = usageLimit
 // Each section starts at its top: the modal body keeps the previous scroll
 // offset otherwise. Post-flush, so save() still scrolls to an invalid field.
@@ -727,7 +729,7 @@ const { save } = useAccountSave({
             </SSettingRow>
           </SSettingsGroup>
 
-          <SSettingsGroup :title="t('settings.environment.title')" :description="t('settings.environment.accountHint')" data-testid="account-environment">
+          <SSettingsGroup v-if="showEnvironment" :title="t('settings.environment.title')" :description="t('settings.environment.accountHint')" data-testid="account-environment">
             <EnvironmentEditor v-model="basic.environment" layer="account" field="environment" :errors="errors" :disabled="saving" />
           </SSettingsGroup>
 

@@ -30,6 +30,13 @@ const statusOptions = computed(() => [
 ])
 const STATUS_TONE: Record<NotificationStatus, Tone> = { pending: 'gray', sending: 'primary', sent: 'success', failed: 'danger' }
 const SEVERITY_TONE: Record<NotificationRecord['severity'], Tone> = { info: 'gray', warning: 'warning', critical: 'danger' }
+/** Field error codes of a test send (§74.4); another code (an older core sends "invalid") shows the server's message. */
+const TEST_ERROR_CODES = {
+  unknown_channel: 'settings.notifications.errors.unknown_channel',
+  recipients_count: 'settings.notifications.errors.recipients_count',
+  recipient_too_long: 'settings.notifications.errors.recipient_too_long',
+  invalid_recipient: 'settings.notifications.errors.invalid_recipient'
+}
 
 const channelColumns = computed<TableColumn[]>(() => [
   { key: 'id', label: t('settings.notifications.channel') },
@@ -64,7 +71,7 @@ async function sendTest() {
     toast(t('settings.notifications.testQueued'), 'success')
     await records.reload()
   } catch (e) {
-    applyFormError(e, testErrors)
+    applyFormError(e, testErrors, TEST_ERROR_CODES)
   } finally {
     testing.value = false
   }

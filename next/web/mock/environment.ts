@@ -1,5 +1,6 @@
 // Core environment variables and notifications (CONTRACTS §74.3, §74.4).
 import { fail, nextId, now, on, paginate } from './router'
+import { caller, hasPerm } from './core'
 
 const ALL = ['global', 'group', 'account']
 const TASK = ['group', 'account']
@@ -25,7 +26,12 @@ const variables = [
 ]
 const environment = { values: { relay_timeout_seconds: 600 } as Record<string, number> }
 
-on('GET', '/environment/variables', () => ({ variables, process: { streaming_idle_timeout_seconds: 300 } }))
+// Readable by whoever edits a layer: settings, groups, accounts (own accounts included).
+on('GET', '/environment/variables', (req) =>
+  hasPerm(caller(req), ['settings:read', 'group:read', 'account:read', 'account:own:read'])
+    ? { variables, process: { streaming_idle_timeout_seconds: 300 } }
+    : fail(403, 'permission_denied', 'permission denied')
+)
 on('GET', '/settings/environment', () => environment)
 on('PUT', '/settings/environment', (req) => {
   const values: Record<string, number> = {}

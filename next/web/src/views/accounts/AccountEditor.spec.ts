@@ -557,4 +557,42 @@ describe('account usage limit', () => {
     expect(card(w).props('errors')).toEqual({ period_count: '周期长度必须为 1-12' })
     expect(w.getComponent(AccountEditorNav).props('errors').scheduling).toBe(true)
   })
+
+  it.each([
+    ['a newer core ("")', ''],
+    ['an older core (UTC defaults)', 'UTC']
+  ])('starts a limit the account never saved in the browser time zone: %s', async (_, timezone) => {
+    const never = { raw_cost_accounting: false, enabled: false, amount: '0', period: 'month', period_count: 1, anchor: null, timezone }
+    limitGet = () => Promise.resolve(never)
+    const w = await open()
+    expect(card(w).props('modelValue').timezone).toBe(zone)
+    card(w).vm.$emit('update:modelValue', { ...card(w).props('modelValue'), enabled: true, amount: '50' })
+    await submit(w)
+    expect(mocks.put).toHaveBeenCalledWith('/accounts/1/usage-limit', { ...never, enabled: true, amount: '50', timezone: zone })
+  })
+
+  it('saves a switched-off limit whose amount was cleared with the saved amount', async () => {
+    const w = await open()
+    card(w).vm.$emit('update:modelValue', { ...saved, enabled: false, amount: '' })
+    await submit(w)
+    expect(card(w).props('errors')).toEqual({})
+    expect(mocks.put).toHaveBeenCalledWith('/accounts/1/usage-limit', { ...saved, enabled: false, amount: '200' })
+  })
+
+  it('saves a lifetime limit whatever the hidden period length was', async () => {
+    limitGet = () => Promise.resolve({ ...saved, period: 'month', period_count: 12 })
+    const w = await open()
+    card(w).vm.$emit('update:modelValue', { ...saved, period: 'none', period_count: 12 })
+    await submit(w)
+    expect(card(w).props('errors')).toEqual({})
+    expect(mocks.put).toHaveBeenCalledWith('/accounts/1/usage-limit', { ...saved, period: 'none', period_count: 1, timezone: zone })
+  })
+
+  it('saves an amount with more than 2 decimals (the card input takes step="any")', async () => {
+    const w = await open()
+    card(w).vm.$emit('update:modelValue', { ...saved, amount: '0.12345678' })
+    await submit(w)
+    expect(mocks.patch).toHaveBeenCalledOnce()
+    expect(mocks.put).toHaveBeenCalledWith('/accounts/1/usage-limit', { ...saved, amount: '0.12345678' })
+  })
 })
