@@ -14,6 +14,13 @@
 - **核心 0.1.224**（`6771d384d`，manifest `fe12b580…c530`，无 schema / Host API 变化，内置插件与 0.1.223 相同）：Worker 在身份校验中转出的 401/403（`AccountRefusalError`）按上游错误响应处理：切换账号、套用自动禁用规则，响应体原样返回给客户端。以前报 503 “account does not provide a verified resource issuer”，只切换账号，账号一直可调度。计划 51 秒完成，没有暂停。
 - 脚本 `stage/ccgateway-0.1.116`、`stage/ccgateway-0.1.117`、`stage/0.1.224`；备份在 `backups/ccgateway-0.1.116`、`ccgateway-0.1.117`、`core-0.1.224`。#23 的 paired 更新仍是 `not_found`（0.1.115 时就有）。
 
+2026-11-01 插件 **ccgateway 0.1.118**（`7a72fd342`，包 `7bc2c1fc…d7c`，rollout 214，北京时间 04:53，核心不变）：共享 Xray 成为唯一出口。
+- 每账号 sing-box 出口、迁移/回迁接口和 `migrate_egress.py` 已删除；插件包仍是四个镜像，`egress` 角色换成 Xray 网关镜像（`ccgateway-egress:0.1.118`，Xray 26.3.27，36 MB）。控制器 `7a72fd3424e9`；`CCG_XRAY_IMAGE` 仍固定为现有网关的镜像 `sha256:92305b5b…`，共享网关 `ccg-shared-egress` 没有重建（Up 2 weeks）。
+- 新控制器启动后自动清掉 10 个账号 egress 容器、19 张账号 uplink 网络和账号目录里的 `sing-box.json`/`firewall.nft`；网关自己的 `ccg-d0000000000000000-xray-uplink` 保留。
+- 手工清理（用户确认）：`ccg302*`/`ccg302dbg*` 测试环境（6 个容器、6 张网络、3 个数据卷）、`ccg-21-app-rollback-*` 3 个容器、`ccg-request-modes-20261018-net`、`ccg-v6-test-net`，以及 107 个镜像 tag（`ccgateway-egress:0.1.16–0.1.117`、`ccg-egress:22cfdb506`、`ccg-tls-relay-egress:mdgqm9et`、`ccgateway-worker:302-v7-test`、`ccgateway-controller:shared-xray.*`/`xray-candidate`）。清单在 `backups/ccgateway-0.1.118/cleanup.log`。未动 `*:302-v7-final`、`ccgateway-controller:302-v7-test`。
+- 验证：账号 21、51–59 控制台测试 200（54 在 Worker 原地更新后第一次 `ECONNRESET`，随后连续 5 次 200）；50 仍是刷新令牌失效 401。23 号没有容器（`not_found`，0.1.117 时就如此）。
+- 备份 `backups/ccgateway-0.1.118`（数据库 `999e8560…2f04` 和控制器状态 `runtime-state.tgz`），脚本 `stage/ccgateway-0.1.118`。回滚：插件回到 0.1.117 时旧控制器仍按 `egress_backend: shared_xray` 把账号留在共享网关，但新建账号会走已删除的 sing-box，只作应急。
+
 2026-11-01 核心 **0.1.225**（`671d1267d`，manifest `9b3cee95…a12d`，迁移 0071、0072，内置插件与 0.1.224 相同，北京时间 04:11）：
 - 失败策略 Schema 3/4 的规则同时填了状态码和关键词时，两者都命中才算匹配（原为任一）；自动禁用原因带命中的关键词，如 `failure policy login-invalid: upstream HTTP 401, keyword "oauth refresh token is no longer valid"`。
 - 迁移 0072 把线上唯一的账号规则 `migrated-disable`（401 + 7 个 new-api 关键词）拆成 `login-invalid`（401 + 登录失效关键词，取自近 30 天真实 401：`OAuth access token has been revoked.`、`OAuth refresh token is no longer valid…`，以及 CLI/Worker 的 `oauth_refresh_dead`、`not_logged_in` 等）、`account-on-hold`（403 + `oauth_account_on_hold` 等）、`migrated-disable`（原 7 个关键词，不限状态码）。revision 1→2，旧策略在 `failure_policy_history`。
