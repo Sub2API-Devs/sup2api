@@ -89,6 +89,7 @@ export default {
     gateway_endpoint: 'Gateway endpoints',
     platform_register: 'Register a platform or account types',
     scheduler_rank: 'Rewrite account scheduling',
+    notify_send: 'Send notifications',
     sticky_clear: 'Clear sticky session bindings',
     users_read: 'Read users',
     accounts_credentials: 'Account credentials',

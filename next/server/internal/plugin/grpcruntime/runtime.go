@@ -64,6 +64,9 @@ type Options struct {
 	// Environment serves HostService.GetEnvironment; nil makes it fail with
 	// UNAVAILABLE.
 	Environment core.EnvironmentResolver
+	// Notifier serves HostService.ListNotificationChannels and Notify; nil
+	// makes them fail with UNAVAILABLE.
+	Notifier core.Notifier
 
 	HostVersion   string
 	DataDir       string // plugin work directories live under DataDir/<key>/work

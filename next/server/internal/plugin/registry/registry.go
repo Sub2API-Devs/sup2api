@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"mime"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -155,10 +156,13 @@ type generation struct {
 	jobs      []core.JobBinding
 	subs      []core.SubscriptionBinding
 	observers []core.ObservationBinding
+	channels  []core.NotificationChannelBinding
 	assets    sync.Map // key + "\x00" + path -> asset
 }
 
 func (g *generation) Observers() []core.ObservationBinding { return g.observers }
+
+func (g *generation) NotificationChannels() []core.NotificationChannelBinding { return g.channels }
 
 type asset struct {
 	data []byte
@@ -328,6 +332,11 @@ func (g *generation) registerPlugin(ext Extension, pkg *Package) {
 	g.addRoutes(ext, info, pkg, grants)
 	g.addObserver(ext, info, m, grants)
 	g.addJobsAndEvents(ext, info, m, grants)
+	if conflicts := g.addNotificationChannels(ext, info, m); len(conflicts) > 0 {
+		info.Conflicts = append(info.Conflicts, conflicts...)
+		g.plugins[len(g.plugins)-1] = info
+		g.byKey[pkg.Key] = info
+	}
 }
 
 // addPluginPlatforms registers the platforms m declares. Plugin platforms:
@@ -439,6 +448,33 @@ func (g *generation) addObserver(ext Extension, info core.PluginInfo, m *manifes
 	if client := source.Observer(); client != nil && (types == "own" || types == "all") {
 		g.observers = append(g.observers, core.ObservationBinding{Plugin: info, Declaration: *m.Observations, AllAccounts: types == "all", Client: client})
 	}
+}
+
+// addNotificationChannels registers the channels the plugin delivers. A
+// channel id another plugin already claimed is skipped and the plugin is
+// abnormal, like a conflicting platform.
+func (g *generation) addNotificationChannels(ext Extension, info core.PluginInfo, m *manifest.Manifest) []core.ResourceConflict {
+	source, ok := ext.(interface {
+		Notifier() core.NotificationChannelPlugin
+	})
+	if !ok || m.Notifications == nil || !hasCapability(m, manifest.CapNotifyChannel) {
+		return nil
+	}
+	client := source.Notifier()
+	if client == nil {
+		return nil
+	}
+	var conflicts []core.ResourceConflict
+	for _, c := range m.Notifications.Channels {
+		if i := slices.IndexFunc(g.channels, func(b core.NotificationChannelBinding) bool { return b.Channel.ID == c.ID }); i >= 0 {
+			reason := "notification channel already declared by plugin " + g.channels[i].Plugin.Key
+			slog.Error("plugin registry: notification channel skipped, the plugin is abnormal", "plugin", info.Key, "channel", c.ID, "reason", reason)
+			conflicts = append(conflicts, core.ResourceConflict{Resource: "notification_channel", ID: c.ID, Reason: reason})
+			continue
+		}
+		g.channels = append(g.channels, core.NotificationChannelBinding{Plugin: info, Channel: c, Client: client})
+	}
+	return conflicts
 }
 
 // addJobsAndEvents registers the plugin's jobs and event subscriptions, each

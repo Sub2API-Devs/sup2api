@@ -27,6 +27,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/iam"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/job"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/notify"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/install"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/market"
@@ -69,6 +70,7 @@ type boot struct {
 	idm     *iam.Service
 	grp     *group.Service
 	env     *environment.Service
+	ntf     *notify.Service
 	keys    *apikey.Service
 	prx     *proxy.Service
 	stats   *account.Stats

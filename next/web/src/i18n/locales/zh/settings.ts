@@ -1,6 +1,7 @@
 export default {
   description: '全局的计费、网关与调度设置。',
   tabs: {
+    notifications: '通知',
     environment: '环境变量',
     billing: '计费',
     gateway: '网关',
@@ -27,6 +28,29 @@ export default {
       unavailable: '未就绪',
       disabled: '已禁用'
     }
+  },
+  notifications: {
+    channelsTitle: '通知渠道',
+    channelsHint: '由插件声明并投递（例如邮件插件提供「邮件」）。其他插件和核心按渠道发送通知，不需要了解提供渠道的插件。',
+    noChannels: '还没有提供通知渠道的插件。启用邮件插件等通知插件后，这里会出现对应渠道。',
+    channel: '渠道',
+    provider: '提供插件',
+    recipientFormat: '收件人格式',
+    recipient: { email: '邮箱地址', text: '文本（由插件解释）' },
+    testTitle: '发送测试通知',
+    testHint: '由核心发出一条测试通知，用于检查渠道配置。发送结果见下方投递记录。',
+    recipients: '收件人',
+    recipientsHint: '多个收件人用逗号或空格分隔，最多 20 个。',
+    sendTest: '发送测试',
+    testQueued: '测试通知已加入发送队列',
+    recordsTitle: '投递记录',
+    recordsHint: '失败的投递会按退避重试，最多 8 次；记录保留 30 天。',
+    allStatuses: '全部状态',
+    source: '来源',
+    subject: '主题',
+    attempts: '第 {n} 次',
+    status: { pending: '等待发送', sending: '发送中', sent: '已发送', failed: '失败' },
+    severity: { info: '信息', warning: '警告', critical: '严重' }
   },
   environment: {
     title: '环境变量',

@@ -158,6 +158,38 @@ export interface EnvironmentVariable {
   process_env: string
 }
 
+// ------------------------------------------------------------------ notifications (CONTRACTS §73.4)
+
+/** A channel a plugin delivers (GET /notifications/channels). */
+export interface NotificationChannel {
+  id: string
+  plugin_key: string
+  plugin_name: Record<string, string>
+  label: Record<string, string>
+  description: Record<string, string>
+  recipient: 'email' | 'text'
+}
+
+export type NotificationStatus = 'pending' | 'sending' | 'sent' | 'failed'
+
+/** One queued or delivered notification (GET /notifications). */
+export interface NotificationRecord {
+  id: number
+  /** Plugin key, or "core". */
+  source: string
+  channel: string
+  recipients: string[]
+  subject: string
+  body: string
+  severity: 'info' | 'warning' | 'critical'
+  status: NotificationStatus
+  attempts: number
+  last_error: string
+  next_attempt_at: string
+  created_at: string
+  sent_at: string | null
+}
+
 // ------------------------------------------------------------------ platforms (CONTRACTS §13)
 
 /** A gateway endpoint declared by a platform. */

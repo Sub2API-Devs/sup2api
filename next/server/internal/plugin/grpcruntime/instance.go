@@ -75,6 +75,7 @@ type proc struct {
 	http       pluginv1.HTTPServiceClient
 	sched      pluginv1.SchedulerServiceClient
 	migration  pluginv1.MigrationServiceClient
+	notifier   pluginv1.NotificationServiceClient
 	pid        int
 	runDir     string // private run directory (sockets, TMPDIR); removed with the process
 	stopWatch  func()
@@ -396,6 +397,7 @@ func (i *Instance) dispenseClients(p *proc) {
 	p.http = pluginv1.NewHTTPServiceClient(conn)
 	p.sched = pluginv1.NewSchedulerServiceClient(conn)
 	p.migration = pluginv1.NewMigrationServiceClient(conn)
+	p.notifier = pluginv1.NewNotificationServiceClient(conn)
 }
 
 // verifyInfo checks GetInfo against the package identity and protocol.

@@ -38,6 +38,9 @@ type Manifest struct {
 	Jobs         []Job         `json:"jobs,omitempty"`
 	Database     *Database     `json:"database,omitempty"`
 
+	// Notifications declares the notification channels the plugin delivers.
+	Notifications *Notifications `json:"notifications,omitempty"`
+
 	UserPermissions []UserPermission `json:"userPermissions,omitempty"`
 	Routes          []Route          `json:"routes,omitempty"`
 	UI              *UI              `json:"ui,omitempty"`
@@ -79,6 +82,7 @@ const (
 	CapMigrationData     = "migration.data.v1"
 	CapSchedulerRank     = "scheduler.rank.v1"
 	CapAppBroadcast      = "app.broadcast.v1"
+	CapNotifyChannel     = "notify.channel.v1"
 )
 
 type Capability struct {
@@ -88,6 +92,29 @@ type Capability struct {
 type Observations struct {
 	Events  []string `json:"events"`
 	Metrics []string `json:"metrics,omitempty"`
+}
+
+// Notifications declares the channels a plugin delivers notifications on
+// ("notify.channel.v1", CONTRACTS §73.4). A channel id is unique across the
+// enabled plugins: other plugins send through HostService.Notify by the id
+// and never talk to the provider themselves.
+type Notifications struct {
+	Channels []NotificationChannel `json:"channels"`
+}
+
+// Recipient formats of a notification channel.
+const (
+	RecipientEmail = "email"
+	RecipientText  = "text" // anything the provider understands, e.g. a chat id
+)
+
+type NotificationChannel struct {
+	ID          string        `json:"id"` // ^[a-z][a-z0-9_]{1,29}$, e.g. "email"
+	Label       LocalizedText `json:"label"`
+	Description LocalizedText `json:"description,omitempty"`
+	// Recipient is the format of a recipient: RecipientEmail, or
+	// RecipientText (the default).
+	Recipient string `json:"recipient,omitempty"`
 }
 
 // ---------------------------------------------------------------- platforms and endpoints
@@ -837,6 +864,7 @@ var HostPermissionRisk = map[string]string{
 	"platform.register":    RiskHigh,
 	"scheduler.rank":       RiskHigh,
 	"sticky.clear":         RiskHigh,
+	"notify.send":          RiskMedium, // sends through another plugin's channel, rate limited by the core
 	"gateway.observe":      RiskHigh,
 	"users.read":           RiskHigh,
 	"accounts.credentials": RiskCritical,

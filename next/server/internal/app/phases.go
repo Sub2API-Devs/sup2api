@@ -38,6 +38,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/iam"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/job"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/migrations"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/notify"
 	observer "github.com/Sub2API-Devs/sup2api/next/server/internal/observation"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/api"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/plugin/blobs"
@@ -161,6 +162,9 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	b.settler = usage.New(b.db, bill, bill, b.events, usage.Options{CanRetry: b.canWork, Environment: b.env})
 	b.settler.Start(b.ctx)
 	b.stopper.add("settler", b.settler.Stop)
+	b.ntf = notify.New(b.db, b.reg, notify.Options{CanRun: b.canWork})
+	b.ntf.Start(b.ctx)
+	b.stopper.add("notifications", b.ntf.Stop)
 
 	az := authz.New(authz.Deps{DB: b.db, Bus: b.cl.Bus, Plugins: b.reg})
 	if err := az.Start(b.ctx); err != nil {
@@ -270,7 +274,7 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 
 	rt, err := grpcruntime.New(grpcruntime.Options{
 		DB: b.db, Redis: b.rdb, Bus: b.cl.Bus, Locker: b.cl.Locker, Cipher: b.cipher, Node: b.cl.Registry, Launcher: launcher,
-		Egress: egress, Authorizer: b.az, Ledger: b.bill, Prices: b.bill, Schemas: schemas, Accounts: b.acc, Sticky: gateway.NewStickyClearer(b.rdb), Environment: b.env,
+		Egress: egress, Authorizer: b.az, Ledger: b.bill, Prices: b.bill, Schemas: schemas, Accounts: b.acc, Sticky: gateway.NewStickyClearer(b.rdb), Environment: b.env, Notifier: b.ntf,
 		HostVersion: b.version, DataDir: cfg.Plugins.DataDir, RunDir: cfg.Plugins.RunDir,
 		StrictNetwork: cfg.Plugins.StrictNetwork, Seccomp: cfg.Plugins.Seccomp, MaxMemoryMB: cfg.Plugins.MaxMemoryMB,
 		Logger: b.log,
@@ -324,6 +328,7 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 	// stack moves the re-registration to the end instead of adding a second
 	// call, so the close order is unchanged.
 	b.stopper.add("settler", b.settler.Stop)
+	b.stopper.add("notifications", b.ntf.Stop)
 	b.stopper.add("helper-history", stopHelperHistory)
 
 	b.inst = install.New(install.Deps{Mutations: mutations,
@@ -418,6 +423,7 @@ func (b *boot) registerRoutes(r *httpapi.Router) {
 	b.az.RegisterRoutes(r)
 	b.grp.RegisterRoutes(r)
 	b.env.RegisterRoutes(r)
+	b.ntf.RegisterRoutes(r)
 	b.keys.RegisterRoutes(r)
 	b.prx.RegisterRoutes(r)
 	b.acc.RegisterRoutes(r)

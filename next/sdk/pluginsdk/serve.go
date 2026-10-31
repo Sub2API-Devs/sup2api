@@ -167,6 +167,9 @@ func Register(s grpc.ServiceRegistrar, p any, dial HostDialer, opts ...Option) e
 	if v, ok := p.(Migration); ok {
 		pluginv1.RegisterMigrationServiceServer(s, migrationServer{impl: v})
 	}
+	if v, ok := p.(NotificationChannel); ok {
+		pluginv1.RegisterNotificationServiceServer(s, notificationServer{impl: v})
+	}
 	return nil
 }
 
@@ -222,6 +225,9 @@ func Capabilities(p any) []string {
 	}
 	if _, ok := p.(Migration); ok {
 		caps = append(caps, manifest.CapMigrationData)
+	}
+	if _, ok := p.(NotificationChannel); ok {
+		caps = append(caps, manifest.CapNotifyChannel)
 	}
 	return caps
 }
@@ -632,4 +638,13 @@ type migrationServer struct {
 
 func (s migrationServer) MigrateData(ctx context.Context, in *pluginv1.MigrateDataRequest) (*pluginv1.MigrateDataResponse, error) {
 	return s.impl.MigrateData(ctx, in)
+}
+
+type notificationServer struct {
+	pluginv1.UnimplementedNotificationServiceServer
+	impl NotificationChannel
+}
+
+func (s notificationServer) DeliverNotification(ctx context.Context, in *pluginv1.DeliverNotificationRequest) (*pluginv1.DeliverNotificationResponse, error) {
+	return s.impl.DeliverNotification(ctx, in)
 }

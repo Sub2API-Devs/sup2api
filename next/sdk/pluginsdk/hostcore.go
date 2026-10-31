@@ -39,3 +39,35 @@ func GetEnvironment(ctx context.Context, h Host, groupID, accountID int64) (map[
 	}
 	return resp.GetEnvironment(), nil
 }
+
+// ListNotificationChannels lists the notification channels of the enabled
+// plugins; it needs the "notify.send" grant (CONTRACTS §73.4).
+func ListNotificationChannels(ctx context.Context, h Host) ([]*pluginv1.NotificationChannel, error) {
+	if err := notifyReady(h); err != nil {
+		return nil, err
+	}
+	resp, err := h.Client().ListNotificationChannels(ctx, &pluginv1.ListNotificationChannelsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetChannels(), nil
+}
+
+// Notify queues a notification on a channel by its id; the core delivers it
+// through the plugin declaring the channel. It needs the "notify.send" grant.
+func Notify(ctx context.Context, h Host, in *pluginv1.NotifyRequest) (*pluginv1.NotifyResponse, error) {
+	if err := notifyReady(h); err != nil {
+		return nil, err
+	}
+	return h.Client().Notify(ctx, in)
+}
+
+func notifyReady(h Host) error {
+	if h == nil || h.Client() == nil {
+		return ErrHostNotReady
+	}
+	if h.Info().HostAPIVersion < protocol.NotificationHostAPIVersion {
+		return status.Errorf(codes.FailedPrecondition, "notifications require host API %d", protocol.NotificationHostAPIVersion)
+	}
+	return nil
+}

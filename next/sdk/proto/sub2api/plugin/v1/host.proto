@@ -24,6 +24,11 @@ service HostService {
   // group and optionally an account, for work outside a gateway request
   // (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
   rpc GetEnvironment(GetEnvironmentRequest) returns (GetEnvironmentResponse);
+  // notify.send (grant "notify.send"): the notification channels of the
+  // enabled plugins, and sending through one by its id; the core queues,
+  // deduplicates, rate limits and retries (CONTRACTS §73.4).
+  rpc ListNotificationChannels(ListNotificationChannelsRequest) returns (ListNotificationChannelsResponse);
+  rpc Notify(NotifyRequest) returns (NotifyResponse);
   // Pure local tokenization. No upstream traffic and no billing side effects.
   rpc CountTokens(CountTokensRequest) returns (CountTokensResponse);
   // These callbacks are authorized only by an active Execute/Monitor scope,
@@ -520,4 +525,41 @@ message DialResult {
 
 message DialClose {
   string error = 1;          // empty = clean close
+}
+
+message ListNotificationChannelsRequest {}
+
+message NotificationChannel {
+  string id = 1;
+  // The plugin delivering it.
+  string plugin_key = 2;
+  map<string, string> label = 3;
+  map<string, string> description = 4;
+  // email | text
+  string recipient = 5;
+}
+
+message ListNotificationChannelsResponse {
+  repeated NotificationChannel channels = 1;
+}
+
+message NotifyRequest {
+  string channel = 1;
+  // 1..20 recipients in the channel's format.
+  repeated string recipients = 2;
+  string subject = 3;
+  // Plain text.
+  string body = 4;
+  // info (default) | warning | critical
+  string severity = 5;
+  // Optional: a second notification with the same key from the same plugin
+  // within dedupe_seconds is dropped (the first one's id is answered).
+  string dedupe_key = 6;
+  // 0 = 600 seconds; at most 86400.
+  int32 dedupe_seconds = 7;
+}
+
+message NotifyResponse {
+  int64 id = 1;
+  bool deduplicated = 2;
 }

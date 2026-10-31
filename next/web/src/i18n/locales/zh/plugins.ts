@@ -89,6 +89,7 @@ export default {
     gateway_endpoint: '网关端点',
     platform_register: '注册平台或账号类型',
     scheduler_rank: '改写账号调度参数',
+    notify_send: '发送通知',
     sticky_clear: '清除粘性会话绑定',
     users_read: '读取用户',
     accounts_credentials: '账号凭证',

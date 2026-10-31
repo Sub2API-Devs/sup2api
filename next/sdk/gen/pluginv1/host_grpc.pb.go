@@ -33,6 +33,11 @@ type HostServiceClient interface {
 	// group and optionally an account, for work outside a gateway request
 	// (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
 	GetEnvironment(ctx context.Context, in *GetEnvironmentRequest, opts ...grpc.CallOption) (*GetEnvironmentResponse, error)
+	// notify.send (grant "notify.send"): the notification channels of the
+	// enabled plugins, and sending through one by its id; the core queues,
+	// deduplicates, rate limits and retries (CONTRACTS §73.4).
+	ListNotificationChannels(ctx context.Context, in *ListNotificationChannelsRequest, opts ...grpc.CallOption) (*ListNotificationChannelsResponse, error)
+	Notify(ctx context.Context, in *NotifyRequest, opts ...grpc.CallOption) (*NotifyResponse, error)
 	// Pure local tokenization. No upstream traffic and no billing side effects.
 	CountTokens(ctx context.Context, in *CountTokensRequest, opts ...grpc.CallOption) (*CountTokensResponse, error)
 	// These callbacks are authorized only by an active Execute/Monitor scope,
@@ -179,6 +184,24 @@ func (c *hostServiceClient) ClearStickyBindings(ctx context.Context, in *ClearSt
 func (c *hostServiceClient) GetEnvironment(ctx context.Context, in *GetEnvironmentRequest, opts ...grpc.CallOption) (*GetEnvironmentResponse, error) {
 	out := new(GetEnvironmentResponse)
 	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/GetEnvironment", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) ListNotificationChannels(ctx context.Context, in *ListNotificationChannelsRequest, opts ...grpc.CallOption) (*ListNotificationChannelsResponse, error) {
+	out := new(ListNotificationChannelsResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/ListNotificationChannels", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) Notify(ctx context.Context, in *NotifyRequest, opts ...grpc.CallOption) (*NotifyResponse, error) {
+	out := new(NotifyResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/Notify", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -416,6 +439,11 @@ type HostServiceServer interface {
 	// group and optionally an account, for work outside a gateway request
 	// (CONTRACTS §73.3). Requests carry theirs in RequestMeta.environment.
 	GetEnvironment(context.Context, *GetEnvironmentRequest) (*GetEnvironmentResponse, error)
+	// notify.send (grant "notify.send"): the notification channels of the
+	// enabled plugins, and sending through one by its id; the core queues,
+	// deduplicates, rate limits and retries (CONTRACTS §73.4).
+	ListNotificationChannels(context.Context, *ListNotificationChannelsRequest) (*ListNotificationChannelsResponse, error)
+	Notify(context.Context, *NotifyRequest) (*NotifyResponse, error)
 	// Pure local tokenization. No upstream traffic and no billing side effects.
 	CountTokens(context.Context, *CountTokensRequest) (*CountTokensResponse, error)
 	// These callbacks are authorized only by an active Execute/Monitor scope,
@@ -540,6 +568,12 @@ func (UnimplementedHostServiceServer) ClearStickyBindings(context.Context, *Clea
 }
 func (UnimplementedHostServiceServer) GetEnvironment(context.Context, *GetEnvironmentRequest) (*GetEnvironmentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetEnvironment not implemented")
+}
+func (UnimplementedHostServiceServer) ListNotificationChannels(context.Context, *ListNotificationChannelsRequest) (*ListNotificationChannelsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListNotificationChannels not implemented")
+}
+func (UnimplementedHostServiceServer) Notify(context.Context, *NotifyRequest) (*NotifyResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Notify not implemented")
 }
 func (UnimplementedHostServiceServer) CountTokens(context.Context, *CountTokensRequest) (*CountTokensResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CountTokens not implemented")
@@ -694,6 +728,42 @@ func _HostService_GetEnvironment_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(HostServiceServer).GetEnvironment(ctx, req.(*GetEnvironmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_ListNotificationChannels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNotificationChannelsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).ListNotificationChannels(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/ListNotificationChannels",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).ListNotificationChannels(ctx, req.(*ListNotificationChannelsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_Notify_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NotifyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).Notify(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/Notify",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).Notify(ctx, req.(*NotifyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1152,6 +1222,14 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetEnvironment",
 			Handler:    _HostService_GetEnvironment_Handler,
+		},
+		{
+			MethodName: "ListNotificationChannels",
+			Handler:    _HostService_ListNotificationChannels_Handler,
+		},
+		{
+			MethodName: "Notify",
+			Handler:    _HostService_Notify_Handler,
 		},
 		{
 			MethodName: "CountTokens",

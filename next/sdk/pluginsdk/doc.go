@@ -23,6 +23,7 @@
 //	BroadcastHandler -> AppService.OnBroadcast ("app.broadcast.v1", see BroadcastMux)
 //	HTTP       -> HTTPService       ("http.routes.v1")
 //	AccountRanker -> SchedulerService.RankAccounts ("scheduler.rank.v1")
+//	NotificationChannel -> NotificationService.DeliverNotification ("notify.channel.v1")
 //	Migration  -> MigrationService  ("migration.data.v1")
 //
 // The SDK implements PluginService itself. Optional lifecycle interfaces
