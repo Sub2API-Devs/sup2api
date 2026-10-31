@@ -163,7 +163,7 @@ func TestAIAnalysisEndToEnd(t *testing.T) {
 		t.Fatalf("analyses = %+v", all)
 	}
 	pr := decodeData[PromptPreview](t, h.Do("GET", "/analysis/prompt", map[string]string{"group_id": "0"}, nil))
-	if pr.Flow == nil || !strings.Contains(pr.Prompt, "第 1 级 初审") || len(pr.Dict) != 13 {
+	if pr.Flow == nil || !strings.Contains(pr.Prompt, "第 1 级 初审") || len(pr.Dict) != 13 || pr.DefaultGuidelines != DefaultAnalysisGuidelines || pr.CustomGuidelines {
 		t.Fatalf("prompt preview = %+v", pr)
 	}
 	if n := len(decodeData[[]ToolView](t, h.Do("GET", "/analysis/tools", nil, nil))); n != 5 {

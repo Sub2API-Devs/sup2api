@@ -587,6 +587,15 @@ type PromptPreview struct {
 	Dict    []CategoryDef    `json:"dict"`
 	Prompt  string           `json:"prompt"`
 	Bytes   int              `json:"bytes"`
+	// The built-in guidelines and whether analysis_guidelines replaces them
+	// (the settings page shows the default in its editor).
+	DefaultGuidelines string `json:"default_guidelines"`
+	CustomGuidelines  bool   `json:"custom_guidelines"`
+}
+
+func (v PromptPreview) withGuidelines(c *config) PromptPreview {
+	v.DefaultGuidelines, v.CustomGuidelines = DefaultAnalysisGuidelines, c.AnalysisGuidelines != ""
+	return v
 }
 
 // getAnalysisPrompt previews the system prompt by group (what its users
@@ -607,7 +616,7 @@ func (p *Plugin) getAnalysisPrompt(ctx context.Context, req *pluginv1.HTTPReques
 			return nil, err
 		}
 		prompt := buildAnalysisPrompt(c.AnalysisGuidelines, nil, view, *view.Dict)
-		return pluginsdk.DataResponse(PromptPreview{Flow: view, Dict: view.Dict.Items, Prompt: prompt, Bytes: len(prompt)}), nil
+		return pluginsdk.DataResponse(PromptPreview{Flow: view, Dict: view.Dict.Items, Prompt: prompt, Bytes: len(prompt)}.withGuidelines(c)), nil
 	}
 	var g int64
 	if v := pluginsdk.Query(req, "group_id"); v != "" {
@@ -618,7 +627,7 @@ func (p *Plugin) getAnalysisPrompt(ctx context.Context, req *pluginv1.HTTPReques
 		g = id
 	}
 	prompt, view, dict := analysisPrompt(c.AnalysisGuidelines, s, &g)
-	return pluginsdk.DataResponse(PromptPreview{GroupID: &g, Flow: view, Dict: dict.Items, Prompt: prompt, Bytes: len(prompt)}), nil
+	return pluginsdk.DataResponse(PromptPreview{GroupID: &g, Flow: view, Dict: dict.Items, Prompt: prompt, Bytes: len(prompt)}.withGuidelines(c)), nil
 }
 
 func (p *Plugin) getAnalysisTools(context.Context, *pluginv1.HTTPRequest) (*pluginv1.HTTPResponse, error) {
