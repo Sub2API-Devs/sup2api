@@ -109,6 +109,12 @@
 
 **核对**：两节点镜像都是 0.1.128，核心仍是 0.1.214，没有 ERROR/WARN；`updater.nodes` 两节点 ready；插件进程 `Seccomp=2`；api.prophey.ai `/readyz` 0.025–0.03 秒。44 号 haiku 200；42 号 429 是 5 小时额度已用满。慢链路下载要等下一次核心发布才能实际验证。
 
+## 网关 0.1.129：Host API 8（2026-10-31）
+
+源码 `b55479dad`，镜像 `sup2api-gateway:0.1.129`（ID `b19e596b…`），在 ovh 干净 worktree `~/sup2api/release-gateway-0.1.129` 构建，经本机复制到 clicodeplus（gzip 44 MB）。与 0.1.128 的唯一区别是 `runtime-contract` 的 `HostAPIVersion` 7 → 8；镜像里的 `sub2api-release` 也随之默认签 Host API 8。两边 `.env` 的 `GATEWAY_IMAGE` 都已改成这个版本，备份为 `.env.bak-gw129`。
+
+**上线顺序**：同 0.1.128。先更新 ovh 的 sup2api-1（6 秒就绪）；再从 Caddy 摘下 3140（`Caddyfile.bak-gw129`），重建 sup2api-ccp（15 秒就绪），恢复 Caddy。全程 api.prophey.ai `/readyz` 200。随后发布核心 0.1.222（`v0.1.222-r2`）。
+
 ## 已知问题
 
 - **资源余量小**：clicodeplus 6 核、7.7 GB 内存，节点约用 1.8 GB，可用约 3.6 GB，磁盘剩 27 GB。

@@ -4,7 +4,9 @@
 
 2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
-**待发布：动态权重的核心（CONTRACTS §74.6）**：带迁移 0065/0066/0067 和 Host API 8，schema 契约改变，不是滚动更新。按 schema 变化发布（签名传 `schema-before`），primary-first 期间主节点维护、入口 503，要安排维护窗口；所有节点都是新核心后再启用 dynweight。
+2026-10-31 网关 **0.1.129**（`b55479dad`，镜像 ID `b19e596b…`，两个节点都已更新）：只把 `HostAPIVersion` 从 7 改为 8，外壳才能接受并签发 Host API 8 的核心。同日核心 **0.1.222**（发布号 `v0.1.222-r2`，manifest `91c90b0c…`，迁移 0064–0070）两节点升级完成，计划约 60 秒；内置插件随之升级：moderation 0.6.0，dynweight 0.3.0、mailer 0.1.1 只安装不启用（install-only）。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
+
+**2026-10-31 事故（14:22–14:32 UTC，两节点 503 约 10 分钟）**：第一次用 0.1.128 外壳签发 `v0.1.222`，manifest 的 Host API 写成 7，候选核心报 8，`start-primary` 在 Prepare 前失败、计划暂停，两节点都已停服。迁移未执行。schema 变化的计划不允许回滚、破坏性步骤后也不允许取消，最后在 `updater.upgrades` 手工把计划标为 cancelled，重启两节点外壳回到 0.1.221 基线。**教训**：核心的 `HostAPIVersion`（或集群/任务协议）变了，先升外壳，再用新外壳镜像签核心包。
 
 2026-10-31 最新发布（北京时间 03:10–03:20）：Core 两节点 **0.1.221** + moderation **0.3.1**（CONTRACTS §72.13 P2），并把 new-api 的内容审核配置迁了过来、给审核渠道补了模型价格。
 - **Core 0.1.221**（源码 `3aa066097`，manifest `0b449986…3b46`，计划 `5660c812cb3025782dd24941a69e346f` completed/13）：新增宿主调用 `PriceUsage`（权限 `prices`，low，只读按模型价格试算）。schema 不变（`e3d6a10f…`）。`builtin/` 仍是 0.1.212 的包（moderation 0.1.13）：放进新包会让主节点一启动就升级插件，而另一节点还是旧核心，所以这次没放；内置插件只升不降，下次核心发布时换成 0.3.1 包（`stage/moderation-0.3.1/packages`）。备份 `backups/core-0.1.221`。

@@ -6,7 +6,7 @@ name: sup2api-node
 
 services:
   sup2api-ccp:
-    image: ${GATEWAY_IMAGE:-sup2api-gateway:0.1.128}
+    image: ${GATEWAY_IMAGE:-sup2api-gateway:0.1.129}
     container_name: sup2api-ccp
     pull_policy: never
     restart: unless-stopped
