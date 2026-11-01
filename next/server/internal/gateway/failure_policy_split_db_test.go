@@ -84,3 +84,84 @@ func TestMigrationDraftNamesLoginFailures(t *testing.T) {
 	require.Equal(t, []string{"login-invalid", "account-on-hold", "migrated-disable"}, ids)
 	require.Empty(t, p.AccountRules[2].Match.StatusCodes)
 }
+
+// Migration 0073 splits the migrated rule where 0072 left it alone: next to
+// rules an administrator added, in place, keeping their order; a rule id the
+// policy already has is not added twice; 0072's result and a second run are
+// left as they are.
+func TestMigrationSplitsTheMigratedRuleNextToOtherRules(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	raw72, err := migrations.FS.ReadFile("0072_failure_policy_split_auto_disable.sql")
+	require.NoError(t, err)
+	raw73, err := migrations.FS.ReadFile("0073_failure_policy_split_auto_disable_any_position.sql")
+	require.NoError(t, err)
+	store := func(policy string) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, `INSERT INTO settings(key,value) VALUES('failure_policy',$1)
+			ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value`, policy)
+		require.NoError(t, err)
+	}
+	run := func(raw []byte) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, string(raw))
+		require.NoError(t, err)
+	}
+	ids := func(p *FailurePolicy) []string {
+		out := []string{}
+		for _, r := range p.AccountRules {
+			out = append(out, r.ID)
+		}
+		return out
+	}
+	custom := `{"id":"quota-cooldown","name":"Quota","match":{"mode":"all","groups":[],"models":[],"source":"upstream","keywords":[],"protocols":[],"status_codes":"402"},"action":"cooldown","egress":"","enabled":true,"cooldown_seconds":60,"exhausted_action":"","same_account_retries":0}`
+
+	// The migrated rule after an added one, and one more after it.
+	var policy string
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT jsonb_set($1::jsonb, '{account_rules}',
+		jsonb_build_array($2::jsonb) || ($1::jsonb->'account_rules') || jsonb_build_array(jsonb_set($2::jsonb, '{id}', '"tail"')))::text`,
+		migratedPolicy, custom).Scan(&policy))
+	store(policy)
+	run(raw72) // leaves it alone: more than one account rule
+	p, err := loadFailurePolicy(ctx, db.Pool)
+	require.NoError(t, err)
+	require.Equal(t, []string{"quota-cooldown", "migrated-disable", "tail"}, ids(p))
+	for range 2 {
+		run(raw73)
+	}
+	p, err = loadFailurePolicy(ctx, db.Pool)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), p.Revision)
+	require.Equal(t, []string{"quota-cooldown", "login-invalid", "account-on-hold", "migrated-disable", "tail"}, ids(p))
+	require.Equal(t, "402", p.AccountRules[0].Match.StatusCodes)
+	require.Empty(t, p.AccountRules[3].Match.StatusCodes)
+	want := loginAccountRules()
+	for i, r := range want {
+		require.Equal(t, r.Match.Keywords, p.AccountRules[1+i].Match.Keywords, "migration 0073 and loginAccountRules must agree")
+	}
+	d := p.decide(FailureFacts{Source: "upstream", Status: 401,
+		Text: `{"type":"error","error":{"type":"authentication_error","message":"OAuth access token has been revoked."}}`})
+	require.Equal(t, "login-invalid", d.AccountRule)
+	d = p.decide(FailureFacts{Source: "upstream", Status: 402, Text: `{}`})
+	require.Equal(t, "quota-cooldown", d.AccountRule)
+
+	// An id the policy already has is not added again.
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT jsonb_set($1::jsonb, '{account_rules}',
+		jsonb_build_array(jsonb_set($2::jsonb, '{id}', '"login-invalid"')) || ($1::jsonb->'account_rules'))::text`,
+		migratedPolicy, custom).Scan(&policy))
+	store(policy)
+	run(raw73)
+	p, err = loadFailurePolicy(ctx, db.Pool)
+	require.NoError(t, err)
+	require.Equal(t, []string{"login-invalid", "account-on-hold", "migrated-disable"}, ids(p))
+	require.Equal(t, "402", p.AccountRules[0].Match.StatusCodes)
+
+	// 0072's result is left as it is.
+	store(migratedPolicy)
+	run(raw72)
+	run(raw73)
+	p, err = loadFailurePolicy(ctx, db.Pool)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), p.Revision)
+	require.Equal(t, []string{"login-invalid", "account-on-hold", "migrated-disable"}, ids(p))
+}

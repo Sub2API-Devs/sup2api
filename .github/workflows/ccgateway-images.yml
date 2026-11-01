@@ -110,7 +110,19 @@ jobs:
       GOFLAGS: -buildvcs=false
     steps:
       - uses: actions/checkout@v6
+      # The app image needs the customized CLI under cli-mods/release, which
+      # is not in Git (.gitignore): without it the job is skipped with a
+      # warning instead of failing on every push.
+      - id: cli
+        run: |
+          if [ -d next/plugins/ccgateway/companions/cli-mods/release ]; then
+            echo present=true >> "$GITHUB_OUTPUT"
+          else
+            echo present=false >> "$GITHUB_OUTPUT"
+            echo "::warning::cli-mods/release is not in Git: the bundled-images release path is not built on this runner"
+          fi
       - uses: actions/setup-go@v6
+        if: steps.cli.outputs.present == 'true'
         with:
           go-version-file: next/go.work
           check-latest: false
@@ -119,11 +131,13 @@ jobs:
             next/go.work.sum
             next/**/go.sum
       - name: Build the runtime images (build-ccgateway-images.sh)
+        if: steps.cli.outputs.present == 'true'
         working-directory: next
         run: |
           version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' plugins/ccgateway/manifest.json | head -n1)
           dash deploy/docker/build-ccgateway-images.sh "$version" plugins/ccgateway/images
       - name: Pack ccgateway with the bundled images
+        if: steps.cli.outputs.present == 'true'
         working-directory: next
         run: |
           cli="$RUNNER_TEMP/sub2api-plugin"
@@ -175,13 +189,26 @@ jobs:
             file: next/plugins/ccgateway/companions/guard/Dockerfile
     steps:
       - uses: actions/checkout@v6
+      # ccgateway-app copies cli-mods/release, which is not in Git: skipped
+      # with a warning (the other images do not need it).
+      - id: cli
+        run: |
+          if [ "${{ matrix.name }}" != ccgateway-app ] || [ -d next/plugins/ccgateway/companions/cli-mods/release ]; then
+            echo build=true >> "$GITHUB_OUTPUT"
+          else
+            echo build=false >> "$GITHUB_OUTPUT"
+            echo "::warning::cli-mods/release is not in Git: ${{ matrix.name }} is not built on this runner"
+          fi
       - uses: docker/setup-buildx-action@v3
+        if: steps.cli.outputs.build == 'true'
       - uses: docker/login-action@v3
+        if: steps.cli.outputs.build == 'true'
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
+        if: steps.cli.outputs.build == 'true'
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           echo "image=ghcr.io/${owner}/${{ matrix.name }}" >> "$GITHUB_OUTPUT"
@@ -189,6 +216,7 @@ jobs:
           echo "branch=$(echo "${GITHUB_REF_NAME}" | tr '/' '-')" >> "$GITHUB_OUTPUT"
       - id: build
         uses: docker/build-push-action@v6
+        if: steps.cli.outputs.build == 'true'
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
@@ -204,5 +232,6 @@ jobs:
             ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.short }}
             ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.branch }}
       - name: Digest
+        if: steps.cli.outputs.build == 'true'
         run: |
           echo "${{ matrix.name }}: ${{ steps.meta.outputs.image }}@${{ steps.build.outputs.digest }}" | tee -a "$GITHUB_STEP_SUMMARY"
