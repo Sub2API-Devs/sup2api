@@ -331,6 +331,33 @@ func TestPendingLimitAndDelete(t *testing.T) {
 	want(t, s, b, 405, errBody("method_not_allowed"))
 }
 
+// covers: R16, H12 (new: an UploadError is answered with its own status
+// and {"error": code, **extra}, closes, and is not logged; load_forbidden
+// from the guard's 403 comes back as 400 load_forbidden)
+func TestUploadErrorAnsweredAsIs(t *testing.T) {
+	h := newHarness(t, nil)
+	id := strings.Repeat("a", 22)
+	for _, c := range []struct {
+		err  *contract.UploadError
+		body string
+	}{
+		{&contract.UploadError{Status: 400, Code: "load_forbidden", Err: errors.New("guard 403")}, `{"error": "load_forbidden"}`},
+		{&contract.UploadError{Status: 400, Code: "load_failed"}, `{"error": "load_failed"}`},
+		{&contract.UploadError{Status: 400, Code: "checksum_mismatch"}, `{"error": "checksum_mismatch"}`},
+		{&contract.UploadError{Status: 409, Code: "offset_mismatch", Extra: pyjson.Ordered{{Key: "offset", Value: 7}}},
+			`{"error": "offset_mismatch", "offset": 7}`},
+	} {
+		h.core.failWith("uploads.load", fmt.Errorf("load: %w", c.err))
+		res := h.do("POST", "/images/uploads/"+id+"/load", "")
+		if res.Status != c.err.Status || string(res.Body) != c.body || !res.Closed {
+			t.Fatalf("%s: %d %s closed=%v", c.err.Code, res.Status, res.Body, res.Closed)
+		}
+	}
+	if h.log.String() != "" {
+		t.Fatalf("UploadError is not logged: %q", h.log.String())
+	}
+}
+
 // covers: R23 (test_uploads.test_old_endpoints_are_gone)
 func TestOldEndpointsAreGone(t *testing.T) {
 	h, _ := uploadHarness(t)

@@ -347,6 +347,17 @@ func TestErrorGroups(t *testing.T) {
 		if res := h.do(g.method, g.target, g.body, headers...); res.Status != 503 || string(res.Body) != errBody("runtime_unavailable") {
 			t.Fatalf("%s guard 404: %d", g.name, res.Status)
 		}
+		// The guard still starting (503 unavailable/starting), the local
+		// 413 of an oversized guard request and a transport failure are
+		// unnamed everywhere (IMPLEMENTATION §5.3).
+		for _, gerr := range []error{guardapi.ErrStarting,
+			&guardapi.Error{Status: 413, Code: guardapi.CodeTooLarge, Endpoint: "PUT /v1/accounts/{aid}/app"},
+			&guardapi.TransportError{Endpoint: "GET /v1/accounts/{aid}", Err: errors.New("connection refused")}} {
+			h.core.failWith(g.stub, gerr)
+			if res := h.do(g.method, g.target, g.body, headers...); res.Status != 503 || string(res.Body) != errBody("runtime_unavailable") || !res.Closed {
+				t.Fatalf("%s %v: %d %s", g.name, gerr, res.Status, res.Body)
+			}
+		}
 	}
 	h.core.failWith("public", errs.Activation(errs.CodeEgressNotReady, "egress did not come up"))
 	s, b := h.call("GET", "/accounts/7/status", "")
