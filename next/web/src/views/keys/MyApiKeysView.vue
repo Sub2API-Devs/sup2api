@@ -43,17 +43,17 @@ loadGroups()
 const groupOf = (k: ApiKey) => (k.group_id == null ? undefined : groups.value.find((g) => g.id === k.group_id))
 
 /**
- * The key's group cell: name and platforms as reported on the key, else those
- * of its group. A key whose group was deleted has no group (and no platform).
+ * The key's group cell: name, platforms and group state as reported on the
+ * key (the server reports a deleted group as group_status "deleted" with no
+ * platform), else those of its group.
  */
 function groupCell(k: ApiKey) {
-  const status = k.group_id == null ? 'deleted' : k.group_status
   const g = groupOf(k)
   return {
     name: k.group_name || g?.name || (k.group_id == null ? '' : `#${k.group_id}`),
     multiplier: g?.rate_multiplier,
-    platforms: status === 'deleted' ? [] : (k.platforms ?? g?.platforms),
-    status
+    platforms: k.platforms ?? g?.platforms,
+    status: k.group_status
   }
 }
 const groupOptions = computed(() =>
