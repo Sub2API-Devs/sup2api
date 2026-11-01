@@ -1,0 +1,222 @@
+{
+ "generator": "companions/controller/reference_vectors.py",
+ "python": "3.12.14",
+ "cases": [
+  {
+   "name": "proxy-00-private",
+   "salt": "private",
+   "proxy": "null",
+   "resolved": null,
+   "node": "{\"outbound\": {\"protocol\": \"freedom\", \"settings\": {\"domainStrategy\": \"UseIPv4\"}, \"tag\": \"proxy-771f25192f1fcdd4396d6d86\"}, \"endpoint\": null}",
+   "tag": "proxy-771f25192f1fcdd4396d6d86"
+  },
+  {
+   "name": "proxy-00-ffffffff",
+   "salt": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "proxy": "null",
+   "resolved": null,
+   "node": "{\"outbound\": {\"protocol\": \"freedom\", \"settings\": {\"domainStrategy\": \"UseIPv4\"}, \"tag\": \"proxy-39483dc59505772ad888211d\"}, \"endpoint\": null}",
+   "tag": "proxy-39483dc59505772ad888211d"
+  },
+  {
+   "name": "proxy-00-01234567",
+   "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "proxy": "null",
+   "resolved": null,
+   "node": "{\"outbound\": {\"protocol\": \"freedom\", \"settings\": {\"domainStrategy\": \"UseIPv4\"}, \"tag\": \"proxy-de8a4ae57b90e075b05af00b\"}, \"endpoint\": null}",
+   "tag": "proxy-de8a4ae57b90e075b05af00b"
+  },
+  {
+   "name": "proxy-01-private",
+   "salt": "private",
+   "proxy": "{\"protocol\": \"http\", \"host\": \"proxy.test\", \"port\": 8080}",
+   "resolved": "198.18.0.2",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.2\", \"port\": 8080}]}, \"tag\": \"proxy-911f089328bf6d71595783b5\"}, \"endpoint\": [\"198.18.0.2\", 8080]}",
+   "tag": "proxy-911f089328bf6d71595783b5"
+  },
+  {
+   "name": "proxy-01-ffffffff",
+   "salt": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "proxy": "{\"protocol\": \"http\", \"host\": \"proxy.test\", \"port\": 8080}",
+   "resolved": "198.18.0.2",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.2\", \"port\": 8080}]}, \"tag\": \"proxy-f5475ce6ee57f2b261e5594b\"}, \"endpoint\": [\"198.18.0.2\", 8080]}",
+   "tag": "proxy-f5475ce6ee57f2b261e5594b"
+  },
+  {
+   "name": "proxy-01-01234567",
+   "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "proxy": "{\"protocol\": \"http\", \"host\": \"proxy.test\", \"port\": 8080}",
+   "resolved": "198.18.0.2",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.2\", \"port\": 8080}]}, \"tag\": \"proxy-ef8aaa2445e78f70c188206e\"}, \"endpoint\": [\"198.18.0.2\", 8080]}",
+   "tag": "proxy-ef8aaa2445e78f70c188206e"
+  },
+  {
+   "name": "proxy-02-private",
+   "salt": "private",
+   "proxy": "{\"protocol\": \"https\", \"host\": \"proxy.test\", \"port\": 443, \"username\": \"u___\", \"password\": \"secret\"}",
+   "resolved": "198.18.0.3",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.3\", \"port\": 443, \"users\": [{\"user\": \"u___\", \"pass\": \"secret\"}]}]}, \"streamSettings\": {\"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"proxy.test\", \"allowInsecure\": false}}, \"tag\": \"proxy-624cc858a7c605319557355d\"}, \"endpoint\": [\"198.18.0.3\", 443]}",
+   "tag": "proxy-624cc858a7c605319557355d"
+  },
+  {
+   "name": "proxy-02-ffffffff",
+   "salt": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "proxy": "{\"protocol\": \"https\", \"host\": \"proxy.test\", \"port\": 443, \"username\": \"u___\", \"password\": \"secret\"}",
+   "resolved": "198.18.0.3",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.3\", \"port\": 443, \"users\": [{\"user\": \"u___\", \"pass\": \"secret\"}]}]}, \"streamSettings\": {\"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"proxy.test\", \"allowInsecure\": false}}, \"tag\": \"proxy-63deb00fab998f0e4ae52ba0\"}, \"endpoint\": [\"198.18.0.3\", 443]}",
+   "tag": "proxy-63deb00fab998f0e4ae52ba0"
+  },
+  {
+   "name": "proxy-02-01234567",
+   "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "proxy": "{\"protocol\": \"https\", \"host\": \"proxy.test\", \"port\": 443, \"username\": \"u___\", \"password\": \"secret\"}",
+   "resolved": "198.18.0.3",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.3\", \"port\": 443, \"users\": [{\"user\": \"u___\", \"pass\": \"secret\"}]}]}, \"streamSettings\": {\"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"proxy.test\", \"allowInsecure\": false}}, \"tag\": \"proxy-78839dc4634b192fd4495a81\"}, \"endpoint\": [\"198.18.0.3\", 443]}",
+   "tag": "proxy-78839dc4634b192fd4495a81"
+  },
+  {
+   "name": "proxy-03-private",
+   "salt": "private",
+   "proxy": "{\"protocol\": \"socks5\", \"host\": \"socks.test\", \"port\": \"1080\", \"username\": \"user\"}",
+   "resolved": "198.18.0.4",
+   "node": "{\"outbound\": {\"protocol\": \"socks\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.4\", \"port\": 1080, \"users\": [{\"user\": \"user\", \"pass\": \"\"}]}]}, \"tag\": \"proxy-fb0c47dabbf95bf2c4dbe512\"}, \"endpoint\": [\"198.18.0.4\", 1080]}",
+   "tag": "proxy-fb0c47dabbf95bf2c4dbe512"
+  },
+  {
+   "name": "proxy-03-ffffffff",
+   "salt": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "proxy": "{\"protocol\": \"socks5\", \"host\": \"socks.test\", \"port\": \"1080\", \"username\": \"user\"}",
+   "resolved": "198.18.0.4",
+   "node": "{\"outbound\": {\"protocol\": \"socks\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.4\", \"port\": 1080, \"users\": [{\"user\": \"user\", \"pass\": \"\"}]}]}, \"tag\": \"proxy-2c8a4ec92b1255999a0e31f5\"}, \"endpoint\": [\"198.18.0.4\", 1080]}",
+   "tag": "proxy-2c8a4ec92b1255999a0e31f5"
+  },
+  {
+   "name": "proxy-03-01234567",
+   "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "proxy": "{\"protocol\": \"socks5\", \"host\": \"socks.test\", \"port\": \"1080\", \"username\": \"user\"}",
+   "resolved": "198.18.0.4",
+   "node": "{\"outbound\": {\"protocol\": \"socks\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.4\", \"port\": 1080, \"users\": [{\"user\": \"user\", \"pass\": \"\"}]}]}, \"tag\": \"proxy-8c8faf36716b7c198f428458\"}, \"endpoint\": [\"198.18.0.4\", 1080]}",
+   "tag": "proxy-8c8faf36716b7c198f428458"
+  },
+  {
+   "name": "proxy-04-private",
+   "salt": "private",
+   "proxy": "{\"protocol\": \"socks5\", \"host\": \"socks.test\", \"port\": 1080, \"password\": \"only-pass\"}",
+   "resolved": "198.18.0.4",
+   "node": "{\"outbound\": {\"protocol\": \"socks\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.4\", \"port\": 1080, \"users\": [{\"user\": \"\", \"pass\": \"only-pass\"}]}]}, \"tag\": \"proxy-c293ae24c3bde8b4a7bff3d3\"}, \"endpoint\": [\"198.18.0.4\", 1080]}",
+   "tag": "proxy-c293ae24c3bde8b4a7bff3d3"
+  },
+  {
+   "name": "proxy-04-ffffffff",
+   "salt": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "proxy": "{\"protocol\": \"socks5\", \"host\": \"socks.test\", \"port\": 1080, \"password\": \"only-pass\"}",
+   "resolved": "198.18.0.4",
+   "node": "{\"outbound\": {\"protocol\": \"socks\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.4\", \"port\": 1080, \"users\": [{\"user\": \"\", \"pass\": \"only-pass\"}]}]}, \"tag\": \"proxy-fbd72e39a3c99729de7183f6\"}, \"endpoint\": [\"198.18.0.4\", 1080]}",
+   "tag": "proxy-fbd72e39a3c99729de7183f6"
+  },
+  {
+   "name": "proxy-04-01234567",
+   "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "proxy": "{\"protocol\": \"socks5\", \"host\": \"socks.test\", \"port\": 1080, \"password\": \"only-pass\"}",
+   "resolved": "198.18.0.4",
+   "node": "{\"outbound\": {\"protocol\": \"socks\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.4\", \"port\": 1080, \"users\": [{\"user\": \"\", \"pass\": \"only-pass\"}]}]}, \"tag\": \"proxy-3b99c2901e49252906c42759\"}, \"endpoint\": [\"198.18.0.4\", 1080]}",
+   "tag": "proxy-3b99c2901e49252906c42759"
+  },
+  {
+   "name": "proxy-05-private",
+   "salt": "private",
+   "proxy": "{\"protocol\": \"http\", \"host\": \"p.test\", \"port\": 8080.0, \"username\": \"\", \"password\": \"\"}",
+   "resolved": "203.0.113.7",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"203.0.113.7\", \"port\": 8080}]}, \"tag\": \"proxy-7182f271e5822b9b108b664e\"}, \"endpoint\": [\"203.0.113.7\", 8080]}",
+   "tag": "proxy-7182f271e5822b9b108b664e"
+  },
+  {
+   "name": "proxy-05-ffffffff",
+   "salt": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "proxy": "{\"protocol\": \"http\", \"host\": \"p.test\", \"port\": 8080.0, \"username\": \"\", \"password\": \"\"}",
+   "resolved": "203.0.113.7",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"203.0.113.7\", \"port\": 8080}]}, \"tag\": \"proxy-ae9e00d4e64f73f879723ae7\"}, \"endpoint\": [\"203.0.113.7\", 8080]}",
+   "tag": "proxy-ae9e00d4e64f73f879723ae7"
+  },
+  {
+   "name": "proxy-05-01234567",
+   "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "proxy": "{\"protocol\": \"http\", \"host\": \"p.test\", \"port\": 8080.0, \"username\": \"\", \"password\": \"\"}",
+   "resolved": "203.0.113.7",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"203.0.113.7\", \"port\": 8080}]}, \"tag\": \"proxy-2e7fd9cfb4a5130bb72ce91e\"}, \"endpoint\": [\"203.0.113.7\", 8080]}",
+   "tag": "proxy-2e7fd9cfb4a5130bb72ce91e"
+  },
+  {
+   "name": "proxy-06-private",
+   "salt": "private",
+   "proxy": "{\"protocol\": \"https\", \"host\": \"Proxy.Example.COM\", \"port\": 65535, \"username\": \"用户\", \"password\": \"密码😀<>&\\\"\"}",
+   "resolved": "203.0.113.8",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"203.0.113.8\", \"port\": 65535, \"users\": [{\"user\": \"\\u7528\\u6237\", \"pass\": \"\\u5bc6\\u7801\\ud83d\\ude00<>&\\\"\"}]}]}, \"streamSettings\": {\"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"Proxy.Example.COM\", \"allowInsecure\": false}}, \"tag\": \"proxy-2570715d62880c5c50f913cf\"}, \"endpoint\": [\"203.0.113.8\", 65535]}",
+   "tag": "proxy-2570715d62880c5c50f913cf"
+  },
+  {
+   "name": "proxy-06-ffffffff",
+   "salt": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "proxy": "{\"protocol\": \"https\", \"host\": \"Proxy.Example.COM\", \"port\": 65535, \"username\": \"用户\", \"password\": \"密码😀<>&\\\"\"}",
+   "resolved": "203.0.113.8",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"203.0.113.8\", \"port\": 65535, \"users\": [{\"user\": \"\\u7528\\u6237\", \"pass\": \"\\u5bc6\\u7801\\ud83d\\ude00<>&\\\"\"}]}]}, \"streamSettings\": {\"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"Proxy.Example.COM\", \"allowInsecure\": false}}, \"tag\": \"proxy-acaf755b498b8d7342034c23\"}, \"endpoint\": [\"203.0.113.8\", 65535]}",
+   "tag": "proxy-acaf755b498b8d7342034c23"
+  },
+  {
+   "name": "proxy-06-01234567",
+   "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "proxy": "{\"protocol\": \"https\", \"host\": \"Proxy.Example.COM\", \"port\": 65535, \"username\": \"用户\", \"password\": \"密码😀<>&\\\"\"}",
+   "resolved": "203.0.113.8",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"203.0.113.8\", \"port\": 65535, \"users\": [{\"user\": \"\\u7528\\u6237\", \"pass\": \"\\u5bc6\\u7801\\ud83d\\ude00<>&\\\"\"}]}]}, \"streamSettings\": {\"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"Proxy.Example.COM\", \"allowInsecure\": false}}, \"tag\": \"proxy-3ca4c51764ca3219cdc4f2f8\"}, \"endpoint\": [\"203.0.113.8\", 65535]}",
+   "tag": "proxy-3ca4c51764ca3219cdc4f2f8"
+  },
+  {
+   "name": "proxy-07-private",
+   "salt": "private",
+   "proxy": "{\"protocol\": \"http\", \"host\": \"203.0.113.9\", \"port\": 3128, \"username\": null, \"password\": \"p\"}",
+   "resolved": "203.0.113.9",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"203.0.113.9\", \"port\": 3128, \"users\": [{\"user\": null, \"pass\": \"p\"}]}]}, \"tag\": \"proxy-14d441ba6f51ed811654329a\"}, \"endpoint\": [\"203.0.113.9\", 3128]}",
+   "tag": "proxy-14d441ba6f51ed811654329a"
+  },
+  {
+   "name": "proxy-07-ffffffff",
+   "salt": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "proxy": "{\"protocol\": \"http\", \"host\": \"203.0.113.9\", \"port\": 3128, \"username\": null, \"password\": \"p\"}",
+   "resolved": "203.0.113.9",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"203.0.113.9\", \"port\": 3128, \"users\": [{\"user\": null, \"pass\": \"p\"}]}]}, \"tag\": \"proxy-bde80d180376c61d1eb9bb38\"}, \"endpoint\": [\"203.0.113.9\", 3128]}",
+   "tag": "proxy-bde80d180376c61d1eb9bb38"
+  },
+  {
+   "name": "proxy-07-01234567",
+   "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "proxy": "{\"protocol\": \"http\", \"host\": \"203.0.113.9\", \"port\": 3128, \"username\": null, \"password\": \"p\"}",
+   "resolved": "203.0.113.9",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"203.0.113.9\", \"port\": 3128, \"users\": [{\"user\": null, \"pass\": \"p\"}]}]}, \"tag\": \"proxy-eafdb21ff55815269e826112\"}, \"endpoint\": [\"203.0.113.9\", 3128]}",
+   "tag": "proxy-eafdb21ff55815269e826112"
+  },
+  {
+   "name": "proxy-08-private",
+   "salt": "private",
+   "proxy": "{\"protocol\": \"http\", \"host\": \"h.test\", \"port\": \" 81 \", \"extra\": {\"ignored\": true}}",
+   "resolved": "192.0.2.1",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"192.0.2.1\", \"port\": 81}]}, \"tag\": \"proxy-5ae4dab9468c51e45df4108f\"}, \"endpoint\": [\"192.0.2.1\", 81]}",
+   "tag": "proxy-5ae4dab9468c51e45df4108f"
+  },
+  {
+   "name": "proxy-08-ffffffff",
+   "salt": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "proxy": "{\"protocol\": \"http\", \"host\": \"h.test\", \"port\": \" 81 \", \"extra\": {\"ignored\": true}}",
+   "resolved": "192.0.2.1",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"192.0.2.1\", \"port\": 81}]}, \"tag\": \"proxy-26e9f85ac4cf7f959baeee29\"}, \"endpoint\": [\"192.0.2.1\", 81]}",
+   "tag": "proxy-26e9f85ac4cf7f959baeee29"
+  },
+  {
+   "name": "proxy-08-01234567",
+   "salt": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+   "proxy": "{\"protocol\": \"http\", \"host\": \"h.test\", \"port\": \" 81 \", \"extra\": {\"ignored\": true}}",
+   "resolved": "192.0.2.1",
+   "node": "{\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"192.0.2.1\", \"port\": 81}]}, \"tag\": \"proxy-de2ab97498568405fe26d984\"}, \"endpoint\": [\"192.0.2.1\", 81]}",
+   "tag": "proxy-de2ab97498568405fe26d984"
+  }
+ ]
+}
