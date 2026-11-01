@@ -265,7 +265,9 @@ services:
     security_opt: ["no-new-privileges:true"]
     read_only: true
     tmpfs: ["/tmp:size=64m"]
-    mem_limit: 1g
+    # 2g: headroom over what the Go controller uses (large files stream
+    # through /data/.spool, whose page cache is charged here too).
+    mem_limit: 2g
     pids_limit: 512
     stop_grace_period: 15s
     healthcheck:

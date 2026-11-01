@@ -112,6 +112,7 @@ type composeService struct {
 	ReadOnly    bool              `yaml:"read_only"`
 	Ports       []string          `yaml:"ports"`
 	Profiles    []string          `yaml:"profiles"`
+	MemLimit    string            `yaml:"mem_limit"`
 	Environment map[string]string `yaml:"environment"`
 	Volumes     []struct {
 		Type     string `yaml:"type"`
@@ -174,6 +175,10 @@ func TestComposeTemplatePolicy(t *testing.T) {
 	}
 	if strings.Join(ctl.Healthcheck.Test, " ") != "CMD /ccg-controller healthcheck" {
 		t.Fatalf("controller healthcheck: %v", ctl.Healthcheck.Test)
+	}
+	// 2026-11-01: a paired activation got the controller killed in a 1g cgroup.
+	if ctl.MemLimit != "2g" {
+		t.Fatalf("controller mem_limit %q, want 2g", ctl.MemLimit)
 	}
 	// The controller service block itself (05 §3 L0): no Docker access.
 	block := serviceBlock(t, "controller")
