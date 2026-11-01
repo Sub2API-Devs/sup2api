@@ -130,7 +130,7 @@
 
 | 方法 路径 | 权限 |
 |---|---|
-| GET/POST `/me/api-keys`，DELETE `/me/api-keys/:id` | `apikey:self:manage`；创建返回明文 `key`（`sk-s2a-` 前缀），已加密保存的新 Key 可通过显式 reveal 再复制；不含 `user_email`；普通用户不能修改自己的 Key，只能删除重建 |
+| GET/POST `/me/api-keys`，PATCH/DELETE `/me/api-keys/:id` | `apikey:self:manage`；创建返回明文 `key`（`sk-s2a-` 前缀），已加密保存的新 Key 可通过显式 reveal 再复制；不含 `user_email`；PATCH 修改名称、分组、限额等（2026-10-26 起，见 §15.1 末尾） |
 | GET `/me/groups` | auth（当前用户可用的分组） |
 | GET/POST `/groups`，GET/PATCH/DELETE `/groups/:id` | `group:read` / `group:manage`；DELETE 不再因分组下有 API Key 而拒绝（2026-11-01）：`?move_keys_to=<分组 id>` 把 Key 迁到该分组（须为另一个已存在的分组，否则 400 `details.fields[{field:"move_keys_to"}]`），不带时 Key 保留但解除绑定（`group_id` 置 `null`，§15.1）；分组下的账号只移出分组 |
 | GET/POST `/proxies`，GET/PATCH/DELETE `/proxies/:id` | `proxy:read` / `proxy:manage`（或 `proxy:own:*`，只作用于自己创建的，§21）；密码省略或 `null` 不改、`""` 清除，没有掩码值（§15.4） |
@@ -517,7 +517,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | POST `/me/api-keys` | `apikey:self:manage` | `{name, group_id, expires_at?}` | 201 `APIKey`（含 `key`）。`name` 去首尾空格后 1–100 字符；`expires_at` 必须晚于当前时间；`group_id` 须为 `active` 且对该用户可用（`visibility=public` 或已分配给用户），否则 `details.fields[{field:"group_id", code:"not_available"}]` |
 | DELETE `/me/api-keys/:id` | `apikey:self:manage` | | 204；只能删自己的 Key（软删除），他人的 Key 返回 404 |
 
-- 普通用户**没有**修改自己 Key 的接口（没有 `PATCH /me/api-keys/:id`），只能删除重建。
+- `PATCH /me/api-keys/:id`（2026-10-26 起）修改自己 Key 的名称、分组、IP 白名单、过期时间与限额，字段见本文 2026-10-26 的说明；分组被删除的 Key 选新分组即恢复。
 - 修改或删除后立即清除该 Key 的 Redis 缓存（`apikey:{sha256}`），网关侧立即生效。
 
 ### 15.2 列表接口的筛选与排序
@@ -542,7 +542,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | GET `/plugins/:key/egress` | 明细分页 | `from`、`to`（默认最近 24 小时） | 汇总按连接数倒序（最多 200 条）；明细按 `started_at` 倒序 | `plugin/api/ops.go` |
 
 响应字段补充：
-- `/usage`、`/me/usage` 列表项：`id, request_id, created_at, user_id, user_email?, api_key_id, api_key_name?, group_id, group_name?, account_id, account_name?, plugin_key, platform, protocol, account_type, upstream_protocol, endpoint, model, upstream_model, stream, status_code, success, error_type, error_message, attempts, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens, total_cost, rate_multiplier, billing_status, billing_mode, matched_tier, latency_ms, first_token_ms, sticky_hit, client_ip`（`?` 为空串时省略）。`/me/usage`（列表与详情）把 `account_id` 置 `null`，`account_name`、`account_type`、`upstream_protocol` 置空，详情另把 `node_id` 置空。
+- `/usage`、`/me/usage` 列表项：`id, request_id, created_at, user_id, user_email?, api_key_id, api_key_name?, group_id, group_name?, account_id, account_name?, plugin_key, platform, protocol, account_type, upstream_protocol, endpoint, model, upstream_model, stream, status_code, success, error_type, error_message, attempts, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens, total_cost, rate_multiplier, billing_status, billing_mode, matched_tier, latency_ms, first_token_ms, sticky_hit, client_ip`（`?` 为空串时省略）。`/me/usage`（列表与详情）把 `account_id` 置 `null`，`account_name`、`account_type`、`upstream_protocol`、`upstream_model`（账号的模型映射）置空，详情另把 `node_id` 置空。
 - `/usage/:id`、`/me/usage/:id` 详情另含：`plugin_version, metrics, sticky_rule, hook_decisions, price_id, price?:{id, model, source, plugin_key}, expr_hash, billing_detail, ledger_id, client_ip, user_agent, node_id`。`/me/usage/:id` 访问他人记录返回 404。
 - `usage_logs` 还有一列 `sched_decisions`（jsonb，迁移 0011，记录 `scheduler.rank` 插件对本次调度的改写，格式与语义见 §24.5），**接口不返回它**：它不在上面的详情字段里，`hook_decisions` 暴露而它不暴露是当前有意的取舍，排查请直接查库。
 - `/usage/summary` 每项：`{key, user_email?, requests, success, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, prompt_tokens, total_cost}`；`group_by=day` 时 `key` 为 UTC 日期 `YYYY-MM-DD`，`user` 时为用户 id 字符串并带 `user_email`；`ip` 时为调用 IP（没记录到 IP 的请求归入空串）并带该 IP 最近一次请求的时间 `last_at`；`cache_creation_tokens` 为 5 分钟与 1 小时缓存写入之和。`prompt_tokens` 按各请求保存的 usage semantics 归一化：inclusive 使用原始输入，exclusive 将输入、缓存读和两类缓存写入相加，再汇总；缓存命中率为 `cache_read_tokens / prompt_tokens`。历史记录若有缓存用量但缺少 semantics，所在汇总项的 `prompt_tokens` 返回 `null`，界面显示“—”，不按客户端协议猜测。新免费记录也保存 semantics，但不额外保存定价请求头或参数。
@@ -757,7 +757,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 | 8 | `/usage` 的筛选参数更多；`/me/usage` 不支持 `user_id`、`account_id`、`account_type` | **以代码为准**，参数以 §15.2 为准。§5.5 已改 |
 | 9 | `/prices` 的 `platform` 筛选已删除 | **以代码为准**：`mode`、`source`、`plugin_key`、`enabled`、`q`。§5.5 已改；§5.4 `/accounts` 的 `platform` 筛选同理改为 `plugin_key`、`type` |
 | 10 | 账号测试超时 30 秒与平台调用 10 秒 | **两者都对，不冲突**：每次插件调用（`BuildTestRequest`）限 10 秒（`grpcruntime.TimeoutPlatformConsole`），测试接口整体（含向上游发送测试请求）限 30 秒。§11.7 已改 |
-| 11 | `/me/api-keys` 不含 `user_email`；普通用户没有修改自己 Key 的接口 | **以代码为准**：用户只能删除后重建（Key 绑定的分组不应由用户随意切换，名称和过期时间也不是必要功能）。以后需要再加 `PATCH /me/api-keys/:id`。§5.3 已改 |
+| 11 | `/me/api-keys` 不含 `user_email`；普通用户没有修改自己 Key 的接口 | **以代码为准**：用户只能删除后重建（Key 绑定的分组不应由用户随意切换，名称和过期时间也不是必要功能）。2026-10-26 起已加 `PATCH /me/api-keys/:id`，以 §5.3、§15.1 为准 |
 | 12 | §14 部分条目当时尚未实现 | 已于第四轮实现，见 §14 |
 
 ## 16. 模型价格只用完整模型 ID（2026-09-25；"插件默认价格"部分已被 §17 取代）
@@ -4587,7 +4587,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 参数：与对应列表（`/me/usage`、`/usage`）相同的筛选，另加 `tz=`（时间列的时区，校验同 66.1）和 `lang=zh|en`（表头语言；缺省看 `Accept-Language`，以 `zh` 开头为中文，否则英文；其他值 400）。筛选在写出第一个字节前校验，非法时照常回 JSON 错误。
 - 回应：`200 text/csv; charset=utf-8`，`Content-Disposition: attachment; filename="usage_YYYYMMDD_HHMMSS.csv"`（`tz` 的当地时间），`Cache-Control: no-store`。文件以 UTF-8 BOM（`EF BB BF`）开头，表格软件因此按 UTF-8 打开。
 - 行：新到旧，按 `(created_at, id)` 游标分页，每批 1000 行，不跑单条大查询。最多 100000 行，超出时最后一行是 `# truncated at 100000 rows; narrow the time range or filters`。表头已发出后查询出错，最后一行是 `# export failed: …`，不会被当成完整文件。
-- 列：时间、请求 ID、客户端请求 ID、用户*、API 密钥、分组、账号*、模型、上游模型*、端点、协议、流式、状态码、成功、错误类型、输入 / 输出 / 缓存读取 / 缓存写入 Token（缓存写入含 1 小时写）、费用、原价（费用 ÷ 倍率，倍率为 0 计 0）、倍率、计费状态、首 token (ms)、耗时 (ms)、调用 IP。带 * 的三列只在管理员导出里有；自助导出与自助列表一样隐藏上游信息。
+- 列：时间、请求 ID、客户端请求 ID、用户*、API 密钥、分组、账号 ID*、账号*、模型、上游模型*、端点、协议、流式、状态码、成功、错误类型、输入 / 输出 / 缓存读取 / 缓存写入 Token（缓存写入含 1 小时写）、费用、原价（费用 ÷ 倍率，倍率为 0 计 0）、倍率、计费状态、首 token (ms)、耗时 (ms)、调用 IP。带 * 的四列只在管理员导出里有；自助导出与自助列表一样隐藏上游信息。
 - 以 `= + - @`、制表符或回车开头的单元格前加 `'`，防表格公式注入。
 - 每次导出写一条审计 `usage.export`（`detail`：行数、是否截断、是否自助、原始查询串）。
 

@@ -348,7 +348,10 @@ func TestUsageAPI(t *testing.T) {
 	// Served through protocol conversion: client endpoint openai.chat, upstream
 	// anthropic.messages.
 	mine.Platform, mine.Protocol, mine.AccountType = "openai", "openai.chat", "relay_key"
-	f.svc.process(ctx, []*core.UsageRecord{mine, other, f.record("req-mine-2", true)})
+	mineLater := f.record("req-mine-2", true)
+	// The account's model mapping is upstream detail too: self views must not see it.
+	mine.UpstreamModel, mineLater.UpstreamModel = "gpt-upstream-mapped", "claude-upstream-mapped"
+	f.svc.process(ctx, []*core.UsageRecord{mine, other, mineLater})
 
 	list := f.get(f.user, "/me/usage", 200)
 	items := list["data"].([]any)
@@ -357,7 +360,7 @@ func TestUsageAPI(t *testing.T) {
 	}
 	first := items[0].(map[string]any)
 	if first["account_id"] != nil || first["user_email"] != "u@example.com" || first["group_name"] != "default" || first["total_cost"] != "0.708" ||
-		first["account_type"] != "" || first["upstream_protocol"] != "" || first["upload_ms"] != float64(0) {
+		first["account_type"] != "" || first["upstream_protocol"] != "" || first["upstream_model"] != "" || first["upload_ms"] != float64(0) {
 		t.Fatalf("row: %v", first)
 	}
 	all := f.get(f.user, "/usage?model=claude-haiku-4", 200)["data"].([]any)
@@ -409,7 +412,7 @@ func TestUsageAPI(t *testing.T) {
 		t.Fatalf("sched_decisions %q", s)
 	}
 	md := f.get(f.user, "/me/usage/"+strconv.FormatInt(id, 10), 200)["data"].(map[string]any)
-	if md["account_id"] != nil || md["account_type"] != "" || md["upstream_protocol"] != "" {
+	if md["account_id"] != nil || md["account_type"] != "" || md["upstream_protocol"] != "" || md["upstream_model"] != "" {
 		t.Fatalf("self detail leaks account: %v", md)
 	}
 	if md["client_request_id"] != "cli-req-1" || d["client_request_id"] != "cli-req-1" {

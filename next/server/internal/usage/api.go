@@ -147,11 +147,11 @@ func (r *Record) scanTargets() []any {
 		&r.BillingMode, &r.MatchedTier, &r.LatencyMs, &r.FirstTokenMs, &r.UploadMs, &r.StickyHit, &r.ClientIP}
 }
 
-// hideUpstream removes upstream account details (account, account type and
-// upstream protocol) from self-service views.
+// hideUpstream removes upstream account details (account, account type,
+// upstream protocol and the account's model mapping) from self-service views.
 func (r *Record) hideUpstream() {
 	r.AccountID, r.AccountName = nil, ""
-	r.AccountType, r.UpstreamProtocol = "", ""
+	r.AccountType, r.UpstreamProtocol, r.UpstreamModel = "", "", ""
 	// SEC-L3: Classify and sanitize error messages for self-service views.
 	// Client-side errors (4xx) show the message; server-side errors (5xx) show only the type.
 	if r.ErrorMessage != "" && r.StatusCode >= 500 {
