@@ -1,0 +1,37 @@
+{
+  "Image": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "Entrypoint": [
+    "node"
+  ],
+  "Cmd": [
+    "-e",
+    "x"
+  ],
+  "User": "1000:1000",
+  "Labels": {
+    "io.sup2api.ccgateway.guard-job": "ccg"
+  },
+  "HostConfig": {
+    "Binds": [
+      "ccg-21-data:/work:ro"
+    ],
+    "NetworkMode": "none",
+    "Memory": 1073741824,
+    "NanoCpus": 2000000000,
+    "PidsLimit": 64,
+    "CapDrop": [
+      "ALL"
+    ],
+    "SecurityOpt": [
+      "no-new-privileges:true"
+    ],
+    "LogConfig": {
+      "Type": "json-file",
+      "Config": {
+        "max-file": "1",
+        "max-size": "1m"
+      }
+    },
+    "Privileged": false
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "Name": "ccg-21-data",
+  "Driver": "local",
+  "DriverOpts": {
+    "size": "10737418240"
+  },
+  "Labels": {
+    "io.sup2api.ccgateway.account": "21",
+    "io.sup2api.ccgateway.disk-quota-bytes": "10737418240"
+  }
+}

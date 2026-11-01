@@ -1,0 +1,19 @@
+{
+  "Name": "ccg-21-net",
+  "Driver": "bridge",
+  "Internal": true,
+  "EnableIPv6": false,
+  "IPAM": {
+    "Driver": "default",
+    "Config": [
+      {
+        "Subnet": "10.52.74.0/24",
+        "Gateway": "10.52.74.1"
+      }
+    ]
+  },
+  "Labels": {
+    "io.sup2api.ccgateway.account": "21",
+    "io.sup2api.ccgateway.network": "{\"allocation\": \"random\", \"pool\": \"10.0.0.0/8\"}"
+  }
+}
