@@ -356,13 +356,27 @@ export function successRate(total: number, fail: number): string {
   return total > 0 ? `${Math.round(((total - fail) / total) * 1000) / 10}%` : '—'
 }
 
-/** Rule names with a number left empty (SInput type="number" gives null), which the plugin refuses or reads as 0. */
+/** A number left empty: SInput type="number" gives null. */
+const empty = (v: number | undefined | null) => v === null || v === undefined
+
+/** Rule names with a number left empty, which the plugin refuses or reads as 0. */
 export function rulesWithEmptyNumbers(rules: Rule[]): string[] {
-  const empty = (v: number | undefined | null) => v === null || v === undefined
   return rules
     .filter((r) => empty(r.periods) || empty(r.hit_periods) || r.conditions.some((c) => empty(c.value) || (percentileMetric(c.metric) && empty(c.p))))
     .map((r) => r.name)
 }
+
+/** Strategy names with an action amount left empty. */
+export function strategiesWithEmptyNumbers(strategies: Strategy[]): string[] {
+  return strategies.filter((s) => s.actions.some((a) => empty(a.type === 'affinity_clear' ? a.percent : a.value))).map((s) => s.name)
+}
+
+/** Whether a layer has a number left empty: its own, a rule's or a strategy's. */
+export const layerIncomplete = (l: Layer) =>
+  [l.window_seconds, l.min_samples, l.min_weight].some(empty) || rulesWithEmptyNumbers(l.rules).length > 0 || strategiesWithEmptyNumbers(l.strategies).length > 0
+
+/** Whether an account override sets a floor mode but leaves the floor empty. */
+export const overrideIncomplete = (o: AccountOverride) => o.min_weight_mode !== undefined && empty(o.min_weight)
 
 /** "10s" / "1.5s" / "800ms" for a threshold in ms. */
 export const formatMs = (ms: number) => (ms >= 1000 ? `${Math.round(ms / 100) / 10}s` : `${ms}ms`)

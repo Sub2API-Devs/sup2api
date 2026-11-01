@@ -1,25 +1,28 @@
 <script setup lang="ts">
-import { computed, ref, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, ref, watchEffect } from 'vue'
 import { SAlert, SButton, SField, SHint, SInput, SSectionTitle, SSegmented, SSelect, SSwitch } from '@sub2api/ui'
 import ItemsJsonPanel from './ItemsJsonPanel.vue'
 import RulesEditor from './RulesEditor.vue'
 import StrategiesEditor from './StrategiesEditor.vue'
-import { clone, enumOptions, rulesWithEmptyNumbers, useDwHost, type Layer, type When } from './host'
+import { clone, enumOptions, rulesWithEmptyNumbers, strategiesWithEmptyNumbers, useDwHost, type Layer, type When } from './host'
 
 // One configuration layer (the global one or a group's): window, sample
 // floor and whether it is strict, exempt status codes, weight floor, the
 // sticky clearing at 0, rules and strategies.
 const props = defineProps<{ defaults: Layer | null; master?: boolean }>()
 const layer = defineModel<Layer>({ required: true })
-// Set while the JSON panel holds text that does not parse, or a number is
-// left empty: the plugin would refuse it, or read a group's as the default.
+// Set while the JSON panel holds text that does not parse: that text is not
+// in the layer. Empty numbers are in the layer, so ConfigTab finds them from
+// the draft itself, also while this editor is collapsed (unmounted).
 const invalid = defineModel<boolean>('invalid', { default: false })
 const t = useDwHost().t
 const jsonInvalid = ref(false)
 const required = (v: number | null) => (v === null || v === undefined ? t('layer.required') : undefined)
-const emptyScalar = computed(() => [layer.value.window_seconds, layer.value.min_samples, layer.value.min_weight].some((v) => required(v)))
 const emptyRules = computed(() => rulesWithEmptyNumbers(layer.value.rules))
-watchEffect(() => (invalid.value = jsonInvalid.value || emptyScalar.value || emptyRules.value.length > 0))
+const emptyStrategies = computed(() => strategiesWithEmptyNumbers(layer.value.strategies))
+watchEffect(() => (invalid.value = jsonInvalid.value))
+// The unparsed text goes with the editor.
+onBeforeUnmount(() => (invalid.value = false))
 
 const floorOptions = computed(() => enumOptions('floor', ['base_percent', 'fixed']))
 // Rules and strategies are edited visually or as JSON.
@@ -37,15 +40,22 @@ function renamed(w: When, from: string, to: string): When {
   return 'all' in w ? { all: each(w.all) } : { any: each(w.any) }
 }
 
+// Strategies follow a rename only when it is unambiguous: no other rule still
+// has the old name (its strategies stay with it), and no other rule had the
+// new one already (renaming a copy onto a name and away again must not take
+// that rule's strategies along).
 function renameRule(from: string, to: string) {
+  const names = layer.value.rules.map((r) => r.name)
+  if (from === to || names.includes(from) || names.filter((n) => n === to).length > 1) return
   for (const s of layer.value.strategies) if (s.when !== null) s.when = renamed(s.when, from, to)
 }
 
-// Enabled strategies referencing a removed or disabled rule, which the plugin
-// refuses to save.
+// Strategies the plugin refuses to save: an enabled one referencing a removed
+// or disabled rule, a disabled one referencing a removed rule.
 const staleStrategies = computed(() => {
+  const all = new Set(layer.value.rules.map((r) => r.name))
   const live = new Set(layer.value.rules.filter((r) => r.enabled !== false).map((r) => r.name))
-  return layer.value.strategies.filter((s) => s.enabled !== false && refsOf(s.when).some((r) => !live.has(r))).map((s) => s.name)
+  return layer.value.strategies.filter((s) => refsOf(s.when).some((r) => !(s.enabled !== false ? live : all).has(r))).map((s) => s.name)
 })
 
 function restoreRules() {
@@ -97,6 +107,7 @@ function restoreRules() {
     <SHint class="dw-hint">{{ t('layer.rulesHint') }}</SHint>
     <SAlert v-if="staleStrategies.length" tone="warning" class="dw-block">{{ t('layer.staleRefs', { names: staleStrategies.join(', ') }) }}</SAlert>
     <SAlert v-if="emptyRules.length" tone="danger" class="dw-block">{{ t('layer.emptyNumbers', { names: emptyRules.join(', ') }) }}</SAlert>
+    <SAlert v-if="emptyStrategies.length" tone="danger" class="dw-block">{{ t('layer.emptyStrategyNumbers', { names: emptyStrategies.join(', ') }) }}</SAlert>
     <ItemsJsonPanel v-if="mode === 'json'" v-model="layer" v-model:invalid="jsonInvalid" />
     <template v-else>
       <RulesEditor v-model="layer.rules" @rename="renameRule" />

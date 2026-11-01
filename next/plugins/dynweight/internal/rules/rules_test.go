@@ -407,9 +407,26 @@ func TestAdjustOffPinsBase(t *testing.T) {
 	}
 }
 
+// Each default degrade also clears 30% of the key's sticky sessions (0.4.0);
+// the climbs clear nothing.
+func TestDefaultDegradeClearsSticky(t *testing.T) {
+	for _, s := range DefaultLayer().Strategies {
+		a, ok := s.AffinityAction()
+		if s.Direction() == Degrade != (ok && a.Percent == 30) {
+			t.Fatalf("strategy %s: affinity %+v %v", s.Name, a, ok)
+		}
+	}
+	s := newSim(t, compiled(t, nil), 100)
+	s.step(5, 5, -1)
+	out := s.step(5, 5, -1)
+	if out.WeightTo != 70 || len(out.SideEffects) != 1 || out.SideEffects[0].Strategy != "错误率过高" || out.SideEffects[0].AffinityPercent != 30 {
+		t.Fatalf("degrade: %v %+v", out.WeightTo, out.SideEffects)
+	}
+}
+
 func TestAffinityClear(t *testing.T) {
 	c := compiled(t, func(c *Config) {
-		c.Strategies[2].Actions = append(c.Strategies[2].Actions, Action{Type: ActionAffinityClear, Percent: 50})
+		c.Strategies[2].Actions[1].Percent = 50 // the default clears 30%
 		c.Strategies[3].Actions = append(c.Strategies[3].Actions, Action{Type: ActionAffinityClear, Percent: 20})
 	})
 	s := newSim(t, c, 100)

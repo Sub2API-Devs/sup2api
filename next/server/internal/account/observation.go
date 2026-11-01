@@ -70,7 +70,8 @@ func (s *Service) fillOutcomes(ctx context.Context, out []*View) {
 	}
 	for start := 0; start < len(ids); start += statsMaxAccounts {
 		chunk := ids[start:min(start+statsMaxAccounts, len(ids))]
-		snap, err := s.d.Stats.AccountStats(ctx, chunk, outcomesWindowSeconds)
+		// The list reads in_use itself (views); the outcomes need only the counters.
+		snap, err := s.d.Stats.accountStats(ctx, chunk, outcomesWindowSeconds, false)
 		if err != nil || snap.Status == "unavailable" {
 			continue
 		}

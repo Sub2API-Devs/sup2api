@@ -7,8 +7,8 @@ import { useDwHost, type Layer } from './host'
 // the two arrays as text. Text that parses to an array of named items goes
 // into the layer at once; otherwise the error is shown, `invalid` is set and
 // the layer keeps its last good value. An item must have what the visual
-// editors read (conditions, actions, a well-formed when); a missing list is
-// filled in empty, a missing when as none. A change to the layer from elsewhere
+// editors read (conditions with their joins, actions, a well-formed when); a
+// missing list is filled in empty, a missing when as none. A change to the layer from elsewhere
 // (restoring the defaults, discard, the saved configuration) replaces the
 // text; the layer following the text does not, so typing is never
 // reformatted. Everything else is checked by the plugin (Validate, Save).
@@ -59,8 +59,16 @@ function listField(x: Item, field: string): string {
   return Array.isArray(list) && list.every(isItem) ? '' : field
 }
 
+/** The malformed join of a rule's conditions ('' when none): every condition
+ * after the first says and or or, which the visual editor would otherwise
+ * show as "and" while the plugin refuses it. */
+function joinField(x: Item): string {
+  const i = (x.conditions as Item[]).findIndex((c, j) => j > 0 && c.join !== 'and' && c.join !== 'or')
+  return i < 0 ? '' : `conditions[${i}].join`
+}
+
 const malformed: Record<Part, (x: Item) => string> = {
-  rules: (x) => listField(x, 'conditions'),
+  rules: (x) => listField(x, 'conditions') || joinField(x),
   strategies: (x) => {
     x.when ??= null
     return x.when !== null && !isWhen(x.when) ? 'when' : listField(x, 'actions')

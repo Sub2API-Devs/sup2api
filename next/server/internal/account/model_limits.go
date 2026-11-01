@@ -102,7 +102,9 @@ func normalizeModelLimits(ctx context.Context, in []core.ModelLimit) ([]core.Mod
 }
 
 // fillModelInUse sets the requests in flight of each model list of the views,
-// one Redis round trip per distinct list.
+// one Redis read per distinct list, run concurrently (at most
+// modelInUseParallel at a time). It must run after RateUsage is set: it
+// writes into RateUsage.Models. Any read error leaves every count at 0.
 func (s *Service) fillModelInUse(ctx context.Context, out []*View) {
 	if s.d.Slots == nil {
 		return
@@ -114,14 +116,27 @@ func (s *Service) fillModelInUse(ctx context.Context, out []*View) {
 			byKey[k] = append(byKey[k], v.ID)
 		}
 	}
-	counts := make(map[string]map[int64]int, len(byKey))
-	for k, ids := range byKey {
-		n, err := s.d.Slots.InUseMany(ctx, core.ModelLimitSlots(k), ids)
-		if err != nil {
-			slog.WarnContext(ctx, "account: read model list slots", "err", err)
+	if len(byKey) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(byKey))
+	for k := range byKey {
+		keys = append(keys, k)
+	}
+	results := make([]map[int64]int, len(keys))
+	errs := make([]error, len(keys))
+	tasks := make([]func(), len(keys))
+	for i, k := range keys {
+		tasks[i] = func() { results[i], errs[i] = s.d.Slots.InUseMany(ctx, core.ModelLimitSlots(k), byKey[k]) }
+	}
+	runParallel(ctx, modelInUseParallel, tasks...)
+	counts := make(map[string]map[int64]int, len(keys))
+	for i, k := range keys {
+		if errs[i] != nil {
+			slog.WarnContext(ctx, "account: read model list slots", "err", errs[i])
 			return
 		}
-		counts[k] = n
+		counts[k] = results[i]
 	}
 	for _, v := range out {
 		for i := range v.ModelLimits {

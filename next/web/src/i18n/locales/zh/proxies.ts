@@ -21,6 +21,8 @@ export default {
   failed: '失败',
   exitIp: '出口 IP',
   createdBy: '创建人',
+  copyHint: "复制完整代理串（协议://用户名:密码{'@'}主机:端口）",
+  copyFailed: '复制失败，请检查浏览器剪贴板权限。',
   pasteUrl: '粘贴代理串自动填充',
   pasteUrlHint: "格式：协议://用户名:密码{'@'}主机:端口，或 主机:端口:用户名:密码、用户名:密码{'@'}主机:端口。省略协议时依次尝试 socks5、http、https，用第一个可用的。点「测试」会检测出口 IP 和所在地；「填充」只解析不测试。",
   pasteFill: '填充',

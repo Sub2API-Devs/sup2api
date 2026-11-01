@@ -374,6 +374,13 @@ func (s *Stats) Settings(ctx context.Context) (StatsSettings, error) {
 }
 
 func (s *Stats) ReadObservationMetrics(ctx context.Context, namespace string, ids []int64, names []string, seconds int) (*pluginv1.ReadObservationMetricsResponse, error) {
+	return s.readObservationMetrics(ctx, namespace, ids, names, seconds, true)
+}
+
+// readObservationMetrics is ReadObservationMetrics; withInUse=false skips the
+// in_use read (one Redis round trip) for callers that already have it or do
+// not show it, leaving InUse nil.
+func (s *Stats) readObservationMetrics(ctx context.Context, namespace string, ids []int64, names []string, seconds int, withInUse bool) (*pluginv1.ReadObservationMetricsResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	if seconds == 0 {
@@ -386,7 +393,7 @@ func (s *Stats) ReadObservationMetrics(ctx context.Context, namespace string, id
 	for _, id := range ids {
 		out.Accounts = append(out.Accounts, &pluginv1.AccountObservationMetrics{AccountId: id})
 	}
-	if s.slots != nil {
+	if withInUse && s.slots != nil {
 		if usage, err := s.slots.InUseMany(ctx, "account", ids); err == nil {
 			for i, id := range ids {
 				n := int64(usage[id])
@@ -508,7 +515,13 @@ func (s *Stats) readInternalCounters(ctx context.Context, namespace string, ids 
 }
 
 func (s *Stats) AccountStats(ctx context.Context, ids []int64, seconds int) (core.AccountStatsSnapshot, error) {
-	raw, err := s.ReadObservationMetrics(ctx, observation.CoreNamespace, ids, observation.CoreMetrics, seconds)
+	return s.accountStats(ctx, ids, seconds, true)
+}
+
+// accountStats is AccountStats; withInUse=false leaves InUse nil and saves
+// the slot read (the account list reads in_use itself).
+func (s *Stats) accountStats(ctx context.Context, ids []int64, seconds int, withInUse bool) (core.AccountStatsSnapshot, error) {
+	raw, err := s.readObservationMetrics(ctx, observation.CoreNamespace, ids, observation.CoreMetrics, seconds, withInUse)
 	out := core.AccountStatsSnapshot{WindowSeconds: int(raw.WindowSeconds), AsOf: time.UnixMilli(raw.AsOfUnixMs).UTC(), Status: raw.Status, Accounts: make([]core.AccountStatsView, 0, len(raw.Accounts))}
 	if raw.ObservedSinceUnixMs > 0 {
 		at := time.UnixMilli(raw.ObservedSinceUnixMs).UTC()

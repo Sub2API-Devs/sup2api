@@ -130,6 +130,7 @@ const zh = {
   op: { gt: '>', gte: '≥', lt: '<', lte: '≤' },
   rules: {
     name: '规则名',
+    duplicate: '与另一条规则同名',
     scope: '统计范围',
     periods: '窗口数 N',
     periodsHint: '最近 N 个窗口中',
@@ -155,7 +156,7 @@ const zh = {
     strategies: '策略 JSON',
     strategiesHint: '数组，每条：name、when（规则名，或 all / any 数组）、actions（type、mode、value、percent）、cooldown_seconds、enabled',
     notArray: '必须是一个数组',
-    invalid: '有错误（JSON 无法解析或数值未填写），修正后才能校验或保存',
+    invalid: '有错误（JSON 无法解析或数值未填写），修正后才能校验或保存：{where}',
     unnamed: '第 {i} 项必须是带 name 的对象',
     malformed: '第 {i} 项的 {field} 格式不对'
   },
@@ -200,7 +201,8 @@ const zh = {
     strategiesHint: '规则触发后执行的动作。',
     staleRefs: '这些策略引用了已删除或停用的规则，保存前请修改：{names}',
     required: '请填写',
-    emptyNumbers: '这些规则有未填写的数值，保存前请填写：{names}'
+    emptyNumbers: '这些规则有未填写的数值，保存前请填写：{names}',
+    emptyStrategyNumbers: '这些策略有未填写的动作幅度或清理比例，保存前请填写：{names}'
   },
   config: {
     loadFailed: '加载配置失败',
@@ -366,6 +368,7 @@ const en: typeof zh = {
   op: { gt: '>', gte: '≥', lt: '<', lte: '≤' },
   rules: {
     name: 'Rule name',
+    duplicate: 'Another rule has this name',
     scope: 'Counted requests',
     periods: 'Windows N',
     periodsHint: 'of the last N windows',
@@ -391,7 +394,7 @@ const en: typeof zh = {
     strategies: 'Strategies JSON',
     strategiesHint: 'An array; each strategy: name, when (a rule name, or an all / any array), actions (type, mode, value, percent), cooldown_seconds, enabled',
     notArray: 'must be an array',
-    invalid: 'Fix the errors (JSON that does not parse, or an empty number) to validate or save',
+    invalid: 'Fix the errors (JSON that does not parse, or an empty number) to validate or save: {where}',
     unnamed: 'item {i} must be an object with a name',
     malformed: 'item {i}: {field} is malformed'
   },
@@ -436,7 +439,8 @@ const en: typeof zh = {
     strategiesHint: 'What happens when rules fire.',
     staleRefs: 'These strategies reference a removed or disabled rule; fix them before saving: {names}',
     required: 'Required',
-    emptyNumbers: 'These rules have an empty number; fill it in before saving: {names}'
+    emptyNumbers: 'These rules have an empty number; fill it in before saving: {names}',
+    emptyStrategyNumbers: 'These strategies have an empty action amount or share; fill it in before saving: {names}'
   },
   config: {
     loadFailed: 'Failed to load the configuration',
