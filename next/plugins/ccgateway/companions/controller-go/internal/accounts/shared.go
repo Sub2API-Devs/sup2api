@@ -535,7 +535,12 @@ func (s *shared) healthySnapshot(aid string, st *store.AccountState, appID strin
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	b, ok := s.data.Bindings.Get(aid)
+	// gw.IP: the gateway still sits on the account network at the address
+	// of the activation; detached (L7 IT-X06) the runtime cannot reach out
+	// and must go offline so that recover re-attaches it (an intended
+	// difference from Python, which kept such a runtime ready).
 	return ok && gw != nil && gw.Status == "running" && s.boot == [2]string{gw.ID, gw.StartedAt} &&
+		gw.IP != "" && gw.IP == st.GatewayIP &&
 		b.Active && b.Revision == st.Revision && b.ContainerID == appID && b.IP == st.AppIP
 }
 

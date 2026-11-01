@@ -405,3 +405,23 @@ func TestReadinessDefiniteGuardAnswersDoNotUseTheSnapshot(t *testing.T) {
 		t.Fatal("404 must take the runtime offline")
 	}
 }
+
+// covers: Y1 Y2 G15 IT-X06 (the gateway detached from the account network:
+// the runtime goes offline and the background recovery re-attaches it;
+// intended difference from Python, which kept it ready and cut off)
+func TestDetachedGatewayTakesTheRuntimeOfflineAndRecoverReattaches(t *testing.T) {
+	e := newEnv(t)
+	e.mustApply("21", desired(rev))
+	if err := e.g.Client().DisconnectGateway(bg, "21"); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := e.m.Connection(bg, "21", rev); c != nil {
+		t.Fatal("ready with the gateway off its network")
+	}
+	if err := e.m.recover(bg); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := e.m.Connection(bg, "21", rev); err != nil || c == nil {
+		t.Fatal("recover did not re-attach", err)
+	}
+}
