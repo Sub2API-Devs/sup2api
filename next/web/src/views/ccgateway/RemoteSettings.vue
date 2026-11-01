@@ -244,8 +244,10 @@ async function save() {
   const connection = connectionPayload(s)
   imageError.value = otherSettingsProblem()
   if (imageError.value) return
-  // A PUT with images replaces all of them: keep the gateway (Caddy) override the form does not edit.
+  // A PUT with images replaces all of them: keep the overrides the form does not edit
+  // (gateway: the Caddy image; guard: the ccgateway guard of a compose install, CONTRACTS §76).
   const gateway = s.images?.gateway
+  const guard = s.images?.guard
   const rebuildNetwork = networkChanged.value
   const response = await api.put<RemoteConfig>(base, {
     // Per-account containers are the only mode: every save keeps them on.
@@ -254,7 +256,7 @@ async function save() {
     request_policy: normalizeRequestPolicy(requestPolicy.value),
     cc_feature_groups: Object.fromEntries(Object.entries(featureGroups.value).map(([id, group]) => [id, { ...group, overrides: savedOverrides(group.overrides) }])),
     feature_revision: s.feature_revision ?? 0,
-    images: gateway ? { ...imagesPayload.value, gateway } : imagesPayload.value,
+    images: { ...imagesPayload.value, ...(gateway ? { gateway } : {}), ...(guard ? { guard } : {}) },
     network: { pool: network.pool.trim() || DEFAULT_POOL, allocation: network.allocation },
     // Only to a core that reports the rule (an older one would not know it).
     ...(savedLogDefault.value !== null ? { request_logs: { level: requestLogDefault.value } } : {})

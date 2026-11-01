@@ -37,6 +37,7 @@ var (
 	reportedImage   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,299}$`)
 	reportedVersion = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
 	resultLine      = regexp.MustCompile(`(?m)^CCG_RESULT=([a-z_]+)\s*$`)
+	rollbackLine    = regexp.MustCompile(`(?m)^CCG_ROLLBACK=(restored|removed|restore_failed)\s*$`)
 
 	installScriptLimit = 15 * time.Minute
 	healthWait         = 60 * time.Second
@@ -111,12 +112,17 @@ echo CCG_RESULT=not_installed
 
 // installScript pulls the images that are not on the host yet (images built
 // on the host itself are used as they are), writes the controller
-// environment from stdin (0600) and replaces the controller (the previous
-// one is kept as ccg-controller-prev until the new one is healthy). It
-// contains constants and image references that match validImage only (no
-// quotes, spaces or shell characters), never other input.
+// environment from stdin (0600) and replaces the controller. The controller
+// image's guard-api label picks the path (CONTRACTS §76.2): without it the
+// 0.1.226 docker run path, unchanged (the previous controller is kept as
+// ccg-controller-prev until the new one is healthy); with it the compose
+// path, which writes compose.yml and .env, starts the guard first and, on a
+// host whose controller docker run started, moves the controller data over
+// (the transition). It contains constants and image references that match
+// validImage only (no quotes, spaces or shell characters), never other
+// input.
 func installScript(img RuntimeImages, workloadOptional bool) (string, error) {
-	for _, ref := range []string{img.App, img.Egress, img.Controller} {
+	for _, ref := range []string{img.App, img.Egress, img.Controller, img.Guard} {
 		if !validImage(ref) {
 			return "", errors.New("invalid runtime image reference")
 		}
@@ -136,52 +142,37 @@ umask 077
 APP='` + img.App + `'
 EGRESS='` + img.Egress + `'
 CTL='` + img.Controller + `'
+GUARD='` + img.Guard + `'
 ROOT='` + runtimeRoot + `'
 ENVF='` + runtimeEnvFile + `'
+DIR='` + composeDir + `'
+DATA='` + controllerData + `'
+STATE='` + guardState + `'
 ` + workload + `
 docker image inspect "$CTL" >/dev/null 2>&1 || docker pull -q "$CTL" >/dev/null 2>&1 || { echo CCG_RESULT=image_pull_failed; exit 1; }
-mkdir -p "$ROOT" && chmod 700 "$ROOT" || { echo CCG_RESULT=install_failed; exit 1; }
-if ! { cat > "$ENVF.tmp" && chmod 600 "$ENVF.tmp" && mv -f "$ENVF.tmp" "$ENVF"; }; then
-  rm -f "$ENVF.tmp"; echo CCG_RESULT=install_failed; exit 1
+` + installPathSelect + legacyInstallBody + `exit 0
 fi
-# An install interrupted after the rename left only the previous controller.
-if ! docker inspect --type container ccg-controller >/dev/null 2>&1 && docker inspect --type container ccg-controller-prev >/dev/null 2>&1; then
-  docker rename ccg-controller-prev ccg-controller >/dev/null 2>&1
-fi
-docker rm -f ccg-controller-prev >/dev/null 2>&1
-if docker inspect --type container ccg-controller >/dev/null 2>&1; then
-  docker rename ccg-controller ccg-controller-prev >/dev/null 2>&1 || { echo CCG_RESULT=install_failed; exit 1; }
-  docker stop ccg-controller-prev >/dev/null 2>&1
-fi
-if ! docker run -d --name ccg-controller --restart unless-stopped --network host \
-  --env-file "$ENVF" -v /var/run/docker.sock:/var/run/docker.sock -v "$ROOT:$ROOT" \
-  --log-opt max-size=20m --log-opt max-file=3 "$CTL" >/dev/null 2>&1; then
-  docker rm -f ccg-controller >/dev/null 2>&1
-  if docker inspect --type container ccg-controller-prev >/dev/null 2>&1; then
-    docker rename ccg-controller-prev ccg-controller >/dev/null 2>&1 && docker start ccg-controller >/dev/null 2>&1
-  fi
-  echo CCG_RESULT=controller_unhealthy; exit 1
-fi
-echo CCG_RESULT=started
-`, nil
+` + composeInstallBody(), nil
 }
 
-// finishScript drops the previous controller after a healthy switch.
-const finishScript = `docker rm -f ccg-controller-prev >/dev/null 2>&1
+// finishScript drops the previous controller after a healthy switch, and
+// the rollback marks of a compose install (none on a docker run host).
+const finishScript = `DIR='` + composeDir + `'
+docker rm -f ccg-controller-prev >/dev/null 2>&1
+rm -f "$DIR/.env.prev" "$DIR/.transition"
 echo CCG_RESULT=done
 `
 
-// rollbackScript removes an unhealthy new controller and restarts the
+// rollbackScript undoes an install whose controller did not become healthy:
+// on a compose host it restores .env.prev (or, for a transition, moves the
+// data back and restarts the previous controller); otherwise it is the
+// 0.1.226 rollback, which removes the new controller and restarts the
 // previous one under its own name.
-const rollbackScript = `docker rm -f ccg-controller >/dev/null 2>&1
-if docker inspect --type container ccg-controller-prev >/dev/null 2>&1; then
-  if docker rename ccg-controller-prev ccg-controller >/dev/null 2>&1 && docker start ccg-controller >/dev/null 2>&1; then
-    echo CCG_RESULT=restored; exit 0
-  fi
-  echo CCG_RESULT=restore_failed; exit 1
-fi
-echo CCG_RESULT=removed
-`
+const rollbackScript = `set -u
+ROOT='` + runtimeRoot + `'
+DIR='` + composeDir + `'
+DATA='` + controllerData + `'
+` + composeCommon + composeRollbackBranch + legacyRollback
 
 // controllerEnv is the environment file written from stdin.
 func controllerEnv(key string, img RuntimeImages) []byte {
@@ -199,6 +190,31 @@ func scriptResult(out string) string {
 		return ""
 	}
 	return m[len(m)-1][1]
+}
+
+// scriptRollback is the CCG_ROLLBACK line a failed compose install prints
+// when it undid its own changes (restored, removed or restore_failed), ""
+// without one.
+func scriptRollback(out string) string {
+	m := rollbackLine.FindAllStringSubmatch(out, -1)
+	if len(m) == 0 {
+		return ""
+	}
+	return m[len(m)-1][1]
+}
+
+// installFailure maps the result of a failed install script to the error
+// the caller sees (§49.16, §76.7): the codes the console knows pass through,
+// the rest (control_network_conflict, bridge_guard_active, ...) are only
+// logged and answered as install_failed.
+func installFailure(result string) (*core.Error, string) {
+	switch result {
+	case "image_pull_failed", "controller_unhealthy", "install_failed", "compose_unavailable", "guard_unavailable":
+		return core.ErrUnavailable, result
+	case "legacy_blocked":
+		return core.ErrConflict, result
+	}
+	return core.ErrUnavailable, "install_failed"
 }
 
 type runtimeImages struct {
@@ -548,14 +564,15 @@ func (s *Service) installRuntime(ctx context.Context, cfg Config, uid int64, wor
 		return cfg, reasonError(core.ErrUnavailable, runFailure(cfg))
 	}
 	if res.ExitStatus != 0 || scriptResult(res.Output) != "started" {
-		reason := scriptResult(res.Output)
-		switch reason {
-		case "image_pull_failed", "controller_unhealthy", "install_failed":
-		default:
-			reason = "install_failed"
+		raw := scriptResult(res.Output)
+		kind, reason := installFailure(raw)
+		rollback := scriptRollback(res.Output)
+		slog.WarnContext(ctx, "CCGateway runtime install failed", "reason", reason, "result", raw, "rollback", rollback, "exit", res.ExitStatus)
+		err := reasonError(kind, reason)
+		if rollback != "" {
+			err = err.WithDetails(map[string]any{"rollback": rollback})
 		}
-		slog.WarnContext(ctx, "CCGateway runtime install failed", "reason", reason, "exit", res.ExitStatus)
-		return cfg, reasonError(core.ErrUnavailable, reason)
+		return cfg, err
 	}
 	if !s.waitHealthy(ctx, cfg, img) {
 		restored := "rollback_failed"

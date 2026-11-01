@@ -1,0 +1,9 @@
+# layer minimum-passing-tests (scripts/check-test-json.sh, 05 §1)
+# unit:     go test -json -count=1 ./...                       (any OS)
+# linux:    go test -json -count=1 -race ./...                 (Linux, adds //go:build linux)
+# netns:    go test -tags netns -json -count=1 ./internal/firewall/       (root, --privileged throwaway container)
+# dockerit: go test -tags dockerit -json -count=1 -run Dockerit ./internal/api/  (real dockerd, prefix ccg-gtu)
+unit 327
+linux 334
+netns 37
+dockerit 20

@@ -1,0 +1,14 @@
+{
+  "name": "400 invalid account key d+15",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/accounts/d000000000000000"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  }
+}

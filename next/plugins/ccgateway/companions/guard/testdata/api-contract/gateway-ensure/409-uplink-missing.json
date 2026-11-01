@@ -1,0 +1,29 @@
+{
+  "name": "409 uplink_missing",
+  "covers": "R13",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ]
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/gateway/ensure",
+    "json": {}
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": "conflict",
+      "reason": "uplink_missing"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

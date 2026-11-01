@@ -1,0 +1,7 @@
+-N CCG-PROXY-BRIDGE
+-A CCG-PROXY-BRIDGE -s 10.52.74.112/32 -p tcp -m physdev --physdev-in veth1695e5c --physdev-out veth7622ec2 --physdev-is-bridged -m comment --comment ccgateway-21-proxy-out -j ACCEPT
+-A CCG-PROXY-BRIDGE -d 10.52.74.112/32 -m physdev --physdev-in veth7622ec2 --physdev-out veth1695e5c --physdev-is-bridged -m conntrack --ctstate RELATED,ESTABLISHED -m comment --comment ccgateway-21-proxy-return -j ACCEPT
+-A CCG-PROXY-BRIDGE -s 10.94.100.227/32 -p tcp -m physdev --physdev-in vethc1750de --physdev-out veth63f02de --physdev-is-bridged -m comment --comment ccgateway-d0f5649dddebd3c25-proxy-out -j ACCEPT
+-A CCG-PROXY-BRIDGE -d 10.94.100.227/32 -m physdev --physdev-in veth63f02de --physdev-out vethc1750de --physdev-is-bridged -m conntrack --ctstate RELATED,ESTABLISHED -m comment --comment ccgateway-d0f5649dddebd3c25-proxy-return -j ACCEPT
+-N DOCKER-USER
+-A DOCKER-USER -m comment --comment ccgateway-managed-proxy-bridge -j CCG-PROXY-BRIDGE

@@ -1,0 +1,44 @@
+{
+  "name": "200 none",
+  "covers": "R13",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ],
+    "networks": [
+      {
+        "aid": "d0000000000000000",
+        "role": "xray-uplink",
+        "subnet": "10.117.81.0/24"
+      }
+    ],
+    "gateway": {
+      "networks": {
+        "21": "10.52.74.2"
+      }
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/gateway/ensure",
+    "json": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "action": "none"
+    },
+    "keys": [
+      "gateway",
+      "action"
+    ]
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

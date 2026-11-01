@@ -1,0 +1,21 @@
+{
+  "name": "200 gzip",
+  "covers": "R9",
+  "setup": {
+    "load_lines": [
+      "Loaded image: ccgateway-app:9"
+    ]
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/load",
+    "body_base64": "H4sIAAAAAAAA/+zTTcuCQBAH8P0oD3P2yXHxhbx27RTdxMMoqxnlimuEiN89elmJbmFK0P4uM7owO7D8j1QWmVDNYq9kyaaBiOi7LsO714ocg6G/nTtOgB77Qz1gSifVUM1w9F3D8o+q/3+5qIOVLLMihxCSg0yUrXbEPd+mkcCCNbWiVhBGsQUbUckt5dcvSNOcGnGm9p+qKlxC3Md6HWNmH31zPfTN/CPypx4Zcs910OR/jvx3ve4MwzCMX3IZAGlByUEADAAA",
+    "content_type": "application/gzip"
+  },
+  "response": {
+    "status": 200,
+    "keys": [
+      "images"
+    ]
+  }
+}

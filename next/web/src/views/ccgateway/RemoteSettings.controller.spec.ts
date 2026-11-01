@@ -244,6 +244,17 @@ describe('controller connection', () => {
     mocks.put.mockResolvedValue(controller())
     await submit(w)
     expect(mocks.put.mock.calls[0]![1]).toMatchObject({ port: 8443, images: { app: '', egress: '', controller: '', gateway: 'caddy:2.8-alpine' } })
+    expect(mocks.put.mock.calls[0]![1].images).not.toHaveProperty('guard')
+    w.unmount()
+  })
+
+  it('keeps the guard image override when saving (CONTRACTS §76)', async () => {
+    const w = await render(controller({ images: { app: '', egress: '', controller: '', guard: 'ccgateway-guard:local' } }))
+    await w.get('[data-testid="controller-endpoint"]').setValue('https://ccg.example.com:8443')
+    await w.get('[data-testid="controller-admin-key"]').setValue('k'.repeat(64))
+    mocks.put.mockResolvedValue(controller())
+    await submit(w)
+    expect(mocks.put.mock.calls[0]![1].images).toEqual({ app: '', egress: '', controller: '', guard: 'ccgateway-guard:local' })
     w.unmount()
   })
 

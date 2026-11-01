@@ -1,0 +1,17 @@
+{
+  "name": "413 over 4 MiB",
+  "setup": {},
+  "request": {
+    "method": "PUT",
+    "path": "/v1/gateway/files/boot.json",
+    "body_base64": "e30=",
+    "content_type": "application/octet-stream",
+    "content_length": 4194305
+  },
+  "response": {
+    "status": 413,
+    "body": {
+      "error": "too_large"
+    }
+  }
+}

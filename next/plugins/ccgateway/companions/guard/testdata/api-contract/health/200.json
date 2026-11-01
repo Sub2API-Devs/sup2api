@@ -1,0 +1,35 @@
+{
+  "name": "200",
+  "covers": "R17 03§3.4.1",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/health"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "controller": "ok",
+      "features": [
+        "account-state-v1",
+        "exec-combined-v1",
+        "gateway-compose-v1",
+        "raw-inspect-v1",
+        "jobs-v1",
+        "load-gzip-v1",
+        "upgrade-compose-v1"
+      ],
+      "prefix": "ccg",
+      "starting": false
+    },
+    "keys": [
+      "version",
+      "prefix",
+      "features",
+      "docker",
+      "firewall",
+      "controller",
+      "starting"
+    ]
+  }
+}

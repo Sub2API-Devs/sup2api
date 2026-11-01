@@ -1,0 +1,36 @@
+{
+  "name": "204 no gateway",
+  "covers": "R18",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-app:1"
+      }
+    ],
+    "networks": [
+      {
+        "aid": "21",
+        "subnet": "10.52.74.0/24"
+      }
+    ],
+    "volumes": [
+      {
+        "aid": "21",
+        "quota": true
+      }
+    ],
+    "files": {
+      "21/resolv.conf": "ok"
+    }
+  },
+  "request": {
+    "method": "DELETE",
+    "path": "/v1/gateway/networks/21"
+  },
+  "response": {
+    "status": 204
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

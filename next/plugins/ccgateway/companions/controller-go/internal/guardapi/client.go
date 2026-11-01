@@ -4,8 +4,9 @@
 //
 // Error contract:
 //   - a guard error answer is *Error (errors.Is with ErrNotFound,
-//     ErrNotRunning, ErrExists, ... ); 404 is never mapped to a named
-//     failure here;
+//     ErrNotRunning, ErrExists, ErrSubnetOverlap, ErrUplinkMissing,
+//     ErrMountRejected, ErrMountReplaced, ErrStarting, ... ); 404 is never
+//     mapped to a named failure here;
 //   - the answers of 02 §5.3 that have a controller meaning come back as
 //     *errs.Error wrapping the *Error: 409 ownership_mismatch ->
 //     errs.OwnershipMismatch (Names), 409 resource_in_use -> errs.ResourceInUse,
@@ -13,7 +14,19 @@
 //     disk_quota_unavailable -> errs.DiskQuotaUnavailable, 503 busy ->
 //     errs.RuntimeBusy; every failure of ImagePull -> errs.ImagePullFailed;
 //     403 of UpgradeController -> errs.InvalidImage;
-//   - a transport failure is *TransportError (errors.Is(err, ErrUnavailable)).
+//   - a transport failure is *TransportError (errors.Is(err, ErrUnavailable)),
+//     and so is an answer of the wrong shape or with a success status the
+//     guard does not use for the endpoint; 503 unavailable/starting is an
+//     *Error that also matches ErrUnavailable;
+//   - a JSON request body over MaxJSONRequest is a local *Error 413
+//     too_large (not sent).
+//
+// Wire contract (checked against the guard's samples in
+// companions/guard/testdata/api-contract): "Authorization: Bearer <64
+// lowercase hex>"; JSON bodies application/json; raw bodies with
+// Content-Length, never chunked; exact success statuses (201 PUT network
+// and PUT app with the raw inspect as the body, 200/201 PUT volume, 202
+// controller upgrade, 204 every other change).
 //
 // FROZEN: the interfaces and types of this package.
 package guardapi

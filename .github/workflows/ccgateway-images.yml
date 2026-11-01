@@ -1,7 +1,7 @@
 name: CCGateway images
 
 # Builds the Claude Code runtime images (business container, shared Xray
-# egress gateway, account controller).
+# egress gateway, account controller) and the ccgateway guard.
 #
 # Since CONTRACTS §53.10 the images ship INSIDE the ccgateway plugin package:
 # the release host runs next/deploy/docker/build-ccgateway-images.sh before
@@ -9,8 +9,15 @@ name: CCGateway images
 # the core installs / pushes the bundled archives itself. The `bundle` job
 # below runs that very script on a GitHub runner and packs ccgateway with its
 # images, so the release path is exercised on every change. The GHCR push
-# (`images`) is kept for anyone pulling the images directly, but nothing
-# depends on it any more (the GHCR packages are private).
+# (`images`) is kept for anyone pulling the images directly (the GHCR
+# packages are private).
+#
+# The guard (CONTRACTS §76) is NOT in the plugin package: its GHCR digest
+# (the `images` summary of ccgateway-guard) is pinned as GuardImage in
+# next/server/internal/ccgateway/images.go. The controller is the Go
+# controller (companions/controller-go); the matrix entry with the -python
+# tag suffix still builds the old Python controller for a rollback to
+# ccgateway 0.1.118 until the observation period ends.
 
 on:
   push:
@@ -61,6 +68,25 @@ jobs:
       # Shared vocabulary and the cross-layer contract fixtures (testdata/).
       - name: contracts (Go)
         run: sh .github/next-ci/next-check-module.sh next/plugins/ccgateway/companions/contracts
+      # The Go controller and the guard are modules of their own: the
+      # companions module's go vet / go test above do not enter them (its
+      # gofmt -l does). Until a module lands the step is a no-op.
+      - name: controller (Go)
+        if: hashFiles('next/plugins/ccgateway/companions/controller-go/go.mod') != ''
+        working-directory: next/plugins/ccgateway/companions/controller-go
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+          go vet ./...
+          GOOS=linux go vet ./...
+          go test -count=1 -race ./...
+      - name: guard (Go)
+        if: hashFiles('next/plugins/ccgateway/companions/guard/go.mod') != ''
+        working-directory: next/plugins/ccgateway/companions/guard
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+          go vet ./...
+          GOOS=linux go vet ./...
+          go test -count=1 -race ./...
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
@@ -76,6 +102,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      # Kept until the observation period ends: a rollback goes back to the
+      # Python controller of ccgateway 0.1.118.
       - name: controller (Python)
         working-directory: next/plugins/ccgateway/companions/controller
         run: |
@@ -119,6 +147,14 @@ jobs:
           for role in app egress controller gateway; do
             grep -Eq " Stored .* images/$role\.tar\.gz$" "$RUNNER_TEMP/entries.txt" || { echo "::error::images/$role.tar.gz missing or compressed"; exit 1; }
           done
+          # Exactly the four roles (the guard is never packed), and the
+          # controller is the Go controller that runs under the guard.
+          roles=$(grep -Eo '^    "[a-z]+": \{' plugins/ccgateway/images/images.json | tr -d ' ":{' | sort | tr '\n' ,)
+          [ "$roles" = app,controller,egress,gateway, ] || { echo "::error::images.json roles: $roles"; exit 1; }
+          grep -Eq '^    "controller": \{.*"labels": \{"io\.sup2api\.ccgateway\.guard-api": "1"\}' plugins/ccgateway/images/images.json \
+            || { echo '::error::the bundled controller does not declare io.sup2api.ccgateway.guard-api=1'; exit 1; }
+          [ "$(docker image inspect --format '{{index .Config.Labels "io.sup2api.ccgateway.guard-api"}}' "ccgateway-controller:$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' plugins/ccgateway/manifest.json | head -n1)")" = 1 ] \
+            || { echo '::error::the controller image lacks io.sup2api.ccgateway.guard-api=1'; exit 1; }
           {
             echo '### ccgateway package with bundled images'
             echo '```'
@@ -142,8 +178,18 @@ jobs:
             context: next/plugins/ccgateway/companions/xray-egress
             file: next/plugins/ccgateway/companions/xray-egress/Dockerfile
           - name: ccgateway-controller
+            context: next/plugins/ccgateway/companions/controller-go
+            file: next/plugins/ccgateway/companions/controller-go/Dockerfile
+          # The Python controller (ccgateway 0.1.118 and earlier), kept for a
+          # rollback: same package, tags with the -python suffix.
+          - name: ccgateway-controller
+            suffix: -python
             context: next/plugins/ccgateway/companions/controller
             file: next/plugins/ccgateway/companions/controller/Dockerfile
+          # Not in the plugin package: its digest is GuardImage in the core.
+          - name: ccgateway-guard
+            context: next/plugins/ccgateway/companions/guard
+            file: next/plugins/ccgateway/companions/guard/Dockerfile
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v3
@@ -172,8 +218,8 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
           tags: |
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.short }}
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.branch }}
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.short }}${{ matrix.suffix }}
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.branch }}${{ matrix.suffix }}
       - name: Digest
         run: |
-          echo "${{ steps.meta.outputs.image }}@${{ steps.build.outputs.digest }}" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "${{ matrix.name }}${{ matrix.suffix }}: ${{ steps.meta.outputs.image }}@${{ steps.build.outputs.digest }}" | tee -a "$GITHUB_STEP_SUMMARY"
