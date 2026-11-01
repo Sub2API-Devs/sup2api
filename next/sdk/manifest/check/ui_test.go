@@ -376,6 +376,37 @@ func TestNativeSettingsWithSchema(t *testing.T) {
 	}
 }
 
+// The core installs on hostCompat alone, so a native UI that needs UI 3.4
+// must not admit core 0.1.228 (UI 3.3), where the console would refuse it.
+func TestHostUICompatNeedsMatchingHostCompat(t *testing.T) {
+	cases := []struct {
+		ui, host string
+		bad      bool
+	}{
+		{"^3.4", ">=0.1.222 <0.2.0", true},
+		{"^3.5", ">=0.1.154 <0.2.0", true},
+		{"^3.4", ">=0.1.229 <0.2.0", false},
+		{"^3.4", ">=0.1.230 <0.2.0", false},
+		{"^3.3", ">=0.1.222 <0.2.0", false},
+		{"~3.4.2", ">=0.1.222 <0.2.0", true},
+		{"^3.0", ">=0.1.0 <0.2.0", false},
+		{">=0.1.0 <0.2.0", ">=0.1.0 <0.2.0", false},
+	}
+	for _, tc := range cases {
+		m := uiManifest()
+		m.HostPermissions = append(m.HostPermissions, manifest.HostPermission{ID: "ui.native"})
+		m.UI.Native = &manifest.NativeUI{Entry: "ui/native/entry.js"}
+		m.HostUICompat, m.HostCompat = tc.ui, tc.host
+		c := uiCodes(m)
+		if got := c["hostCompat"] == "below_ui_core"; got != tc.bad {
+			t.Errorf("hostUICompat %s, hostCompat %s: below_ui_core = %v, want %v (%v)", tc.ui, tc.host, got, tc.bad, c)
+		}
+		if !tc.bad && len(c) > 0 {
+			t.Errorf("hostUICompat %s, hostCompat %s must be valid: %v", tc.ui, tc.host, c)
+		}
+	}
+}
+
 // page.search is what makes the host render a search box at all.
 func TestPageSearchDeclaration(t *testing.T) {
 	set := func(m *manifest.Manifest, mutate func(*manifest.Page)) {

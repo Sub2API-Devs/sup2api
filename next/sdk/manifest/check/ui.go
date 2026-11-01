@@ -333,9 +333,40 @@ func (v *validator) uiNative(u *manifest.UI) {
 	}
 	if v.m.HostUICompat == "" {
 		v.add("hostUICompat", "required", "hostUICompat is required when ui.native is used")
-	} else if _, err := semver.NewConstraint(v.m.HostUICompat); err != nil {
+	} else if c, err := semver.NewConstraint(v.m.HostUICompat); err != nil {
 		v.add("hostUICompat", "invalid_constraint", "hostUICompat: %v", err)
+	} else if needsUI34(c) {
+		// The core installs a plugin on hostCompat alone and the console then
+		// refuses a native UI whose hostUICompat its UI does not satisfy, so
+		// a plugin that needs UI 3.4 or later must also keep out the cores
+		// that ship 3.3.
+		if ok, err := HostCompatible(v.m.HostCompat, lastUI33Core); err == nil && ok {
+			v.add("hostCompat", "below_ui_core", "hostCompat %q admits core %s, whose UI %s does not satisfy hostUICompat %q (UI 3.4 starts at core %s)",
+				v.m.HostCompat, lastUI33Core, lastUI33, v.m.HostUICompat, firstUI34Core)
+		}
 	}
+}
+
+// Core 0.1.228 is the last core that ships UI SDK 3.3; UI 3.4 starts at 0.1.229.
+const (
+	lastUI33      = "3.3.0"
+	lastUI33Core  = "0.1.228"
+	firstUI34Core = "0.1.229"
+)
+
+// needsUI34 reports whether c rejects UI 3.3.0 but accepts a 3.x release from
+// 3.4 on (^3.4, ~3.4.2, >=3.5 ...); a range that never matches a 3.x UI is
+// wrong in other ways and left alone.
+func needsUI34(c *semver.Constraints) bool {
+	if c.Check(semver.MustParse(lastUI33)) {
+		return false
+	}
+	for minor := uint64(4); minor <= 30; minor++ {
+		if c.Check(semver.New(3, minor, 0, "", "")) || c.Check(semver.New(3, minor, 99, "", "")) {
+			return true
+		}
+	}
+	return false
 }
 
 // firstText returns the "en" text or any non-empty value.
