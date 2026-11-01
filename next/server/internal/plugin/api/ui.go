@@ -75,7 +75,8 @@ func (a *API) uiPlugins(c *gin.Context) {
 // visibleMenusAndPages filters a plugin's menus and pages for one caller.
 // A page reached only through menus the caller may not see is dropped; so is
 // a table's "New" link the caller may not use, and the form page it opens
-// unless a visible menu or another table's usable link reaches it. Pages no
+// unless a visible menu or another shown table's usable link reaches it (a
+// table hidden by its menu's permission makes its link unusable). Pages no
 // menu or link names stay (their routes check permissions themselves).
 func visibleMenusAndPages(ui *manifest.UI, allowed func(perm string) bool) ([]manifest.Menu, map[string]manifest.Page) {
 	menus := []manifest.Menu{}
@@ -90,15 +91,25 @@ func visibleMenusAndPages(ui *manifest.UI, allowed func(perm string) bool) ([]ma
 			hidden[mn.Page] = true
 		}
 	}
-	for _, pg := range ui.Pages {
+	// A link counts only from a page the menus leave shown: a table the
+	// caller cannot see must not reveal the form it opens.
+	linkVisible := map[string]bool{}
+	linkHidden := map[string]bool{}
+	for id, pg := range ui.Pages {
 		if pg.Create == nil {
 			continue
 		}
-		if allowed(pg.Create.Permission) {
-			visible[pg.Create.Page] = true
+		if (visible[id] || !hidden[id]) && allowed(pg.Create.Permission) {
+			linkVisible[pg.Create.Page] = true
 		} else {
-			hidden[pg.Create.Page] = true
+			linkHidden[pg.Create.Page] = true
 		}
+	}
+	for id := range linkVisible {
+		visible[id] = true
+	}
+	for id := range linkHidden {
+		hidden[id] = true
 	}
 	shown := func(id string) bool { return visible[id] || !hidden[id] }
 	for id, pg := range ui.Pages {
