@@ -1,0 +1,50 @@
+{
+ "about": "Deliberate differences of the Go controller from the Python 0.1.118 recording in python.json (05-test-plan §6, §8). Each case is the answer Go gives instead; calls are what the HTTP layer asks of the business packages.",
+ "cases": {
+  "auth-bare-key": {
+   "why": "BUG-11 fixed: the Authorization value must be 'Bearer <key>'; Python's removeprefix accepted a bare key",
+   "calls": [],
+   "response": {"status": 401, "reason": "Unauthorized", "headers": [["Content-Type", "application/json"], ["Content-Length", "25"], ["Cache-Control", "no-store"], ["Connection", "close"]], "body": "{\"error\": \"unauthorized\"}", "closed": true}
+  },
+  "auth-non-ascii": {
+   "why": "BUG-11 fixed: a non-ASCII Authorization value is 401; Python's hmac.compare_digest raised TypeError and dropped the connection without an answer",
+   "calls": [],
+   "response": {"status": 401, "reason": "Unauthorized", "headers": [["Content-Type", "application/json"], ["Content-Length", "25"], ["Cache-Control", "no-store"], ["Connection", "close"]], "body": "{\"error\": \"unauthorized\"}", "closed": true}
+  },
+  "method-head": {
+   "why": "BUG-12 fixed: other methods are authenticated, then 405 JSON with close (HEAD: headers only); Python answered 501 HTML before authentication",
+   "calls": [],
+   "response": {"status": 405, "reason": "Method Not Allowed", "headers": [["Content-Type", "application/json"], ["Content-Length", "31"], ["Cache-Control", "no-store"], ["Connection", "close"]], "body": "", "closed": true}
+  },
+  "method-patch": {
+   "why": "BUG-12 fixed",
+   "calls": [],
+   "response": {"status": 405, "reason": "Method Not Allowed", "headers": [["Content-Type", "application/json"], ["Content-Length", "31"], ["Cache-Control", "no-store"], ["Connection", "close"]], "body": "{\"error\": \"method_not_allowed\"}", "closed": true}
+  },
+  "method-patch-wrong-key": {
+   "why": "BUG-12 fixed: authentication comes first for every method",
+   "calls": [],
+   "response": {"status": 401, "reason": "Unauthorized", "headers": [["Content-Type", "application/json"], ["Content-Length", "25"], ["Cache-Control", "no-store"], ["Connection", "close"]], "body": "{\"error\": \"unauthorized\"}", "closed": true}
+  },
+  "method-options-health": {
+   "why": "BUG-12 fixed",
+   "calls": [],
+   "response": {"status": 405, "reason": "Method Not Allowed", "headers": [["Content-Type", "application/json"], ["Content-Length", "31"], ["Cache-Control", "no-store"], ["Connection", "close"]], "body": "{\"error\": \"method_not_allowed\"}", "closed": true}
+  },
+  "egress-recreate": {
+   "why": "02 §7.4: POST /runtime/egress/recreate is new (Python: 404)",
+   "calls": [{"call": "recreate_egress", "args": "[{}]", "result": "{\"recreated\": true, \"image\": \"egress:test\"}"}],
+   "response": {"status": 200, "reason": "OK", "headers": [["Content-Type", "application/json"], ["Content-Length", "43"], ["Cache-Control", "no-store"]], "body": "{\"recreated\": true, \"image\": \"egress:test\"}", "closed": false}
+  },
+  "length-plus-sign": {
+   "why": "net/http refuses a Content-Length that is not a decimal number before any handler runs (plain-text 400, close); Python's read_body answered 400 invalid_request. The core always sends a valid Content-Length",
+   "calls": [],
+   "response": {"status": 400, "reason": "Bad Request", "headers": [["Content-Type", "text/plain; charset=utf-8"], ["Connection", "close"]], "body": "400 Bad Request", "closed": true}
+  },
+  "length-not-decimal": {
+   "why": "net/http refuses a Content-Length that is not a decimal number (see length-plus-sign)",
+   "calls": [],
+   "response": {"status": 400, "reason": "Bad Request", "headers": [["Content-Type", "text/plain; charset=utf-8"], ["Connection", "close"]], "body": "400 Bad Request", "closed": true}
+  }
+ }
+}
