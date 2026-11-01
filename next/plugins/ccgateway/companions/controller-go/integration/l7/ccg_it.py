@@ -11,6 +11,7 @@ import scenarios_f  # noqa: F401  registers IT-F*
 import scenarios_s  # noqa: F401  registers IT-S*
 import scenarios_x  # noqa: F401  registers IT-X*
 import scenarios_p  # noqa: F401  registers IT-P*
+import scenarios_mem  # noqa: F401  registers IT-MEM*
 
 
 def main(argv):

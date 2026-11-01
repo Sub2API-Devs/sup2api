@@ -22,8 +22,8 @@ GT_BRIDGE_UNIT=ccg-gt-bridge-guard
 # Images: the Python reference controller, the Go controller and guard under
 # test, the production gateway image (read only, by ID).
 GT_PY_CTL=ccgateway-controller:0.1.118
-GT_GO_CTL=ccgateway-controller:it
-GT_GUARD_IMG=ccgateway-guard:it
+GT_GO_CTL=${GT_GO_CTL:-ccgateway-controller:it}
+GT_GUARD_IMG=${GT_GUARD_IMG:-ccgateway-guard:it}
 GT_APP=ccgateway-app:0.1.118
 GT_EGRESS=ccgateway-egress:0.1.118
 GT_XRAY=sha256:92305b5b13c97b8b9c93276c3e5430f68f7a4f607e768a63d32f1fb4c61ed0ea

@@ -18,7 +18,10 @@ const (
 	fileLinger = 2 * time.Minute
 	// maxActivations is how many in-place updates work in containers at
 	// the same time (each holds a Worker backup and streams to the guard).
-	maxActivations = 4
+	// The guard serves at most 4 streams (archives, image files) at once and
+	// answers 503 busy beyond that: two activations, one stream each, plus
+	// the shared read of the image's CLI or Worker stay within it.
+	maxActivations = 2
 )
 
 // fileKey is one file of one image: by image ID, so references to the

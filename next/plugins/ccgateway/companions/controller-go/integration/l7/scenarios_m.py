@@ -13,7 +13,7 @@ from itlib import (A1, A2, A3, APP_117, APP_118, CHAIN, CLI_VERSION, CONTROLLER,
 L7 = os.path.dirname(os.path.abspath(__file__))
 GEN = os.path.join(WORK, 'gen')
 PY_VERSION = '7a72fd3424e9'
-GO_IMAGE = 'ccgateway-controller:it'
+GO_IMAGE = os.environ.get('GT_GO_CTL', 'ccgateway-controller:it')
 # Mount sources and gateway files that stay under the runtime root (04 §2.6).
 STAY = ('resolv.conf', 'app.nft')
 GW_STAY = ('shared-egress/boot.json', 'shared-egress/boot.nft', 'shared-egress/dns.json',
