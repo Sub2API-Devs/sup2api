@@ -1158,8 +1158,11 @@ type ProxyResolver interface {
 - 只有概览和我的账户的用户（没有 gateway/security/finance/users/system 任何一区），控制台把"我的账户"排到仪表盘之后并且不画它的标题；插件区照常有标题。
 - 侧栏收起时分区标题隐藏，各区之间画一条分隔线。
 - 用到 `security`、`users` 的插件需要核心 0.1.229 或更高（guard 0.2.7、moderation 0.6.2 的 `hostCompat`）。
+- `security`、`users` 是本次新增的核心区 id，从此是保留 id：插件在 `ui.sections` 里声明 id 为 `security` 或 `users` 的自有区，上传/安装时校验失败 `ui.sections[i].id / invalid`（"reserved for the core sidebar"）。校验只在上传/安装时做，已经装好的这类插件照常加载：它的菜单 `section:"security"`/`"users"` 在运行时按核心区处理，并入核心的"安全"/"用户与权限"区，自己声明的 `label` 和 `order` 被忽略。
+- 用其他 id 声明的旧自有区不受影响，仍作为插件自己的区显示，例如 moderation 0.1.1–0.6.1 的 `safety`（order 350，排在 security 与 finance 之间，区名取声明的 label）；升级到 moderation 0.6.2 后它的菜单进入核心 `security` 区。
+- 核心区的 id 与 order 只有一处定义：`sdk/manifest` 的 `CoreMenuSections()`（另有 `PluginMenuSectionOrder` = 650）；manifest 校验（`sdk/manifest/check`）和 `GET /me/menus`（`server/internal/authz/menus.go`，`coreMenus` 只补标签和核心项，测试保证与 SDK 列表同序同 id）都读它。
 
-**表格页的"新建"按钮**：manifest `ui.pages.<id>.create: {page, permission?}` 只能写在 `type:"table"` 的页面上，`page` 必须是同一插件的 `type:"form"` 页面，`permission` 是 `userPermissions` 里的 key。控制台在表格上方画一个主按钮，文字取目标页的 `title`，点击打开 `/p/<插件>/<page>`。`GET /ui/plugins` 对没有该权限的调用者去掉 `create`，表单页如果没有可见菜单指向它也一并去掉。校验错误：`ui.pages.<id>.create` invalid（非表格页）、`.create.page` unknown / invalid（不存在 / 不是表单）、`.create.permission` unknown。volcengine 0.12.6 用它替代了"新建素材组""新建素材"两个菜单项，需要核心 0.1.229。
+**表格页的"新建"按钮**：manifest `ui.pages.<id>.create: {page, permission?}` 只能写在 `type:"table"` 的页面上，`page` 必须是同一插件的 `type:"form"` 页面，`permission` 是 `userPermissions` 里的 key。控制台在表格上方画一个主按钮，文字取目标页的 `title`，点击打开 `/p/<插件>/<page>`。`GET /ui/plugins` 对没有该权限的调用者去掉 `create`，表单页如果没有可见菜单指向它也一并去掉；表格页本身因菜单权限对调用者不可见时，它的 `create` 链接同样不算可用，只靠这条链接到达的表单页也去掉（即使链接不要求权限）。校验错误：`ui.pages.<id>.create` invalid（非表格页）、`.create.page` unknown / invalid（不存在 / 不是表单）、`.create.permission` unknown。volcengine 0.12.6 用它替代了"新建素材组""新建素材"两个菜单项，需要核心 0.1.229。
 
 **控制台布局**：路由 `meta.parent` 指向上级页面，顶栏在标题前显示面包屑（价格详情、价格同步源、同步预览、插件详情、发布进度、安装授权、插件设置）。设置页改为左侧二级导航（网关 / 计费 / 通知 / 系统 / 插件设置），页面仍用 `?tab=` 选择；"插件设置"列出已启用且有设置表单的插件（以及 ccgateway），选中为 `?tab=plugin:<key>`，内容即插件设置页。
 
