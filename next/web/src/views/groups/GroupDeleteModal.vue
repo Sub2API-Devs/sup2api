@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SButton, SField, SHint, SModal, SRadioGroup, SSelect, toast, type SelectOption } from '@sub2api/ui'
+import { SAlert, SField, SFormModal, SHint, SRadioGroup, SSelect, toast, type SelectOption } from '@sub2api/ui'
 import type { Group } from '@/api/types'
 import { useGroupsLookup } from '@/composables/lookups'
 import { applyFormError } from '@/utils/formErrors'
@@ -71,30 +71,30 @@ async function submit() {
 </script>
 
 <template>
-  <SModal
+  <SFormModal
     :open="open"
     :title="t('groups.deleteKeys.title', { name: group?.name ?? '' })"
-    width="md"
+    :loading="busy"
+    :enter-submit="false"
+    :submit-text="t('common.delete')"
+    submit-variant="danger"
+    :submit-attrs="{ 'data-testid': 'group-delete-confirm' }"
+    data-testid="group-delete"
     @update:open="emit('update:open', $event)"
+    @submit="submit"
   >
-    <div class="space-y-4" data-testid="group-delete">
-      <SAlert tone="warning">{{ t('groups.deleteKeys.intro', { k: formatNumber(keyCount) }) }}</SAlert>
-      <SRadioGroup v-model="mode" :options="modeOptions" :aria-label="t('groups.deleteKeys.title', { name: group?.name ?? '' })" />
-      <SField
-        v-if="mode === 'move'"
-        :label="t('groups.deleteKeys.target')"
-        required
-        :hint="t('groups.deleteKeys.moveHint')"
-        :error="errors.move_keys_to"
-      >
-        <SSelect v-model="target" :options="targets" :disabled="busy" data-testid="group-delete-target" />
-      </SField>
-      <SHint v-else size="xs">{{ t('groups.deleteKeys.unbindHint') }}</SHint>
-      <SHint v-if="group?.account_count" size="xs">{{ t('groups.deleteKeys.accounts', { a: formatNumber(group.account_count) }) }}</SHint>
-    </div>
-    <template #footer>
-      <SButton :disabled="busy" @click="emit('update:open', false)">{{ t('common.cancel') }}</SButton>
-      <SButton variant="danger" :loading="busy" data-testid="group-delete-confirm" @click="submit">{{ t('common.delete') }}</SButton>
-    </template>
-  </SModal>
+    <SAlert tone="warning">{{ t('groups.deleteKeys.intro', { k: formatNumber(keyCount) }) }}</SAlert>
+    <SRadioGroup v-model="mode" :options="modeOptions" :aria-label="t('groups.deleteKeys.title', { name: group?.name ?? '' })" />
+    <SField
+      v-if="mode === 'move'"
+      :label="t('groups.deleteKeys.target')"
+      required
+      :hint="t('groups.deleteKeys.moveHint')"
+      :error="errors.move_keys_to"
+    >
+      <SSelect v-model="target" :options="targets" :disabled="busy" data-testid="group-delete-target" />
+    </SField>
+    <SHint v-else size="xs">{{ t('groups.deleteKeys.unbindHint') }}</SHint>
+    <SHint v-if="group?.account_count" size="xs">{{ t('groups.deleteKeys.accounts', { a: formatNumber(group.account_count) }) }}</SHint>
+  </SFormModal>
 </template>
