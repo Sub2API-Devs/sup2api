@@ -170,6 +170,10 @@ if ! { cat > "$DIR/compose.yml.tmp" <<'CCG_COMPOSE_EOF'
 # install script writes it verbatim to /opt/ccgateway/compose.yml, and the
 # manual guard deployment and the isolated test instance use the same text.
 #
+# The guard mounts /run/systemd/resolve (the directory: systemd-resolved
+# replaces the file whole) for the control network DNS upstreams (D1); it is
+# created empty on a host without systemd-resolved.
+#
 # Every instance value is a variable with its production value as the :-
 # default; the core writes four variables into /opt/ccgateway/.env (CCG_GUARD_IMAGE, CCG_CONTROLLER_IMAGE,
 # CCG_GATEWAY_IMAGE, CCG_GUARD_TOKEN), an isolated instance overrides the rest
@@ -218,6 +222,7 @@ services:
       - {type: bind, source: "${CCG_PROJECT_DIR:-/opt/ccgateway}", target: "${CCG_PROJECT_DIR:-/opt/ccgateway}", bind: {create_host_path: false}}
       - {type: bind, source: "${CCG_RUNTIME_ENV:-/opt/ccgateway-runtime.env}", target: "${CCG_RUNTIME_ENV:-/opt/ccgateway-runtime.env}", read_only: true, bind: {create_host_path: false}}
       - {type: bind, source: "${CCG_GUARD_STATE:-/var/lib/ccgateway-guard}", target: /var/lib/ccgateway-guard, bind: {create_host_path: false}}
+      - {type: bind, source: /run/systemd/resolve, target: /run/systemd/resolve, read_only: true, bind: {create_host_path: true}}
     healthcheck:
       test: ["CMD", "/usr/local/bin/ccgateway-guard", "ready"]
       interval: 10s

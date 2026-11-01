@@ -195,8 +195,9 @@ func TestComposeTemplatePolicy(t *testing.T) {
 	}
 	targets := []string{}
 	for _, v := range g.Volumes {
-		if v.Type != "bind" || v.Bind.CreateHostPath == nil || *v.Bind.CreateHostPath {
-			t.Fatalf("guard mount %+v is not a bind with create_host_path: false", v)
+		resolved := v.Target == "/run/systemd/resolve"
+		if v.Type != "bind" || v.Bind.CreateHostPath == nil || *v.Bind.CreateHostPath != resolved || resolved && !v.ReadOnly {
+			t.Fatalf("guard mount %+v: only the read-only resolved directory may be created on the host", v)
 		}
 		targets = append(targets, v.Target)
 		if v.Target == "${CCG_RUNTIME_ENV:-/opt/ccgateway-runtime.env}" && !v.ReadOnly {
@@ -204,7 +205,7 @@ func TestComposeTemplatePolicy(t *testing.T) {
 		}
 	}
 	// D6: no /run/xtables.lock; no controller data directory (adopt is the core's).
-	if strings.Join(targets, ",") != "/var/run/docker.sock,${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime},${CCG_PROJECT_DIR:-/opt/ccgateway},${CCG_RUNTIME_ENV:-/opt/ccgateway-runtime.env},/var/lib/ccgateway-guard" {
+	if strings.Join(targets, ",") != "/var/run/docker.sock,${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime},${CCG_PROJECT_DIR:-/opt/ccgateway},${CCG_RUNTIME_ENV:-/opt/ccgateway-runtime.env},/var/lib/ccgateway-guard,/run/systemd/resolve" {
 		t.Fatalf("guard mounts: %v", targets)
 	}
 	if strings.Contains(composeTemplate, "xtables") || strings.Contains(serviceBlock(t, "guard"), "ccgateway-controller") {
