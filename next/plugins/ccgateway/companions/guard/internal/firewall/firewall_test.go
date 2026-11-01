@@ -688,3 +688,47 @@ func TestRunLoop(t *testing.T) {
 		t.Fatal("stopped account still allowed")
 	}
 }
+
+// covers: IT-X06 03§7.7 row 1 (a host interface that disappears while the
+// table is read is skipped, never an error of the whole pass: the Python
+// bridge guard flushed every account on that OSError, L7 2026-11-01)
+func TestSysLinksSkipsAVanishedInterface(t *testing.T) {
+	root := t.TempDir()
+	for name, idx := range map[string]string{"eth0": "2\n", "veth1a2b3c4": "57\n"} {
+		if err := os.MkdirAll(filepath.Join(root, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name, "ifindex"), []byte(idx), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Listed but gone before its ifindex is read.
+	if err := os.MkdirAll(filepath.Join(root, "veth9f9f9f9"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got, err := SysLinks{Root: root}.Ifindexes()
+	if err != nil || len(got) != 2 || got[2] != "eth0" || got[57] != "veth1a2b3c4" {
+		t.Fatalf("%v %v", got, err)
+	}
+}
+
+// covers: IT-X06 03§7.7 row 1 (the veth of one account vanished from the
+// host table: only that account loses its bridge rules; the other account
+// and both control rule sets stay)
+func TestVanishedVethSkipsOnlyThatAccount(t *testing.T) {
+	d, run, links := world(t)
+	delete(links.idx, 110) // vetha22 is gone
+	e := engine(d, run, links, nil)
+	desired, err := e.Desired(context.Background())
+	if err != nil {
+		t.Fatalf("whole pass failed: %v", err)
+	}
+	b := desired["CCG-PROXY-BRIDGE"]
+	if len(b) != 2 || !has(b[0], "ccgateway-21-proxy-out") || strings.Contains(fmt.Sprint(b), "ccgateway-22") {
+		t.Fatalf("%v", b)
+	}
+	fwd := fmt.Sprint(desired["CCG-CONTROL-FWD"])
+	if !strings.Contains(fwd, "ccgateway-21-control") || !strings.Contains(fwd, "ccgateway-22-control") {
+		t.Fatal(fwd)
+	}
+}
