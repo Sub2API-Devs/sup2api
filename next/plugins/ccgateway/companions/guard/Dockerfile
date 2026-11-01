@@ -7,7 +7,10 @@ COPY go.mod ./
 COPY cmd ./cmd
 COPY internal ./internal
 ARG VERSION=dev
-RUN CGO_ENABLED=0 GOWORK=off go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+# Bounded like the worker image: on a many-core host (384 on ovh) an
+# unbounded build exceeds the build cgroup's task limit.
+ARG BUILD_MAX_PROCS=2
+RUN CGO_ENABLED=0 GOWORK=off GOMAXPROCS=${BUILD_MAX_PROCS} go build -p ${BUILD_MAX_PROCS} -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
       -o /out/ccgateway-guard ./cmd/ccgateway-guard
 
 FROM debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
