@@ -89,3 +89,29 @@ func (m memTracker) Record(_ context.Context, _ pgx.Tx, id, checksum string) err
 	m[id] = checksum
 	return nil
 }
+
+// A database that applied the failure policy split under its first name
+// (0073_..., feat/next-platform 6094f565) knows it as 0074: nothing runs
+// again and no applied id is unknown to the core.
+func TestRenamedCoreMigrationIsKnownUnderItsNewID(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := context.Background()
+	const old, cur = "0073_failure_policy_split_auto_disable_any_position.sql", "0074_failure_policy_split_auto_disable_any_position.sql"
+	if _, err := db.Pool.Exec(ctx, `UPDATE schema_migrations SET id = $1 WHERE id = $2`, old, cur); err != nil {
+		t.Fatal(err)
+	}
+	again, err := store.Migrate(ctx, db, migrations.FS, store.CoreTracker{}, store.MigrateOptions{LockKey: store.CoreMigrationLockKey})
+	if err != nil || len(again) != 0 {
+		t.Fatalf("run after the rename applied %v, %v; want nothing", again, err)
+	}
+	applied, err := (store.CoreTracker{}).Applied(ctx, db.Pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := applied[old]; ok {
+		t.Fatalf("%s still reported", old)
+	}
+	if _, ok := applied[cur]; !ok {
+		t.Fatalf("%s not reported", cur)
+	}
+}

@@ -138,7 +138,36 @@ func (CoreTracker) Applied(ctx context.Context, q Querier) (map[string]string, e
 		}
 		m[id] = sum
 	}
-	return m, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return renameApplied(m), nil
+}
+
+// renamedCoreMigrations maps the id of a core migration renamed after a build
+// carrying the old name could have applied it to its current id. The file
+// content is unchanged, so the recorded checksum still matches.
+var renamedCoreMigrations = map[string]string{
+	// Merged as a second 0073 next to 0073_api_key_group_loose.sql
+	// (feat/next-platform 6094f565), renumbered before any release.
+	"0073_failure_policy_split_auto_disable_any_position.sql": "0074_failure_policy_split_auto_disable_any_position.sql",
+}
+
+// renameApplied reports applied migrations under their current ids, so a
+// database that applied a renamed file neither runs it again nor holds an id
+// the core does not know.
+func renameApplied(m map[string]string) map[string]string {
+	for old, cur := range renamedCoreMigrations {
+		sum, ok := m[old]
+		if !ok {
+			continue
+		}
+		delete(m, old)
+		if _, done := m[cur]; !done {
+			m[cur] = sum
+		}
+	}
+	return m
 }
 
 func (CoreTracker) Record(ctx context.Context, tx pgx.Tx, id, checksum string) error {
