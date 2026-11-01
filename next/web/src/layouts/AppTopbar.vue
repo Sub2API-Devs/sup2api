@@ -21,15 +21,20 @@ const pwdOpen = ref(false)
 
 const title = computed(() => (route.meta.title ? t(route.meta.title as string) : ''))
 
-/** The pages above this one (meta.parent, followed upwards), outermost first. */
+/**
+ * The pages above this one (meta.parent, followed upwards), outermost first.
+ * A page the caller may not open stays as plain text: e.g. plugin settings
+ * sit under Settings for operators, but their main users only hold the
+ * plugin's own settings permission.
+ */
 const crumbs = computed(() => {
-  const out: Array<{ path: string; label: string }> = []
+  const out: Array<{ path: string; label: string; link: boolean }> = []
   const seen = new Set<string>()
   let parent = route.meta.parent
   while (parent && !seen.has(parent) && out.length < 4) {
     seen.add(parent)
     const meta = router.resolve(parent).meta
-    out.unshift({ path: parent, label: meta.title ? t(meta.title) : parent })
+    out.unshift({ path: parent, label: meta.title ? t(meta.title) : parent, link: !meta.perm || auth.has(meta.perm) })
     parent = meta.parent
   }
   return out
@@ -64,7 +69,8 @@ async function logout() {
     <div class="flex min-w-0 flex-1 items-baseline gap-3">
       <nav v-if="crumbs.length" :aria-label="t('nav.breadcrumb')" class="flex min-w-0 shrink items-center gap-1 text-sm text-fg-muted" data-testid="breadcrumbs">
         <template v-for="c in crumbs" :key="c.path">
-          <RouterLink :to="c.path" class="truncate hover:text-fg">{{ c.label }}</RouterLink>
+          <RouterLink v-if="c.link" :to="c.path" class="truncate hover:text-fg">{{ c.label }}</RouterLink>
+          <span v-else class="truncate">{{ c.label }}</span>
           <SIcon name="chevron-right" class="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
         </template>
       </nav>

@@ -11,7 +11,14 @@ import DeclarativeTable from '@/components/plugin/DeclarativeTable.vue'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), list: vi.fn() }))
 vi.mock('@sub2api/host', async original => ({ ...(await original<object>()), api }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ me: { email: 'a@x', roles: [] }, balance: null, has: () => true }) }))
+const denied = vi.hoisted(() => new Set<string>())
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({
+    me: { email: 'a@x', roles: [] },
+    balance: null,
+    has: (p?: string | string[]) => [p ?? []].flat().length === 0 || [p ?? []].flat().some(x => !denied.has(x))
+  })
+}))
 enableAutoUnmount(afterEach)
 
 const Blank = defineComponent({ template: '<div />' })
@@ -23,6 +30,9 @@ function makeRouter() {
       { path: '/prices', component: Blank, meta: { title: 'nav.items.prices' } },
       { path: '/prices/sources', component: Blank, meta: { title: 'prices.sources.title', parent: '/prices' } },
       { path: '/prices/sources/:id/sync', component: Blank, meta: { title: 'prices.syncPrices', parent: '/prices/sources' } },
+      { path: '/settings', component: Blank, meta: { perm: ['settings:read', 'sticky:read'], title: 'nav.items.settings' } },
+      { path: '/plugins', component: Blank, meta: { perm: 'plugin:read', title: 'nav.items.plugins' } },
+      { path: '/plugins/:key/settings', component: Blank, meta: { title: 'nav.crumbs.pluginSettings', parent: '/settings' } },
       { path: '/:p(.*)*', component: Blank }
     ]
   })
@@ -32,17 +42,18 @@ const item = (id: string, path: string) => ({ id, label: { zh: id }, icon: 'dash
 
 beforeEach(() => {
   vi.clearAllMocks()
+  denied.clear()
   localStorage.clear()
   setActivePinia(createPinia())
   i18n.global.locale.value = 'zh'
 })
 
 describe('sidebar', () => {
-  async function mountSidebar(sections: unknown[] | Error) {
+  async function mountSidebar(sections: unknown[] | Error, at = '/dashboard') {
     if (sections instanceof Error) api.get.mockRejectedValue(sections)
     else api.get.mockResolvedValue(sections)
     const router = makeRouter()
-    await router.push('/dashboard')
+    await router.push(at)
     const app = useAppStore()
     await app.loadMenus()
     const wrapper = mount(AppSidebar, { global: { plugins: [i18n, router] } })
@@ -80,6 +91,28 @@ describe('sidebar', () => {
     expect(wrapper.findAll('nav hr')).toHaveLength(4)
   })
 
+  it('lights up the menu entry of the page, else of its nearest parent page', async () => {
+    const menu = [
+      { section: 'overview', items: [item('dashboard', '/dashboard')] },
+      { section: 'system', items: [item('plugins', '/plugins'), item('prices', '/prices'), item('settings', '/settings')] }
+    ]
+    const current = (w: ReturnType<typeof mount>) => w.findAll('nav a').filter(a => a.attributes('aria-current') === 'page').map(a => a.text())
+    // Plugin settings are a child of Settings, not of the plugin list the path starts with.
+    expect(current((await mountSidebar(menu, '/plugins/mailer/settings')).wrapper)).toEqual(['settings'])
+    expect(current((await mountSidebar(menu, '/prices/sources/3/sync')).wrapper)).toEqual(['prices'])
+    expect(current((await mountSidebar(menu, '/plugins/mailer')).wrapper)).toEqual(['plugins'])
+  })
+
+  it('keeps the labels in the mobile drawer when collapsed on desktop', async () => {
+    const { wrapper, app } = await mountSidebar([{ section: 'overview', items: [item('dashboard', '/dashboard')] }])
+    app.sidebarCollapsed = true
+    await flushPromises()
+    expect(labels(wrapper)).toEqual([''])
+    app.mobileNavOpen = true
+    await flushPromises()
+    expect(labels(wrapper)).toEqual(['dashboard'])
+  })
+
   it('shows only the dashboard and a retry when the menu cannot load', async () => {
     const { wrapper, app } = await mountSidebar(new Error('down'))
     expect(app.menusError).toBe(true)
@@ -104,6 +137,24 @@ describe('top bar', () => {
     await router.push('/prices')
     await flushPromises()
     expect(wrapper.find('[data-testid="breadcrumbs"]').exists()).toBe(false)
+  })
+
+  it('does not link a parent page the caller cannot open', async () => {
+    denied.add('settings:read').add('sticky:read')
+    const router = makeRouter()
+    await router.push('/plugins/mailer/settings')
+    const wrapper = mount(AppTopbar, { global: { plugins: [i18n, router], stubs: { ChangePasswordDialog: true } } })
+    const nav = wrapper.get('[data-testid="breadcrumbs"]')
+    expect(nav.findAll('a')).toHaveLength(0)
+    expect(nav.text()).toContain('设置')
+  })
+
+  it('every parent of the real routes is a page with a title', async () => {
+    const { router } = await import('@/router')
+    for (const r of router.getRoutes()) {
+      if (!r.meta.parent) continue
+      expect(router.resolve(r.meta.parent).meta.title, `${r.path} → ${r.meta.parent}`).toBeTruthy()
+    }
   })
 })
 

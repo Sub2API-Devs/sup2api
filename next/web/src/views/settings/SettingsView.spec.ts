@@ -70,6 +70,32 @@ describe('system settings use platform title ownership', () => {
     expect(wrapper.get('[data-testid="settings-panel"]').attributes('aria-label')).toBe('邮件')
   })
 
+  it('opens a linked plugin page once the plugin list arrives, without loading another page first', async () => {
+    let release!: (v: unknown) => void
+    const base = api.get.getMockImplementation()!
+    api.get.mockImplementation(path => path === '/plugins'
+      ? new Promise(r => { release = r })
+      : base(path))
+    route.query.tab = 'plugin:mailer'
+    const wrapper = mount(SettingsView, { global: { plugins: [i18n, createPinia()], stubs: { PluginSettings: true } } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="settings-waiting"]').exists()).toBe(true)
+    expect(api.get).not.toHaveBeenCalledWith('/settings/gateway')
+    release([{ key: 'mailer', name: { zh: '邮件' }, status: 'enabled', has_settings: true }])
+    await flushPromises()
+    expect(wrapper.find('[data-testid="settings-waiting"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="settings-missing"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="settings-panel"]').attributes('aria-label')).toBe('邮件')
+  })
+
+  it('says so when a linked page is not available', async () => {
+    api.get.mockImplementation(path => path === '/plugins' ? Promise.resolve([]) : Promise.resolve({}))
+    route.query.tab = 'plugin:gone'
+    const wrapper = mount(SettingsView, { global: { plugins: [i18n, createPinia()] } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="settings-missing"]').exists()).toBe(true)
+  })
+
   it('retains saving and removes the empty billing header for read-only users', async () => {
     const wrapper = mount(SettingsView, { global: { plugins: [i18n, createPinia()] } })
     await flushPromises()
