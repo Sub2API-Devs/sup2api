@@ -59,7 +59,7 @@ describe('usage records layout', () => {
   })
   it('keeps model, routing and error readable while preserving request-id filtering', async () => {
     const w = mount(UsageTable, { props: { rows: [row], showClientRequestId: true }, global })
-    expect(w.findAll('th').length).toBe(10)
+    expect(w.findAll('th').length).toBe(11)
     expect(w.text()).toContain(row.model)
     expect(w.text()).toContain(row.group_name)
     expect(w.get('[data-testid="usage-client"]').text()).toContain('my-laptop')
@@ -71,9 +71,20 @@ describe('usage records layout', () => {
     expect(w.text()).not.toContain('usage.errors.model_not_allowed')
     expect(w.get('[data-testid="usage-error-summary"]').element.closest('td')?.querySelector('time')).not.toBeNull()
     const headers = w.findAll('th').map(th => th.text())
-    expect(headers.indexOf(i18n.global.t('usage.request.clientIP'))).toBeLessThan(headers.indexOf(i18n.global.t('usage.cols.modelAccount')))
+    expect(headers.indexOf(i18n.global.t('usage.request.clientIP'))).toBeLessThan(headers.indexOf(i18n.global.t('common.model')))
+    expect(headers.indexOf(i18n.global.t('common.account'))).toBe(headers.indexOf(i18n.global.t('common.model')) + 1)
     await w.get('[data-testid="client-request-id"]').trigger('click')
     expect(w.emitted('filter-client-request-id')).toEqual([['client-request-one']])
+  })
+  it('shows the upstream account as "#id name" and filters by it on click', async () => {
+    const w = mount(UsageTable, { props: { rows: [row, { ...row, id: 2, account_id: null, account_name: '' }] }, global })
+    const accounts = w.findAll('[data-testid="usage-account"]')
+    expect(accounts.length).toBe(1)
+    expect(accounts[0].findAll('span').map(x => x.text()).filter(Boolean)).toEqual(['#9', 'Account nine'])
+    expect(accounts[0].attributes('title')).toContain('#9 Account nine')
+    expect(w.findAll('[data-testid="mobile-usage-record"]')[0].text()).toContain('#9 Account nine')
+    await accounts[0].trigger('click')
+    expect(w.emitted('filter-account-id')).toEqual([[9]])
   })
   it('loads owner-scoped mobile detail only when expanded and keeps admin fields hidden', async () => {
     const w = mount(UsageTable, {

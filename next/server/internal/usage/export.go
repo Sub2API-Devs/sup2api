@@ -42,6 +42,12 @@ var exportColumns = []exportColumn{
 	{"用户", "User", true, func(r *Record, _ *time.Location) string { return r.UserEmail }},
 	{"API 密钥", "API key", false, func(r *Record, _ *time.Location) string { return r.APIKeyName }},
 	{"分组", "Group", false, func(r *Record, _ *time.Location) string { return r.GroupName }},
+	{"账号 ID", "Account ID", true, func(r *Record, _ *time.Location) string {
+		if r.AccountID == nil {
+			return ""
+		}
+		return strconv.FormatInt(*r.AccountID, 10)
+	}},
 	{"账号", "Account", true, func(r *Record, _ *time.Location) string { return r.AccountName }},
 	{"模型", "Model", false, func(r *Record, _ *time.Location) string { return r.Model }},
 	{"上游模型", "Upstream model", true, func(r *Record, _ *time.Location) string { return r.UpstreamModel }},
