@@ -226,6 +226,17 @@ func (m *Manager) sharedActivate(ctx context.Context, aid string, st *store.Acco
 		return err
 	}
 	if err := m.g.WriteResolv(ctx, aid, gateway); err != nil {
+		if errors.Is(err, guardapi.ErrMountReplaced) {
+			// The guard rewrote resolv.conf as a new file: the running
+			// container keeps the old one and has to be recreated. Remove
+			// it; the core's next configuration creates it again (the data
+			// volume and the keys stay).
+			m.log.Warn("resolv.conf of key=%s was replaced; account container removed for recreation", aid)
+			m.GoOffline(aid)
+			if derr := m.g.DeleteContainer(ctx, aid, "app"); derr != nil && !guardapi.IsNotFound(derr) {
+				m.log.Warn("remove key=%s app: %s", aid, failureText(derr))
+			}
+		}
 		return err
 	}
 	revValue, _ := desired.Get("revision")

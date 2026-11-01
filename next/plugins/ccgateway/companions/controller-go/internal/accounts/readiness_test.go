@@ -124,7 +124,9 @@ func TestConnectionRequiresCurrentReadyRevisionAndKeepsKeyPrivate(t *testing.T) 
 	}
 }
 
-func containsStr(s, sub string) bool { return len(sub) > 0 && len(s) >= len(sub) && indexOf(s, sub) >= 0 }
+func containsStr(s, sub string) bool {
+	return len(sub) > 0 && len(s) >= len(sub) && indexOf(s, sub) >= 0
+}
 
 func indexOf(s, sub string) int {
 	for i := 0; i+len(sub) <= len(s); i++ {

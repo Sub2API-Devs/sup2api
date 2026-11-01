@@ -569,10 +569,31 @@ func (m *Manager) createApp(ctx context.Context, aid string, st *store.AccountSt
 	if res.ExitCode != 0 {
 		return errors.New("volume preparation exited with " + strconv.Itoa(res.ExitCode))
 	}
-	if err := m.g.WriteResolv(ctx, aid, addr.gatewayIP); err != nil {
+	// No container uses resolv.conf yet: a file the guard had to replace
+	// (mount_source_replaced) is simply the new one.
+	if err := m.g.WriteResolv(ctx, aid, addr.gatewayIP); err != nil && !errors.Is(err, guardapi.ErrMountReplaced) {
 		return err
 	}
-	_, err = m.g.CreateApp(ctx, aid, guardapi.AppRequest{Image: p.imageRef, IPv4: addr.appIP,
+	return m.createContainer(ctx, aid, guardapi.AppRequest{Image: p.imageRef, IPv4: addr.appIP,
 		Env: m.appEnvironment(st, a, p), AuthLabel: fingerprint, ImageLabel: p.image.ID})
+}
+
+// createContainer is PUT app. A lost answer of an earlier attempt makes the
+// retry fail: the guard checks the address (400 in use) before the name
+// (409 exists); the container found with this address and fingerprint is
+// the one created.
+func (m *Manager) createContainer(ctx context.Context, aid string, req guardapi.AppRequest) error {
+	_, err := m.g.CreateApp(ctx, aid, req)
+	if err != nil && (errors.Is(err, guardapi.ErrExists) || isInvalidRequest(err)) {
+		if acct, qerr := m.g.Account(ctx, aid); qerr == nil && acct.App != nil &&
+			acct.App.Labels[names.LabelAuth] == req.AuthLabel && acct.App.IP(m.name(aid, "net")) == req.IPv4 {
+			return nil
+		}
+	}
 	return err
+}
+
+func isInvalidRequest(err error) bool {
+	e, ok := guardapi.AsError(err)
+	return ok && e.Status == 400 && e.Code == guardapi.CodeInvalidRequest
 }
