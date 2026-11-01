@@ -1,0 +1,20 @@
+{
+  "name": "400 xz compression",
+  "covers": "R9",
+  "setup": {},
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/load",
+    "body_base64": "/Td6WFoAAAA=",
+    "content_type": "application/x-tar"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "name": "403 image_not_guarded",
+  "covers": "R14 A17 D8",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-controller:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ]
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/controller/upgrade",
+    "json": {
+      "image": "ccgateway-controller:1"
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": "forbidden",
+      "reason": "image_not_guarded"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

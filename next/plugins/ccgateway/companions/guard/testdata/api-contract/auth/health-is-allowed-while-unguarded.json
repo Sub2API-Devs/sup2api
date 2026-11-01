@@ -1,0 +1,26 @@
+{
+  "name": "health is allowed while unguarded",
+  "covers": "03§3.4.1",
+  "setup": {
+    "controller_unguarded": true
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/health"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "controller": "unguarded"
+    },
+    "keys": [
+      "version",
+      "prefix",
+      "features",
+      "docker",
+      "firewall",
+      "controller",
+      "starting"
+    ]
+  }
+}

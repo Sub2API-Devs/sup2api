@@ -1,27 +1,38 @@
 // Package fakeguard is an in-memory guard for tests (02 §8.2, 05 §5): the
 // guard HTTP API of 03 §3 served from a model of containers, networks,
-// volumes, images and the shared gateway, with the same validation rules as
-// the guard's policy package.
+// volumes, images and the shared gateway, with the same validation rules,
+// check order, status codes and answers as the guard. It answers every
+// sample of companions/guard/testdata/api-contract as the guard does
+// (fakeguard_contract_test.go).
 //
 // Use Client() for a guardapi.Client wired to the fake in process (the real
 // HTTP client and wire format, no network), or Handler() to serve it.
 //
 // Scripting:
-//   - images: AddImage (local), AddPullable (pull succeeds), files inside
-//     images for images/file;
+//   - images: AddImage (local), AddPullable (pull succeeds), files and
+//     directories inside images for images/file; SetPullRepos and
+//     SetLoadRepos take the guard's repository patterns (a trailing '*');
 //   - exec: OnExec(target, argvPrefix, fn) answers matching execs in an app
 //     container ("app:<aid>", "app:*") or the gateway ("gateway"); without a
 //     hook, a small emulation answers sha256sum, chmod, stat, mv, rm, mkdir,
 //     xray api lso/lsi/ado/adi/adrules/rmo/rmi, ip -j -4 addr, ss and the nft
 //     replacement; anything else exits 0 with no output;
-//   - jobs: OnJob(fn); default exit 0, no output;
+//   - jobs: OnJob(fn); default exit 0, no output; the firewall helper:
+//     OnFirewall(fn); ExitTimeout and ExitStartFailed script the guard's
+//     timeouts and start failures;
+//   - image loads: the guard's archive checks, then OnLoad(fn) or the
+//     archive's manifest.json;
+//   - guard state: SetControllerUnguarded, SetStarting, SetLifecycleBusy,
+//     SetDiskFull, SetComposeFails, RejectMountSource, SetControllerAddr,
+//     SetToken;
 //   - faults: Fail(route, Fault{...}) makes the Nth matching call answer an
 //     error (or a transport failure);
 //   - lifecycle: RestartContainer, StopContainer, RecreateGatewayNow,
-//     RestartGateway, SetQuotaSupported, ...
+//     RestartGateway, SetQuotaSupported, AddGatewaySpec, ...
 //
 // Every call is recorded (Calls) with its route template, e.g.
-// "PUT /v1/accounts/{aid}/app".
+// "PUT /v1/accounts/{aid}/app". DockerState is a dump of the Docker objects
+// to assert that a call changed nothing.
 package fakeguard
 
 import (
@@ -99,6 +110,7 @@ type image struct {
 	env      []string
 	labels   map[string]string
 	files    map[string][]byte
+	dirs     map[string]bool
 }
 
 // ImageSpec describes an image added to the fake.
@@ -107,6 +119,9 @@ type ImageSpec struct {
 	Env    []string
 	Labels map[string]string
 	Files  map[string][]byte // path -> content, for images/file
+	// Dirs are directories of the image (images/file answers 422
+	// not_regular_file). A parent of a Files entry is a directory anyway.
+	Dirs []string
 }
 
 type xrayState struct {
@@ -145,15 +160,24 @@ type Guard struct {
 	establishedSS string
 	listening     bool
 
+	controllerAddr string            // "" = the source address is not checked
+	unguarded      bool              // 403 controller_unguarded (all but health)
+	starting       bool              // 503 unavailable/starting (all but health)
+	lifecycleBusy  bool              // an upgrade, ensure or recreate holds the lifecycle
+	diskFull       bool              // image load: 503 busy
+	composeFails   map[string]bool   // compose up of the gateway with this image fails
+	rejected       map[string]string // mount sources the guard rejects: "<aid>/resolv.conf", "shared-egress"
+
 	seq int
 
-	hooksMu   sync.Mutex
-	execHooks []execHook
-	jobHook   func(aid string, job guardapi.Job) (int, []byte)
-	loadHook  func(data []byte) ([]guardapi.LoadedImage, error)
-	jobs      []JobRecord
-	faults    []*faultRule
-	calls     []Call
+	hooksMu      sync.Mutex
+	execHooks    []execHook
+	jobHook      func(aid string, job guardapi.Job) (int, []byte)
+	firewallHook func(aid string, rec FirewallRecord) int
+	loadHook     func(data []byte) ([]guardapi.LoadedImage, error)
+	jobs         []JobRecord
+	faults       []*faultRule
+	calls        []Call
 }
 
 // FirewallRecord is the last PUT firewall of an account.
@@ -185,6 +209,8 @@ func New() *Guard {
 		gatewayFiles:  map[string][]byte{},
 		resolv:        map[string]string{},
 		firewall:      map[string]FirewallRecord{},
+		composeFails:  map[string]bool{},
+		rejected:      map[string]string{},
 		quota:         true,
 		listening:     true,
 		gatewayImage:  "ccgateway-egress:test",
@@ -243,10 +269,14 @@ func (g *Guard) newImage(ref string, spec ImageSpec) *image {
 		labels[k] = v
 	}
 	files := map[string][]byte{}
+	dirs := map[string]bool{}
 	for k, v := range spec.Files {
 		files[k] = append([]byte(nil), v...)
 	}
-	img := &image{id: id, env: append([]string(nil), spec.Env...), labels: labels, files: files}
+	for _, d := range spec.Dirs {
+		dirs[d] = true
+	}
+	img := &image{id: id, env: append([]string(nil), spec.Env...), labels: labels, files: files, dirs: dirs}
 	if ref != "" && !strings.HasPrefix(ref, "sha256:") {
 		img.repoTags = []string{ref}
 	}
@@ -315,11 +345,103 @@ func (g *Guard) SetGatewayImage(ref string) {
 	g.gatewayImage = ref
 }
 
-// SetHealth replaces the health answer.
+// SetHealth replaces the health answer (controller and starting still
+// follow SetControllerUnguarded and SetStarting).
 func (g *Guard) SetHealth(h guardapi.Health) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.health = h
+}
+
+// SetToken replaces the guard token (64 lowercase hex characters).
+func (g *Guard) SetToken(token string) {
+	if !validToken(token) {
+		panic("fakeguard: the token must be 64 lowercase hex characters")
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.token = token
+}
+
+// SetControllerAddr makes the guard check the source address (03 §3.2):
+// a request whose RemoteAddr is not addr (an IPv4 address, e.g.
+// "172.29.255.2") answers 401. "" (the default) turns the check off; the
+// in-process Client() sends no source address.
+func (g *Guard) SetControllerAddr(addr string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.controllerAddr = addr
+}
+
+// SetControllerUnguarded makes every route but health answer 403
+// forbidden/controller_unguarded, and health report controller "unguarded".
+func (g *Guard) SetControllerUnguarded(v bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.unguarded = v
+}
+
+// SetStarting makes every route but health answer 503 unavailable/starting,
+// and health report starting true.
+func (g *Guard) SetStarting(v bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.starting = v
+}
+
+// SetLifecycleBusy holds the guard's lifecycle (an upgrade, gateway ensure
+// or recreate in progress): controller upgrade, gateway recreate and the
+// creating gateway ensure answer 409 upgrade_in_progress. The upgrade
+// status is not changed (SetUpgradeState("running") has the same effect
+// and also shows in GET controller/upgrade).
+func (g *Guard) SetLifecycleBusy(v bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.lifecycleBusy = v
+}
+
+// SetDiskFull makes image loads answer 503 busy (not enough free space for
+// the spool).
+func (g *Guard) SetDiskFull(v bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.diskFull = v
+}
+
+// SetComposeFails makes `docker compose up` of the gateway fail for these
+// image references (ensure and recreate answer 502 compose_failed).
+func (g *Guard) SetComposeFails(images ...string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.composeFails = map[string]bool{}
+	for _, i := range images {
+		g.composeFails[i] = true
+	}
+}
+
+// RejectMountSource marks a mount source the guard refuses (03 §6.4): rel is
+// "<aid>/resolv.conf" or "shared-egress", why the reason (symlink, hardlink,
+// name, ...); why "" clears it. A rejected resolv.conf makes PUT app and
+// app start/restart answer 403 mount_source_rejected, and PUT resolv
+// replace it and answer 409 mount_source_replaced; a rejected shared-egress
+// makes gateway ensure and recreate answer 403 mount_source_rejected.
+func (g *Guard) RejectMountSource(rel, why string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if why == "" {
+		delete(g.rejected, rel)
+		return
+	}
+	g.rejected[rel] = why
+}
+
+// SetResolv writes aid's resolv.conf directly (as PUT resolv would, without
+// checking the network).
+func (g *Guard) SetResolv(aid, content string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.resolv[aid] = content
+	delete(g.rejected, aid+"/resolv.conf")
 }
 
 // SetXrayReadyAfter makes `xray api lso` fail n times after the next gateway start.
@@ -435,6 +557,17 @@ func (g *Guard) PutFile(containerName, path string, data []byte, mode int64) {
 	c.dirs[parentDir(path)] = true
 }
 
+// MkDir creates a directory in a container's file system.
+func (g *Guard) MkDir(containerName, path string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	c := g.containers[containerName]
+	if c == nil {
+		panic("fakeguard: no container " + containerName)
+	}
+	c.dirs[path] = true
+}
+
 // File reads a file of a container's file system.
 func (g *Guard) File(containerName, path string) ([]byte, bool) {
 	g.mu.Lock()
@@ -487,6 +620,29 @@ func (g *Guard) Exists(name string) bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return g.containers[name] != nil || g.networks[name] != nil || g.volumes[name] != nil
+}
+
+// DockerState is a deterministic dump of everything Docker holds in the
+// fake (container, network and volume inspects, local image references).
+// Two equal dumps mean no Docker object changed in between; runtime files,
+// jobs, the Xray state and the recorded calls are not part of it.
+func (g *Guard) DockerState() string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	var b strings.Builder
+	for _, name := range sortedKeys(g.containers) {
+		b.WriteString("container " + string(pyjson.MustMarshal(g.rawContainer(g.containers[name]))) + "\n")
+	}
+	for _, name := range sortedKeys(g.networks) {
+		b.WriteString("network " + string(pyjson.MustMarshal(g.rawNetwork(g.networks[name]))) + "\n")
+	}
+	for _, name := range sortedKeys(g.volumes) {
+		b.WriteString("volume " + string(pyjson.MustMarshal(g.rawVolume(g.volumes[name]))) + "\n")
+	}
+	for _, ref := range sortedKeys(g.images) {
+		b.WriteString("image " + ref + " " + g.images[ref].id + "\n")
+	}
+	return b.String()
 }
 
 // ContainerNames lists every container.
@@ -610,6 +766,62 @@ func (g *Guard) AddGateway(managedBy string) string {
 
 func (g *Guard) uplinkName() string { return names.Name(g.prefix, names.UplinkKey, "xray-uplink") }
 
+// GatewaySpec describes a shared gateway added with AddGatewaySpec.
+type GatewaySpec struct {
+	ManagedBy string            // guardapi.ManagedByCompose (default) or ManagedByLegacy
+	Owner     string            // the shared label; default the prefix (another value: 409 ownership_mismatch)
+	Image     string            // default the compose gateway image (SetGatewayImage)
+	Status    string            // default running
+	Networks  map[string]string // aid -> its address on <p>-<aid>-net (the network must exist)
+}
+
+// AddGatewaySpec creates the shared gateway directly. Unlike AddGateway it
+// creates no uplink network: the gateway is attached to the uplink only
+// when that network exists.
+func (g *Guard) AddGatewaySpec(s GatewaySpec) string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if s.ManagedBy == "" {
+		s.ManagedBy = guardapi.ManagedByCompose
+	}
+	if s.Owner == "" {
+		s.Owner = g.prefix
+	}
+	if s.Image == "" {
+		s.Image = g.gatewayImage
+	}
+	if s.Status == "" {
+		s.Status = "running"
+	}
+	labels := map[string]string{names.LabelSharedOwner: s.Owner}
+	if s.ManagedBy == guardapi.ManagedByCompose {
+		labels["com.docker.compose.project"] = "ccgateway"
+		labels["com.docker.compose.service"] = "egress"
+	}
+	c := &container{id: g.nextID(), name: names.SharedGateway(g.prefix), image: s.Image, configImage: s.Image,
+		created: g.nextTime(), status: s.Status, labels: labels,
+		path: "/usr/local/bin/xray", args: []string{"run", "-c", "/config/boot.json"},
+		networkMode: g.uplinkName(), managedBy: s.ManagedBy, files: map[string]*file{}, dirs: defaultDirs(),
+		mounts: []mount{{typ: "bind", source: RuntimeHostRoot + "/shared-egress", destination: "/config", mode: "ro",
+			propagation: "rprivate"}}}
+	if img := g.images[s.Image]; img != nil {
+		c.image = img.id
+	}
+	c.startedAt = "0001-01-01T00:00:00Z"
+	if s.Status == "running" {
+		c.startedAt = g.nextTime()
+	}
+	if up := g.networks[g.uplinkName()]; up != nil {
+		c.endpoints = append(c.endpoints, endpoint{network: up.name, ip: hostAt(up.subnet, 2).String()})
+	}
+	for _, aid := range sortedKeys(s.Networks) {
+		c.endpoints = append(c.endpoints, endpoint{network: names.Name(g.prefix, aid, "net"), ip: s.Networks[aid]})
+	}
+	g.containers[c.name] = c
+	g.resetXray()
+	return c.id
+}
+
 func (g *Guard) createGatewayLocked(managedBy string) *container {
 	img := g.images[g.gatewayImage]
 	labels := map[string]string{names.LabelSharedOwner: g.prefix}
@@ -687,7 +899,7 @@ func (g *Guard) UpgradeRequested() guardapi.UpgradeStatus {
 }
 
 // SetUpgradeState sets the controller upgrade state (running blocks
-// upgrade and recreate with 409 upgrade_in_progress).
+// upgrade, recreate and a creating gateway ensure with 409 upgrade_in_progress).
 func (g *Guard) SetUpgradeState(state string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()

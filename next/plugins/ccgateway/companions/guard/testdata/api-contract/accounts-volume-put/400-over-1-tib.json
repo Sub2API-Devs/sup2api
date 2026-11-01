@@ -1,0 +1,20 @@
+{
+  "name": "400 over 1 TiB",
+  "setup": {},
+  "request": {
+    "method": "PUT",
+    "path": "/v1/accounts/21/volume",
+    "json": {
+      "size_bytes": 1099511627777
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

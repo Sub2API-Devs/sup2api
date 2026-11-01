@@ -339,6 +339,17 @@ func sanitizeLoadedImages(c *gin.Context, sha string, loaded []loadedImage) ([]l
 // caller keeps its own ctx: a tail context for the audit and the runtime read
 // is its business (tailContext).
 func (s *Service) applyLoadedImage(c *gin.Context, ctx context.Context, uid int64, role, ref string) (Config, *workersReport, bool) {
+	if role == "controller" {
+		cfg, e := s.Load(ctx)
+		if e != nil {
+			httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
+			return Config{}, nil, false
+		}
+		if err := s.checkAdopted(ctx, cfg, s.bundle(), ref); err != nil {
+			httpapi.Fail(c, err)
+			return Config{}, nil, false
+		}
+	}
 	saved, e := s.updateConfig(ctx, uid, []string{"images"}, func(cur *Config) error {
 		if cur.Mode != "controller" {
 			return errConfigChanged

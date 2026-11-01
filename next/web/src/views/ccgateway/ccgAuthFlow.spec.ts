@@ -123,6 +123,11 @@ describe('CCGateway authorization flow', () => {
     // Reasons of the retained-runtime purge and of a refused cli_version save.
     expect(knownReason('runtime_not_retained')).toBe('runtime_not_retained')
     expect(knownReason('cli_version_unavailable')).toBe('cli_version_unavailable')
+    // Results of the compose install and of a self-upgrade before the guard adopted the controller (CONTRACTS §76).
+    for (const r of ['compose_unavailable', 'guard_unavailable', 'legacy_blocked', 'controller_adopt_required']) {
+      expect(knownReason(r), r).toBe(r)
+      expect(reasonDisplay(err(r)), r).toEqual({ key: `ccgateway.reason.${r}` })
+    }
     expect(knownStatus('pending')).toBe('pending')
     expect(knownStatus('weird')).toBeNull()
   })

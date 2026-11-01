@@ -1,0 +1,31 @@
+{
+  "name": "409 fields=state foreign gateway",
+  "covers": "R2 BUG-13",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ],
+    "gateway": {
+      "owner": "ccg-other"
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/accounts/21?fields=state"
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": "conflict",
+      "names": [
+        "ccg-shared-egress"
+      ],
+      "reason": "ownership_mismatch"
+    }
+  }
+}

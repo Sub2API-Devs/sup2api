@@ -107,6 +107,9 @@ type RuntimeImages struct {
 	Controller string `json:"controller"`
 	// Gateway is the Caddy image of the control panel (§53.3).
 	Gateway string `json:"gateway"`
+	// Guard is the ccgateway guard of a compose installation (§76): never
+	// bundled in the plugin package, written by an explicit install only.
+	Guard string `json:"guard"`
 }
 
 var (
@@ -124,7 +127,7 @@ func validImage(ref string) bool {
 // override, else the reference bundled in the active plugin package
 // (§53.10), else the pinned references.
 func (c Config) EffectiveImages() RuntimeImages {
-	out := RuntimeImages{App: AppImage, Egress: EgressImage, Controller: ControllerImage, Gateway: GatewayImage}
+	out := RuntimeImages{App: AppImage, Egress: EgressImage, Controller: ControllerImage, Gateway: GatewayImage, Guard: GuardImage}
 	for _, img := range []*RuntimeImages{c.bundled, c.Images} {
 		if img == nil {
 			continue
@@ -140,6 +143,9 @@ func (c Config) EffectiveImages() RuntimeImages {
 		}
 		if img.Gateway != "" {
 			out.Gateway = img.Gateway
+		}
+		if img.Guard != "" {
+			out.Guard = img.Guard
 		}
 	}
 	return out
@@ -473,7 +479,7 @@ func mergeImages(c *Config, old Config) error {
 	if c.Images == nil {
 		return nil
 	}
-	for _, ref := range []string{c.Images.App, c.Images.Egress, c.Images.Controller, c.Images.Gateway} {
+	for _, ref := range []string{c.Images.App, c.Images.Egress, c.Images.Controller, c.Images.Gateway, c.Images.Guard} {
 		if ref != "" && !validImage(ref) {
 			return errors.New("invalid runtime image reference")
 		}

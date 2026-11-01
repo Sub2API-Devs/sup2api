@@ -1,0 +1,38 @@
+{
+  "Image": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "Entrypoint": [
+    "sh",
+    "-ec"
+  ],
+  "Cmd": [
+    "if nft list table inet ccg_app \u003e/dev/null 2\u003e\u00261; then { printf \"delete table inet ccg_app\\n\"; cat /app.nft; } | nft -f -; else nft -f /app.nft; fi; ip route replace default via 10.52.74.2"
+  ],
+  "Labels": {
+    "io.sup2api.ccgateway.guard-job": "ccg"
+  },
+  "HostConfig": {
+    "Binds": [
+      "/opt/ccgateway-runtime/21/app.nft:/app.nft:ro"
+    ],
+    "NetworkMode": "container:appid",
+    "Memory": 67108864,
+    "PidsLimit": 32,
+    "CapDrop": [
+      "ALL"
+    ],
+    "CapAdd": [
+      "NET_ADMIN"
+    ],
+    "SecurityOpt": [
+      "no-new-privileges:true"
+    ],
+    "LogConfig": {
+      "Type": "json-file",
+      "Config": {
+        "max-file": "1",
+        "max-size": "1m"
+      }
+    },
+    "Privileged": false
+  }
+}

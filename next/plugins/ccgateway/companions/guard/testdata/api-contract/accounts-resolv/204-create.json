@@ -1,0 +1,27 @@
+{
+  "name": "204 create",
+  "covers": "R11",
+  "setup": {
+    "networks": [
+      {
+        "aid": "21",
+        "subnet": "10.52.74.0/24"
+      }
+    ]
+  },
+  "request": {
+    "method": "PUT",
+    "path": "/v1/accounts/21/resolv",
+    "json": {
+      "nameserver": "10.52.74.2"
+    }
+  },
+  "response": {
+    "status": 204
+  },
+  "after": {
+    "files": {
+      "21/resolv.conf": "nameserver 10.52.74.2\noptions timeout:2 attempts:2\n"
+    }
+  }
+}

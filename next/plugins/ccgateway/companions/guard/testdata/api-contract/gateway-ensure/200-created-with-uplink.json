@@ -1,0 +1,35 @@
+{
+  "name": "200 created with uplink",
+  "covers": "X9",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ]
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/gateway/ensure",
+    "json": {
+      "uplink": {
+        "gateway": "10.117.81.1",
+        "policy_label": "{}",
+        "subnet": "10.117.81.0/24"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "action": "created"
+    },
+    "keys": [
+      "gateway",
+      "action"
+    ]
+  }
+}

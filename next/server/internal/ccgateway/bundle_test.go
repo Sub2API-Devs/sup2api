@@ -222,11 +222,11 @@ func mustTemp(t *testing.T) *os.File {
 func TestEffectiveImagesPriority(t *testing.T) {
 	bundled := &RuntimeImages{App: testBundleRefs["app"], Egress: testBundleRefs["egress"], Controller: testBundleRefs["controller"], Gateway: testBundleRefs["gateway"]}
 	// Nothing bundled: the pinned references.
-	if eff := (Config{}).EffectiveImages(); eff != (RuntimeImages{App: AppImage, Egress: EgressImage, Controller: ControllerImage, Gateway: GatewayImage}) {
+	if eff := (Config{}).EffectiveImages(); eff != (RuntimeImages{App: AppImage, Egress: EgressImage, Controller: ControllerImage, Gateway: GatewayImage, Guard: GuardImage}) {
 		t.Fatalf("pinned: %+v", eff)
 	}
-	// Bundled refs beat the pinned ones (the gateway's Caddy too).
-	if eff := (Config{bundled: bundled}).EffectiveImages(); eff != *bundled {
+	// Bundled refs beat the pinned ones (the gateway's Caddy too); the guard is never bundled.
+	if eff := (Config{bundled: bundled}).EffectiveImages(); eff != (RuntimeImages{App: bundled.App, Egress: bundled.Egress, Controller: bundled.Controller, Gateway: bundled.Gateway, Guard: GuardImage}) {
 		t.Fatalf("bundled: %+v", eff)
 	}
 	// A configured override beats the bundled ref, per role.

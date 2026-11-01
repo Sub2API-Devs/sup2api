@@ -1,0 +1,29 @@
+{
+  "name": "200 empty account",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/accounts/22"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "app": null,
+      "gateway_attached": false,
+      "network": null,
+      "others": [],
+      "uplink": null,
+      "volume": null
+    },
+    "keys": [
+      "app",
+      "others",
+      "network",
+      "uplink",
+      "volume",
+      "volume_users",
+      "network_foreign",
+      "gateway_attached"
+    ]
+  }
+}

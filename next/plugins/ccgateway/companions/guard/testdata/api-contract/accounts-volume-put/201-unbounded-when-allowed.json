@@ -1,0 +1,27 @@
+{
+  "name": "201 unbounded when allowed",
+  "covers": "03§3.5.4",
+  "setup": {
+    "no_quota": true
+  },
+  "request": {
+    "method": "PUT",
+    "path": "/v1/accounts/21/volume",
+    "json": {
+      "allow_unbounded": true,
+      "size_bytes": 10737418240
+    }
+  },
+  "response": {
+    "status": 201,
+    "body": {
+      "created": true,
+      "quota_supported": false
+    },
+    "keys": [
+      "volume",
+      "created",
+      "quota_supported"
+    ]
+  }
+}

@@ -679,12 +679,13 @@ export interface CcgWorkersReport {
   cli_version?: string
 }
 
-/** Image overrides of the CCGateway connection; '' uses the core's fixed reference. `gateway` is the Caddy image of the control panel (§53.3). */
+/** Image overrides of the CCGateway connection; '' uses the core's fixed reference. `gateway` is the Caddy image of the control panel (§53.3), `guard` the ccgateway guard of a compose install (§76). */
 export interface CcgRemoteImages {
   app: string
   egress: string
   controller: string
   gateway?: string
+  guard?: string
 }
 
 /**

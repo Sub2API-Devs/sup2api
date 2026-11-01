@@ -26,3 +26,23 @@ const (
 // GatewayImage is the Caddy image of the control panel's HTTPS gateway
 // (CONTRACTS §53.3), overridable with images.gateway.
 const GatewayImage = "caddy:2.11.7-alpine"
+
+// GuardImage is the ccgateway guard (CONTRACTS §76), the host service that
+// runs the Docker operations of a Go controller. It is not in the plugin
+// package: only an explicit controller install (over SSH or on this machine)
+// writes it into /opt/ccgateway/.env. Overridable with images.guard (e.g. a
+// tag built on the Docker host by build-ccgateway-guard.sh while the GHCR
+// package is private). Built and pushed by the "CCGateway images" workflow
+// (matrix entry ccgateway-guard).
+//
+// PLACEHOLDER: the digest below is not a real image. 发布前由主控替换 with
+// the digest the workflow reports for ccgateway-guard.
+const GuardImage = "ghcr.io/sub2api-devs/ccgateway-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+// ControllerImageGuardAPI tells whether ControllerImage carries the label
+// io.sup2api.ccgateway.guard-api=1 (a Go controller, installed through
+// compose next to the guard). The core refuses to self-upgrade a controller
+// the guard has not adopted yet to such an image (controller_adopt_required,
+// CONTRACTS §76.6). 发布前由主控替换: set to true together with
+// ControllerImage when it becomes the Go controller's digest.
+const ControllerImageGuardAPI = false

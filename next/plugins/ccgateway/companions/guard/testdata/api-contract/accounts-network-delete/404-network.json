@@ -1,0 +1,16 @@
+{
+  "name": "404 network",
+  "covers": "R18",
+  "setup": {},
+  "request": {
+    "method": "DELETE",
+    "path": "/v1/accounts/21/network?role=net"
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not_found",
+      "reason": "network"
+    }
+  }
+}

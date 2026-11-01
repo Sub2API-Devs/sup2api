@@ -1,0 +1,23 @@
+{
+  "Image": "ccgateway-app:0.1.118",
+  "Entrypoint": [
+    "true"
+  ],
+  "Labels": {
+    "io.sup2api.ccgateway.guard-job": "ccg"
+  },
+  "NetworkDisabled": true,
+  "HostConfig": {
+    "NetworkMode": "none",
+    "CapDrop": [
+      "ALL"
+    ],
+    "SecurityOpt": [
+      "no-new-privileges:true"
+    ],
+    "LogConfig": {
+      "Type": "none"
+    },
+    "Privileged": false
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "name": "200 nonzero exit is not an error",
+  "covers": "03§3.5.14",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-app:1"
+      }
+    ],
+    "networks": [
+      {
+        "aid": "21",
+        "subnet": "10.52.74.0/24"
+      }
+    ],
+    "volumes": [
+      {
+        "aid": "21",
+        "quota": true
+      }
+    ],
+    "files": {
+      "21/resolv.conf": "ok"
+    },
+    "job": {
+      "exit_code": 7
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/accounts/21/jobs",
+    "json": {
+      "argv": [
+        "true"
+      ],
+      "caps": [],
+      "entrypoint": [
+        "sh",
+        "-ec"
+      ],
+      "image": "ccgateway-app:1",
+      "user": "1000:1000",
+      "volume": "ro"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "exit_code": 7,
+      "stdout": ""
+    },
+    "keys": [
+      "exit_code",
+      "stdout"
+    ]
+  }
+}

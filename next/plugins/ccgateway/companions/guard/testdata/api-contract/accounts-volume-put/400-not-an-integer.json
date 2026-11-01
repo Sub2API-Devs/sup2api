@@ -1,0 +1,20 @@
+{
+  "name": "400 not an integer",
+  "setup": {},
+  "request": {
+    "method": "PUT",
+    "path": "/v1/accounts/21/volume",
+    "json": {
+      "size_bytes": 1073741824.5
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

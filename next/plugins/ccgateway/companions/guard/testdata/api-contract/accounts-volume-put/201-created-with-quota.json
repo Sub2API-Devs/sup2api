@@ -1,0 +1,24 @@
+{
+  "name": "201 created with quota",
+  "covers": "03§3.5.4",
+  "setup": {},
+  "request": {
+    "method": "PUT",
+    "path": "/v1/accounts/21/volume",
+    "json": {
+      "size_bytes": 10737418240
+    }
+  },
+  "response": {
+    "status": 201,
+    "body": {
+      "created": true,
+      "quota_supported": true
+    },
+    "keys": [
+      "volume",
+      "created",
+      "quota_supported"
+    ]
+  }
+}
