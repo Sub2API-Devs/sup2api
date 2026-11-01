@@ -1,5 +1,5 @@
 # Build from the repository root: docker build -f backend/Dockerfile .
-FROM golang:1.27.2-alpine
+FROM golang:1.27.3-alpine
 
 WORKDIR /app/backend
 
