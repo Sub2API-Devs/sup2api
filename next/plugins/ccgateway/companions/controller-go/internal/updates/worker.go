@@ -28,14 +28,22 @@ const (
 	RestartTimeout = 30 // seconds, the stop grace period of the restart
 )
 
-type updater struct{ o Options }
+// updater keeps the controller's memory independent of how many runtimes
+// update at once: image files are read once and shared (files), at most
+// maxActivations updates work in containers (slots), and every large file
+// streams through a spool file (containerfs).
+type updater struct {
+	o     Options
+	files *fileCache
+	slots chan struct{}
+}
 
 // New is the in-place Worker update and the paired Worker+CLI activation.
 func New(opts Options) (contract.Updates, error) {
 	if err := opts.Defaults(); err != nil {
 		return nil, err
 	}
-	return &updater{o: opts}, nil
+	return &updater{o: opts, files: newFileCache(fileLinger), slots: make(chan struct{}, maxActivations)}, nil
 }
 
 // session is one update holding the account lock. Its ctx is detached from
@@ -82,34 +90,53 @@ func (u *updater) UpdateWorker(ctx context.Context, aid string, desired any) (py
 	if err != nil {
 		return nil, err
 	}
-	program, err := u.workerProgram(ctx, ref)
+	program, done, err := u.workerProgram(ctx, ref)
 	if err != nil {
 		return nil, err
 	}
-	defer program.Close()
+	defer done()
 	s, err := u.lock(ctx, aid)
 	if err != nil {
 		return nil, err
 	}
 	defer s.release()
+	free, err := u.slot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer free()
 	return s.updateWorker(program)
 }
 
 // workerProgram is step 1 (W1): the Worker program of image ref, read
-// through the guard without holding the account lock.
-func (u *updater) workerProgram(ctx context.Context, ref string) (containerfs.Blob, error) {
-	if _, err := u.o.Host.EnsureImage(ctx, ref); err != nil {
-		return nil, err
+// through the guard without holding the account lock, shared with every
+// other update of the same image; done releases it.
+func (u *updater) workerProgram(ctx context.Context, ref string) (containerfs.Blob, func(), error) {
+	img, err := u.o.Host.EnsureImage(ctx, ref)
+	if err != nil {
+		return nil, nil, err
 	}
-	b, err := containerfs.ImageFile(ctx, u.o.Guard, ref, containerfs.WorkerSource, containerfs.WorkerMaxBytes, u.o.Store.CreateSpool)
+	b, done, err := u.imageFile(ctx, img, ref, containerfs.WorkerSource, containerfs.WorkerMaxBytes)
 	if err != nil {
 		if guardapi.IsNotFound(err) || errors.Is(err, guardapi.ErrNotRegularFile) ||
 			errors.Is(err, guardapi.ErrFileTooLarge) || errors.Is(err, containerfs.ErrTooLarge) {
-			return nil, errs.Wrap(errs.InvalidImage, "image has no worker program", err)
+			return nil, nil, errs.Wrap(errs.InvalidImage, "image has no worker program", err)
 		}
-		return nil, err
+		return nil, nil, err
 	}
-	return b, nil
+	return b, done, nil
+}
+
+// imageFile is file p of image ref (inspected as img) through the shared
+// file cache: one read of the image per file, however many updates use it.
+func (u *updater) imageFile(ctx context.Context, img *guardapi.Image, ref, p string, limit int64) (containerfs.Blob, func(), error) {
+	id := ref
+	if img != nil && img.ID != "" {
+		id = img.ID
+	}
+	return u.files.get(ctx, fileKey{image: id, path: p, limit: limit}, func(ctx context.Context) (containerfs.Blob, error) {
+		return containerfs.ImageFile(ctx, u.o.Guard, ref, p, limit, u.o.Store.CreateSpool)
+	})
 }
 
 // running is what an in-place update starts from (running_worker).

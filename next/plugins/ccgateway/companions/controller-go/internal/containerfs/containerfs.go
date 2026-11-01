@@ -4,9 +4,10 @@
 // check and the container identity.
 //
 // Large files (the CLI up to 512 MiB, the Worker up to 256 MiB) travel as a
-// Blob: in memory up to 32 MiB, else spooled to <root>/.spool, hashed while
+// Blob: in memory up to 1 MiB, else spooled to <root>/.spool, hashed while
 // read. A tar for PUT archive is streamed (header, content, padding, end
-// blocks), never copied in memory.
+// blocks), never copied in memory; a file written is verified by hashing
+// its read-back as it streams.
 //
 // FROZEN: App, Blob and every exported function.
 package containerfs
@@ -264,45 +265,57 @@ func archiveErr(msg string, err error) error {
 
 // ReadSingleFile is dockerfs.read_single_file on a tar stream: the content
 // of its only entry, which must be a regular file of at most limit bytes;
-// at most limit + 1 MiB of archive is read.
+// at most limit + 1 MiB of archive is read. For small files only: the
+// content is returned in memory (large ones go through CopySingleFile).
 func ReadSingleFile(archive io.Reader, limit int64) ([]byte, error) {
+	var buf bytes.Buffer
+	if _, err := CopySingleFile(&buf, archive, limit); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// CopySingleFile is ReadSingleFile streamed into w (same checks, same
+// errors): the entry's content is copied, never held, so a 512 MiB CLI
+// costs a copy buffer. It returns the content's size.
+func CopySingleFile(w io.Writer, archive io.Reader, limit int64) (int64, error) {
 	lr := &io.LimitedReader{R: archive, N: limit + ArchiveSlack + 1}
 	tr := tar.NewReader(lr)
 	h, err := tr.Next()
 	if err != nil {
 		if lr.N <= 0 {
-			return nil, archiveErr("archive too large", nil)
+			return 0, archiveErr("archive too large", nil)
 		}
-		return nil, archiveErr("invalid archive", err)
+		return 0, archiveErr("invalid archive", err)
 	}
 	if h.Typeflag != tar.TypeReg || h.Size > limit {
-		return nil, ErrNotSingleFile
+		return 0, ErrNotSingleFile
 	}
-	data, err := io.ReadAll(tr)
+	n, err := io.Copy(w, tr)
 	if err != nil {
 		if lr.N <= 0 {
-			return nil, archiveErr("archive too large", nil)
+			return 0, archiveErr("archive too large", nil)
 		}
-		return nil, archiveErr("invalid archive", err)
+		return 0, archiveErr("invalid archive", err)
 	}
-	if int64(len(data)) != h.Size {
-		return nil, archiveErr("truncated archive", nil)
+	if n != h.Size {
+		return 0, archiveErr("truncated archive", nil)
 	}
 	if _, err := tr.Next(); err != io.EOF {
 		if lr.N <= 0 {
-			return nil, archiveErr("archive too large", nil)
+			return 0, archiveErr("archive too large", nil)
 		}
-		return nil, ErrNotSingleFile
+		return 0, ErrNotSingleFile
 	}
 	io.Copy(io.Discard, lr)
 	if lr.N <= 0 {
-		return nil, archiveErr("archive too large", nil)
+		return 0, archiveErr("archive too large", nil)
 	}
-	return data, nil
+	return n, nil
 }
 
 // ReadFile is dockerfs.read_file: the regular file p of the container
-// (guardapi.ErrNotFound when absent).
+// (guardapi.ErrNotFound when absent). For small files; see FileSHA256.
 func ReadFile(ctx context.Context, a App, p string, limit int64) ([]byte, error) {
 	rc, err := a.ArchiveGet(ctx, p)
 	if err != nil {
@@ -312,7 +325,25 @@ func ReadFile(ctx context.Context, a App, p string, limit int64) ([]byte, error)
 	return ReadSingleFile(rc, limit)
 }
 
-// WriteFile is dockerfs.write_file: put data at p (root 0755) and read it back.
+// FileSHA256 is ReadFile hashed while it streams: the hex SHA-256 of the
+// regular file p (same errors as ReadFile), its content never in memory.
+func FileSHA256(ctx context.Context, a App, p string, limit int64) (string, error) {
+	rc, err := a.ArchiveGet(ctx, p)
+	if err != nil {
+		return "", err
+	}
+	defer rc.Close()
+	h := sha256.New()
+	if _, err := CopySingleFile(h, rc, limit); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// WriteFile is dockerfs.write_file: put data at p (root 0755) and read it
+// back. Both directions stream: the read-back is hashed, not kept. (Python
+// reads it into memory; doing the same with a 230 MiB CLI took the Go
+// controller past its 1 GiB memory cgroup on 2026-11-01.)
 func WriteFile(ctx context.Context, a App, p string, data Blob, now time.Time) error {
 	size, stream, err := TarStream(path.Base(p), data, now)
 	if err != nil {
@@ -327,11 +358,11 @@ func WriteFile(ctx context.Context, a App, p string, data Blob, now time.Time) e
 	if limit < 65536 {
 		limit = 65536
 	}
-	back, err := ReadFile(ctx, a, p, limit)
+	back, err := FileSHA256(ctx, a, p, limit)
 	if err != nil {
 		return err
 	}
-	if Digest(back) != data.SHA256() {
+	if back != data.SHA256() {
 		return errors.New("runtime file verification failed")
 	}
 	return nil
@@ -400,26 +431,31 @@ func Bytes(b Blob) []byte {
 	return nil
 }
 
-// SpoolThreshold is the size above which ReadBlob spools to disk.
-const SpoolThreshold = 32 << 20
+// SpoolThreshold is the size above which ReadBlob spools to disk. It is
+// small on purpose: a blob is held for a whole activation (the idle wait
+// alone is up to two minutes), once per runtime being updated.
+const SpoolThreshold = 1 << 20
 
 // ErrTooLarge is a blob larger than its limit.
 var ErrTooLarge = errors.New("file larger than its limit")
 
 // ReadBlob reads r (at most limit bytes) into a Blob: memory up to
-// SpoolThreshold, else a file from spool (store.CreateSpool), which Close removes.
+// SpoolThreshold, else a file from spool (store.CreateSpool), which Close
+// removes. The digest is computed while reading; a spool file is written
+// through to disk every dropStep bytes and dropped from the page cache
+// (its pages are charged to the controller's memory cgroup).
 func ReadBlob(r io.Reader, limit int64, spool func() (*os.File, error)) (Blob, error) {
 	h := sha256.New()
-	var head bytes.Buffer
-	n, err := io.Copy(&head, io.TeeReader(io.LimitReader(r, SpoolThreshold+1), h))
-	if err != nil {
+	head := make([]byte, min(limit, SpoolThreshold)+1)
+	n, err := io.ReadFull(io.TeeReader(r, h), head)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 		return nil, err
 	}
-	if n > limit {
+	if int64(n) > limit {
 		return nil, ErrTooLarge
 	}
 	if n <= SpoolThreshold {
-		return &memBlob{data: head.Bytes(), sum: hex.EncodeToString(h.Sum(nil))}, nil
+		return &memBlob{data: append([]byte(nil), head[:n]...), sum: hex.EncodeToString(h.Sum(nil))}, nil
 	}
 	f, err := spool()
 	if err != nil {
@@ -430,21 +466,76 @@ func ReadBlob(r io.Reader, limit int64, spool func() (*os.File, error)) (Blob, e
 		os.Remove(f.Name())
 		return nil, err
 	}
-	if _, err := f.Write(head.Bytes()); err != nil {
+	w := &dropWriter{f: f}
+	if _, err := w.Write(head); err != nil {
 		return fail(err)
 	}
-	rest, err := io.Copy(f, io.TeeReader(io.LimitReader(r, limit-n+1), h))
+	rest, err := io.Copy(w, io.TeeReader(io.LimitReader(r, limit-int64(n)+1), h))
 	if err != nil {
 		return fail(err)
 	}
-	if n+rest > limit {
+	if int64(n)+rest > limit {
 		return fail(ErrTooLarge)
+	}
+	if err := w.flush(); err != nil {
+		return fail(err)
 	}
 	if err := f.Close(); err != nil {
 		return fail(err)
 	}
-	return &fileBlob{path: f.Name(), size: n + rest, sum: hex.EncodeToString(h.Sum(nil))}, nil
+	return &fileBlob{path: f.Name(), size: int64(n) + rest, sum: hex.EncodeToString(h.Sum(nil))}, nil
 }
+
+// dropStep is how much of a spool file may be dirty or cached before it is
+// written through and dropped (dropWriter, dropReader).
+const dropStep = 8 << 20
+
+// dropWriter writes a spool file; every dropStep bytes it writes the new
+// range to disk and drops it from the page cache (Linux; elsewhere nothing).
+type dropWriter struct {
+	f       *os.File
+	off     int64 // written so far
+	flushed int64 // written through and dropped up to here
+}
+
+func (w *dropWriter) Write(p []byte) (int, error) {
+	n, err := w.f.Write(p)
+	w.off += int64(n)
+	if err == nil && w.off-w.flushed >= dropStep {
+		err = w.flush()
+	}
+	return n, err
+}
+
+func (w *dropWriter) flush() error {
+	if w.off > w.flushed {
+		if err := writeThrough(w.f, w.flushed, w.off-w.flushed); err != nil {
+			return err
+		}
+		w.flushed = w.off
+	}
+	return nil
+}
+
+// dropReader reads a spool file and drops what it has read from the page
+// cache every dropStep bytes (a shared CLI is read once per runtime).
+type dropReader struct {
+	f       *os.File
+	off     int64
+	dropped int64
+}
+
+func (r *dropReader) Read(p []byte) (int, error) {
+	n, err := r.f.Read(p)
+	r.off += int64(n)
+	if r.off-r.dropped >= dropStep || (err != nil && r.off > r.dropped) {
+		dropCache(r.f, r.dropped, r.off-r.dropped)
+		r.dropped = r.off
+	}
+	return n, err
+}
+
+func (r *dropReader) Close() error { return r.f.Close() }
 
 type fileBlob struct {
 	path string
@@ -452,9 +543,15 @@ type fileBlob struct {
 	sum  string
 }
 
-func (b *fileBlob) Size() int64                  { return b.size }
-func (b *fileBlob) SHA256() string               { return b.sum }
-func (b *fileBlob) Open() (io.ReadCloser, error) { return os.Open(b.path) }
+func (b *fileBlob) Size() int64    { return b.size }
+func (b *fileBlob) SHA256() string { return b.sum }
+func (b *fileBlob) Open() (io.ReadCloser, error) {
+	f, err := os.Open(b.path)
+	if err != nil {
+		return nil, err
+	}
+	return &dropReader{f: f}, nil
+}
 func (b *fileBlob) Close() error {
 	err := os.Remove(b.path)
 	if errors.Is(err, os.ErrNotExist) {

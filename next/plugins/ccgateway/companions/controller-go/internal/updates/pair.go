@@ -106,42 +106,45 @@ func entryString(entry pyjson.Ordered, key string) string {
 }
 
 // pkg is runtime_updates.package (P2): Worker, CLI and entry of the image.
-func (u *updater) pkg(ctx context.Context, image, version string) (worker, cli containerfs.Blob, entry pyjson.Ordered, err error) {
-	if _, err := u.o.Host.EnsureImage(ctx, image); err != nil {
-		return nil, nil, nil, err
+// The CLI and the Worker are shared with every other activation of the
+// same image (read once, spooled, never in memory); done releases both.
+func (u *updater) pkg(ctx context.Context, image, version string) (worker, cli containerfs.Blob, entry pyjson.Ordered, done func(), err error) {
+	img, err := u.o.Host.EnsureImage(ctx, image)
+	if err != nil {
+		return nil, nil, nil, nil, err
 	}
 	mb, err := containerfs.ImageFile(ctx, u.o.Guard, image, CLIRoot+"/manifest.json", maxSmallFile, u.o.Store.CreateSpool)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	raw := containerfs.Bytes(mb)
+	raw := containerfs.Bytes(mb) // at most maxSmallFile: always a memory blob
 	mb.Close()
 	manifest, err := pyjson.Decode(raw)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	if entry, err = releaseEntry(manifest, version); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	cli, err = containerfs.ImageFile(ctx, u.o.Guard, image, CLIRoot+"/"+entryString(entry, "path"), MaxCLI, u.o.Store.CreateSpool)
+	cli, doneCLI, err := u.imageFile(ctx, img, image, CLIRoot+"/"+entryString(entry, "path"), MaxCLI)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	if !containerfs.IsELF(cli) || cli.SHA256() != entryString(entry, "sha256") {
-		cli.Close()
-		return nil, nil, nil, errors.New("packaged CLI checksum or binary format mismatch")
+		doneCLI()
+		return nil, nil, nil, nil, errors.New("packaged CLI checksum or binary format mismatch")
 	}
-	worker, err = containerfs.ImageFile(ctx, u.o.Guard, image, containerfs.WorkerSource, containerfs.WorkerMaxBytes, u.o.Store.CreateSpool)
+	worker, doneWorker, err := u.imageFile(ctx, img, image, containerfs.WorkerSource, containerfs.WorkerMaxBytes)
 	if err != nil {
-		cli.Close()
-		return nil, nil, nil, err
+		doneCLI()
+		return nil, nil, nil, nil, err
 	}
 	if !containerfs.IsELF(worker) {
-		cli.Close()
-		worker.Close()
-		return nil, nil, nil, errors.New("packaged Worker is not a Linux executable")
+		doneCLI()
+		doneWorker()
+		return nil, nil, nil, nil, errors.New("packaged Worker is not a Linux executable")
 	}
-	return worker, cli, entry, nil
+	return worker, cli, entry, func() { doneWorker(); doneCLI() }, nil
 }
 
 // pair is one paired activation in progress.
@@ -178,17 +181,21 @@ func (u *updater) UpdatePair(ctx context.Context, aid string, desired any) (pyjs
 	if err := names.CheckKey(aid); err != nil {
 		return nil, err
 	}
-	worker, cli, entry, err := u.pkg(ctx, image, version)
+	worker, cli, entry, done, err := u.pkg(ctx, image, version)
 	if err != nil {
 		return nil, err
 	}
-	defer worker.Close()
-	defer cli.Close()
+	defer done()
 	s, err := u.lock(ctx, aid)
 	if err != nil {
 		return nil, err
 	}
 	defer s.release()
+	free, err := u.slot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer free()
 	p, answer, err := s.begin(version, worker, cli, entry)
 	if err != nil || answer != nil {
 		return answer, err
