@@ -86,7 +86,13 @@ if [ "$OWNER" = ccgateway ] || [ -e "$DATA/.adopted" ] || [ -e "$DATA/.adopting"
 // the guard takes too, held until the script exits), and release, which
 // moves the controller data back from $DATA to $ROOT (§76.5).
 const composeCommon = `dc() { docker compose -p ccgateway --project-directory "$DIR" -f "$DIR/compose.yml" --env-file "$DIR/.env" "$@"; }
-lock() { command -v flock >/dev/null 2>&1 || return 0; exec 9>>"$DIR/.compose.lock" && flock -w 180 9; }
+lock() {
+  command -v flock >/dev/null 2>&1 || return 0
+  exec 9>>"$DIR/.compose.lock" || return 1
+  # flock -n in a loop, not -w: BusyBox flock (Alpine hosts) has no -w.
+  i=0
+  until flock -n 9; do i=$((i+1)); [ "$i" -lt 180 ] || return 1; sleep 1; done
+}
 is_key() {
   case "$1" in
     d????????????????) case "${1#d}" in *[!0-9a-f]*) return 1 ;; esac; return 0 ;;

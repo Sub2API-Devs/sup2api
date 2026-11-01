@@ -192,6 +192,7 @@ func TestPackRejectsInvalidImages(t *testing.T) {
 		{"path in file", replaceIndex(`"file": "app.tar.gz"`, `"file": "../app.tar.gz"`), "plain .tar or .tar.gz name"},
 		{"unknown field", replaceIndex(`"version": 1`, `"version": 1, "extra": true`), "unknown field"},
 		{"version 2", replaceIndex(`"version": 1`, `"version": 2`), "want 1"},
+		{"bad label", replaceIndex(`"file": "controller.tar.gz",`, `"labels": {"Bad Key": "1"}, "file": "controller.tar.gz",`), "invalid label"},
 		{"uppercase sha", func(dir string) {
 			raw, _ := os.ReadFile(filepath.Join(dir, "images.json"))
 			s := string(raw)
@@ -205,6 +206,11 @@ func TestPackRejectsInvalidImages(t *testing.T) {
 			}
 		})
 	}
+
+	// The Go controller's entry carries its guard-api label (CONTRACTS §76).
+	labelled := imageFixture(t, demoImages)
+	replaceIndex(`"file": "controller.tar.gz",`, `"labels": {"io.sup2api.ccgateway.guard-api": "1"}, "file": "controller.tar.gz",`)(labelled)
+	runOK(t, "pack", "--dir", demoPlugin(t), "--out-dir", t.TempDir(), "--images", labelled, "--image-roles", demoRoles)
 
 	if msg := runFail(t, "pack", "--dir", demoPlugin(t), "--out-dir", t.TempDir(), "--image-roles", demoRoles); !strings.Contains(msg, "requires --images") {
 		t.Fatalf("msg = %s", msg)

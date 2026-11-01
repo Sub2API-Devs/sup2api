@@ -6,8 +6,11 @@ COPY go.mod ./
 COPY cmd ./cmd
 COPY internal ./internal
 ARG VERSION=dev
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOWORK=off \
-    go build -trimpath -ldflags "-s -w -X main.buildVersion=${VERSION}" -o /out/ccg-controller ./cmd/ccg-controller \
+# Bounded like the worker image: on a many-core host (384 on ovh) an
+# unbounded build exceeds the build cgroup's task limit.
+ARG BUILD_MAX_PROCS=2
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOWORK=off GOMAXPROCS=${BUILD_MAX_PROCS} \
+    go build -p ${BUILD_MAX_PROCS} -trimpath -ldflags "-s -w -X main.buildVersion=${VERSION}" -o /out/ccg-controller ./cmd/ccg-controller \
  && mkdir -p /out/data /out/tmp && chmod 0700 /out/data && chmod 1777 /out/tmp
 
 FROM scratch

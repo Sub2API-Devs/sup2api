@@ -42,6 +42,8 @@ var (
 	imageRoleRe = regexp.MustCompile(`^[a-z][a-z0-9-]{0,31}$`)
 	imageFileRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.(?:tar|tar\.gz)$`)
 	sha256Re    = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	labelKeyRe  = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{0,127}$`)
+	labelValRe  = regexp.MustCompile(`^[A-Za-z0-9._:/-]{0,128}$`)
 	fixedTagRe  = regexp.MustCompile(`(?:^|[^0-9])[0-9]+\.[0-9]+\.[0-9]+`)
 )
 
@@ -50,6 +52,9 @@ type imageEntry struct {
 	File   string `json:"file"`
 	SHA256 string `json:"sha256"`
 	Size   int64  `json:"size"`
+	// Labels (optional) copies image labels a host acts on, e.g. the Go
+	// controller's io.sup2api.ccgateway.guard-api (CONTRACTS §76).
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 type imagesIndex struct {
@@ -113,6 +118,14 @@ func collectImages(dir string, m *manifest.Manifest, required []string) (map[str
 		}
 		if !sha256Re.MatchString(e.SHA256) || e.Size <= 0 {
 			return nil, fmt.Errorf("images: %s: sha256 must be 64 lowercase hex digits and size positive", role)
+		}
+		if len(e.Labels) > 16 {
+			return nil, fmt.Errorf("images: %s: at most 16 labels", role)
+		}
+		for k, v := range e.Labels {
+			if !labelKeyRe.MatchString(k) || !labelValRe.MatchString(v) {
+				return nil, fmt.Errorf("images: %s: invalid label %q", role, k)
+			}
 		}
 		name := imagesDir + "/" + e.File
 		if _, dup := files[name]; dup {
