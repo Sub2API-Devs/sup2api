@@ -1,0 +1,20 @@
+{
+  "name": "400 under 1 GiB",
+  "setup": {},
+  "request": {
+    "method": "PUT",
+    "path": "/v1/accounts/21/volume",
+    "json": {
+      "size_bytes": 1073741823
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

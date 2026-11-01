@@ -1,0 +1,19 @@
+{
+  "name": "200 none",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/gateway"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "gateway": null,
+      "managed_by": ""
+    },
+    "keys": [
+      "gateway",
+      "managed_by"
+    ]
+  }
+}

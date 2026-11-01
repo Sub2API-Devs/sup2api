@@ -1,0 +1,15 @@
+{
+  "name": "400 unknown query parameter",
+  "covers": "03§3.3",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/inventory?x=1"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  }
+}

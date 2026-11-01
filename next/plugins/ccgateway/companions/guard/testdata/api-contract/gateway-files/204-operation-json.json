@@ -1,0 +1,13 @@
+{
+  "name": "204 operation.json",
+  "setup": {},
+  "request": {
+    "method": "PUT",
+    "path": "/v1/gateway/files/operation.json",
+    "body_base64": "e30=",
+    "content_type": "application/octet-stream"
+  },
+  "response": {
+    "status": 204
+  }
+}

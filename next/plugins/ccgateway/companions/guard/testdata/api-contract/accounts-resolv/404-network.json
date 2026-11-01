@@ -1,0 +1,18 @@
+{
+  "name": "404 network",
+  "setup": {},
+  "request": {
+    "method": "PUT",
+    "path": "/v1/accounts/21/resolv",
+    "json": {
+      "nameserver": "10.52.74.2"
+    }
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not_found",
+      "reason": "network"
+    }
+  }
+}

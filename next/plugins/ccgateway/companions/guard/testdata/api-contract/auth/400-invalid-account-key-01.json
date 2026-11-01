@@ -1,0 +1,14 @@
+{
+  "name": "400 invalid account key 01",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/accounts/01"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  }
+}

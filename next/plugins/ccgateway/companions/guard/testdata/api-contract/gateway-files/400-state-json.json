@@ -1,0 +1,20 @@
+{
+  "name": "400 state.json",
+  "covers": "A11 BUG-20(fixed)",
+  "setup": {},
+  "request": {
+    "method": "PUT",
+    "path": "/v1/gateway/files/state.json",
+    "body_base64": "e30=",
+    "content_type": "application/octet-stream"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

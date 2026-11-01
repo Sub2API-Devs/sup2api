@@ -1,0 +1,55 @@
+{
+  "name": "504 exec_timeout",
+  "covers": "03§3.5.9",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-app:1"
+      }
+    ],
+    "networks": [
+      {
+        "aid": "21",
+        "subnet": "10.52.74.0/24"
+      }
+    ],
+    "volumes": [
+      {
+        "aid": "21",
+        "quota": true
+      }
+    ],
+    "containers": [
+      {
+        "aid": "21",
+        "status": "running",
+        "ipv4": "10.52.74.5"
+      }
+    ],
+    "files": {
+      "21/resolv.conf": "ok"
+    },
+    "exec": {
+      "exit_code": 0,
+      "hang": true
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/accounts/21/app/exec",
+    "json": {
+      "argv": [
+        "sleep",
+        "999"
+      ],
+      "user": "1000"
+    }
+  },
+  "response": {
+    "status": 504,
+    "body": {
+      "error": "timeout",
+      "reason": "exec_timeout"
+    }
+  }
+}

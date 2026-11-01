@@ -1,0 +1,43 @@
+{
+  "name": "200 all docker networks",
+  "covers": "R16",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-app:1"
+      }
+    ],
+    "networks": [
+      {
+        "aid": "21",
+        "subnet": "10.52.74.0/24"
+      }
+    ],
+    "other_networks": [
+      {
+        "name": "ccg-control",
+        "subnet": "172.29.255.0/29"
+      }
+    ],
+    "volumes": [
+      {
+        "aid": "21",
+        "quota": true
+      }
+    ],
+    "files": {
+      "21/resolv.conf": "ok"
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/subnets"
+  },
+  "response": {
+    "status": 200,
+    "keys": [
+      "host_routes",
+      "networks"
+    ]
+  }
+}

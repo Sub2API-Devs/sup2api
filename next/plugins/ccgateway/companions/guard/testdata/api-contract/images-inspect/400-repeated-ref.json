@@ -1,0 +1,14 @@
+{
+  "name": "400 repeated ref",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/images/inspect?ref=a:1\u0026ref=b:1"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  }
+}

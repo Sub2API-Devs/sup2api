@@ -1,0 +1,21 @@
+{
+  "name": "403 controller unguarded",
+  "covers": "U6 03§3.2",
+  "setup": {
+    "controller_unguarded": true
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/inventory"
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": "forbidden",
+      "reason": "controller_unguarded"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

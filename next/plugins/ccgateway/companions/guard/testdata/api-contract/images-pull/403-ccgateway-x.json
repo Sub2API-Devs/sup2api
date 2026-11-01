@@ -1,0 +1,26 @@
+{
+  "name": "403 ccgateway-x",
+  "covers": "A5 03§3.6.2",
+  "setup": {
+    "pullable": [
+      "ccgateway-x"
+    ]
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/pull",
+    "json": {
+      "ref": "ccgateway-x"
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": "forbidden",
+      "reason": "image_not_allowed"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

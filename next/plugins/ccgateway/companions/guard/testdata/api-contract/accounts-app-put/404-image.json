@@ -1,0 +1,43 @@
+{
+  "name": "404 image",
+  "setup": {
+    "networks": [
+      {
+        "aid": "21",
+        "subnet": "10.52.74.0/24"
+      }
+    ],
+    "volumes": [
+      {
+        "aid": "21",
+        "quota": true
+      }
+    ],
+    "files": {
+      "21/resolv.conf": "ok"
+    }
+  },
+  "request": {
+    "method": "PUT",
+    "path": "/v1/accounts/21/app",
+    "json": {
+      "auth_label": "fp-1",
+      "env": {
+        "TZ": "UTC"
+      },
+      "image": "ccgateway-app:1",
+      "image_label": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "ipv4": "10.52.74.5"
+    }
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not_found",
+      "reason": "image"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

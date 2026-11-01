@@ -1,0 +1,39 @@
+{
+  "name": "403 state.json in shared-egress",
+  "covers": "BUG-20(fixed)",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ],
+    "networks": [
+      {
+        "aid": "d0000000000000000",
+        "role": "xray-uplink",
+        "subnet": "10.117.81.0/24"
+      }
+    ],
+    "files": {
+      "shared-egress": "name"
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/gateway/ensure",
+    "json": {}
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": "forbidden",
+      "reason": "mount_source_rejected"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

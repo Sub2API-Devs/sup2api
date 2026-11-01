@@ -1,0 +1,31 @@
+{
+  "name": "409 subnet_overlap docker network",
+  "covers": "03§3.5.2",
+  "setup": {
+    "other_networks": [
+      {
+        "name": "other",
+        "subnet": "10.60.0.0/16"
+      }
+    ]
+  },
+  "request": {
+    "method": "PUT",
+    "path": "/v1/accounts/21/network",
+    "json": {
+      "gateway": "10.60.1.1",
+      "policy_label": "{\"allocation\": \"random\", \"pool\": \"10.0.0.0/8\"}",
+      "subnet": "10.60.1.0/24"
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": "conflict",
+      "reason": "subnet_overlap"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

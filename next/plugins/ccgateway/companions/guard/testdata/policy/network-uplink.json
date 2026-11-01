@@ -1,0 +1,19 @@
+{
+  "Name": "ccg-d0000000000000000-xray-uplink",
+  "Driver": "bridge",
+  "Internal": false,
+  "EnableIPv6": false,
+  "IPAM": {
+    "Driver": "default",
+    "Config": [
+      {
+        "Subnet": "10.117.81.0/24",
+        "Gateway": "10.117.81.1"
+      }
+    ]
+  },
+  "Labels": {
+    "io.sup2api.ccgateway.account": "d0000000000000000",
+    "io.sup2api.ccgateway.network": "{}"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "404 image",
+  "setup": {},
+  "request": {
+    "method": "POST",
+    "path": "/v1/controller/upgrade",
+    "json": {
+      "image": "ccgateway-controller:404"
+    }
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not_found",
+      "reason": "image"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

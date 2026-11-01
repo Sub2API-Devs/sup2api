@@ -1,0 +1,17 @@
+{
+  "name": "400 missing role",
+  "setup": {},
+  "request": {
+    "method": "DELETE",
+    "path": "/v1/accounts/21/network"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

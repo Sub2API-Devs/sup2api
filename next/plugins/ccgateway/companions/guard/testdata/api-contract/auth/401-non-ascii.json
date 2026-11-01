@@ -1,0 +1,19 @@
+{
+  "name": "401 non ASCII",
+  "covers": "U6 BUG-11(fixed)",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/inventory",
+    "auth": "Bearer 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeé"
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "error": "unauthorized"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

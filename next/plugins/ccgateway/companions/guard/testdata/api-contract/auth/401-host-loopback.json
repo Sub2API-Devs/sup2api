@@ -1,0 +1,16 @@
+{
+  "name": "401 host loopback",
+  "covers": "U6 N4",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/health",
+    "remote": "127.0.0.1:4000"
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "error": "unauthorized"
+    }
+  }
+}

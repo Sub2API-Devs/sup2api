@@ -1,0 +1,25 @@
+{
+  "name": "409 volume owned by another account",
+  "setup": {
+    "volumes": [
+      {
+        "aid": "21",
+        "owner": "22"
+      }
+    ]
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/accounts/21"
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": "conflict",
+      "names": [
+        "ccg-21-data"
+      ],
+      "reason": "ownership_mismatch"
+    }
+  }
+}

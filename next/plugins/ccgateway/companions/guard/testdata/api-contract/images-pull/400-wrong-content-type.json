@@ -1,0 +1,20 @@
+{
+  "name": "400 wrong content type",
+  "covers": "03§3.3",
+  "setup": {},
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/pull",
+    "text": "{\"ref\":\"ccgateway-app:1\"}",
+    "content_type": "text/plain"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

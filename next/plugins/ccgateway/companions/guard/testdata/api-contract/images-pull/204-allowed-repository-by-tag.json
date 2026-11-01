@@ -1,0 +1,19 @@
+{
+  "name": "204 allowed repository by tag",
+  "covers": "R4",
+  "setup": {
+    "pullable": [
+      "ghcr.io/sub2api-devs/ccgateway-app:0.1.119"
+    ]
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/pull",
+    "json": {
+      "ref": "ghcr.io/sub2api-devs/ccgateway-app:0.1.119"
+    }
+  },
+  "response": {
+    "status": 204
+  }
+}
