@@ -32,6 +32,12 @@ export function knownUsageRounds(row: UsageRow): Array<{ round: number; tokens: 
   })
 }
 
+/** "#12 name" for the upstream account a request used ("#12" once the account is gone, "" without one). */
+export function accountLabel(u: Pick<UsageLog, 'account_id' | 'account_name'>): string {
+  if (!u.account_id) return u.account_name || ''
+  return u.account_name ? `#${u.account_id} ${u.account_name}` : `#${u.account_id}`
+}
+
 /** True when the core converted the request to another upstream protocol. */
 export function isConverted(u: Pick<UsageLog, 'protocol' | 'upstream_protocol'>): boolean {
   return !!u.upstream_protocol && !!u.protocol && u.upstream_protocol !== u.protocol

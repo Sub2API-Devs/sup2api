@@ -9,11 +9,12 @@ import UsageError from './UsageError.vue'
 import UsageStatus from './UsageStatus.vue'
 import UsageTiming from './UsageTiming.vue'
 import UsageTokens from './UsageTokens.vue'
-import { billingTone, hashColor, isConverted, type UsageRow } from './usage'
+import { accountLabel, billingTone, hashColor, isConverted, type UsageRow } from './usage'
 
 // The usage list: one row per request, its detail (billing trace, request
-// facts) expanded under it; cards on narrow screens. Clicking a client IP or
-// a client request ID asks the page to filter by it.
+// facts) expanded under it; cards on narrow screens. Clicking a client IP, a
+// client request ID or (operators) the upstream account asks the page to
+// filter by it.
 const props = withDefaults(
   defineProps<{
     rows: UsageRow[]
@@ -29,6 +30,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'filter-client-request-id', id: string): void
   (e: 'filter-client-ip', ip: string): void
+  (e: 'filter-account-id', id: number): void
 }>()
 const { t } = useI18n()
 const expanded = ref(new Set<number>())
@@ -37,7 +39,8 @@ const columns = computed<TableColumn[]>(() => [
   ...(props.showUser ? [{ key: 'user', label: t('common.user'), width: '150px' }] : []),
   { key: 'api_key', label: t('usage.request.apiKey'), width: '140px' },
   { key: 'client_ip', label: t('usage.request.clientIP'), width: '170px', format: 'ip', filterable: true },
-  { key: 'model', label: props.showAccount ? t('usage.cols.modelAccount') : t('common.model'), width: '210px' },
+  { key: 'model', label: t('common.model'), width: '190px' },
+  ...(props.showAccount ? [{ key: 'account', label: t('common.account'), width: '170px' }] : []),
   { key: 'tokens', label: t('usage.tokens.title'), width: '125px' },
   { key: 'total_cost', label: t('usage.cols.cost'), width: '95px' },
   { key: 'latency', label: t('usage.cols.timing'), width: '140px' },
@@ -117,19 +120,25 @@ function toggleMobile(id: number) {
             <SIcon v-if="row.upstream_model && row.upstream_model !== row.model" name="arrow-left" class="h-3 w-3 shrink-0 rotate-180 text-fg-subtle" />
           </span>
           <div class="flex max-w-full items-center gap-1.5 text-xxs text-fg-subtle">
-            <span
-              v-if="showAccount && row.account_id"
-              class="flex min-w-0 items-center gap-1"
-              :title="row.account_name || undefined"
-            >
-              <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="hashColor(String(row.account_id))" aria-hidden="true" />
-              <span class="shrink-0 font-mono">#{{ row.account_id }}</span>
-              <span class="truncate">{{ row.account_name }}</span>
-            </span>
-            <span v-else-if="!showAccount" class="truncate font-mono">{{ row.upstream_protocol || row.protocol || '—' }}</span>
+            <span class="truncate font-mono">{{ row.upstream_protocol || row.protocol || '—' }}</span>
             <SBadge v-if="isConverted(row)" size="xs" tone="warning" :title="t('usage.convertedFrom', { protocol: row.protocol })">{{ t('usage.converted') }}</SBadge>
           </div>
         </div>
+      </template>
+      <template #cell-account="{ row }">
+        <button
+          v-if="row.account_id"
+          type="button"
+          class="inline-flex h-6 max-w-full items-center gap-1.5 rounded-md border border-line bg-surface-2/60 px-2 text-left text-xs hover:border-primary-400 hover:text-primary-600"
+          :title="t('usage.filterByAccount', { account: accountLabel(row) })"
+          data-testid="usage-account"
+          @click.stop="emit('filter-account-id', row.account_id)"
+        >
+          <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="hashColor(String(row.account_id))" aria-hidden="true" />
+          <span class="shrink-0 font-mono text-fg-muted">#{{ row.account_id }}</span>
+          <span v-if="row.account_name" class="truncate">{{ row.account_name }}</span>
+        </button>
+        <span v-else class="text-xs text-fg-subtle" :title="t('usage.noAccount')">—</span>
       </template>
       <template #cell-tokens="{ row }"><UsageTokens :row="row" /></template>
       <template #cell-total_cost="{ row }">
@@ -201,9 +210,20 @@ function toggleMobile(id: number) {
             <dt class="text-fg-subtle">{{ t('usage.request.apiKey') }}</dt>
             <dd class="truncate">{{ keyName(row) }}<span v-if="groupName(row)" class="text-fg-subtle"> · {{ groupName(row) }}</span></dd>
           </template>
-          <template v-if="showAccount && isVisible('model')">
+          <template v-if="showAccount && isVisible('account')">
             <dt class="text-fg-subtle">{{ t('common.account') }}</dt>
-            <dd class="truncate">{{ row.account_name || (row.account_id ? '#' + row.account_id : '—') }}</dd>
+            <dd class="min-w-0">
+              <button
+                v-if="row.account_id"
+                type="button"
+                class="block max-w-full truncate text-left text-primary-600"
+                :title="t('usage.filterByAccount', { account: accountLabel(row) })"
+                @click="emit('filter-account-id', row.account_id)"
+              >
+                {{ accountLabel(row) }}
+              </button>
+              <span v-else class="text-fg-subtle">—</span>
+            </dd>
           </template>
           <template v-if="isVisible('client_ip')">
             <dt class="text-fg-subtle">{{ t('usage.request.clientIP') }}</dt>

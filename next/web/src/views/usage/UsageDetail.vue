@@ -8,7 +8,7 @@ import { ACCOUNT_PAGE_PERMS } from '@/composables/useOwnership'
 import { formatMoney, formatNumber } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
 import { useAccountTypes } from '@/views/accounts/accountTypes'
-import { factText, hookTone, isConverted, knownUsageRounds, type UsageRow } from './usage'
+import { accountLabel, factText, hookTone, isConverted, knownUsageRounds, type UsageRow } from './usage'
 import UsageBillingFacts from './UsageBillingFacts.vue'
 import UsageStatus from './UsageStatus.vue'
 import UsageTokenFacts from './UsageTokenFacts.vue'
@@ -121,7 +121,7 @@ const failureDecisions = computed<FailureDecision[]>(() => {
     <SCard variant="flat" :title="t('usage.request.title')" data-testid="usage-request-facts">
       <SDescriptions dense :columns="2" label-width="6rem">
         <SDescItem :label="t('common.group')">{{ u.group_name || (u.group_id ? '#' + u.group_id : '—') }}</SDescItem>
-        <SDescItem v-if="u.account_id || u.account_name" :label="t('common.account')">{{ u.account_name || '#' + u.account_id }}</SDescItem>
+        <SDescItem v-if="u.account_id || u.account_name" :label="t('common.account')">{{ accountLabel(u) }}</SDescItem>
         <SDescItem v-if="u.api_key_name || u.api_key_id" :label="t('usage.request.apiKey')">{{ u.api_key_name || '#' + u.api_key_id }}</SDescItem>
         <SDescItem :label="t('usage.request.clientIP')"><SIPAddress :value="u.client_ip" data-testid="detail-client-ip" /></SDescItem>
         <SDescItem :label="t('usage.request.id')"><div class="flex items-center gap-1">
