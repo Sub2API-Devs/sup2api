@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SBadge, SCard, SCode, SDisclosure, SHint, SStatusBadge } from '@sub2api/ui'
+import { SBadge, SCard, SCode, SDisclosure, SHint } from '@sub2api/ui'
+import PluginStatusBadge from '../parts/PluginStatusBadge.vue'
 import { lt } from '@/i18n'
 import { formatNumber } from '@/utils/format'
-import { PLUGIN_TONES, accountTypesOf, asArray, capabilityIdsOf, endpointText, pick, platformsOf, usePluginStatusLabel, type PluginDetail } from '../pluginUtil'
+import { accountTypesOf, asArray, capabilityIdsOf, endpointText, pick, platformsOf, type PluginDetail } from '../pluginUtil'
 import PluginGatewayDecl from '../parts/PluginGatewayDecl.vue'
 import TrustBadge from '../parts/TrustBadge.vue'
 
 const props = defineProps<{ detail: PluginDetail }>()
 const { t } = useI18n()
-const statusLabel = usePluginStatusLabel()
 
 const m = computed<Record<string, any>>(() => props.detail.manifest || {})
 const ui = computed<Record<string, any>>(() => pick(m.value, 'ui') || {})
@@ -49,7 +49,7 @@ const nodeStates = computed(() => {
         <dd class="font-mono">{{ detail.key }}</dd>
         <dt>{{ t('common.status') }}</dt>
         <dd class="flex flex-wrap items-center gap-2">
-          <SStatusBadge :status="detail.status" :tones="PLUGIN_TONES" :label="statusLabel(detail.status)" />
+          <PluginStatusBadge :status="detail.status" />
           <SHint v-if="detail.status_reason" inline size="xs" tone="danger">{{ detail.status_reason }}</SHint>
         </dd>
         <dt>{{ t('plugins.activeVersion') }}</dt>
@@ -120,7 +120,7 @@ const nodeStates = computed(() => {
         <dd class="flex flex-wrap gap-1">
           <template v-if="nodeStates.length">
             <span v-for="[s, n] in nodeStates" :key="s" class="inline-flex items-center gap-1">
-              <SStatusBadge :status="s" :tones="PLUGIN_TONES" :label="statusLabel(s)" /><span class="text-xs">× {{ n }}</span>
+              <PluginStatusBadge :status="s" /><span class="text-xs">× {{ n }}</span>
             </span>
             <SHint inline size="xs">{{ t('plugins.detail.nodeCount', { n: detail.nodes?.length || 0 }) }}</SHint>
           </template>

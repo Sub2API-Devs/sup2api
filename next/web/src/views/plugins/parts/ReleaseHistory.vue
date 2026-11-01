@@ -3,10 +3,11 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
 import { SButton, SCard, SCode, SDisclosure, SHint, SPagination, SStatusBadge, useAutoRefresh } from '@sub2api/ui'
+import PluginStatusBadge from './PluginStatusBadge.vue'
 import type { PluginHistory, PluginRelease } from '@/api/observability'
 import { formatDateTime } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
-import { PLUGIN_TONES, usePluginStatusLabel } from '../pluginUtil'
+import { usePluginStatusLabel } from '../pluginUtil'
 const props = defineProps<{ pluginKey?: string; since?: string }>()
 const { t } = useI18n()
 const statusLabel = usePluginStatusLabel()
@@ -62,7 +63,7 @@ onBeforeUnmount(() => { disposed = true })
         >
           <strong>{{ item.plugin_key }}</strong>
           <SCode inline :text="`#${item.id} · ${item.from_version || '—'} → ${item.target_version || '—'}`" />
-          <SStatusBadge :status="item.phase" :tones="PLUGIN_TONES" :label="statusLabel(item.phase)" />
+          <PluginStatusBadge :status="item.phase" />
           <SHint inline size="xs">{{ formatDateTime(item.created_at) }}</SHint>
         </button>
         <div class="mt-2 flex flex-wrap gap-2">
@@ -81,7 +82,7 @@ onBeforeUnmount(() => { disposed = true })
           <li v-for="event in group.events" :key="event.id">
             <SHint inline size="xs">{{ formatDateTime(event.created_at) }} · {{ event.boot_id.slice(0, 8) }}</SHint>
             <div class="my-1 flex flex-wrap items-center gap-2">
-              <SStatusBadge :status="event.state" :tones="PLUGIN_TONES" :label="statusLabel(event.state)" />
+              <PluginStatusBadge :status="event.state" />
               <SCode v-if="event.version" inline :text="event.version" />
             </div>
             <SDisclosure v-if="event.message" :label="t('observe.detail')">
