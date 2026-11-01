@@ -3,6 +3,7 @@ package accounts
 import (
 	"context"
 	"errors"
+	"time"
 
 	"ccgateway/controller/internal/contract"
 	"ccgateway/controller/internal/guardapi"
@@ -24,11 +25,15 @@ func (m *Manager) probe(ctx context.Context, aid string, st *store.AccountState,
 	s, err := m.g.AccountState(ctx, aid)
 	if err != nil {
 		if !guardapi.IsNotFound(err) {
+			if rev, snap, ok := m.fromSnapshot(aid, st, err); ok {
+				return rev, snap, nil
+			}
 			return "", nil, err
 		}
 		m.GoOffline(aid)
 		return "", nil, nil
 	}
+	m.keepSnapshot(aid, s)
 	if _, ok := m.onlineRev(aid); ok {
 		if !m.backed(aid, st, s) {
 			m.GoOffline(aid)
@@ -248,4 +253,55 @@ func (m *Manager) stateBoth(ctx context.Context, aid string) (*guardapi.AccountS
 		return nil, errGatewayMissing
 	}
 	return s, nil
+}
+
+// SnapshotMaxAge bounds the readiness fallback: a runtime is answered from
+// the last guard snapshot only while it is younger than this.
+const SnapshotMaxAge = 300 * time.Second
+
+// stateSnapshot is the last AccountState the guard answered for a runtime.
+type stateSnapshot struct {
+	at    time.Time
+	state *guardapi.AccountState
+}
+
+func (m *Manager) keepSnapshot(aid string, s *guardapi.AccountState) {
+	m.memMu.Lock()
+	defer m.memMu.Unlock()
+	m.snaps[aid] = stateSnapshot{at: m.clock.Now(), state: s}
+}
+
+// fromSnapshot answers readiness while the guard is unreachable (transport
+// failure, 503 unavailable or starting): the request path must not depend on
+// the guard (05 IT-X01). Only a snapshot at most SnapshotMaxAge old that
+// itself shows the runtime backed (both containers running, the boots of the
+// activation, a healthy binding) keeps an online runtime ready. A definite
+// guard answer (404, 403 controller_unguarded, ownership mismatch) never
+// gets here. Safe: if a container died meanwhile, the tunnel to app_ip fails
+// and answers 503; nothing is sent elsewhere.
+func (m *Manager) fromSnapshot(aid string, st *store.AccountState, err error) (string, *guardapi.AccountState, bool) {
+	if !errors.Is(err, guardapi.ErrUnavailable) {
+		return "", nil, false
+	}
+	rev, online := m.onlineRev(aid)
+	if !online {
+		return "", nil, false
+	}
+	now := m.clock.Now()
+	m.memMu.Lock()
+	snap, ok := m.snaps[aid]
+	m.memMu.Unlock()
+	if !ok || now.Sub(snap.at) > SnapshotMaxAge || !m.backed(aid, st, snap.state) {
+		return "", nil, false
+	}
+	m.memMu.Lock()
+	warn := now.Sub(m.snapWarn[aid]) >= time.Minute
+	if warn {
+		m.snapWarn[aid] = now
+	}
+	m.memMu.Unlock()
+	if warn && m.log != nil {
+		m.log.Warn("readiness from cached snapshot key=%s age=%s: %v", aid, now.Sub(snap.at).Round(time.Second), err)
+	}
+	return rev, snap.state, true
 }

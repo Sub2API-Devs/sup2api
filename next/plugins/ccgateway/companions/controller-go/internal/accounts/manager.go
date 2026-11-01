@@ -65,6 +65,11 @@ type Manager struct {
 	online  map[string]string    // M1: revision a runtime is ready at
 	boots   map[string][2]string // M2: (app StartedAt, gateway StartedAt) at activation
 	dropped map[string]bool      // M5: runtimes rid of sing-box leftovers by this process
+	// snaps is the last AccountState the guard answered per runtime, the
+	// readiness fallback while the guard is unreachable (IT-X01); snapWarn
+	// rate-limits its log line.
+	snaps    map[string]stateSnapshot
+	snapWarn map[string]time.Time
 
 	shared *shared
 
@@ -108,6 +113,7 @@ func New(opts Options) (*Manager, error) {
 		locks: opts.Locks, clock: opts.Clock, rand: opts.Rand, resolver: opts.Resolver, worker: opts.Worker,
 		rules: opts.BusinessRules, log: opts.Log,
 		online: map[string]string{}, boots: map[string][2]string{}, dropped: map[string]bool{},
+		snaps: map[string]stateSnapshot{}, snapWarn: map[string]time.Time{},
 		recoverEvery: RecoverEvery, recheckEvery: RecheckEvery, reqWait: keylock.RequestWait,
 	}
 	data, _, err := m.st.LoadShared(func() string { return rnd.TokenHex(m.rand, 32) })

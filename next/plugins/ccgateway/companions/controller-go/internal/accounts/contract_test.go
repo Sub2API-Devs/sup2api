@@ -3,6 +3,7 @@ package accounts
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"ccgateway/controller/internal/errs"
 	"ccgateway/controller/internal/guardapi"
@@ -89,6 +90,9 @@ func TestRejectedMountOnStartIsUnnamed(t *testing.T) {
 func TestStartingGuardKeepsReadiness(t *testing.T) {
 	e := newEnv(t)
 	e.mustApply("21", desired(rev))
+	// No usable snapshot (older than SnapshotMaxAge): the unreachable
+	// guard answers 503 and readiness is kept (IT-X01 covers the fallback).
+	e.clock.Advance(SnapshotMaxAge + time.Second)
 	e.g.SetStarting(true)
 	_, err := e.m.Connection(bg, "21", rev)
 	if !errors.Is(err, guardapi.ErrUnavailable) || !errors.Is(err, guardapi.ErrStarting) {

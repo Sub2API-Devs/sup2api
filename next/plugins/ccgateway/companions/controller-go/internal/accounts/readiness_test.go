@@ -3,6 +3,7 @@ package accounts
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -156,6 +157,9 @@ func TestRestartedOrMissingContainersDropReadiness(t *testing.T) {
 func TestUnreachableGuardKeepsReadiness(t *testing.T) {
 	e := newEnv(t)
 	e.mustApply("21", desired(rev))
+	// No usable snapshot (older than SnapshotMaxAge): the unreachable
+	// guard answers 503 and readiness is kept (IT-X01 covers the fallback).
+	e.clock.Advance(SnapshotMaxAge + time.Second)
 	e.g.Fail("GET /v1/accounts/{aid}?fields=state", fakeguard.Fault{Status: 0, Times: 3})
 	_, err := e.m.Connection(bg, "21", rev)
 	if !errors.Is(err, guardapi.ErrUnavailable) {
@@ -319,5 +323,85 @@ func TestRecoveryNeverStartsAStoppedAccount(t *testing.T) {
 	}
 	if e.state("21").Status != store.StatusReady {
 		t.Fatal("state untouched")
+	}
+}
+
+// covers: BUG-2 IT-X01 (the guard is unreachable: a snapshot younger than
+// SnapshotMaxAge keeps an online runtime ready; the request path does not
+// depend on the guard)
+func TestReadinessFallsBackToARecentSnapshotWhenTheGuardIsUnreachable(t *testing.T) {
+	e := newEnv(t)
+	e.mustApply("21", desired(rev))
+	if c, err := e.m.Connection(bg, "21", rev); err != nil || c == nil {
+		t.Fatal(err)
+	}
+	e.clock.Advance(SnapshotMaxAge - time.Second)
+	e.g.Fail("GET /v1/accounts/{aid}?fields=state", fakeguard.Fault{Times: 3}) // transport failure
+	for i := 0; i < 2; i++ {
+		if c, err := e.m.Connection(bg, "21", rev); err != nil || c == nil || c.Revision != rev {
+			t.Fatalf("transport failure %d: %v", i, err)
+		}
+	}
+	e.g.ClearFaults()
+	e.g.Fail("GET /v1/accounts/{aid}?fields=state", fakeguard.Fault{Status: 503, Code: "unavailable", Reason: "starting"})
+	if c, err := e.m.Connection(bg, "21", rev); err != nil || c == nil {
+		t.Fatalf("guard starting: %v", err)
+	}
+	if !e.m.OnlineAt("21", rev) {
+		t.Fatal("the fallback took the runtime offline")
+	}
+	if n := strings.Count(e.logs.String(), "readiness from cached snapshot"); n != 1 {
+		t.Fatalf("want one rate-limited warning, got %d", n)
+	}
+}
+
+// covers: BUG-2 IT-X01 (a snapshot older than SnapshotMaxAge is not used: 503
+// as before, readiness kept)
+func TestReadinessSnapshotOlderThanTheLimitAnswers503(t *testing.T) {
+	e := newEnv(t)
+	e.mustApply("21", desired(rev))
+	if _, err := e.m.Connection(bg, "21", rev); err != nil {
+		t.Fatal(err)
+	}
+	e.clock.Advance(SnapshotMaxAge + time.Second)
+	e.g.Fail("GET /v1/accounts/{aid}?fields=state", fakeguard.Fault{})
+	_, err := e.m.Connection(bg, "21", rev)
+	if status, code, _ := errs.Answer(err, errs.Tunnel); status != 503 || code != "runtime_unavailable" {
+		t.Fatalf("%d %s (%v)", status, code, err)
+	}
+	if !e.m.OnlineAt("21", rev) {
+		t.Fatal("a transport failure must not take the runtime offline")
+	}
+	// Never answered: no snapshot, 503.
+	e2 := newEnv(t)
+	e2.mustApply("21", desired(rev))
+	e2.m.memMu.Lock()
+	delete(e2.m.snaps, "21")
+	e2.m.memMu.Unlock()
+	e2.g.Fail("GET /v1/accounts/{aid}?fields=state", fakeguard.Fault{})
+	if _, err := e2.m.Connection(bg, "21", rev); err == nil {
+		t.Fatal("no snapshot: want 503")
+	}
+}
+
+// covers: BUG-2 IT-X01 (a definite guard answer is never replaced by the
+// snapshot: 404 takes the runtime offline, 403 controller_unguarded fails)
+func TestReadinessDefiniteGuardAnswersDoNotUseTheSnapshot(t *testing.T) {
+	e := newEnv(t)
+	e.mustApply("21", desired(rev))
+	if _, err := e.m.Connection(bg, "21", rev); err != nil {
+		t.Fatal(err)
+	}
+	e.g.Fail("GET /v1/accounts/{aid}?fields=state", fakeguard.Fault{Status: 403, Code: "forbidden", Reason: "controller_unguarded"})
+	if c, err := e.m.Connection(bg, "21", rev); err == nil || c != nil {
+		t.Fatal("403 controller_unguarded answered from the snapshot")
+	}
+	e.g.ClearFaults()
+	e.g.Fail("GET /v1/accounts/{aid}?fields=state", fakeguard.Fault{Status: 404, Code: "not_found", Reason: "container"})
+	if c, _ := e.m.Connection(bg, "21", rev); c != nil {
+		t.Fatal("404 answered from the snapshot")
+	}
+	if e.m.OnlineAt("21", rev) {
+		t.Fatal("404 must take the runtime offline")
 	}
 }
