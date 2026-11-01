@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -216,6 +217,14 @@ func TestComposeTemplatePolicy(t *testing.T) {
 	}
 	if g.Environment["CCG_GUARD_TOKEN"] != "${CCG_GUARD_TOKEN:?}" || g.Environment["CCG_GUARD_CONTROL_DNS"] != "${CCG_CONTROL_DNS:-1}" {
 		t.Fatalf("guard environment: %v", g.Environment)
+	}
+	// L7 2026-11-01: on a 384-CPU host Go's default thread pool exceeds
+	// pids_limit, and the guard's docker CLI/compose children failed to start
+	// ("failed to fetch metadata: exit status 2"). Both Go services pin it.
+	for name, svc := range map[string]string{"guard": g.Environment["GOMAXPROCS"], "controller": ctl.Environment["GOMAXPROCS"]} {
+		if n, err := strconv.Atoi(svc); err != nil || n < 1 || n > 8 {
+			t.Fatalf("%s GOMAXPROCS = %q, want a small fixed number", name, svc)
+		}
 	}
 
 	// docker.sock appears in the guard only.

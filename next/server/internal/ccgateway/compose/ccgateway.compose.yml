@@ -37,6 +37,10 @@ services:
     pids_limit: 256
     stop_grace_period: 30s
     environment:
+      # Go sizes its thread pool by the host CPU count (384 on ovh); with
+      # pids_limit 256 the docker CLI and compose plugin the guard runs could
+      # not start their threads (05 L7, 2026-11-01). Children inherit this.
+      GOMAXPROCS: "4"
       CCG_GUARD_TOKEN: ${CCG_GUARD_TOKEN:?}
       CCG_GUARD_PREFIX: ${CCG_PREFIX:-ccg}
       CCG_GUARD_LISTEN: ${CCG_GUARD_ADDR:-172.29.255.1}:8790
@@ -76,6 +80,7 @@ services:
     # environment wins over the same names in env_file: .env is the only
     # source of the controller image and the guard token.
     environment:
+      GOMAXPROCS: "4"
       CCG_RUNTIME_ROOT: /data
       CCG_CONTROLLER_BIND: 0.0.0.0
       CCG_CONTROLLER_IMAGE: ${CCG_CONTROLLER_IMAGE:?}
