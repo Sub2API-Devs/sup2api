@@ -76,14 +76,6 @@ export default {
   account: '账号',
   createdById: '创建人 ID',
   onlyMine: '只看我的',
-  status_: {
-    active: '正常',
-    disabled: '禁用',
-    error: '异常',
-    enabled: '已启用',
-    pending: '待处理',
-    revoked: '已吊销'
-  },
   theme: {
     toggle: '切换主题'
   },

@@ -60,8 +60,8 @@ export async function toggleStatus(path: string, status: string, done?: () => un
 export function useStatusOptions(withAll = false): ComputedRef<SelectOption[]> {
   return computed(() => [
     ...(withAll ? [{ value: '', label: t('common.all') }] : []),
-    { value: 'active', label: t('common.status_.active') },
-    { value: 'disabled', label: t('common.status_.disabled') }
+    { value: 'active', label: t('ui.status.active') },
+    { value: 'disabled', label: t('ui.status.disabled') }
   ])
 }
 
