@@ -2,6 +2,15 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-01 **控制器去 Docker 权限：Go guard + Go 控制器**（北京时间 23:10 至 11-02 01:00；设计 [ccgateway-guard/](../../../docs/ccgateway-guard/)，CONTRACTS §76，证据 [2026-11-01-production](../../../docs/ccgateway-guard/evidence/2026-11-01-production.md)）：
+- 形态：compose 项目 `ccgateway`（`/opt/ccgateway/{compose.yml,.env}`，root 0600）。guard（`ccg-guard`）持有 docker.sock，只监听 `172.29.255.1:8790`（网络 `ccg-control`），维护 `CCG-PROXY-BRIDGE`、`CCG-CONTROL-FWD`、`CCG-CONTROL-IN`；控制器（`ccg-controller`，Go）没有 Docker 权限，数据在 `/opt/ccgateway-controller`。共享网关仍是原来的 `ccg-shared-egress`（S6 未做）。
+- 顺序：S1 guard 换下宿主服务 `ccgateway-bridge-guard`（规则逐条一致；旧服务 stop + disable，**不要再启动**）→ 核心 **0.1.227**（`8dfe959da`，manifest `066bc7bb…af81`）→ 插件 **ccgateway 0.1.119**（包 `a1b8e1a7…cdc3`）→ 接管（没有重建任何账号容器）→ 插件 **ccgateway 0.1.120**（`69385b7bd`，包 `a69b619f…bea2`，rollout 218；控制器经 guard 自升级约 4 秒）→ finish（Python `ccg-controller-prev` 已删）。
+- 两次内存事故，均已修：Go 控制器成对激活时在 1 GiB cgroup 被 OOM 杀（回读校验把 CLI 读进内存，0.1.120 修）；guard 加载 app 镜像时在 256 MiB cgroup 被 OOM 杀两次（上传归档的脏页，`3bb9d3a8d` 写穿修复，guard 换成本地构建的 `ccgateway-guard:0.1.120-r2`）。两次都自动重启，数据路径不受影响。
+- 手工改动：`/opt/ccgateway/compose.yml` 控制器 `mem_limit` 1g → 2g（与仓库模板逐字节一致）；`.env` 的 `CCG_GUARD_IMAGE` 改为 `ccgateway-guard:0.1.120-r2`。修改前的文件在 `backups/ccgateway-0.1.120`。
+- 验收：草稿账号建删、egress/app 原地更新、Worker+CLI 2.1.312 成对激活（27 updated，23 号没有容器）、27 个账号 healthy，规则数全程不变（62/54），网关未重建。
+- 脚本 `stage/ccgateway-0.1.119`（s0/s1/s4/s5）、`stage/ccgateway-0.1.120`、`stage/0.1.227`；备份 `backups/ccgateway-guard/{s0,s4}-20261101`、`backups/core-0.1.227`、`backups/ccgateway-0.1.120`。
+- 观察期到 2026-11-08；之后再做 S6（网关纳入 compose，全账号出网中断 10–60 秒）和收尾清理（旧 bridge guard 文件、Python 控制器镜像与源码、历史备份目录）。
+
 2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
 2026-10-31 网关 **0.1.129**（`b55479dad`，镜像 ID `b19e596b…`，两个节点都已更新）：只把 `HostAPIVersion` 从 7 改为 8，外壳才能接受并签发 Host API 8 的核心。同日核心 **0.1.222**（发布号 `v0.1.222-r2`，manifest `91c90b0c…`，迁移 0064–0070）两节点升级完成，计划约 60 秒；内置插件随之升级：moderation 0.6.0，dynweight 0.3.0、mailer 0.1.1 只安装不启用（install-only）。详见 [clicodeplus/README.md](../clicodeplus/README.md)。

@@ -815,7 +815,7 @@ guard 的错误映射到控制器的错误：
   - `ImageLoad`：请求体是 `io.Reader`（打开的 `.part` 文件），明确给出 `ContentLength`。上传时边读边算 SHA-256（`io.TeeReader`）。导入前 `uploads.Load` 已经算过一遍并核对，这里再算是为了确认送出的字节与核对时相同。
   - `ImageFile` 和 `AppArchiveGet`：返回 `io.ReadCloser`。客户端用 `io.LimitReader(limit+1)` 截断，超出就报错，不信任对端声明的大小。
   - `AppArchivePut`：请求体由 `containerfs.tarStream(name, blob)` 拼成：`io.MultiReader(tar 头, blob 内容, 填充, 结尾两个空块)`。不在内存里再复制一份 512 MiB。
-  - 大文件（CLI 最大 512 MiB，Worker 最大 256 MiB）在控制器里统一用 `containerfs.Blob` 表示。超过 32 MiB 的先落盘到 `<root>/.spool/<随机>`（0600，用完删除，启动时清空），哈希边读边算。控制器容器是只读根文件系统加 64 MiB 的 `/tmp`，装不下，所以落在数据根里。这样配对激活时的峰值内存在 100 MiB 以下。Python 版的峰值接近 1 GiB，原因是 BytesIO 复制和 tar 复制。
+  - 大文件（CLI 最大 512 MiB，Worker 最大 256 MiB）在控制器里统一用 `containerfs.Blob` 表示。超过 1 MiB 的先落盘到 `<root>/.spool/<随机>`（0600，用完删除，启动时清空），哈希边读边算，每 8 MiB 写穿并丢掉页缓存（页缓存记在控制器的 cgroup 里）。写进容器后的回读也是边读边算哈希，不留在内存里。同一镜像的同一个文件只读一次，所有激活共享；同时最多 2 个激活。控制器容器是只读根文件系统加 64 MiB 的 `/tmp`，装不下，所以落在数据根里。2026-11-01 生产上第一版的回读用 `io.ReadAll`，成对激活时在 1 GiB cgroup 里被 OOM 杀；修复后实测匿名内存在 10 MiB 以内（evidence/2026-11-01-production §3.1）。Python 版的峰值接近 1 GiB，原因是 BytesIO 复制和 tar 复制。
 - **输出上限：** exec 应答最多 24 MiB（guard 是 16 MiB 输出，base64 后约 21.3 MiB）；JSON 应答最多 8 MiB；任务的 stdout 最多 128 KiB。
 
 ### 5.5 请求路径上的就绪检查：一次调用
@@ -1393,7 +1393,7 @@ docker build "$@" $labels --build-arg VERSION="$short" -t "$controller" "$compan
 | 2 | **guard 返回的形状和语义与 docker-py 有差异**：Mounts 被裁剪、exec 输出不合并、停止的容器不能读写归档、top 的列不同 | 原地更新、配对激活、identity 比较出错 | 需求 R1、R5、R6、R7；共享契约夹具（§8.2）；真机测试覆盖原地更新和配对激活 |
 | 3 | **Python 隐式语义在移植中走样**：真值、`int()`、`urlsplit`、`isspace`、RLock 重入、哪些错误命名哪些不命名、`Connection: close` 出现在哪里 | 某些边界输入的应答变了，或某条路径死锁 | 185 项测试一一移植；§8.5 的差分测试；`pyjson` 的语义工具都有表驱动测试；不可重入锁改为显式传 `*Held`，加锁顺序检查 |
 | 4 | **网关由 compose 管理以后的恢复**：compose 任何一次重建都会丢掉全部动态接入 | 所有账号同时掉线，串行恢复约 1–3 s × 账号数 | §7.3 的完整恢复路径和测试；重建后 `kickRecover`；第二期做有限并发恢复；recreate 只在显式维护时执行，控制器绝不自动调用 |
-| 5 | **资源与真并发**：<br>- 控制器内存上限 1 GiB，CLI 最大 512 MiB；<br>- 上传导入时磁盘双份占用；<br>- Go 的真并发暴露数据竞争 | OOM、磁盘满、偶发的状态错乱 | 大文件经 `Blob` 落盘、全程流式（§5.4）；`-race`；mem 锁和 sharedMu 只做内存操作；上传上限仍是 4 个并发、4 GiB；磁盘水位在部署说明里写明 |
+| 5 | **资源与真并发**：<br>- 控制器内存上限 2 GiB（原 1 GiB，2026-11-01 提高），CLI 最大 512 MiB；<br>- 上传导入时磁盘双份占用；<br>- Go 的真并发暴露数据竞争 | OOM、磁盘满、偶发的状态错乱 | 大文件经 `Blob` 落盘、全程流式（§5.4）；`-race`；mem 锁和 sharedMu 只做内存操作；上传上限仍是 4 个并发、4 GiB；磁盘水位在部署说明里写明 |
 
 ### 11.2 其他风险与取舍
 

@@ -719,7 +719,7 @@ type LoadedImage struct {
 
 步骤：
 
-1. **落盘。** 写到 `StateDir/loads/<随机>.part`（0600），边写边数字节，与 `Content-Length` 不一致就删掉并回 400。磁盘剩余不足 `Content-Length` 的 1.2 倍时直接 503 `busy`。
+1. **落盘。** 写到 `StateDir/loads/<随机>.part`（0600），边写边数字节，与 `Content-Length` 不一致就删掉并回 400。每 8 MiB 用 `sync_file_range` 写穿并 `fadvise DONTNEED` 丢掉页缓存（`files.CopyWriteThrough`）：这些页记在 guard 的 256 MiB cgroup 里，脏页回写前不能回收，2026-11-01 生产上加载 app 镜像时因此被 OOM 杀了两次。磁盘剩余不足 `Content-Length` 的 1.2 倍时直接 503 `busy`。
 2. **解析清单**（`imagecheck.Scan`）：读前几个字节判断格式，gzip 魔数 `1f 8b` 就套 `gzip.Reader`，否则按 tar；其他压缩格式（xz、bzip2、zstd，Docker 也认）一律 400，因为 guard 无法核对它们的内容。扫描整个归档，**只读元数据，不解出层**：
    - 收集所有名字规范化后（`path.Clean`，去掉开头的 `./`）等于 `manifest.json`、`index.json`、`repositories` 的条目。任一出现超过一次，或者不是普通文件（符号链接、硬链接都不行），或者超过 1 MiB → 403 `load_forbidden`。Docker 是先把归档解到临时目录再读这三个文件，重名时以最后一个为准，符号链接会被跟随，所以必须这样拒绝。
    - `manifest.json` 必须存在且能解析（读不出清单的归档直接拒绝，总设计稿 §6.2）。每一项的 `RepoTags` 收进候选名字。
@@ -1183,7 +1183,7 @@ chown -R 1000:1000 /work
 | 挂载 | `docker.sock` 读写、`/opt/ccgateway-runtime` 读写 | 只有 `/opt/ccgateway-controller:/data` |
 | 用户、能力 | root，Docker 默认 14 项能力 | root（第一期），`cap_drop: [ALL]`，没有 `cap_add` |
 | 根文件系统 | 可写 | `read_only: true`，`tmpfs: /tmp:size=64m` |
-| 资源 | 无 | `mem_limit: 1g`，`pids_limit: 512` |
+| 资源 | 无 | `mem_limit: 2g`（2026-11-01 由 1g 提高，见 evidence/2026-11-01-production §3），`pids_limit: 512` |
 | 环境 | 环境文件 | `env_file` + `environment`（`CCG_RUNTIME_ROOT=/data`、`CCG_CONTROLLER_BIND=0.0.0.0`、`CCG_GUARD_URL`、`CCG_GUARD_TOKEN`、`CCG_CONTROLLER_IMAGE`） |
 | 健康 | 无（升级脚本自己轮询 `/health`） | `healthcheck: ["CMD", "/ccg-controller", "healthcheck"]` |
 | 镜像要求 | — | guard-api=1 且 shared-egress=1；只有 CMD |
@@ -1753,7 +1753,7 @@ services:
     security_opt: ["no-new-privileges:true"]
     read_only: true
     tmpfs: ["/tmp:size=64m"]
-    mem_limit: 1g
+    mem_limit: 2g
     pids_limit: 512
     stop_grace_period: 15s
     healthcheck:
