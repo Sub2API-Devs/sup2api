@@ -22,9 +22,8 @@ import (
 
 // Exit codes of serve.
 const (
-	exitConfig   = 2  // invalid environment (02 §4.5 step 1)
-	exitStartup  = 1  // data root, runtime.json, shared state, listener
-	exitNotWired = 70 // built without the business packages (wire_pending.go)
+	exitConfig  = 2 // invalid environment (02 §4.5 step 1)
+	exitStartup = 1 // data root, runtime.json, shared state, listener
 )
 
 // guardCheckTimeout bounds the start-up GET /v1/health of the guard.
@@ -95,9 +94,6 @@ func serve(ctx context.Context, lookup func(string) (string, bool), stderr io.Wr
 		Worker: worker, Log: log})
 	if err != nil {
 		log.Error("cannot start: %v", err)
-		if err == errNotWired {
-			return exitNotWired
-		}
 		return exitStartup
 	}
 	server, err := api.New(api.Options{Key: cfg.ControllerKey, Accounts: svc.Accounts, Updates: svc.Updates,

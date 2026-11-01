@@ -1,10 +1,6 @@
-//go:build ccgwired
-
 package main
 
 import (
-	"errors"
-
 	"ccgateway/controller/internal/accounts"
 	"ccgateway/controller/internal/admin"
 	"ccgateway/controller/internal/cleanup"
@@ -12,15 +8,9 @@ import (
 	"ccgateway/controller/internal/uploads"
 )
 
-// errNotWired is never returned by this build.
-var errNotWired = errors.New("serve is not wired")
-
 // build wires the business packages (IMPLEMENTATION.md §1). The accounts
 // Manager is the host of updates, cleanup and admin. accounts.New reads the
 // shared gateway state (an unknown schema fails the start).
-//
-// The coordinator removes the ccgwired tag (and wire_pending.go) after
-// merging writers A and B.
 func build(d deps) (*services, error) {
 	m, err := accounts.New(accounts.Options{Config: d.Config, Store: d.Store, Guard: d.Guard, Images: d.Images,
 		DiskQuota: d.DiskQuota, Worker: d.Worker, Log: d.Log})
