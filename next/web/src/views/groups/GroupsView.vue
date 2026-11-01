@@ -15,6 +15,7 @@ import { formatNumber } from '@/utils/format'
 import { ACCOUNT_KEYS } from '@/composables/useOwnership'
 import EnvironmentEditor from '@/components/environment/EnvironmentEditor.vue'
 import GroupAccountsEditor from './GroupAccountsEditor.vue'
+import GroupDeleteModal from './GroupDeleteModal.vue'
 import GroupModelPolicyEditor from './GroupModelPolicyEditor.vue'
 import GroupPlatforms from '@/views/platforms/GroupPlatforms.vue'
 import PlatformEndpointsPreview from '@/views/platforms/PlatformEndpointsPreview.vue'
@@ -193,10 +194,19 @@ async function submit() {
 
 // ------------------------------------------------------------------ row menu
 
+/** The group being deleted while it still has API keys (they move or are unbound). */
+const deleting = ref<Group | null>(null)
+const deleteOpen = ref(false)
+
 function onAction(g: Group, key: string) {
   if (key === 'toggle') return toggleStatus(`/groups/${g.id}`, g.status, changed)
   if (key !== 'delete') return
-  const extra = g.account_count || keyCount(g) ? ' ' + t('groups.deleteInUse', { a: g.account_count ?? 0, k: keyCount(g) ?? 0 }) : ''
+  if (keyCount(g)) {
+    deleting.value = g
+    deleteOpen.value = true
+    return
+  }
+  const extra = g.account_count ? ' ' + t('groups.deleteWithAccounts', { a: g.account_count }) : ''
   return deleteWithConfirm(`/groups/${g.id}`, t('common.confirmDelete', { name: g.name }) + extra, changed)
 }
 </script>
@@ -301,6 +311,8 @@ function onAction(g: Group, key: string) {
         <SButton variant="primary" :loading="saving" @click="submit">{{ editing ? t('common.save') : t('common.create') }}</SButton>
       </template>
     </SModal>
+
+    <GroupDeleteModal v-model:open="deleteOpen" :group="deleting" :key-count="deleting ? keyCount(deleting) ?? 0 : 0" @deleted="changed" />
 
     <!-- detail -->
     <SModal v-model:open="detailOpen" :title="detail?.name || ''" width="lg">

@@ -131,12 +131,13 @@ func TestPlatformsOf(t *testing.T) {
 func TestFillPlatformsWithoutRegistry(t *testing.T) {
 	// No registry (or no generation): no database access, platforms are [].
 	for _, s := range []*Service{New(nil, nil, nil, nil), New(nil, nil, nil, fakeRegistry{})} {
-		keys := []*APIKey{{GroupID: 1}, {GroupID: 2}}
+		g1, g2 := int64(1), int64(2)
+		keys := []*APIKey{{GroupID: &g1}, {GroupID: &g2}, {}}
 		if err := s.fillPlatforms(context.Background(), keys); err != nil {
 			t.Fatal(err)
 		}
 		b, _ := json.Marshal(keys)
-		if strings.Count(string(b), `"platforms":[]`) != 2 {
+		if strings.Count(string(b), `"platforms":[]`) != 3 {
 			t.Fatalf("json: %s", b)
 		}
 	}
@@ -544,10 +545,40 @@ func TestAPIKeyLifecycleAndAuth(t *testing.T) {
 	}
 	// Removing membership takes effect without waiting for cache expiry.
 	e.exec(`DELETE FROM user_groups WHERE user_id = $1`, e.user)
-	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != "permission_denied" {
+	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != CodeGroupNotAllowed {
 		t.Fatalf("group not available: %v", err)
 	}
+	_, out = e.do(e.user, "GET", "/me/api-keys", nil)
+	if v := out["data"].([]any)[0].(map[string]any); v["group_status"] != "unavailable" {
+		t.Fatalf("unavailable group view: %v", v)
+	}
 	e.exec(`UPDATE api_keys SET group_id=$2, expires_at=NULL WHERE id=$1`, keyID, pub)
+	e.exec(`UPDATE groups SET status='disabled' WHERE id=$1`, pub)
+	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != CodeGroupDisabled {
+		t.Fatalf("disabled group: %v", err)
+	}
+	e.exec(`UPDATE groups SET status='active' WHERE id=$1`, pub)
+
+	// A deleted group leaves the key unbound: it is kept and listed, answers
+	// group_deleted instead of reaching the scheduler, and works again once
+	// its owner picks another group.
+	gone := e.exec1(`INSERT INTO groups (name) VALUES ('gone') RETURNING id`)
+	e.exec(`UPDATE api_keys SET group_id=$2 WHERE id=$1`, keyID, gone)
+	e.exec(`DELETE FROM groups WHERE id=$1`, gone)
+	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != CodeGroupDeleted {
+		t.Fatalf("deleted group: %v", err)
+	}
+	_, out = e.do(e.user, "GET", "/me/api-keys", nil)
+	if v := out["data"].([]any)[0].(map[string]any); v["group_id"] != nil || v["group_status"] != "deleted" || fmt.Sprint(v["platforms"]) != "[]" {
+		t.Fatalf("unbound key view: %v", v)
+	}
+	if code, out = e.do(e.user, "PATCH", fmt.Sprintf("/me/api-keys/%d", keyID), map[string]any{"group_id": pub}); code != 200 ||
+		out["data"].(map[string]any)["group_status"] != "active" {
+		t.Fatalf("rebind: %d %v", code, out)
+	}
+	if p, err := e.svc.Authenticate(ctx, raw); err != nil || p.Group.ID != pub {
+		t.Fatalf("after rebind: %+v %v", p, err)
+	}
 
 	e.exec(`UPDATE api_keys SET expires_at = now() - interval '1 minute' WHERE id = $1`, keyID)
 	if _, err := e.svc.Authenticate(ctx, raw); codeOf(err) != "unauthenticated" {

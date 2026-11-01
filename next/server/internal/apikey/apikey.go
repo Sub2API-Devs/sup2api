@@ -208,8 +208,8 @@ func (s *Service) Authenticate(ctx context.Context, rawKey string) (*core.APIKey
 	if !ipAllowed(core.ClientIP(ctx), e.AllowedIPs) {
 		return nil, core.NewError(403, "ip_not_allowed", t(ctx, "client IP is not allowed for this API key", "调用 IP 不在此 API Key 的白名单内"))
 	}
-	if e.GroupStatus != "active" || !e.GroupAvailable {
-		return nil, core.ErrPermissionDenied.WithMessage("group not available")
+	if err := groupError(ctx, e); err != nil {
+		return nil, err
 	}
 	ok, err := s.authz.Can(ctx, e.UserID, "gateway:use")
 	if err != nil {
@@ -249,12 +249,13 @@ func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 	var rate string
 	err := s.db.Pool.QueryRow(ctx, `SELECT k.id, k.user_id, k.status, k.expires_at,
 			(u.status = 'active' AND u.deleted_at IS NULL),
-			g.id, g.name, g.status, g.rate_multiplier::text, g.model_allowlist, g.model_filter_mode, g.environment,
-			(g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id)), k.allowed_ips,
+			COALESCE(g.id, 0), COALESCE(g.name, ''), COALESCE(g.status, 'deleted'), COALESCE(g.rate_multiplier, 1)::text,
+			COALESCE(g.model_allowlist, '[]'), COALESCE(g.model_filter_mode, 'blacklist'), COALESCE(g.environment, '{}'),
+			COALESCE(g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id), false), k.allowed_ips,
 			k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used
 		FROM api_keys k
 		JOIN users u ON u.id = k.user_id
-		JOIN groups g ON g.id = k.group_id
+		LEFT JOIN groups g ON g.id = k.group_id
 		WHERE k.key_hash = $1 AND k.deleted_at IS NULL`, hash).Scan(
 		&e.KeyID, &e.UserID, &e.KeyStatus, &e.ExpiresAt, &e.UserActive,
 		&e.GroupID, &e.GroupName, &e.GroupStatus, &rate, &e.ModelAllowlist, &e.ModelFilterMode, &e.GroupEnvironment, &e.GroupAvailable, &e.AllowedIPs,
@@ -271,6 +272,34 @@ func (s *Service) lookup(ctx context.Context, hash string) (*cached, error) {
 	return e, nil
 }
 
+// Group errors of a key, each with its own code so clients and the console
+// can tell "pick another group" from "the platform has no account" (sub2api
+// answered GROUP_DELETED / GROUP_DISABLED / GROUP_NOT_ALLOWED alike).
+const (
+	CodeGroupDeleted    = "group_deleted"
+	CodeGroupDisabled   = "group_disabled"
+	CodeGroupNotAllowed = "group_not_allowed"
+)
+
+// groupError tells why the key's group cannot serve it, or nil.
+func groupError(ctx context.Context, e *cached) error {
+	switch {
+	case e.GroupID == 0:
+		return core.NewError(403, CodeGroupDeleted, t(ctx,
+			"the group of this API key has been deleted; pick another group for the key in the console",
+			"API Key 所属分组已被删除，请在控制台为该 Key 重新选择分组"))
+	case e.GroupStatus != "active":
+		return core.NewError(403, CodeGroupDisabled, t(ctx,
+			"the group of this API key is disabled",
+			"API Key 所属分组已停用"))
+	case !e.GroupAvailable:
+		return core.NewError(403, CodeGroupNotAllowed, t(ctx,
+			"the group of this API key is no longer available to its owner",
+			"API Key 所属分组已不再对当前用户开放"))
+	}
+	return nil
+}
+
 func (s *Service) dropCache(ctx context.Context, hash string) {
 	if s.rdb == nil || hash == "" {
 		return
@@ -284,15 +313,19 @@ func (s *Service) dropCache(ctx context.Context, hash string) {
 
 // APIKey is the API view of an api_keys row.
 type APIKey struct {
-	ID         int64    `json:"id"`
-	UserID     int64    `json:"user_id"`
-	UserEmail  string   `json:"user_email,omitempty"`
-	Name       string   `json:"name"`
-	KeyPrefix  string   `json:"key_prefix"`
-	Copyable   bool     `json:"copyable"`
-	GroupID    int64    `json:"group_id"`
-	GroupName  string   `json:"group_name"`
-	AllowedIPs []string `json:"allowed_ips"`
+	ID        int64  `json:"id"`
+	UserID    int64  `json:"user_id"`
+	UserEmail string `json:"user_email,omitempty"`
+	Name      string `json:"name"`
+	KeyPrefix string `json:"key_prefix"`
+	Copyable  bool   `json:"copyable"`
+	// GroupID is null once the key's group was deleted (keys are only
+	// loosely bound to groups); GroupStatus says whether the group serves the
+	// key: active | disabled | unavailable (not open to the owner) | deleted.
+	GroupID     *int64   `json:"group_id"`
+	GroupName   string   `json:"group_name"`
+	GroupStatus string   `json:"group_status"`
+	AllowedIPs  []string `json:"allowed_ips"`
 	// Platforms the key can reach: those of its group (CONTRACTS §13).
 	Platforms []string `json:"platforms"`
 	// The owner's caps and, when the service counts them, the current use.
@@ -307,14 +340,18 @@ type APIKey struct {
 	Key string `json:"key,omitempty"`
 }
 
-const selectKey = `SELECT k.id, k.user_id, u.email, k.name, k.key_prefix, k.group_id, g.name, k.status,
-		k.expires_at, k.last_used_at, k.created_at, k.key_cipher IS NOT NULL, k.allowed_ips,
+const selectKey = `SELECT k.id, k.user_id, u.email, k.name, k.key_prefix, g.id, COALESCE(g.name, ''),
+		CASE WHEN g.id IS NULL THEN 'deleted'
+			WHEN g.status <> 'active' THEN 'disabled'
+			WHEN g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.user_id = k.user_id AND ug.group_id = g.id) THEN 'active'
+			ELSE 'unavailable' END,
+		k.status, k.expires_at, k.last_used_at, k.created_at, k.key_cipher IS NOT NULL, k.allowed_ips,
 		k.rpm_limit, k.tpm_limit, k.max_concurrency, k.quota_limit, k.quota_used
-	FROM api_keys k JOIN users u ON u.id = k.user_id JOIN groups g ON g.id = k.group_id`
+	FROM api_keys k JOIN users u ON u.id = k.user_id LEFT JOIN groups g ON g.id = k.group_id`
 
 func scanKey(row pgx.Row) (*APIKey, error) {
 	var k APIKey
-	err := row.Scan(&k.ID, &k.UserID, &k.UserEmail, &k.Name, &k.KeyPrefix, &k.GroupID, &k.GroupName,
+	err := row.Scan(&k.ID, &k.UserID, &k.UserEmail, &k.Name, &k.KeyPrefix, &k.GroupID, &k.GroupName, &k.GroupStatus,
 		&k.Status, &k.ExpiresAt, &k.LastUsedAt, &k.CreatedAt, &k.Copyable, &k.AllowedIPs,
 		&k.RPM, &k.TPM, &k.Concurrency, &k.Limit, &k.Used)
 	return &k, err
@@ -330,8 +367,7 @@ func (s *Service) query(c *gin.Context, where string, args []any, hideEmail bool
 	ctx := c.Request.Context()
 	page, size := httpapi.Pagination(c)
 	var total int64
-	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM api_keys k JOIN users u ON u.id = k.user_id
-		JOIN groups g ON g.id = k.group_id`+where, args...).Scan(&total); err != nil {
+	if err := s.db.Pool.QueryRow(ctx, `SELECT count(*) FROM api_keys k JOIN users u ON u.id = k.user_id`+where, args...).Scan(&total); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}

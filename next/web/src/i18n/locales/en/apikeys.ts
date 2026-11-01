@@ -47,6 +47,11 @@ export default {
   },
   changeGroup: 'Change group',
   groupChanged: 'Group changed',
+  groupState: {
+    deleted: 'Group deleted, pick another group',
+    disabled: 'Group disabled',
+    unavailable: 'Group no longer open to you'
+  },
   enabledToast: 'API key enabled',
   disabledToast: 'API key disabled; requests with it are refused',
   empty: 'No API keys yet',

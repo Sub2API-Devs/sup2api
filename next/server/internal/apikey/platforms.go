@@ -76,9 +76,9 @@ func (s *Service) fillPlatforms(ctx context.Context, keys []*APIKey) error {
 		ids := make([]int64, 0, len(keys))
 		seen := map[int64]bool{}
 		for _, k := range keys {
-			if !seen[k.GroupID] {
-				seen[k.GroupID] = true
-				ids = append(ids, k.GroupID)
+			if k.GroupID != nil && !seen[*k.GroupID] {
+				seen[*k.GroupID] = true
+				ids = append(ids, *k.GroupID)
 			}
 		}
 		types, err := groupTypes(ctx, s.db.Pool, ids)
@@ -90,7 +90,9 @@ func (s *Service) fillPlatforms(ctx context.Context, keys []*APIKey) error {
 		}
 	}
 	for _, k := range keys {
-		if ps, ok := byGroup[k.GroupID]; ok {
+		if k.GroupID == nil {
+			k.Platforms = []string{}
+		} else if ps, ok := byGroup[*k.GroupID]; ok {
 			k.Platforms = ps
 		} else {
 			k.Platforms = []string{}

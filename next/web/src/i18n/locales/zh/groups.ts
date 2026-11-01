@@ -30,7 +30,17 @@ export default {
   allowlistPlaceholder: '输入模型匹配规则后按回车',
   accountCount: '账号数',
   keyCount: 'Key 数',
-  deleteInUse: '该分组下仍有 {a} 个账号和 {k} 个 API Key。',
+  deleteWithAccounts: '该分组下的 {a} 个账号只会移出分组，账号本身不会删除。',
+  deleteKeys: {
+    title: '删除分组 {name}',
+    intro: '该分组下还有 {k} 个 API Key。API Key 不会随分组删除，请选择如何处理它们。',
+    move: '迁移到其他分组',
+    unbind: '解除绑定',
+    target: '目标分组',
+    moveHint: 'Key 迁移后立即按新分组的倍率和模型规则调用；目标分组不对 Key 的所有者开放时，调用会被拒绝。',
+    unbindHint: 'Key 保留但暂时不能调用，请求会返回"API Key 所属分组已被删除"，所有者在 API Key 页面重新选择分组后即可恢复。',
+    accounts: '该分组下的 {a} 个账号只会移出分组，账号本身不会删除。'
+  },
   accounts: {
     title: '账号',
     hint: '同一分组可以混放任意类型的账号，它们一起参与各自类型可服务端点的调度。',

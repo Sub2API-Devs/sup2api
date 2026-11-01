@@ -261,7 +261,13 @@ on('PATCH', '/groups/:id', (req) => {
 on('DELETE', '/groups/:id', (req) => {
   const g = groups.find((x) => x.id === Number(req.params.id))
   if (!g) return fail(404, 'not_found', 'group not found')
-  if (keys.some((k) => k.group_id === g.id)) return fail(409, 'conflict', 'group still has API keys')
+  // Keys are only loosely bound: they move to move_keys_to, or stay unbound.
+  let to: number | null = null
+  if (req.query.move_keys_to !== undefined && req.query.move_keys_to !== '') {
+    to = Number(req.query.move_keys_to)
+    if (to === g.id || !groups.some((x) => x.id === to)) return invalid('move_keys_to', 'pick another existing group')
+  }
+  for (const k of keys) if (k.group_id === g.id) k.group_id = to
   groups.splice(groups.indexOf(g), 1)
   return noContent()
 })
@@ -367,7 +373,7 @@ interface MockKey {
   max_concurrency?: number
   id: number
   user_id: number
-  group_id: number
+  group_id: number | null
   name: string
   key_prefix: string
   status: string
@@ -382,7 +388,9 @@ const keys: MockKey[] = [
   { id: 2, user_id: 1, group_id: 2, rpm_limit: 60, tpm_limit: 200000, max_concurrency: 2, quota_limit: '20', quota_used: '17.3', name: 'ci-runner', key_prefix: 'sk-s2a-c3d4', status: 'active', expires_at: now(86400 * 60), last_used_at: now(-3600 * 3), created_at: now(-86400 * 12) },
   { id: 3, user_id: 1, group_id: 1, name: 'old-script', key_prefix: 'sk-s2a-e5f6', status: 'active', expires_at: now(-86400), last_used_at: now(-86400 * 3), created_at: now(-86400 * 50) },
   { id: 4, user_id: 2, group_id: 1, name: 'ops-tools', key_prefix: 'sk-s2a-g7h8', status: 'active', expires_at: null, last_used_at: now(-300), created_at: now(-86400 * 8) },
-  { id: 5, user_id: 4, group_id: 2, name: 'acme-prod', key_prefix: 'sk-s2a-i9j0', status: 'disabled', expires_at: null, last_used_at: now(-86400 * 4), created_at: now(-86400 * 9) }
+  { id: 5, user_id: 4, group_id: 2, name: 'acme-prod', key_prefix: 'sk-s2a-i9j0', status: 'disabled', expires_at: null, last_used_at: now(-86400 * 4), created_at: now(-86400 * 9) },
+  // Its group was deleted: the key is kept, unbound.
+  { id: 6, user_id: 1, group_id: null, name: 'orphan', key_prefix: 'sk-s2a-k1l2', status: 'active', expires_at: null, last_used_at: now(-86400 * 2), created_at: now(-86400 * 20) }
 ]
 
 const LIMIT_FIELDS = ['rpm_limit', 'tpm_limit', 'max_concurrency'] as const
@@ -392,9 +400,19 @@ function liveOf(k: MockKey) {
   return { rpm: k.rpm_limit ? Math.round(k.rpm_limit * 0.85) : k.id * 3, tpm: k.tpm_limit ? Math.round(k.tpm_limit * 0.4) : k.id * 1200, concurrency: k.max_concurrency ? 1 : 0 }
 }
 
+/** How the key's group serves it, as the server reports group_status. */
+function keyGroupStatus(k: MockKey) {
+  const g = groups.find((x) => x.id === k.group_id)
+  if (!g) return 'deleted'
+  if (g.status !== 'active') return 'disabled'
+  const owner = users.find((u) => u.id === k.user_id)
+  return g.visibility === 'public' || owner?.group_ids.includes(g.id) ? 'active' : 'unavailable'
+}
+
 function keyOut(k: MockKey) {
   // old-script stands for a legacy hash-only key.
-  return { copyable: k.id !== 3, rpm_limit: 0, tpm_limit: 0, max_concurrency: 0, quota_limit: '0', quota_used: k.id === 1 ? '3.2' : '0', ...k, live: liveOf(k), user_email: users.find((u) => u.id === k.user_id)?.email, group_name: groups.find((g) => g.id === k.group_id)?.name, platforms: groupPlatforms(k.group_id) }
+  const g = groups.find((x) => x.id === k.group_id)
+  return { copyable: k.id !== 3, rpm_limit: 0, tpm_limit: 0, max_concurrency: 0, quota_limit: '0', quota_used: k.id === 1 ? '3.2' : '0', ...k, group_id: g ? g.id : null, live: liveOf(k), user_email: users.find((u) => u.id === k.user_id)?.email, group_name: g?.name ?? '', group_status: keyGroupStatus(k), platforms: g ? groupPlatforms(g.id) : [] }
 }
 
 function randomToken(n: number) {
