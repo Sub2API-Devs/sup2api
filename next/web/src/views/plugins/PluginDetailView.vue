@@ -162,8 +162,10 @@ function onMore(k: string) {
   else if (k === 'uninstall') uninstallOpen.value = true
 }
 
-async function onUninstalled() {
-  await refreshShell()
+// The shell refresh is not awaited: a plugin module that never settles must not
+// keep the page from leaving; the plugin list does not read the plugin store.
+function onUninstalled() {
+  void refreshShell()
   router.push('/plugins')
 }
 

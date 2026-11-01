@@ -118,7 +118,8 @@ async function poll() {
       if (wasRunning || !detail.value) await loadDetail()
       if (rollout.value.phase === 'active' && shellRefreshedFor !== rollout.value.id) {
         shellRefreshedFor = rollout.value.id
-        await refreshShell()
+        // Not awaited: a plugin module that never settles must not hold up the poll.
+        void refreshShell()
       }
     }
   } catch (e) {

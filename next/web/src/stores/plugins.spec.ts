@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { fileURLToPath, URL } from 'node:url'
+import { watch } from 'vue'
 import type { UIPlugin } from '@/api/types'
 
 const mocks = vi.hoisted(() => ({ get: vi.fn() }))
@@ -16,6 +17,8 @@ import { usePluginStore } from './plugins'
 const fixtures = fileURLToPath(new URL('./__fixtures__', import.meta.url))
 const FAST = 'fast'
 const SLOW = 'slow'
+const CHANGED = 'changed'
+const OLD = 'old'
 const plugin = (key: string, entry: string): UIPlugin =>
   ({ key, version: '1.0.0', name: key, asset_base: fixtures, native_entry: entry, trust: 'official', host_ui_compat: '*', menus: [], pages: {}, slots: [] }) as unknown as UIPlugin
 
@@ -69,6 +72,75 @@ describe('plugin store loading', () => {
     await done
     expect(store.component(SLOW, 'SlowPage')).toBeUndefined()
     expect(store.pending[SLOW]).toBeUndefined()
+  })
+
+  it('a plugin that fails to import or register only records its own error and leaves nothing behind', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const g = globalThis as { __throwPluginUnregistered?: number }
+    delete g.__throwPluginUnregistered
+    mocks.get.mockResolvedValue([plugin('missing', 'missing-plugin.ts'), plugin('throws', 'throw-plugin.ts'), plugin(FAST, 'fast-plugin.ts')])
+    const store = usePluginStore()
+    await store.refresh()
+
+    expect(store.errors.missing).toBeTruthy()
+    expect(store.errors.throws).toBe('register blew up')
+    expect(store.pending).toEqual({})
+    expect(store.components.throws).toBeUndefined()
+    expect(g.__throwPluginUnregistered).toBe(1)
+    expect(store.component(FAST, 'FastPage')).toBeTruthy()
+    expect(store.errors[FAST]).toBeUndefined()
+
+    // The next refresh tries again from a clean slate.
+    await store.refresh()
+    expect(store.components.throws).toBeUndefined()
+    expect(g.__throwPluginUnregistered).toBe(2)
+  })
+
+  it('marks a changed plugin pending before its old module is unloaded', async () => {
+    mocks.get.mockResolvedValueOnce([plugin(CHANGED, 'fast-plugin.ts')])
+    const store = usePluginStore()
+    await store.refresh()
+    expect(store.component(CHANGED, 'FastPage')).toBeTruthy()
+
+    const pendingWhenGone: unknown[] = []
+    watch(
+      () => store.components[CHANGED],
+      (c) => !c && pendingWhenGone.push(store.pending[CHANGED]),
+      { flush: 'sync' }
+    )
+    mocks.get.mockResolvedValueOnce([plugin(CHANGED, 'slow-plugin.ts')])
+    const done = store.refresh()
+    await until(() => release())
+    expect(pendingWhenGone).toEqual([true])
+    release()!()
+    await done
+    expect(store.component(CHANGED, 'SlowPage')).toBeTruthy()
+  })
+
+  it('keeps the newer list when an older GET /ui/plugins answers last', async () => {
+    let answerOld: (v: UIPlugin[]) => void = () => {}
+    mocks.get.mockReturnValueOnce(new Promise((r) => (answerOld = r))).mockResolvedValueOnce([plugin(FAST, 'fast-plugin.ts')])
+    const store = usePluginStore()
+    const older = store.refresh()
+    await store.refresh()
+    answerOld([plugin(OLD, 'fast-plugin.ts')])
+    await older
+    expect(store.uiPlugins.map((p) => p.key)).toEqual([FAST])
+    expect(store.component(OLD, 'FastPage')).toBeUndefined()
+  })
+
+  it('stays empty when reset (logout) lands while the list is loading', async () => {
+    let answer: (v: UIPlugin[]) => void = () => {}
+    mocks.get.mockReturnValueOnce(new Promise((r) => (answer = r)))
+    const store = usePluginStore()
+    const done = store.refresh()
+    await store.reset()
+    answer([plugin(FAST, 'fast-plugin.ts')])
+    await done
+    expect(store.uiPlugins).toEqual([])
+    expect(store.listed).toBe(false)
+    expect(store.components).toEqual({})
+    expect(store.pending).toEqual({})
   })
 
   it('lists when GET /ui/plugins fails', async () => {

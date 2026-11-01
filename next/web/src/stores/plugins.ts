@@ -34,6 +34,9 @@ export const usePluginStore = defineStore('plugins', () => {
   /** GET /ui/plugins answered (menus, pages and slots are known). */
   const listed = ref(false)
   const loaded = new Map<string, Loaded>()
+  // Bumped by every refresh() and reset(): a list that arrives after a newer
+  // call (or after logout) is stale and dropped.
+  let seq = 0
 
   function nativeURL(p: UIPlugin): string | null {
     if (!p.native_entry) return null
@@ -57,8 +60,9 @@ export const usePluginStore = defineStore('plugins', () => {
       errors[p.key] = allowed.reason || 'not allowed'
       return
     }
+    let mod: NativePluginModule | undefined
     try {
-      const mod = (await import(/* @vite-ignore */ url)) as NativePluginModule
+      mod = (await import(/* @vite-ignore */ url)) as NativePluginModule
       if (typeof mod.register !== 'function') throw new Error('entry does not export register(host)')
       const own: Record<string, Component> = {}
       const host = createPluginHost(
@@ -75,6 +79,13 @@ export const usePluginStore = defineStore('plugins', () => {
     } catch (e) {
       console.error(`[plugins] failed to load native UI of ${p.key}`, e)
       errors[p.key] = e instanceof Error ? e.message : String(e)
+      // Drop whatever register() got to before it threw, so the next refresh starts clean.
+      delete components[p.key]
+      try {
+        await mod?.unregister?.()
+      } catch (err) {
+        console.error(`[plugins] unregister of ${p.key} failed`, err)
+      }
     }
   }
 
@@ -104,16 +115,20 @@ export const usePluginStore = defineStore('plugins', () => {
    * module this call started has loaded or failed.
    */
   async function refresh() {
+    const g = ++seq
     const list = await fetchList()
+    if (g !== seq) return
     uiPlugins.value = list
+    // A plugin still loading from an overlapping refresh is left to that call.
+    // New and changed plugins are marked pending before the old modules are
+    // unloaded, so their pages wait instead of briefly showing a missing component.
+    const todo = list.filter((p) => p.native_entry && nativeURL(p) !== loaded.get(p.key)?.url && !pending[p.key])
+    for (const p of todo) pending[p.key] = true
     for (const key of [...loaded.keys()]) {
       const p = list.find((x) => x.key === key)
       if (!p || nativeURL(p) !== loaded.get(key)?.url) await unload(key)
     }
-    // A plugin still loading from an overlapping refresh is left to that call.
-    const todo = list.filter((p) => p.native_entry && !loaded.has(p.key) && !pending[p.key])
-    for (const p of todo) pending[p.key] = true
-    listed.value = true
+    if (g === seq) listed.value = true
     // Each plugin finishes on its own: a slow or failing one holds up only its own pages and slots.
     await Promise.all(todo.map((p) => loadLatest(p).finally(() => delete pending[p.key])))
   }
@@ -130,6 +145,7 @@ export const usePluginStore = defineStore('plugins', () => {
   }
 
   async function reset() {
+    seq++
     for (const key of [...loaded.keys()]) await unload(key)
     uiPlugins.value = []
     listed.value = false
