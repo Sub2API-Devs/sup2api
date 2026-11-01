@@ -112,8 +112,8 @@ func defaultFailurePolicy() FailurePolicy {
 
 // loginAccountRules disable an account on a login failure the provider,
 // Claude Code or the Worker names (401) and on an account the provider holds
-// (403). Migration 0072 writes the same rules into a published policy that
-// still had only the migrated rule.
+// (403). Migrations 0072 and 0073 write the same rules into a published
+// policy in place of the migrated rule.
 func loginAccountRules() []FailureRule {
 	rule := func(id, name, status string, keywords ...string) FailureRule {
 		return FailureRule{ID: id, Name: name, Enabled: true, Action: "disable",

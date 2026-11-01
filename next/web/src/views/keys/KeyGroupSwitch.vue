@@ -6,7 +6,7 @@ import { SDropdown, SIcon } from '@sub2api/ui'
 // Opens a menu of the groups the owner may use from the default slot (the
 // key's group cell); picking another group emits change(groupId).
 const props = defineProps<{
-  groupId: number
+  groupId: number | null
   options: { value: number; label: string }[]
   disabled?: boolean
 }>()
