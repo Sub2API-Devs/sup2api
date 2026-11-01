@@ -53,6 +53,9 @@ func (m *Manager) safe(ctx context.Context, f func(context.Context)) {
 // sharedPass is SharedEgress.run's body: recover, then collect; a failed
 // recover skips collect.
 func (m *Manager) sharedPass(ctx context.Context) {
+	// Stale paired-activation leftovers first (IT-X02): an expired Worker
+	// pause is released even when the recover pass below fails.
+	m.releaseMaintenance(ctx)
 	if err := m.recover(ctx); err != nil {
 		if ctx.Err() == nil {
 			m.log.Warn("shared egress pass failed: %s", failureText(err))
