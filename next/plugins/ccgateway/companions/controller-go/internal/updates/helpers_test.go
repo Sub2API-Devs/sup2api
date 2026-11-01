@@ -374,7 +374,9 @@ func (s *syncWriter) Write(p []byte) (int, error) {
 
 func addApp(g *fakeguard.Guard, name, path string, args []string, labels map[string]string, env []string) {
 	g.AddContainer(fakeguard.ContainerSpec{Name: name, Image: "app:test", User: "1000:1000", Labels: labels,
-		Path: path, Args: args, Env: env, Volumes: map[string]string{"ccg-21-data": "/work"}})
+		Path: path, Args: args, Env: env, Volumes: map[string]string{"ccg-21-data": "/work"},
+		Binds: map[string]string{fakeguard.RuntimeHostRoot + "/21/resolv.conf": "/etc/resolv.conf"}})
+	g.SetResolv("21", names.ResolvConf("10.77.0.2"))
 }
 
 // replaceApp recreates the app container (a new ID) with another command.

@@ -456,7 +456,7 @@ func TestBackupsKeepNewestFive(t *testing.T) {
 	}
 }
 
-// covers: W1 (an image without the program is invalid_image; the account container is not touched)
+// covers: W1 (an image without the program, or with a directory or an oversized file there, is invalid_image; a cut transfer is unnamed)
 func TestImageWithoutProgram(t *testing.T) {
 	e := newEnv(t)
 	_, err := e.update("app:empty")
@@ -465,6 +465,24 @@ func TestImageWithoutProgram(t *testing.T) {
 	}
 	if len(e.execs()) != 0 || e.g.Count("GET /v1/accounts/{aid}") != 0 {
 		t.Fatal(e.g.Routes())
+	}
+	// The program path is a directory (images/file 422 not_regular_file).
+	e.g.AddImage("app:dir", fakeguard.ImageSpec{Dirs: []string{worker}})
+	if _, err := e.update("app:dir"); !errs.Is(err, errs.InvalidImage) {
+		t.Fatal(err)
+	}
+	// A program larger than 256 MiB is refused by the guard (422 too_large).
+	e.g.Fail("GET /v1/images/file", fakeguard.Fault{Status: 422, Code: "unprocessable", Reason: "too_large"})
+	if _, err := e.update("app:new"); !errs.Is(err, errs.InvalidImage) {
+		t.Fatal(err)
+	}
+	// A cut transfer is a guard failure, never a short program.
+	e.g.Fail("GET /v1/images/file", fakeguard.Fault{Status: 0})
+	if _, err := e.update("app:new"); answer(err) != "503 runtime_unavailable" {
+		t.Fatal(err)
+	}
+	if len(e.execs()) != 0 {
+		t.Fatal(e.execs())
 	}
 }
 

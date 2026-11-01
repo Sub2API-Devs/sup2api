@@ -91,53 +91,62 @@ func hexSum(b []byte) string {
 // covers: U1 U2 U3 U4 R12 R13 R14 R16 S29 (a resumable upload in chunks, then loaded through the guard)
 func TestResumableUploadAndLoad(t *testing.T) {
 	e := newEnv(t)
-	data := make([]byte, 300_000)
-	rand.Read(data)
+	imageID := strings.Repeat("f", 64)
+	layer := make([]byte, 300_000)
+	rand.Read(layer)
+	// A docker save archive: its manifest names the image, a large layer makes several chunks.
+	data := archive(t, false, map[string]string{
+		"manifest.json":           `[{"Config": "blobs/sha256/` + imageID + `", "RepoTags": ["ccgateway-app:local"], "Layers": ["layer.tar"]}]`,
+		"blobs/sha256/" + imageID: "{}",
+		"layer.tar":               string(layer),
+	})
+	n := int64(len(data))
+	third := n / 3
 	digest := hexSum(data)
-	created, err := e.u.Create(context.Background(), num(int64(len(data))), digest)
+	created, err := e.u.Create(context.Background(), num(n), digest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	id, _ := created.Get("upload_id")
-	if !strings.Contains(string(pyjson.MustMarshal(created)), `"offset": 0, "size": 300000`) || len(id.(string)) != 22 {
+	if !strings.Contains(string(pyjson.MustMarshal(created)), fmt.Sprintf(`"offset": 0, "size": %d`, n)) || len(id.(string)) != 22 {
 		t.Fatal(created)
 	}
 	if mode := fileMode(t, filepath.Join(e.dir, id.(string)+".part")); mode != "" && mode != "-rw-------" {
 		t.Fatal(mode)
 	}
 	meta, _ := os.ReadFile(filepath.Join(e.dir, id.(string)+".json"))
-	if string(meta) != `{"size": 300000, "sha256": "`+digest+`"}` {
+	if string(meta) != fmt.Sprintf(`{"size": %d, "sha256": "%s"}`, n, digest) {
 		t.Fatal(string(meta))
 	}
 	var loaded [][]byte
 	e.g.OnLoad(func(b []byte) ([]guardapi.LoadedImage, error) {
 		loaded = append(loaded, b)
-		return []guardapi.LoadedImage{{ID: "sha256:" + strings.Repeat("f", 64), Tags: []string{"ccg/app:local"}}}, nil
+		return []guardapi.LoadedImage{{ID: "sha256:" + imageID, Tags: []string{"ccgateway-app:local"}}}, nil
 	})
 	up := id.(string)
 	if got := answer(e.u.Load(context.Background(), up)); got != `409 {"error": "incomplete"}` {
 		t.Fatal(got)
 	}
-	if got := e.put(up, 0, data[:100_000]); got != `200 {"offset": 100000, "size": 300000}` {
+	if got := e.put(up, 0, data[:third]); got != fmt.Sprintf(`200 {"offset": %d, "size": %d}`, third, n) {
 		t.Fatal(got)
 	}
-	if got := e.put(up, 100_000, data[100_000:200_000]); !strings.HasPrefix(got, "200 ") {
+	if got := e.put(up, third, data[third:2*third]); !strings.HasPrefix(got, "200 ") {
 		t.Fatal(got)
 	}
-	if got := e.put(up, 0, data[:10]); got != `409 {"error": "offset_mismatch", "offset": 200000}` {
+	if got := e.put(up, 0, data[:10]); got != fmt.Sprintf(`409 {"error": "offset_mismatch", "offset": %d}`, 2*third) {
 		t.Fatal(got)
 	}
-	if got := answer(e.u.Status(context.Background(), up)); got != `200 {"offset": 200000, "size": 300000}` {
+	if got := answer(e.u.Status(context.Background(), up)); got != fmt.Sprintf(`200 {"offset": %d, "size": %d}`, 2*third, n) {
 		t.Fatal(got)
 	}
-	if got := e.put(up, 200_000, append(append([]byte(nil), data[200_000:]...), 'x')); got != `400 {"error": "invalid_request"}` {
+	if got := e.put(up, 2*third, append(append([]byte(nil), data[2*third:]...), 'x')); got != `400 {"error": "invalid_request"}` {
 		t.Fatal(got)
 	}
-	if got := e.put(up, 200_000, data[200_000:]); !strings.HasPrefix(got, "200 ") {
+	if got := e.put(up, 2*third, data[2*third:]); !strings.HasPrefix(got, "200 ") {
 		t.Fatal(got)
 	}
 	got := answer(e.u.Load(context.Background(), up))
-	if got != `200 {"sha256": "`+digest+`", "images": [{"id": "sha256:`+strings.Repeat("f", 64)+`", "tags": ["ccg/app:local"]}]}` {
+	if got != `200 {"sha256": "`+digest+`", "images": [{"id": "sha256:`+imageID+`", "tags": ["ccgateway-app:local"]}]}` {
 		t.Fatal(got)
 	}
 	if len(loaded) != 1 || !bytes.Equal(loaded[0], data) {
@@ -215,6 +224,7 @@ func TestLoadAnswersTheGuardsNamesAsGiven(t *testing.T) {
 // covers: U4 (checksum mismatch, a failed or empty load: 400 and the upload removed)
 func TestChecksumMismatchAndLoadFailureDeleteTheUpload(t *testing.T) {
 	e := newEnv(t)
+	img := archive(t, false, map[string]string{"manifest.json": `[{"Config": "` + strings.Repeat("ab", 32) + `.json", "RepoTags": ["ccgateway-app:1"], "Layers": []}]`})
 	called := 0
 	e.g.OnLoad(func([]byte) ([]guardapi.LoadedImage, error) {
 		called++
@@ -228,20 +238,27 @@ func TestChecksumMismatchAndLoadFailureDeleteTheUpload(t *testing.T) {
 	if got := answer(e.u.Status(context.Background(), id)); got != `404 {"error": "not_found"}` || called != 0 {
 		t.Fatal(got, called)
 	}
-	if got := answer(e.u.Load(context.Background(), e.upload([]byte("abcd")))); got != `400 {"error": "load_failed"}` {
+	if got := answer(e.u.Load(context.Background(), e.upload(img))); got != `400 {"error": "load_failed"}` {
 		t.Fatal(got)
 	}
 	if len(e.entries()) != 0 {
 		t.Fatal(e.entries())
 	}
 	e.g.OnLoad(func([]byte) ([]guardapi.LoadedImage, error) { return nil, nil })
-	if got := answer(e.u.Load(context.Background(), e.upload([]byte("abcd")))); got != `400 {"error": "load_failed"}` {
+	if got := answer(e.u.Load(context.Background(), e.upload(img))); got != `400 {"error": "load_failed"}` {
+		t.Fatal(got)
+	}
+	// A tag the archive does not name is refused by the guard: a failed load.
+	e.g.OnLoad(func([]byte) ([]guardapi.LoadedImage, error) {
+		return []guardapi.LoadedImage{{ID: "sha256:" + strings.Repeat("ab", 32), Tags: []string{"ccgateway-app:other"}}}, nil
+	})
+	if got := answer(e.u.Load(context.Background(), e.upload(img))); got != `400 {"error": "load_failed"}` {
 		t.Fatal(got)
 	}
 	// A guard that cannot be reached is a failed load too.
 	e.g.OnLoad(nil)
 	e.g.Fail("POST /v1/images/load", fakeguard.Fault{Status: 0})
-	if got := answer(e.u.Load(context.Background(), e.upload([]byte("abcd")))); got != `400 {"error": "load_failed"}` {
+	if got := answer(e.u.Load(context.Background(), e.upload(img))); got != `400 {"error": "load_failed"}` {
 		t.Fatal(got)
 	}
 	if len(e.entries()) != 0 {
