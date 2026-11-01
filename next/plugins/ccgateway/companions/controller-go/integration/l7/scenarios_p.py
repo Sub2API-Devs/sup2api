@@ -1,5 +1,7 @@
 """IT-P: performance (05 §4.5)."""
+import calendar
 import json
+import re
 import os
 import statistics
 import subprocess
@@ -84,3 +86,114 @@ def p02():
     py = ST['perf']['python']['P02']['tunnel_first_byte']
     ok = go['p50_ms'] <= py['p50_ms'] * 1.05 or go['p50_ms'] - py['p50_ms'] < 1.0
     record('first byte: Go within 5% of Python (p50)', ok, go=go, python=py)
+
+
+def cgroup_of(name):
+    pid = inspect(name, '{{.State.Pid}}')
+    return '/sys/fs/cgroup' + sudo('cat', '/proc/%s/cgroup' % pid).strip().split('::')[-1]
+
+
+def cg_read(cg, f):
+    return sudo('cat', '%s/%s' % (cg, f)).strip()
+
+
+@scenario('IT-P03')
+def p03():
+    """3 accounts (the only synthetic keys allowed) x 10 concurrent tunnels for
+    5 minutes; each tunnel sends Worker requests until it is recycled."""
+    keys = [k for k in (A1, A2, A3) if k in ST.get('desired', {}) and status(k)[1].get('status') == 'ready']
+    cg = cgroup_of('ccg-gt-controller')
+    mem = [int(cg_read(cg, 'memory.current'))]
+    stop = time.time() + 300
+    errors, done = [], [0]
+    lock = threading.Lock()
+    from scenarios_x import Tunnel
+
+    def worker(aid):
+        while time.time() < stop:
+            try:
+                t = Tunnel(aid)
+                if not t.status.startswith('HTTP/1.1 101'):
+                    raise RuntimeError(t.status)
+                for _ in range(20):
+                    if '200' not in t.health():
+                        raise RuntimeError('worker answer')
+                    with lock:
+                        done[0] += 1
+                t.close()
+            except Exception as e:  # noqa: BLE001 - counted
+                with lock:
+                    errors.append('%s %s' % (aid, repr(e)[:80]))
+                time.sleep(0.5)
+    ths = [threading.Thread(target=worker, args=(k,)) for k in keys for _ in range(10)]
+    [t.start() for t in ths]
+    while time.time() < stop:
+        time.sleep(15)
+        mem.append(int(cg_read(cg, 'memory.current')))
+    [t.join(60) for t in ths]
+    mib = [round(m / 2**20, 1) for m in mem]
+    ST.setdefault('perf', {})['P03'] = {'accounts': len(keys), 'tunnels': len(ths), 'requests': done[0],
+                                       'errors': len(errors), 'memory_mib': mib}
+    save_state(ST)
+    check(not errors, 'no errors in 5 minutes', accounts=len(keys), tunnels=len(ths), requests=done[0],
+          errors=errors[:5])
+    check(max(mib[len(mib) // 2:]) <= max(mib[:len(mib) // 2]) * 1.2 + 5, 'controller memory stable', memory_mib=mib)
+
+
+@scenario('IT-P04')
+def p04():
+    g, c = cgroup_of('ccg-gt-guard'), cgroup_of('ccg-gt-controller')
+    use = lambda cg: int(re.search(r'usage_usec (\d+)', cg_read(cg, 'cpu.stat')).group(1))  # noqa: E731
+    g0, c0, t0 = use(g), use(c), time.time()
+    time.sleep(600)
+    g1, c1, t1 = use(g), use(c), time.time()
+    gp = (g1 - g0) / 1e6 / (t1 - t0) * 100
+    cp = (c1 - c0) / 1e6 / (t1 - t0) * 100
+    ST.setdefault('perf', {})['P04'] = {'guard_cpu_percent_of_one_core': round(gp, 3),
+                                       'controller_cpu_percent_of_one_core': round(cp, 3), 'seconds': round(t1 - t0)}
+    save_state(ST)
+    check(gp < 2.0, 'guard CPU while idle < 2% of one core', guard_percent=round(gp, 3), controller_percent=round(cp, 3),
+          seconds=round(t1 - t0))
+
+
+@scenario('IT-P05')
+def p05():
+    keys = [k for k in (A1, A2, A3) if k in ST.get('desired', {})]
+    names_ = [gt_name('%s-%s-app' % ('ccg-gt', k)) for k in keys]
+    since = time.time()
+    n = 0
+    t0 = time.time()
+    while n < 20 and time.time() - t0 < 30:
+        name = names_[n % len(names_)]
+        subprocess.run(['docker', 'restart', '-t', '1', name], capture_output=True, timeout=60)
+        n += 1
+    last = time.time()
+    time.sleep(15)
+    ev = subprocess.run(['docker', 'events', '--since', '%.3f' % since, '--until', '%.3f' % time.time(),
+                         '--filter', 'type=container', '--filter', 'event=start', '--filter', 'event=die',
+                         '--format', '{{.TimeNano}} {{.Action}} {{.Actor.Attributes.name}}'], capture_output=True, text=True)
+    events = [l.split() for l in ev.stdout.splitlines() if 'ccg-gt-d' in l]
+    last_ev = max(int(e[0]) for e in events) / 1e9 if events else last
+    logs = subprocess.run(['docker', 'logs', '--since', '%.3f' % since, 'ccg-gt-guard'], capture_output=True, text=True)
+    writes = []
+    for line in logs.stdout.splitlines():
+        try:
+            e = json.loads(line)
+        except ValueError:
+            continue
+        if e.get('event') == 'chain_written':
+            ts = e['ts']
+            sec = calendar.timegm(time.strptime(ts[:19], '%Y-%m-%dT%H:%M:%S')) + float('0.' + ts[20:-1].ljust(9, '0')[:9])
+            writes.append((round(sec, 2), e.get('chain')))
+    restores = sorted({w[0] for w in writes})  # one restore may write several chains
+    after = [w for w in restores if w >= last_ev]
+    first_after = (after[0] - last_ev) if after else None
+    res = {'restarts': n, 'burst_seconds': round(last - t0, 1), 'container_events': len(events),
+           'restores': len(restores), 'first_write_after_last_event_s': round(first_after, 3) if first_after is not None else None}
+    ST.setdefault('perf', {})['P05'] = res
+    save_state(ST)
+    check(first_after is not None and first_after <= 1.0, 'rules rewritten within 1 s of the last event', **res)
+    check(len(restores) < len(events), 'debounce: fewer iptables-restore runs than events', **res)
+    for k in keys:
+        wait_ready(k, ST['desired'][k]['revision'], 90)
+    record('all accounts ready again after the burst', True)

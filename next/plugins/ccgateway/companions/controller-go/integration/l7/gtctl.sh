@@ -2,7 +2,7 @@
 # Lifecycle of the L7 isolated instance (04 §7). Run on ovh as the ssh user
 # (docker group, passwordless sudo). Subcommands:
 #   baseline OUT        production snapshot (containers, CCG-PROXY-BRIDGE, networks, volumes)
-#   py-start            Python 0.1.118 controller the old way (host network, 127.0.0.1:18787)
+#   py-start            Python 0.1.118 controller the old way (host network, 127.0.0.1:$GT_PORT)
 #   py-run              start only the Python container from the existing env file (release step 4)
 #   bridge-start|bridge-stop   the Python bridge guard for the gt chain (transient unit)
 #   guard-files         compose.yml, .env, guard state dir and the control network
@@ -127,6 +127,11 @@ cleanup)
   done
   for p in "$GT_DIR" "$GT_ROOT" "$GT_DATA" "$GT_ENVF" "$GT_STATE"; do gt_name_ok "$p"; sudo -n rm -rf "$p"; done
   rm -f "$GT_WORK/runtime.env.copy"
+  # Files the root fixture containers wrote, and the test images.
+  [ -d "$GT_WORK/fixtures" ] && docker run --rm -v "$GT_WORK:/w" busybox:latest rm -rf /w/fixtures
+  for i in ccgateway-controller:gt-r2 ccgateway-controller:gt-bad ccgateway-app:gt-bad ccgateway-gt-upload:1; do
+    docker image inspect "$i" >/dev/null 2>&1 && docker rmi "$i" >/dev/null
+  done
   echo cleaned ;;
 verify)
   out=$1; mkdir -p "$out/after"; snapshot "$out/after"; rc=0

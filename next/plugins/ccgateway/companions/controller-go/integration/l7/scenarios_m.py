@@ -344,3 +344,29 @@ def m07():
     adopt('m07')
     code, out, err = gtctl('finish')
     check(code == 0 and out.strip().endswith('CCG_RESULT=done'), 'gt finish after the second adopt', out=out[-200:])
+
+
+@scenario('IT-M09')
+def m09():
+    """S6 rehearsal: the docker-py gateway is replaced by the compose service."""
+    gw = inspect(GATEWAY)
+    check(gw['Config']['Labels'].get('com.docker.compose.project') != 'ccgateway-gt', 'precondition: legacy gateway')
+    keys = sorted(k for k in ST['desired'] if status(k)[1].get('status') == 'ready')
+    t0 = time.time()
+    docker('rm', '-f', gt_name(GATEWAY))
+    code, out, err = sh_dc('--profile', 'egress', 'up', '-d', '--no-deps', 'egress')
+    t_up = time.time() - t0
+    check(code == 0, 'compose --profile egress up -d --no-deps egress', err=err[-300:], seconds=round(t_up, 1))
+    per = {}
+    for aid in keys:
+        wait_ready(aid, ST['desired'][aid]['revision'], 180)
+        per[aid] = round(time.time() - t0, 1)
+    record('outage: all accounts ready again', True, per_account_seconds=per, accounts=len(keys))
+    gw = inspect(GATEWAY)
+    lb = gw['Config']['Labels']
+    check(lb.get('com.docker.compose.project') == 'ccgateway-gt' and lb.get('com.docker.compose.service') == 'egress'
+          and lb.get('io.sup2api.ccgateway.shared') == 'ccg-gt', 'gateway is the compose egress service')
+    code, out, err = sh_dc('ps', '--format', '{{.Name}} {{.Service}}')
+    record('compose ps', True, out=out.strip())
+    ST.setdefault('perf', {})['M09'] = {'accounts': len(keys), 'seconds_to_all_ready': max(per.values()) if per else None}
+    save_state(ST)

@@ -372,7 +372,10 @@ def app_exec(aid, cmd, user='1000:1000', env=None, check=False, timeout=120):
 def egress_stream_via(aid):
     """Inside the account container: an HTTPS SSE stream from the fake upstream
     (198.18.0.10 behind the proxy fixture), trusting only the fixture CA."""
-    cert = open(os.path.join(fixture_dir('ccg-gt-fixture-p1'), 'cert.pem'), 'rb').read()
+    # Trust every fixture's certificate: the stream comes from whichever
+    # proxy relayed it (each fixture serves 198.18.0.10 with its own cert).
+    cert = b''.join(open(os.path.join(fixture_dir(n), 'cert.pem'), 'rb').read()
+                    for n in ('ccg-gt-fixture-p1', 'ccg-gt-fixture-p2'))
     name = gt_name('%s-%s-app' % (PREFIX, aid))
     sh(['docker', 'exec', '-i', '-u', '1000:1000', name, 'sh', '-c', 'cat > /tmp/gt-fixture.crt'], input=cert.decode())
     script = ("(async()=>{let r=await fetch('https://198.18.0.10/stream');let t=await r.text();"
