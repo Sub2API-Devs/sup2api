@@ -138,11 +138,20 @@ func (v *validator) menuIcon(field, icon string) {
 	v.add(field, "unknown_icon", "unknown icon %q; %s", icon, iconsStaleHint())
 }
 
-// coreMenuSections are the sidebar groups of the console a plugin menu may
-// join (authz/menus.go).
-var coreMenuSections = map[string]bool{
-	"overview": true, "gateway": true, "security": true, "finance": true,
-	"users": true, "system": true, "me": true,
+// isCoreMenuSection reports whether id is a core sidebar group of the
+// console ("plugins" included) that a plugin menu may join.
+func isCoreMenuSection(id string) bool {
+	_, ok := manifest.CoreMenuSectionOrder(id)
+	return ok
+}
+
+// coreMenuSectionList is "overview, gateway, ..." for error messages.
+func coreMenuSectionList() string {
+	ids := []string{}
+	for _, sec := range manifest.CoreMenuSections() {
+		ids = append(ids, sec.ID)
+	}
+	return strings.Join(ids, ", ")
 }
 
 func (v *validator) ui() {
@@ -170,7 +179,7 @@ func (v *validator) uiSections(u *manifest.UI) map[string]bool {
 		f := fmt.Sprintf("ui.sections[%d]", i)
 		if !idRe.MatchString(sec.ID) {
 			v.add(f+".id", "invalid_format", "section id %q is invalid", sec.ID)
-		} else if coreMenuSections[sec.ID] || sec.ID == "plugins" {
+		} else if isCoreMenuSection(sec.ID) {
 			v.add(f+".id", "invalid", "section id %q is reserved for the core sidebar", sec.ID)
 		} else if sectionIDs[sec.ID] {
 			v.add(f+".id", "duplicate", "section %q declared twice", sec.ID)
@@ -194,8 +203,8 @@ func (v *validator) uiMenus(u *manifest.UI, sectionIDs map[string]bool) {
 			v.add(f+".id", "duplicate", "menu %q declared twice", mn.ID)
 		}
 		menuIDs[mn.ID] = true
-		if mn.Section != "plugins" && !coreMenuSections[mn.Section] && !sectionIDs[mn.Section] {
-			v.add(f+".section", "invalid", "section must be \"plugins\", a core section (overview, gateway, security, finance, users, system, me) or one of ui.sections")
+		if !isCoreMenuSection(mn.Section) && !sectionIDs[mn.Section] {
+			v.add(f+".section", "invalid", "section must be a core section (%s) or one of ui.sections", coreMenuSectionList())
 		}
 		if firstText(mn.Label) == "" {
 			v.add(f+".label", "required", "label is required")

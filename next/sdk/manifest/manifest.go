@@ -774,20 +774,55 @@ type UI struct {
 }
 
 // MenuSection is a sidebar group declared by a plugin. It is shown as its
-// own group, placed among the core groups by Order (overview 100, gateway
-// 200, security 300, finance 400, users 500, plugins 600, system 700, me
-// 800); without Order it goes after plugins (650).
+// own group, placed among the core groups (CoreMenuSections) by Order;
+// without Order it goes after plugins (PluginMenuSectionOrder). Its id must
+// not be a core section id.
 type MenuSection struct {
 	ID    string        `json:"id"`
 	Label LocalizedText `json:"label"`
 	Order int           `json:"order,omitempty"`
 }
 
+// CoreMenuSection is a sidebar group of the console: plugin menus may join
+// it by id, and plugin sections are placed among the core ones by Order.
+type CoreMenuSection struct {
+	ID    string
+	Order int
+}
+
+// coreMenuSections is the one list of core sidebar sections shared by the
+// host (authz menus) and manifest validation. "plugins" is the shared group
+// plugin menus join by default.
+var coreMenuSections = []CoreMenuSection{
+	{"overview", 100}, {"gateway", 200}, {"security", 300}, {"finance", 400},
+	{"users", 500}, {"plugins", 600}, {"system", 700}, {"me", 800},
+}
+
+// PluginMenuSectionOrder places a plugin section that declares no order:
+// after the shared "plugins" section, before system.
+const PluginMenuSectionOrder = 650
+
+// CoreMenuSections returns the core sidebar sections in display order.
+func CoreMenuSections() []CoreMenuSection {
+	return append([]CoreMenuSection(nil), coreMenuSections...)
+}
+
+// CoreMenuSectionOrder returns the order of core section id, or 0 and false
+// when id is not a core section.
+func CoreMenuSectionOrder(id string) (int, bool) {
+	for _, sec := range coreMenuSections {
+		if sec.ID == id {
+			return sec.Order, true
+		}
+	}
+	return 0, false
+}
+
 type Menu struct {
 	ID string `json:"id"`
-	// Section is "plugins" (the shared plugin group), a core group
-	// (overview | gateway | security | finance | users | system | me: the
-	// item is appended to it) or the id of one of UI.Sections.
+	// Section is a core group (CoreMenuSections; "plugins" is the shared
+	// plugin group: the item is appended to it) or the id of one of
+	// UI.Sections.
 	Section    string        `json:"section"`
 	Label      LocalizedText `json:"label"`
 	Icon       string        `json:"icon,omitempty"`

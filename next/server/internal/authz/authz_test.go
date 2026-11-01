@@ -658,3 +658,25 @@ func TestCoreMenuIconsExist(t *testing.T) {
 		t.Error(`the fallback icon "puzzle" is not in the icon set`)
 	}
 }
+
+// The core sidebar sections come from the SDK's list (which manifest
+// validation also reads); coreMenus only adds their labels and items, so it
+// must name the same sections in the same order.
+func TestCoreMenuSectionsMatchManifest(t *testing.T) {
+	t.Parallel()
+	var got, want []string
+	for _, sec := range coreMenus {
+		got = append(got, sec.id)
+	}
+	last := 0
+	for _, sec := range manifest.CoreMenuSections() {
+		want = append(want, sec.ID)
+		if sec.Order <= last {
+			t.Errorf("core section %q order %d is not after %d", sec.ID, sec.Order, last)
+		}
+		last = sec.Order
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("coreMenus sections %v, manifest.CoreMenuSections %v", got, want)
+	}
+}

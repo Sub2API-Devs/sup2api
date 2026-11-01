@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
@@ -86,17 +87,11 @@ var coreMenus = []coreMenuSection{
 	}},
 }
 
-// Core sections are placed by these orders; plugin sections (manifest
+// Core sections are placed by their manifest.CoreMenuSections order (the ids
+// and orders manifest validation uses too); plugin sections (manifest
 // ui.sections) interleave with them by their own order, and a plugin section
-// without one goes after the shared "plugins" section (pluginSectionOrder).
-var coreSectionOrder = map[string]int{
-	"overview": 100, "gateway": 200, "security": 300, "finance": 400,
-	"users": 500, "plugins": 600, "system": 700, "me": 800,
-}
-
-// pluginSectionOrder places a plugin's own section that declares no order:
-// after the shared "plugins" section, before system.
-const pluginSectionOrder = 650
+// without one goes after the shared "plugins" section
+// (manifest.PluginMenuSectionOrder).
 
 // Menus builds the sidebar of userID: core menus filtered by permission,
 // plugin menus appended to the core section they name (the shared "plugins"
@@ -121,7 +116,8 @@ func (s *Service) Menus(ctx context.Context, userID int64) ([]MenuSection, error
 		return len(out) - 1
 	}
 	for _, sec := range coreMenus {
-		i := add(sec.id, sec.label, coreSectionOrder[sec.id])
+		order, _ := manifest.CoreMenuSectionOrder(sec.id)
+		i := add(sec.id, sec.label, order)
 		for _, it := range sec.items {
 			if !hasAny(set, it.anyOf) {
 				continue
@@ -183,11 +179,12 @@ func (s *Service) pluginMenus(set core.PermissionSet) []pluginMenu {
 			}, order: m.Order}
 			// A core section (the shared "plugins" one by default) already
 			// exists with its own label by the time plugin menus join it.
-			if section := cmp.Or(m.Section, "plugins"); coreSectionOrder[section] != 0 {
-				pm.sectionKey, pm.sectionOrder = section, coreSectionOrder[section]
+			section := cmp.Or(m.Section, "plugins")
+			if order, ok := manifest.CoreMenuSectionOrder(section); ok {
+				pm.sectionKey, pm.sectionOrder = section, order
 			} else {
 				pm.sectionKey = p.Key + ":" + m.Section
-				pm.sectionLabel, pm.sectionOrder = core.LocalizedText{"en": m.Section}, pluginSectionOrder
+				pm.sectionLabel, pm.sectionOrder = core.LocalizedText{"en": m.Section}, manifest.PluginMenuSectionOrder
 				for _, sec := range p.Manifest.UI.Sections {
 					if sec.ID == m.Section {
 						if l := core.LocalizedText(sec.Label); l != nil {
