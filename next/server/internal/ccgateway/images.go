@@ -12,15 +12,15 @@ package ccgateway
 // three digests from the summary of the "CCGateway images" workflow
 // (.github/workflows/ccgateway-images.yml) and replace them here.
 //
-// Current digests: controller and egress built by CI from source 7a72fd342
-// (ccgateway 0.1.118: the egress image is Xray, and only a controller of that
-// age runs it as the shared gateway, so the two move together). AppImage is
-// still from 22cfdb506: the workflow cannot build the app image (the
-// customized CLI under cli-mods/release is not in Git).
+// Current digests: the controller is the Go controller built by CI from
+// source 3bb9d3a8d (ccgateway 0.1.120, guard mode); egress is the Xray
+// gateway from 7a72fd342 (ccgateway 0.1.118). AppImage is still from
+// 22cfdb506: the workflow cannot build the app image (the customized CLI
+// under cli-mods/release is not in Git).
 const (
 	AppImage        = "ghcr.io/sub2api-devs/ccgateway-app@sha256:7dd6ca54aba0f893390a981ac01967601e924e6787b67a8bad6d6c70bc6d8833"
 	EgressImage     = "ghcr.io/sub2api-devs/ccgateway-egress@sha256:50c259a9b0e1256f8cd732f8aca8653d0797c7539b9f314b54a88c21b48d8373"
-	ControllerImage = "ghcr.io/sub2api-devs/ccgateway-controller@sha256:f83a7b979d7cdc108487dbec7219b583ab0f8fe7251d6c6c51f0811b6ef4ed26"
+	ControllerImage = "ghcr.io/sub2api-devs/ccgateway-controller@sha256:8e07d52b8b9ee34aebed7f5273688c3ebed9bc09567a4a0c9a29f0620561fc58"
 )
 
 // GatewayImage is the Caddy image of the control panel's HTTPS gateway
@@ -33,16 +33,13 @@ const GatewayImage = "caddy:2.11.7-alpine"
 // writes it into /opt/ccgateway/.env. Overridable with images.guard (e.g. a
 // tag built on the Docker host by build-ccgateway-guard.sh while the GHCR
 // package is private). Built and pushed by the "CCGateway images" workflow
-// (matrix entry ccgateway-guard).
-//
-// PLACEHOLDER: the digest below is not a real image. 发布前由主控替换 with
-// the digest the workflow reports for ccgateway-guard.
-const GuardImage = "ghcr.io/sub2api-devs/ccgateway-guard@sha256:c1a226f4b2a3b0492fc0a6e8f86edb049c0948c6503367dc2e5921dade523fe5"
+// (matrix entry ccgateway-guard); this digest is the CI build of source
+// 3bb9d3a8d (image loads written through, 2026-11-01).
+const GuardImage = "ghcr.io/sub2api-devs/ccgateway-guard@sha256:ac1ca9e66dcc38d2185b693c1a874ae597b734929562f4a5e000489babf7146b"
 
 // ControllerImageGuardAPI tells whether ControllerImage carries the label
 // io.sup2api.ccgateway.guard-api=1 (a Go controller, installed through
 // compose next to the guard). The core refuses to self-upgrade a controller
 // the guard has not adopted yet to such an image (controller_adopt_required,
-// CONTRACTS §76.6). 发布前由主控替换: set to true together with
-// ControllerImage when it becomes the Go controller's digest.
+// CONTRACTS §76.6). True since ControllerImage is the Go controller.
 const ControllerImageGuardAPI = true
