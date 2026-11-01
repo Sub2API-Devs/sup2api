@@ -145,7 +145,8 @@ defineExpose({ save, dirty })
   <div>
     <div class="mb-2 flex flex-wrap items-center gap-2">
       <SSelect v-model="typeFilter" class="w-52" :options="typeFilterOptions" :aria-label="t('common.type')" data-testid="group-accounts-type" />
-      <SInput v-model="q" class="w-48" :aria-label="t('common.search')" :placeholder="t('common.searchPlaceholder')" />
+      <!-- Enter filters the list; it must not submit the surrounding group form. -->
+      <SInput v-model="q" class="w-48" :aria-label="t('common.search')" :placeholder="t('common.searchPlaceholder')" data-testid="group-accounts-search" @keydown.enter.prevent />
       <SCheckbox v-model="onlySelected" :label="t('groups.accounts.onlySelected')" />
       <span class="ml-auto flex gap-2 text-xs">
         <SLink as="button" @click="setVisible(true)">{{ t('groups.accounts.selectVisible') }}</SLink>

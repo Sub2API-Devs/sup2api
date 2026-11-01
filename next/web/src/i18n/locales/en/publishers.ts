@@ -28,7 +28,6 @@ export default {
   notAfter: 'Valid until',
   rangeInvalid: 'Must be later than "Valid from"',
   keyAdded: 'Key added',
-  expired: 'Expired',
   notYetValid: 'Not yet valid',
   revoke: 'Revoke',
   copyPublicKey: 'Copy public key {key}',

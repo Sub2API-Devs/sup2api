@@ -38,8 +38,7 @@ export default {
     unbind: 'Unbind them',
     target: 'Target group',
     moveHint: 'Moved keys use the new group\'s multiplier and model rules right away; if the group is not open to a key\'s owner, its calls are refused.',
-    unbindHint: 'The keys are kept but cannot call until their owners pick another group on the API keys page; meanwhile calls answer "the group of this API key has been deleted".',
-    accounts: 'Its {a} accounts only leave the group; they are not deleted.'
+    unbindHint: 'The keys are kept but cannot call until their owners pick another group on the API keys page; meanwhile calls answer "the group of this API key has been deleted".'
   },
   accounts: {
     title: 'Accounts',

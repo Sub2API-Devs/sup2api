@@ -38,8 +38,7 @@ export default {
     unbind: '解除绑定',
     target: '目标分组',
     moveHint: 'Key 迁移后立即按新分组的倍率和模型规则调用；目标分组不对 Key 的所有者开放时，调用会被拒绝。',
-    unbindHint: 'Key 保留但暂时不能调用，请求会返回"API Key 所属分组已被删除"，所有者在 API Key 页面重新选择分组后即可恢复。',
-    accounts: '该分组下的 {a} 个账号只会移出分组，账号本身不会删除。'
+    unbindHint: 'Key 保留但暂时不能调用，请求会返回"API Key 所属分组已被删除"，所有者在 API Key 页面重新选择分组后即可恢复。'
   },
   accounts: {
     title: '账号',

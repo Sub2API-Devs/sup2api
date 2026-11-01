@@ -65,7 +65,6 @@ export default {
   expiresHint: 'Optional. Leave empty for a key that never expires.',
   expiresInPast: 'Expiry must be in the future',
   noExpiry: 'Never',
-  expired: 'Expired',
   lastUsed: 'Last used',
   noGroups: 'No group is available to you. Ask an administrator to assign one.',
   groupMultiplier: 'Rate multiplier: ×{n}',
