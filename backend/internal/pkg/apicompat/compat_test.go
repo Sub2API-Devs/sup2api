@@ -10,7 +10,7 @@ import (
 
 func TestLegacyFacadeUsesSharedTypesAndBehavior(t *testing.T) {
 	request := &legacy.ResponsesRequest{Model: "claude-opus-5-5", Input: json.RawMessage(`"hello"`)}
-	var shared *codec.ResponsesRequest = request
+	shared := request // passed to the codec below: the legacy type must be an alias
 	old, err := legacy.ResponsesToAnthropicRequest(request)
 	if err != nil {
 		t.Fatal(err)
@@ -25,7 +25,7 @@ func TestLegacyFacadeUsesSharedTypesAndBehavior(t *testing.T) {
 	if old.MaxTokens != 8192 || old.Thinking.Type != "adaptive" || old.OutputConfig.Effort != "medium" {
 		t.Fatal("legacy defaults changed during extraction")
 	}
-	var accumulator *codec.BufferedResponseAccumulator = legacy.NewBufferedResponseAccumulator()
+	accumulator := sharedAccumulator(legacy.NewBufferedResponseAccumulator())
 	accumulator.ProcessEvent(&legacy.ResponsesStreamEvent{Type: "response.output_text.delta", Delta: "hello"})
 	if !accumulator.HasContent() {
 		t.Fatal("type alias lost shared accumulator methods")
@@ -38,4 +38,10 @@ func TestLegacyFacadePreservesVariadicToolMapping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// sharedAccumulator only compiles while the legacy accumulator is an alias of
+// the shared codec type.
+func sharedAccumulator(a *codec.BufferedResponseAccumulator) *codec.BufferedResponseAccumulator {
+	return a
 }
