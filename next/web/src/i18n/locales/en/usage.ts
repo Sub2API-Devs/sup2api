@@ -67,7 +67,6 @@ export default {
     rate_limit_exceeded: 'Rate limit exceeded'
   },
   cols: {
-    modelAccount: 'Model / account',
     timing: 'Timing',
     detail: 'Details',
     input: 'Input',
@@ -77,6 +76,8 @@ export default {
     upstreamProtocol: 'Upstream protocol'
   },
   filterByClientRequestId: '{id} (click to filter by this ID)',
+  filterByAccount: '{account} (click to filter by this account)',
+  noAccount: 'No upstream account (the request ended before one was picked)',
   cacheTitle: 'cache read {r} · cache write {w}',
   cached: 'cached',
   cacheEvidence: {
