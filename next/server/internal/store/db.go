@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -32,17 +33,7 @@ func Open(ctx context.Context, dsn string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse database url: %w", err)
 	}
-	// SUB2API_PG_MAX_CONNS overrides the pool size (AR-P1-2); default 20–30 is
-	// suitable for most deployments. A plugin-heavy or multi-node setup may
-	// need more.
-	if v := os.Getenv("SUB2API_PG_MAX_CONNS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			cfg.MaxConns = int32(n)
-		}
-	}
-	if cfg.MaxConns <= 0 {
-		cfg.MaxConns = 20
-	}
+	cfg.MaxConns = poolMaxConns(dsn, os.Getenv("SUB2API_PG_MAX_CONNS"), cfg.MaxConns)
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
@@ -90,3 +81,26 @@ func IsUniqueViolation(err error, constraint string) bool {
 
 // IsNoRows reports pgx.ErrNoRows.
 func IsNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
+
+// defaultPoolMaxConns is the pool size when neither SUB2API_PG_MAX_CONNS nor
+// the DSN's pool_max_conns sets one.
+const defaultPoolMaxConns = 20
+
+// poolMaxConns picks the pool size: SUB2API_PG_MAX_CONNS (AR-P1-2) first,
+// then pool_max_conns in the DSN (parsed is what pgxpool read from it), else
+// defaultPoolMaxConns. pgxpool.ParseConfig never leaves MaxConns at 0 (it
+// defaults to max(4, NumCPU)), so the absence of pool_max_conns is what
+// tells the default apart: 4 connections shared by the gateway and the
+// console made every list request queue for a connection per statement. A
+// plugin-heavy or multi-node setup may need more.
+func poolMaxConns(dsn, env string, parsed int32) int32 {
+	if env != "" {
+		if n, err := strconv.Atoi(env); err == nil && n > 0 {
+			return int32(n)
+		}
+	}
+	if strings.Contains(dsn, "pool_max_conns") {
+		return parsed
+	}
+	return defaultPoolMaxConns
+}

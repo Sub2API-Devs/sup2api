@@ -263,12 +263,18 @@ func (l *UsageLimit) scanTargets() []any {
 
 // usageLimits loads the configured limits of the given accounts.
 func usageLimits(ctx context.Context, q store.Querier, ids []int64) (map[int64]UsageLimit, error) {
-	rows, err := q.Query(ctx, `SELECT account_id, `+usageLimitColumns+` FROM account_usage_limits WHERE account_id = ANY($1)`, ids)
+	rows, err := q.Query(ctx, usageLimitsSQL, ids)
 	if err != nil {
 		return nil, err
 	}
+	return scanUsageLimits(rows, len(ids))
+}
+
+const usageLimitsSQL = `SELECT account_id, ` + usageLimitColumns + ` FROM account_usage_limits WHERE account_id = ANY($1)`
+
+func scanUsageLimits(rows pgx.Rows, n int) (map[int64]UsageLimit, error) {
 	defer rows.Close()
-	out := make(map[int64]UsageLimit, len(ids))
+	out := make(map[int64]UsageLimit, n)
 	for rows.Next() {
 		var id int64
 		var l UsageLimit
@@ -290,22 +296,34 @@ type usageWindow struct {
 // usageIn sums the hourly usage of each window, in one query; the result is
 // aligned with windows.
 func usageIn(ctx context.Context, q store.Querier, windows []usageWindow) ([]UsageFigures, error) {
-	out := make([]UsageFigures, len(windows))
 	if len(windows) == 0 {
-		return out, nil
+		return make([]UsageFigures, 0), nil
 	}
+	rows, err := q.Query(ctx, usageInSQL, usageInArgs(windows)...)
+	if err != nil {
+		return nil, err
+	}
+	return scanUsageIn(rows, len(windows))
+}
+
+const usageInSQL = `SELECT w.i, coalesce(sum(h.cost),0), coalesce(sum(h.raw_cost),0), coalesce(sum(h.requests),0)::bigint, coalesce(sum(h.tokens),0)::bigint
+		FROM unnest($1::bigint[], $2::timestamptz[], $3::timestamptz[]) WITH ORDINALITY AS w(id, since, until, i)
+		LEFT JOIN account_usage_hourly h ON h.account_id = w.id AND h.hour >= w.since AND (w.until IS NULL OR h.hour < w.until)
+		GROUP BY w.i`
+
+func usageInArgs(windows []usageWindow) []any {
 	ids, since, until := make([]int64, len(windows)), make([]time.Time, len(windows)), make([]*time.Time, len(windows))
 	for i, w := range windows {
 		ids[i], since[i], until[i] = w.account, w.since, w.until
 	}
-	rows, err := q.Query(ctx, `SELECT w.i, coalesce(sum(h.cost),0), coalesce(sum(h.raw_cost),0), coalesce(sum(h.requests),0)::bigint, coalesce(sum(h.tokens),0)::bigint
-		FROM unnest($1::bigint[], $2::timestamptz[], $3::timestamptz[]) WITH ORDINALITY AS w(id, since, until, i)
-		LEFT JOIN account_usage_hourly h ON h.account_id = w.id AND h.hour >= w.since AND (w.until IS NULL OR h.hour < w.until)
-		GROUP BY w.i`, ids, since, until)
-	if err != nil {
-		return nil, err
-	}
+	return []any{ids, since, until}
+}
+
+// scanUsageIn reads the usageInSQL rows into the figures of n windows, in
+// window order.
+func scanUsageIn(rows pgx.Rows, n int) ([]UsageFigures, error) {
 	defer rows.Close()
+	out := make([]UsageFigures, n)
 	for rows.Next() {
 		var i int
 		var f UsageFigures
@@ -318,12 +336,18 @@ func usageIn(ctx context.Context, q store.Querier, windows []usageWindow) ([]Usa
 }
 
 func usageTotals(ctx context.Context, q store.Querier, ids []int64) (map[int64]UsageFigures, error) {
-	rows, err := q.Query(ctx, `SELECT account_id, cost, raw_cost, requests, tokens FROM account_usage_totals WHERE account_id = ANY($1)`, ids)
+	rows, err := q.Query(ctx, usageTotalsSQL, ids)
 	if err != nil {
 		return nil, err
 	}
+	return scanUsageTotals(rows, len(ids))
+}
+
+const usageTotalsSQL = `SELECT account_id, cost, raw_cost, requests, tokens FROM account_usage_totals WHERE account_id = ANY($1)`
+
+func scanUsageTotals(rows pgx.Rows, n int) (map[int64]UsageFigures, error) {
 	defer rows.Close()
-	out := make(map[int64]UsageFigures, len(ids))
+	out := make(map[int64]UsageFigures, n)
 	for rows.Next() {
 		var id int64
 		var f UsageFigures
@@ -384,19 +408,12 @@ func (s *Service) fillUsage(ctx context.Context, out []*View) {
 	for i, v := range out {
 		ids[i], today[i] = v.ID, usageWindow{account: v.ID, since: midnight}
 	}
-	totals, err := usageTotals(ctx, q, ids)
+	// The totals, today's usage and the limits do not depend on each other:
+	// one round trip. The limit periods are computed in Go (time zones,
+	// DST, month ends) and read with a second query when one is active.
+	totals, todays, limits, err := usageOverview(ctx, q, ids, today)
 	if err != nil {
-		slog.WarnContext(ctx, "account: read usage totals", "err", err)
-		return
-	}
-	todays, err := usageIn(ctx, q, today)
-	if err != nil {
-		slog.WarnContext(ctx, "account: read usage of today", "err", err)
-		return
-	}
-	limits, err := usageLimits(ctx, q, ids)
-	if err != nil {
-		slog.WarnContext(ctx, "account: read usage limits", "err", err)
+		slog.WarnContext(ctx, "account: read usage", "err", err)
 		return
 	}
 	states, err := limitStates(ctx, q, limits, totals, now)
@@ -408,6 +425,46 @@ func (s *Service) fillUsage(ctx context.Context, out []*View) {
 		v.Usage = &UsageView{RawCostAccounting: limits[v.ID].RawCost, Total: totals[v.ID], Today: todays[i], Limit: states[v.ID],
 			LimitDisabled: v.limitDisabled}
 	}
+}
+
+// usageOverview reads usageTotals, usageIn(today) and usageLimits of ids in
+// one batch, with the same statements and results as the three calls.
+func usageOverview(ctx context.Context, q interface {
+	SendBatch(context.Context, *pgx.Batch) pgx.BatchResults
+}, ids []int64, today []usageWindow) (map[int64]UsageFigures, []UsageFigures, map[int64]UsageLimit, error) {
+	batch := &pgx.Batch{}
+	batch.Queue(usageTotalsSQL, ids)
+	batch.Queue(usageInSQL, usageInArgs(today)...)
+	batch.Queue(usageLimitsSQL, ids)
+	br := q.SendBatch(ctx, batch)
+	defer br.Close()
+	read := func(what string, scan func(pgx.Rows) error) error {
+		rows, err := br.Query()
+		if err != nil {
+			return fmt.Errorf("%s: %w", what, err)
+		}
+		if err := scan(rows); err != nil {
+			return fmt.Errorf("%s: %w", what, err)
+		}
+		return nil
+	}
+	var totals map[int64]UsageFigures
+	var todays []UsageFigures
+	var limits map[int64]UsageLimit
+	err := read("totals", func(r pgx.Rows) (err error) { totals, err = scanUsageTotals(r, len(ids)); return })
+	if err == nil {
+		err = read("today", func(r pgx.Rows) (err error) { todays, err = scanUsageIn(r, len(today)); return })
+	}
+	if err == nil {
+		err = read("limits", func(r pgx.Rows) (err error) { limits, err = scanUsageLimits(r, len(ids)); return })
+	}
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := br.Close(); err != nil {
+		return nil, nil, nil, err
+	}
+	return totals, todays, limits, nil
 }
 
 // getUsage is GET /accounts/:id/usage: today, the last 7 and 30 days, the
