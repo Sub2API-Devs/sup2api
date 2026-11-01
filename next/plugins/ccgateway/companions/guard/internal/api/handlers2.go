@@ -369,10 +369,13 @@ func (s *Server) imageLoad(w http.ResponseWriter, r *http.Request, _ params) err
 		return apierr.ErrDocker
 	}
 	defer func() {
+		files.DropCache(f)
 		f.Close()
 		_ = s.State.RemoveLoad(name)
 	}()
-	got, err := io.Copy(f, io.LimitReader(s.idleBody(w, r), n+1))
+	// Written through: dirty pages of the archive would fill the guard's
+	// memory cgroup (files.CopyWriteThrough).
+	got, err := files.CopyWriteThrough(f, io.LimitReader(s.idleBody(w, r), n+1))
 	if err != nil || got != n {
 		return apierr.Invalid("request body does not match Content-Length")
 	}
