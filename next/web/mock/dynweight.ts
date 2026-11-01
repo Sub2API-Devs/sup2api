@@ -12,15 +12,15 @@ const DW_DIST = fileURLToPath(new URL('../../plugins/dynweight/ui/native/dist/',
 
 export const dynweightUIPlugin = {
   key: 'dynweight',
-  version: '0.4.0',
+  version: '0.4.1',
   name: { en: 'Dynamic Weight', zh: '动态权重' },
-  asset_base: '/plugin-ui/dynweight/0.4.0-dev',
+  asset_base: '/plugin-ui/dynweight/0.4.1-dev',
   menus: [{ id: 'dynweight', section: 'gateway', label: { en: 'Dynamic Weight', zh: '动态权重' }, page: 'dashboard', icon: 'chart' }],
   pages: { dashboard: { type: 'native', title: { en: 'Dynamic Weight', zh: '动态权重' }, component: 'DynweightDashboard' } },
   slots: [{ slot: 'account.list.weight', component: 'DynweightAccountWeight', permission: 'dynweight:read' }],
   native_entry: 'ui/native/entry.js',
   trust: 'official',
-  host_ui_compat: '^3.3'
+  host_ui_compat: '^3.4'
 }
 
 export function dynweightAsset(path: string): { type: string; body: Buffer } | null {
