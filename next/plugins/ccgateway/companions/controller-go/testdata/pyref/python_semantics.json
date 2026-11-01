@@ -1,0 +1,502 @@
+{
+ "generator": "companions/controller/reference_vectors.py",
+ "python": "3.12.14",
+ "cases": [
+  {
+   "int": [
+    {
+     "input": "\"1080\"",
+     "int": 1080
+    },
+    {
+     "input": "\" 1080 \"",
+     "int": 1080
+    },
+    {
+     "input": "\"+5\"",
+     "int": 5
+    },
+    {
+     "input": "\"-5\"",
+     "int": -5
+    },
+    {
+     "input": "\"1_000\"",
+     "int": 1000
+    },
+    {
+     "input": "\"1__0\"",
+     "error": "ValueError"
+    },
+    {
+     "input": "\"_1\"",
+     "error": "ValueError"
+    },
+    {
+     "input": "\"1_\"",
+     "error": "ValueError"
+    },
+    {
+     "input": "\"\\uff11\\uff12\"",
+     "int": 12
+    },
+    {
+     "input": "\"\\u0661\\u0662\"",
+     "int": 12
+    },
+    {
+     "input": "8080.9",
+     "int": 8080
+    },
+    {
+     "input": "-1.5",
+     "int": -1
+    },
+    {
+     "input": "true",
+     "int": 1
+    },
+    {
+     "input": "false",
+     "int": 0
+    },
+    {
+     "input": "null",
+     "error": "TypeError"
+    },
+    {
+     "input": "\"0x10\"",
+     "error": "ValueError"
+    },
+    {
+     "input": "\"\\u000b42\\u001f\"",
+     "error": "ValueError"
+    },
+    {
+     "input": "\"\\u00a042\\u3000\"",
+     "int": 42
+    },
+    {
+     "input": "\"\"",
+     "error": "ValueError"
+    },
+    {
+     "input": "\" \"",
+     "error": "ValueError"
+    },
+    {
+     "input": "\"1e3\"",
+     "error": "ValueError"
+    },
+    {
+     "input": "\"1.0\"",
+     "error": "ValueError"
+    },
+    {
+     "input": "7",
+     "int": 7
+    },
+    {
+     "input": "-0",
+     "int": 0
+    },
+    {
+     "input": "9223372036854775807",
+     "int": 9223372036854775807
+    },
+    {
+     "input": "[]",
+     "error": "TypeError"
+    },
+    {
+     "input": "{}",
+     "error": "TypeError"
+    },
+    {
+     "input": "\"٣\"",
+     "int": 3
+    }
+   ],
+   "truthy": [
+    {
+     "input": "null",
+     "bool": false
+    },
+    {
+     "input": "false",
+     "bool": false
+    },
+    {
+     "input": "true",
+     "bool": true
+    },
+    {
+     "input": "0",
+     "bool": false
+    },
+    {
+     "input": "0.0",
+     "bool": false
+    },
+    {
+     "input": "-0.0",
+     "bool": false
+    },
+    {
+     "input": "1",
+     "bool": true
+    },
+    {
+     "input": "0.5",
+     "bool": true
+    },
+    {
+     "input": "\"\"",
+     "bool": false
+    },
+    {
+     "input": "\" \"",
+     "bool": true
+    },
+    {
+     "input": "\"0\"",
+     "bool": true
+    },
+    {
+     "input": "[]",
+     "bool": false
+    },
+    {
+     "input": "[0]",
+     "bool": true
+    },
+    {
+     "input": "{}",
+     "bool": false
+    },
+    {
+     "input": "{\"a\": null}",
+     "bool": true
+    },
+    {
+     "input": "\"false\"",
+     "bool": true
+    }
+   ],
+   "isspace": [
+    9,
+    10,
+    11,
+    12,
+    13,
+    28,
+    29,
+    30,
+    31,
+    32,
+    133,
+    160,
+    5760,
+    8192,
+    8193,
+    8194,
+    8195,
+    8196,
+    8197,
+    8198,
+    8199,
+    8200,
+    8201,
+    8202,
+    8232,
+    8233,
+    8239,
+    8287,
+    12288
+   ],
+   "urlsplit": [
+    {
+     "input": "https://api.anthropic.com",
+     "scheme": "https",
+     "netloc": "api.anthropic.com",
+     "path": "",
+     "query": "",
+     "fragment": "",
+     "hostname": "api.anthropic.com",
+     "has_userinfo": false
+    },
+    {
+     "input": "https://H.Example:8443/p?q#f",
+     "scheme": "https",
+     "netloc": "H.Example:8443",
+     "path": "/p",
+     "query": "q",
+     "fragment": "f",
+     "hostname": "h.example",
+     "has_userinfo": false
+    },
+    {
+     "input": "https://user:pw@h/x",
+     "scheme": "https",
+     "netloc": "user:pw@h",
+     "path": "/x",
+     "query": "",
+     "fragment": "",
+     "hostname": "h",
+     "has_userinfo": true
+    },
+    {
+     "input": "https://@h",
+     "scheme": "https",
+     "netloc": "@h",
+     "path": "",
+     "query": "",
+     "fragment": "",
+     "hostname": "h",
+     "has_userinfo": true
+    },
+    {
+     "input": "https://[::1]:8/x",
+     "scheme": "https",
+     "netloc": "[::1]:8",
+     "path": "/x",
+     "query": "",
+     "fragment": "",
+     "hostname": "::1",
+     "has_userinfo": false
+    },
+    {
+     "input": "https://[v1.x]/",
+     "scheme": "https",
+     "netloc": "[v1.x]",
+     "path": "/",
+     "query": "",
+     "fragment": "",
+     "hostname": "v1.x",
+     "has_userinfo": false
+    },
+    {
+     "input": "HTTPS://h",
+     "scheme": "https",
+     "netloc": "h",
+     "path": "",
+     "query": "",
+     "fragment": "",
+     "hostname": "h",
+     "has_userinfo": false
+    },
+    {
+     "input": " \t https://h/a\tb\nc",
+     "scheme": "https",
+     "netloc": "h",
+     "path": "/abc",
+     "query": "",
+     "fragment": "",
+     "hostname": "h",
+     "has_userinfo": false
+    },
+    {
+     "input": "https:h",
+     "scheme": "https",
+     "netloc": "",
+     "path": "h",
+     "query": "",
+     "fragment": "",
+     "hostname": null,
+     "has_userinfo": false
+    },
+    {
+     "input": "//h/p",
+     "scheme": "",
+     "netloc": "h",
+     "path": "/p",
+     "query": "",
+     "fragment": "",
+     "hostname": "h",
+     "has_userinfo": false
+    },
+    {
+     "input": "https://h:abc/",
+     "scheme": "https",
+     "netloc": "h:abc",
+     "path": "/",
+     "query": "",
+     "fragment": "",
+     "hostname": "h",
+     "has_userinfo": false
+    },
+    {
+     "input": "https://[::1/",
+     "error": "ValueError"
+    },
+    {
+     "input": "https://a]b/",
+     "error": "ValueError"
+    },
+    {
+     "input": "https://h%2fx/",
+     "scheme": "https",
+     "netloc": "h%2fx",
+     "path": "/",
+     "query": "",
+     "fragment": "",
+     "hostname": "h%2fx",
+     "has_userinfo": false
+    },
+    {
+     "input": "https://",
+     "scheme": "https",
+     "netloc": "",
+     "path": "",
+     "query": "",
+     "fragment": "",
+     "hostname": null,
+     "has_userinfo": false
+    },
+    {
+     "input": "mailto:x@y",
+     "scheme": "mailto",
+     "netloc": "",
+     "path": "x@y",
+     "query": "",
+     "fragment": "",
+     "hostname": null,
+     "has_userinfo": false
+    },
+    {
+     "input": "1https://h",
+     "scheme": "",
+     "netloc": "",
+     "path": "1https://h",
+     "query": "",
+     "fragment": "",
+     "hostname": null,
+     "has_userinfo": false
+    },
+    {
+     "input": "https://h#frag?x",
+     "scheme": "https",
+     "netloc": "h",
+     "path": "",
+     "query": "",
+     "fragment": "frag?x",
+     "hostname": "h",
+     "has_userinfo": false
+    },
+    {
+     "input": "https://xn--fiq/a",
+     "scheme": "https",
+     "netloc": "xn--fiq",
+     "path": "/a",
+     "query": "",
+     "fragment": "",
+     "hostname": "xn--fiq",
+     "has_userinfo": false
+    },
+    {
+     "input": "https://[192.168.0.1]/",
+     "error": "ValueError"
+    }
+   ],
+   "ipv4": [
+    {
+     "input": "10.0.0.1",
+     "address": "10.0.0.1"
+    },
+    {
+     "input": "010.0.0.1",
+     "error": "AddressValueError"
+    },
+    {
+     "input": "10.0.0",
+     "error": "AddressValueError"
+    },
+    {
+     "input": "10.0.0.256",
+     "error": "AddressValueError"
+    },
+    {
+     "input": "1.2.3.4 ",
+     "error": "AddressValueError"
+    },
+    {
+     "input": "0.0.0.0",
+     "address": "0.0.0.0"
+    },
+    {
+     "input": "255.255.255.255",
+     "address": "255.255.255.255"
+    },
+    {
+     "input": "1.2.3.04",
+     "error": "AddressValueError"
+    },
+    {
+     "input": "१.2.3.4",
+     "error": "AddressValueError"
+    },
+    {
+     "input": "",
+     "error": "AddressValueError"
+    }
+   ],
+   "networks": [
+    {
+     "input": "10.0.0.0/8",
+     "loose": "10.0.0.0/8",
+     "strict": "10.0.0.0/8"
+    },
+    {
+     "input": "10.1.2.3/24",
+     "loose": "10.1.2.0/24",
+     "strict": "error:ValueError"
+    },
+    {
+     "input": "10.0.0.0/255.255.255.0",
+     "loose": "10.0.0.0/24",
+     "strict": "10.0.0.0/24"
+    },
+    {
+     "input": "10.0.0.0/0.0.0.255",
+     "loose": "10.0.0.0/24",
+     "strict": "10.0.0.0/24"
+    },
+    {
+     "input": "10.0.0.0/33",
+     "loose": "error:NetmaskValueError",
+     "strict": "error:NetmaskValueError"
+    },
+    {
+     "input": "10.0.0.0/ 8",
+     "loose": "error:NetmaskValueError",
+     "strict": "error:NetmaskValueError"
+    },
+    {
+     "input": "10.0.0.0/+8",
+     "loose": "error:NetmaskValueError",
+     "strict": "error:NetmaskValueError"
+    },
+    {
+     "input": "10.0.0.0",
+     "loose": "10.0.0.0/32",
+     "strict": "10.0.0.0/32"
+    },
+    {
+     "input": "10.0.0.0/255.0.255.0",
+     "loose": "error:NetmaskValueError",
+     "strict": "error:NetmaskValueError"
+    },
+    {
+     "input": "10.0.0.0/032",
+     "loose": "10.0.0.0/32",
+     "strict": "10.0.0.0/32"
+    },
+    {
+     "input": "10.0.0.0/",
+     "loose": "error:NetmaskValueError",
+     "strict": "error:NetmaskValueError"
+    }
+   ]
+  }
+ ]
+}

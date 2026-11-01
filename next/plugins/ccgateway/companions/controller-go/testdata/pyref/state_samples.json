@@ -1,0 +1,78 @@
+{
+ "generator": "companions/controller/reference_vectors.py",
+ "python": "3.12.14",
+ "cases": [
+  {
+   "name": "ready-oauth",
+   "file": "21/state.json",
+   "note": "apply through the shared gateway: ready",
+   "bytes": "{\"api_key\": \"TKUoqc9psJlVuG0MJa2qoKEuBPyRTfBcEF0F8S6M00s\", \"admin_key\": \"b-qP9qogUliOzoRWccFg_d4PqTy3rXq1M-NnbbgSxUE\", \"app_ip\": \"10.20.251.92\", \"gateway_ip\": \"10.250.0.9\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"status\": \"ready\", \"created_at\": \"2026-11-01T08:52:04Z\", \"network\": {\"pool\": \"10.20.0.0/16\", \"allocation\": \"random\"}, \"disk_quota\": {\"limit_bytes\": 10737418240, \"status\": \"enforced\"}, \"auth_mode\": \"oauth\", \"cli\": {\"version\": \"2.1.312\", \"request_mode\": \"build\", \"disable_auto_update\": true}, \"environment\": {\"locale\": \"ja_JP.UTF-8\", \"timezone\": \"Asia/Tokyo\"}, \"environment_created\": {\"locale\": \"ja_JP.UTF-8\", \"timezone\": \"Asia/Tokyo\"}, \"environment_pending\": false, \"egress_backend\": \"shared_xray\"}"
+  },
+  {
+   "name": "desired-first",
+   "file": "21/egress-desired.json",
+   "note": "egress-desired.json written after the first provision",
+   "bytes": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"proxy\": {\"protocol\": \"http\", \"host\": \"proxy.test\", \"port\": 8080, \"username\": \"u\", \"password\": \"p\"}, \"cli\": {\"version\": \"2.1.312\", \"request_mode\": \"build\", \"disable_auto_update\": true}, \"network\": {\"pool\": \"10.20.0.0/16\"}, \"enabled\": true}"
+  },
+  {
+   "name": "ready-api-key-direct",
+   "file": "d0123456789abcdef/state.json",
+   "note": "api_key account, direct egress, cli keys in core order",
+   "bytes": "{\"api_key\": \"am6mJ5PUDyxUu6n6f3Tybqi1bwTfbbOQjxMDg2WqGzY\", \"admin_key\": \"ASJPTCwbi8oM8FijPBs_FfB40p5ZYSFC3nWGOc8Vk0Q\", \"app_ip\": \"192.168.64.3\", \"gateway_ip\": \"10.250.0.9\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"status\": \"ready\", \"created_at\": \"2026-11-01T08:52:04Z\", \"network\": {\"pool\": \"192.168.64.0/18\", \"allocation\": \"sequential\"}, \"disk_quota\": {\"limit_bytes\": 10737418240, \"status\": \"enforced\"}, \"auth_mode\": \"api_key\", \"cli\": {\"request_mode\": \"direct\", \"version\": \"2.1.312\", \"disable_auto_update\": true}, \"environment\": {\"locale\": \"\", \"timezone\": \"\"}, \"environment_created\": {\"locale\": \"\", \"timezone\": \"\"}, \"environment_pending\": false, \"egress_backend\": \"shared_xray\"}"
+  },
+  {
+   "name": "desired-direct",
+   "file": "d0123456789abcdef/egress-desired.json",
+   "note": "auth removed, unknown core keys kept",
+   "bytes": "{\"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"direct\": true, \"proxy\": null, \"cli\": {\"request_mode\": \"direct\", \"version\": \"2.1.312\", \"disable_auto_update\": true}, \"network\": {\"allocation\": \"sequential\", \"pool\": \"192.168.64.0/18\"}, \"future_core_key\": {\"kept\": [\"in\", \"desired\"]}}"
+  },
+  {
+   "name": "blocked",
+   "file": "22/state.json",
+   "note": "blocked after a configuration without proxy",
+   "bytes": "{\"api_key\": \"CL71MO1czrw5SoSujNn0L8Gjvmo3pG1xtpTipREFekg\", \"admin_key\": \"OmxKf9qGld78ywFQFo0Bb2u7ESBCYDCcq2sGv3pH-f4\", \"app_ip\": \"10.29.177.36\", \"gateway_ip\": \"10.250.0.9\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"status\": \"blocked\", \"created_at\": \"2026-11-01T08:52:04Z\", \"network\": {\"pool\": \"10.0.0.0/8\", \"allocation\": \"random\"}, \"disk_quota\": {\"limit_bytes\": 10737418240, \"status\": \"enforced\"}, \"auth_mode\": \"oauth\", \"environment\": {\"locale\": \"\", \"timezone\": \"\"}, \"environment_created\": {\"locale\": \"\", \"timezone\": \"\"}, \"environment_pending\": false, \"egress_backend\": \"shared_xray\"}"
+  },
+  {
+   "name": "desired-blocked",
+   "file": "22/egress-desired.json",
+   "note": "egress-desired.json of the blocking configuration",
+   "bytes": "{\"revision\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"proxy\": null}"
+  },
+  {
+   "name": "egress-error",
+   "file": "23/state.json",
+   "note": "shared gateway configuration failed",
+   "bytes": "{\"api_key\": \"F3T6ya6ercHfR-eK94Wb7N83MMgIpUKXPzqlgkHS0qU\", \"admin_key\": \"IbUoHTMRk4KNd5YB5naxXHpywyByMZ4fqLSbuYDdPQU\", \"app_ip\": \"10.226.45.110\", \"gateway_ip\": \"10.226.45.136\", \"revision\": \"\", \"status\": \"egress_error\", \"created_at\": \"2026-11-01T08:52:04Z\", \"network\": {\"pool\": \"10.0.0.0/8\", \"allocation\": \"random\"}, \"disk_quota\": {\"limit_bytes\": 10737418240, \"status\": \"enforced\"}, \"auth_mode\": \"oauth\", \"environment\": {\"locale\": \"\", \"timezone\": \"\"}, \"environment_created\": {\"locale\": \"\", \"timezone\": \"\"}, \"environment_pending\": false}"
+  },
+  {
+   "name": "pending",
+   "file": "24/state.json",
+   "note": "provisioned only (no egress_backend yet)",
+   "bytes": "{\"api_key\": \"5Ye-GOBePGo7u28OziBXPC9lxLWCPSRAkp_1R8nFw4U\", \"admin_key\": \"NnFL-zllROAZynKJUqxU2MzWjItV4NG_x7tBoFHnBn4\", \"app_ip\": \"10.27.22.118\", \"gateway_ip\": \"10.27.22.224\", \"revision\": \"\", \"status\": \"pending\", \"created_at\": \"2026-11-01T08:52:04Z\", \"network\": {\"pool\": \"10.0.0.0/8\", \"allocation\": \"random\"}, \"disk_quota\": {\"limit_bytes\": 10737418240, \"status\": \"enforced\"}, \"auth_mode\": \"oauth\", \"environment\": {\"locale\": \"\", \"timezone\": \"\"}, \"environment_created\": {\"locale\": \"\", \"timezone\": \"\"}, \"environment_pending\": false}"
+  },
+  {
+   "name": "ready-active-runtime-unknown-keys",
+   "file": "21/state.json",
+   "note": "paired activation result plus an unknown key and a legacy sing-box key",
+   "bytes": "{\"api_key\": \"TKUoqc9psJlVuG0MJa2qoKEuBPyRTfBcEF0F8S6M00s\", \"admin_key\": \"b-qP9qogUliOzoRWccFg_d4PqTy3rXq1M-NnbbgSxUE\", \"app_ip\": \"10.20.251.92\", \"gateway_ip\": \"10.250.0.9\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"status\": \"ready\", \"created_at\": \"2026-11-01T08:52:04Z\", \"network\": {\"pool\": \"10.20.0.0/16\", \"allocation\": \"random\"}, \"disk_quota\": {\"limit_bytes\": 10737418240, \"status\": \"enforced\"}, \"auth_mode\": \"oauth\", \"cli\": {\"version\": \"2.1.312\", \"request_mode\": \"build\", \"disable_auto_update\": true}, \"environment\": {\"locale\": \"ja_JP.UTF-8\", \"timezone\": \"Asia/Tokyo\"}, \"environment_created\": {\"locale\": \"ja_JP.UTF-8\", \"timezone\": \"Asia/Tokyo\"}, \"environment_pending\": true, \"egress_backend\": \"shared_xray\", \"active_runtime\": {\"version\": \"2.1.312\", \"patch\": \"ccgateway-abc\", \"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"worker_sha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"container_id\": \"cid-ccg-21-app-3\", \"container_identity\": \"{\\\"args\\\": [\\\"worker\\\"], \\\"config_image\\\": \\\"app:test\\\", \\\"id\\\": \\\"cid-ccg-21-app-3\\\", \\\"image\\\": \\\"sha256:app1\\\", \\\"labels\\\": {\\\"io.sup2api.ccgateway.account\\\": \\\"21\\\", \\\"io.sup2api.ccgateway.auth\\\": \\\"780796445d5c7ac7b6dec04efc923366f2b6f4e56c990bf517e76f573fa30645\\\", \\\"io.sup2api.ccgateway.image\\\": \\\"sha256:app1\\\"}, \\\"mounts\\\": [\\\"{\\\\\\\"Destination\\\\\\\": \\\\\\\"/work\\\\\\\", \\\\\\\"Name\\\\\\\": \\\\\\\"ccg-21-data\\\\\\\", \\\\\\\"RW\\\\\\\": true, \\\\\\\"Type\\\\\\\": \\\\\\\"volume\\\\\\\"}\\\"], \\\"path\\\": \\\"/usr/local/bin/docker-entrypoint.sh\\\", \\\"user\\\": \\\"1000:1000\\\"}\"}, \"environment_desired\": {\"locale\": \"en_US.UTF-8\", \"timezone\": \"UTC\"}, \"future_field\": {\"x\": [1, 2.5, \"\\u00e9\", null], \"nested\": {\"b\": 1, \"a\": 2}}, \"uplink_ip\": \"10.0.0.9\", \"migration_failed\": false}"
+  },
+  {
+   "name": "runtime-json",
+   "file": "runtime.json",
+   "note": "PUT /runtime/images",
+   "bytes": "{\"app\": \"app:test\", \"egress\": \"egress:test\", \"env\": {\"app\": \"app:test\", \"egress\": \"egress:test\"}}"
+  },
+  {
+   "name": "backup",
+   "file": "backups/21.json",
+   "note": "DELETE with X-CCG-Delete-Account keeps the state",
+   "bytes": "{\"api_key\": \"TKUoqc9psJlVuG0MJa2qoKEuBPyRTfBcEF0F8S6M00s\", \"admin_key\": \"b-qP9qogUliOzoRWccFg_d4PqTy3rXq1M-NnbbgSxUE\", \"app_ip\": \"10.20.251.92\", \"gateway_ip\": \"10.250.0.9\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"status\": \"ready\", \"created_at\": \"2026-11-01T08:52:04Z\", \"network\": {\"pool\": \"10.20.0.0/16\", \"allocation\": \"random\"}, \"disk_quota\": {\"limit_bytes\": 10737418240, \"status\": \"enforced\"}, \"auth_mode\": \"oauth\", \"cli\": {\"version\": \"2.1.312\", \"request_mode\": \"build\", \"disable_auto_update\": true}, \"environment\": {\"locale\": \"ja_JP.UTF-8\", \"timezone\": \"Asia/Tokyo\"}, \"environment_created\": {\"locale\": \"ja_JP.UTF-8\", \"timezone\": \"Asia/Tokyo\"}, \"environment_pending\": true, \"egress_backend\": \"shared_xray\", \"active_runtime\": {\"version\": \"2.1.312\", \"patch\": \"ccgateway-abc\", \"sha256\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"worker_sha256\": \"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\", \"container_id\": \"cid-ccg-21-app-3\", \"container_identity\": \"{\\\"args\\\": [\\\"worker\\\"], \\\"config_image\\\": \\\"app:test\\\", \\\"id\\\": \\\"cid-ccg-21-app-3\\\", \\\"image\\\": \\\"sha256:app1\\\", \\\"labels\\\": {\\\"io.sup2api.ccgateway.account\\\": \\\"21\\\", \\\"io.sup2api.ccgateway.auth\\\": \\\"780796445d5c7ac7b6dec04efc923366f2b6f4e56c990bf517e76f573fa30645\\\", \\\"io.sup2api.ccgateway.image\\\": \\\"sha256:app1\\\"}, \\\"mounts\\\": [\\\"{\\\\\\\"Destination\\\\\\\": \\\\\\\"/work\\\\\\\", \\\\\\\"Name\\\\\\\": \\\\\\\"ccg-21-data\\\\\\\", \\\\\\\"RW\\\\\\\": true, \\\\\\\"Type\\\\\\\": \\\\\\\"volume\\\\\\\"}\\\"], \\\"path\\\": \\\"/usr/local/bin/docker-entrypoint.sh\\\", \\\"user\\\": \\\"1000:1000\\\"}\"}, \"environment_desired\": {\"locale\": \"en_US.UTF-8\", \"timezone\": \"UTC\"}, \"future_field\": {\"x\": [1, 2.5, \"\\u00e9\", null], \"nested\": {\"b\": 1, \"a\": 2}}, \"uplink_ip\": \"10.0.0.9\", \"migration_failed\": false}"
+  },
+  {
+   "name": "shared-state",
+   "file": "shared-egress/state.json",
+   "note": "shared gateway state, schema 1, salt, bindings, nodes",
+   "bytes": "{\"schema\": 1, \"salt\": \"c77e351d48350c35e03927b967155f3e7967abadc0c8bf9aff423de073067a6f\", \"bindings\": {\"30\": {\"ip\": \"10.20.1.2\", \"gateway\": \"10.20.1.3\", \"network_id\": \"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn\", \"container_id\": \"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc\", \"interface\": \"eth1\", \"port\": 20000, \"tag\": \"proxy-478da8f829eee726cd62a12c\", \"revision\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"active\": true}, \"4\": {\"ip\": \"10.20.2.2\", \"gateway\": \"10.20.2.3\", \"network_id\": \"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm\", \"container_id\": \"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\", \"interface\": \"eth2\", \"port\": 20001, \"tag\": \"proxy-4f9eea802068f8c6711e96fe\", \"revision\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"active\": false, \"future_binding_key\": 1}}, \"nodes\": {\"proxy-478da8f829eee726cd62a12c\": {\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.2\", \"port\": 8080, \"users\": [{\"user\": \"u\", \"pass\": \"p\"}]}]}, \"tag\": \"proxy-478da8f829eee726cd62a12c\"}, \"endpoint\": [\"198.18.0.2\", 8080]}, \"proxy-4f9eea802068f8c6711e96fe\": {\"outbound\": {\"protocol\": \"freedom\", \"settings\": {\"domainStrategy\": \"UseIPv4\"}, \"tag\": \"proxy-4f9eea802068f8c6711e96fe\"}, \"endpoint\": null}, \"proxy-9d8669259e5b2dc1c71f2178\": {\"outbound\": {\"protocol\": \"http\", \"settings\": {\"servers\": [{\"address\": \"198.18.0.2\", \"port\": 443, \"users\": [{\"user\": \"\", \"pass\": \"\\u5bc6\\u7801\"}]}]}, \"streamSettings\": {\"security\": \"tls\", \"tlsSettings\": {\"serverName\": \"tls.test\", \"allowInsecure\": false}}, \"tag\": \"proxy-9d8669259e5b2dc1c71f2178\"}, \"endpoint\": [\"198.18.0.2\", 443]}}, \"future_top_key\": \"kept\"}"
+  }
+ ]
+}

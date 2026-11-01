@@ -1,0 +1,464 @@
+{
+ "generator": "companions/controller/reference_vectors.py",
+ "python": "3.12.14",
+ "cases": [
+  {
+   "name": "auth-000",
+   "raw": "null",
+   "normalized": "{\"mode\": \"oauth\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "2d696a40052649459a8e3e387c1855f3a975cfaf3fcf429bf2bef2a25ec00784"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "d066b3babb5840beb8c4749c9d087d857a3cf437e84de30586a0f3cce869a314"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "7fa650bb8e0cdcd74cbea035795098190e25ac4aa7660e212f344c301d686488"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "396409635c10a7dfb33e864e0b40c6fc3523911d8032f4620bb4313e93a8a4b6"
+    },
+    {
+     "salt": "",
+     "fingerprint": "7e528c1130ca5521cd903a8758728c410925500a4f8206252a8ee5512a053277"
+    }
+   ]
+  },
+  {
+   "name": "auth-001",
+   "raw": "{\"mode\": \"oauth\"}",
+   "normalized": "{\"mode\": \"oauth\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "2d696a40052649459a8e3e387c1855f3a975cfaf3fcf429bf2bef2a25ec00784"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "d066b3babb5840beb8c4749c9d087d857a3cf437e84de30586a0f3cce869a314"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "7fa650bb8e0cdcd74cbea035795098190e25ac4aa7660e212f344c301d686488"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "396409635c10a7dfb33e864e0b40c6fc3523911d8032f4620bb4313e93a8a4b6"
+    },
+    {
+     "salt": "",
+     "fingerprint": "7e528c1130ca5521cd903a8758728c410925500a4f8206252a8ee5512a053277"
+    }
+   ]
+  },
+  {
+   "name": "auth-002",
+   "raw": "{\"mode\": \"oauth\", \"locale\": \"ja_JP.UTF-8\", \"timezone\": \"Asia/Tokyo\"}",
+   "normalized": "{\"mode\": \"oauth\", \"locale\": \"ja_JP.UTF-8\", \"timezone\": \"Asia/Tokyo\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "2d696a40052649459a8e3e387c1855f3a975cfaf3fcf429bf2bef2a25ec00784"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "d066b3babb5840beb8c4749c9d087d857a3cf437e84de30586a0f3cce869a314"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "7fa650bb8e0cdcd74cbea035795098190e25ac4aa7660e212f344c301d686488"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "396409635c10a7dfb33e864e0b40c6fc3523911d8032f4620bb4313e93a8a4b6"
+    },
+    {
+     "salt": "",
+     "fingerprint": "7e528c1130ca5521cd903a8758728c410925500a4f8206252a8ee5512a053277"
+    }
+   ]
+  },
+  {
+   "name": "auth-003",
+   "raw": "{\"mode\": \"oauth\", \"locale\": \"\", \"timezone\": \"\"}",
+   "normalized": "{\"mode\": \"oauth\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "2d696a40052649459a8e3e387c1855f3a975cfaf3fcf429bf2bef2a25ec00784"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "d066b3babb5840beb8c4749c9d087d857a3cf437e84de30586a0f3cce869a314"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "7fa650bb8e0cdcd74cbea035795098190e25ac4aa7660e212f344c301d686488"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "396409635c10a7dfb33e864e0b40c6fc3523911d8032f4620bb4313e93a8a4b6"
+    },
+    {
+     "salt": "",
+     "fingerprint": "7e528c1130ca5521cd903a8758728c410925500a4f8206252a8ee5512a053277"
+    }
+   ]
+  },
+  {
+   "name": "auth-004",
+   "raw": "{\"mode\": \"oauth\", \"locale\": \"zh_CN\"}",
+   "normalized": "{\"mode\": \"oauth\", \"locale\": \"zh_CN\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "2d696a40052649459a8e3e387c1855f3a975cfaf3fcf429bf2bef2a25ec00784"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "d066b3babb5840beb8c4749c9d087d857a3cf437e84de30586a0f3cce869a314"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "7fa650bb8e0cdcd74cbea035795098190e25ac4aa7660e212f344c301d686488"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "396409635c10a7dfb33e864e0b40c6fc3523911d8032f4620bb4313e93a8a4b6"
+    },
+    {
+     "salt": "",
+     "fingerprint": "7e528c1130ca5521cd903a8758728c410925500a4f8206252a8ee5512a053277"
+    }
+   ]
+  },
+  {
+   "name": "auth-005",
+   "raw": "{\"mode\": \"oauth\", \"timezone\": \"Etc/GMT+5\"}",
+   "normalized": "{\"mode\": \"oauth\", \"timezone\": \"Etc/GMT+5\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "2d696a40052649459a8e3e387c1855f3a975cfaf3fcf429bf2bef2a25ec00784"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "d066b3babb5840beb8c4749c9d087d857a3cf437e84de30586a0f3cce869a314"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "7fa650bb8e0cdcd74cbea035795098190e25ac4aa7660e212f344c301d686488"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "396409635c10a7dfb33e864e0b40c6fc3523911d8032f4620bb4313e93a8a4b6"
+    },
+    {
+     "salt": "",
+     "fingerprint": "7e528c1130ca5521cd903a8758728c410925500a4f8206252a8ee5512a053277"
+    }
+   ]
+  },
+  {
+   "name": "auth-006",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"sk-ant-1234567890\"}",
+   "normalized": "{\"mode\": \"api_key\", \"api_key\": \"sk-ant-1234567890\", \"base_url\": \"https://api.anthropic.com\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "24beb58f23b4f727b64f4f68ec1b5ae8fa6c12f1f067757ce85090389156e4a8"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "9f317c9dded6bb515c7b5112eef108f9b0289e9e363c025ff3730cb828c5ff33"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "56f6ae81340c5b8e8c7ac2dac4f52265b3aed7028937672c349958b2975aeb2d"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "9edfd3508cdf0ed05c4d3df8a82886769b902fbad83794f4a7c317510e2a4dfd"
+    },
+    {
+     "salt": "",
+     "fingerprint": "3b51d9a16d886056fee80401d0e383c9c173a353882f8dfce4e4a113b20674c4"
+    }
+   ]
+  },
+  {
+   "name": "auth-007",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"k<e>y&\\\"'\\\\!~\", \"base_url\": \"https://api.example.com/v1/\"}",
+   "normalized": "{\"mode\": \"api_key\", \"api_key\": \"k<e>y&\\\"'\\\\!~\", \"base_url\": \"https://api.example.com\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "3841e1fba54d01cf0b80ff64cdda10efd2f39e11a73b963840eb806a721add20"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "528194ebb54b0769f14e289ee1b7eaa81b62a9170ba746ede326f746de2b0983"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "b154b1262ea0fcd92f7bf53e1b38a1559c807bf8336e7243665c35396ea134bd"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "18b6bcc96b39bc2fadb1324124cb27a4f4d44866e8e609778a1b11638bd573cf"
+    },
+    {
+     "salt": "",
+     "fingerprint": "ad4e1ba2b1a1520980fe722dbeb237be55623722912a0d5b5ffe5c281fc1fd59"
+    }
+   ]
+  },
+  {
+   "name": "auth-008",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://Proxy.Example.COM:8443/anthropic/\", \"locale\": \"C\"}",
+   "normalized": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://Proxy.Example.COM:8443/anthropic\", \"locale\": \"C\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "f88a4ac29f113f685da2debb3c885acb60ccf5c4b30c0d3b844dd8c52edb542f"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "eee2b2bf563395ceddc76668e589a9a3d41fcffcd9e01910b11175ae237d66f9"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "34abde1b89952d4baa5da4c7a6635334df19b6e2b870985cc7c1b414297e5e00"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "d4c69f274bba575b7138b274a6dbff2188b00255a4440769e18c1dd0ec946063"
+    },
+    {
+     "salt": "",
+     "fingerprint": "31ccf3c435fe8f0e8d064c238cf1ffa9d67e38f67f7b1e1d5eec3e3b563c0a10"
+    }
+   ]
+  },
+  {
+   "name": "auth-009",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://h.test/v1/v1\"}",
+   "normalized": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://h.test/v1\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "5d4339c29ff0f14ea7a1f6efb0672fc5db6bc13110487048fa386c15337de3d1"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "81e2fde18235532a8382555fc2f896fa74306d7390e05da67e2fdbbb568f7cf5"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "76f1c8d06657b71b9f244dbf6d49b1255708b8b19c4ce508b7463d870535774e"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "df8bd1664194bb8abb955c76cc064d40ff3b0791d2b54c174e17c9d09bf76ec5"
+    },
+    {
+     "salt": "",
+     "fingerprint": "a7d462a3500a2861d174ebdcd0fdcdfd31f24453b6383b0818f72206aae4e254"
+    }
+   ]
+  },
+  {
+   "name": "auth-010",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://h.test/%zz\"}",
+   "normalized": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://h.test/%zz\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "0a7a7c3e84dfdd2c306af351032f9d027cf8b4098709948ac295b07147973131"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "33ca64bbbfb2eb0eea7d8533f56a5bba72473f0508e13c293b5945576756c350"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "f16f835404b421ac946de3e2532c19a7fb9627af94be4177f643d287f3536dc0"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "3e26fbfc66e341a45c095506827dbe999ab7152982776790b22fcc6b1a2be28d"
+    },
+    {
+     "salt": "",
+     "fingerprint": "8397e02155c8a8db30a3ddf32e6f33fe9005d217007b31b82dd407ba6c0f6cb9"
+    }
+   ]
+  },
+  {
+   "name": "auth-011",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"\"}",
+   "normalized": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://api.anthropic.com\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "cb6c4d8aa2722975daaee0c61446c6e13ff443b0e5f79c5aba6c8981aad45022"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "c8c9b221485e8a128c9b3b88d7d18f3a6a59500cb42ddb62ac8a6161d93a0010"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "8e5f33ffa24457fb307ff86d54487fc13118073cee6f8776699e7ca9366aa36c"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "35c72757a304c18e657f4f57ae58daec03d5ff8a38430beaf2eed2bb9d826c8b"
+    },
+    {
+     "salt": "",
+     "fingerprint": "113d19a79f3bfc028d65eee630806bd00c9cea787bb737d512ba062a158be4f1"
+    }
+   ]
+  },
+  {
+   "name": "auth-012",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://[::1]:8443/x\"}",
+   "normalized": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://[::1]:8443/x\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "70de61e5316e6901689bd7dead841e12b4b46c3d5d1d46e034109add34a51071"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "ef305aaf3923290832753925a0b3057f6cf7b5ee277cba0d66f77587308c41a1"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "8439e19df8a92fbbf41125fa7b2748d1d1fa325e072f32bf39629e4e2b85c02e"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "d94540540438ba089f5b9bea3994992a59f7b03e99b16878a4f8733a03a2852f"
+    },
+    {
+     "salt": "",
+     "fingerprint": "8e2de3569ec76ec5f4e176a8943e16330541350fec1023082b1293a6ba558384"
+    }
+   ]
+  },
+  {
+   "name": "auth-013",
+   "raw": "{\"mode\": \"oauth\", \"extra\": 1}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-014",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"short\"}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-015",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"has space1\"}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-016",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"http://h.test\"}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-017",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://user@h.test\"}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-018",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://h.test/?q\"}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-019",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://h.test/ \"}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-020",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://h.test/\\u001c\"}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-021",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"12345678\", \"base_url\": \"https://\"}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-022",
+   "raw": "{\"mode\": \"api_key\", \"api_key\": \"café12345\"}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-023",
+   "raw": "{\"mode\": \"oauth\", \"locale\": \"Local\"}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-024",
+   "raw": "{\"mode\": \"oauth\", \"timezone\": 5}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-025",
+   "raw": "{\"mode\": \"oauth\", \"locale\": \"en_US.UTF-8@euro\"}",
+   "normalized": "{\"mode\": \"oauth\", \"locale\": \"en_US.UTF-8@euro\"}",
+   "fingerprints": [
+    {
+     "salt": "salt",
+     "fingerprint": "2d696a40052649459a8e3e387c1855f3a975cfaf3fcf429bf2bef2a25ec00784"
+    },
+    {
+     "salt": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "fingerprint": "d066b3babb5840beb8c4749c9d087d857a3cf437e84de30586a0f3cce869a314"
+    },
+    {
+     "salt": "AbC-dEf_0123456789abcdefghijklmnopqrstuvwxy",
+     "fingerprint": "7fa650bb8e0cdcd74cbea035795098190e25ac4aa7660e212f344c301d686488"
+    },
+    {
+     "salt": "盐😀",
+     "fingerprint": "396409635c10a7dfb33e864e0b40c6fc3523911d8032f4620bb4313e93a8a4b6"
+    },
+    {
+     "salt": "",
+     "fingerprint": "7e528c1130ca5521cd903a8758728c410925500a4f8206252a8ee5512a053277"
+    }
+   ]
+  },
+  {
+   "name": "auth-026",
+   "raw": "{\"mode\": \"oauth\", \"locale\": \"xx_YYYYYYYYY\"}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-027",
+   "raw": "{\"mode\": \"other\"}",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-028",
+   "raw": "[]",
+   "error": "BadRequest"
+  },
+  {
+   "name": "auth-029",
+   "raw": "\"oauth\"",
+   "error": "BadRequest"
+  }
+ ]
+}

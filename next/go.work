@@ -8,6 +8,7 @@ use (
 	./plugins/ccgateway
 	./plugins/ccgateway/companions
 	./plugins/ccgateway/companions/contracts
+	./plugins/ccgateway/companions/controller-go
 	./plugins/ccgateway/companions/guard
 	./plugins/ccgateway/companions/worker
 	./plugins/claude-oauth
