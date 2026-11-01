@@ -115,11 +115,18 @@ def p03():
                 t = Tunnel(aid)
                 if not t.status.startswith('HTTP/1.1 101'):
                     raise RuntimeError(t.status)
-                for _ in range(20):
+                # A paced client: 10 requests a second per tunnel, a new
+                # tunnel every 20 s (a first run that reopened a tunnel every
+                # 20 back-to-back requests opened ~1400 TCP connections a
+                # second and ran the controller out of ephemeral ports).
+                for _ in range(200):
+                    if time.time() >= stop:
+                        break
                     if '200' not in t.health():
                         raise RuntimeError('worker answer')
                     with lock:
                         done[0] += 1
+                    time.sleep(0.1)
                 t.close()
             except Exception as e:  # noqa: BLE001 - counted
                 with lock:
@@ -156,11 +163,31 @@ def p04():
           seconds=round(t1 - t0))
 
 
+def core_reconcile(aid, seconds):
+    """What the core does for a runtime that is not ready at its revision:
+    push the same desired configuration again (every 10 s here)."""
+    t0 = time.time()
+    while time.time() - t0 < seconds:
+        st = status(aid)[1]
+        if st.get('status') == 'ready' and st.get('revision') == ST['desired'][aid]['revision']:
+            return round(time.time() - t0, 1)
+        time.sleep(5)
+        st = status(aid)[1]
+        if st.get('status') != 'ready':
+            put_config(aid, ST['desired'][aid])
+    raise RuntimeError('%s not ready after %d s' % (aid, seconds))
+
+
 @scenario('IT-P05')
 def p05():
     keys = [k for k in (A1, A2, A3) if k in ST.get('desired', {})]
     names_ = [gt_name('%s-%s-app' % ('ccg-gt', k)) for k in keys]
     since = time.time()
+    # Docker's event history on a busy host does not keep the window (L7
+    # 2026-11-01: 3 of 40 events came back), so the events are streamed live.
+    stream = subprocess.Popen(['docker', 'events', '--filter', 'type=container',
+                               '--format', '{{.TimeNano}} {{.Action}} {{.Actor.Attributes.name}}'],
+                              stdout=subprocess.PIPE, text=True)
     n = 0
     t0 = time.time()
     while n < 20 and time.time() - t0 < 30:
@@ -169,14 +196,14 @@ def p05():
         n += 1
     last = time.time()
     time.sleep(15)
-    ev = subprocess.run(['docker', 'events', '--since', '%.3f' % since, '--until', '%.3f' % time.time(),
-                         '--filter', 'type=container', '--filter', 'event=start', '--filter', 'event=die',
-                         '--format', '{{.TimeNano}} {{.Action}} {{.Actor.Attributes.name}}'], capture_output=True, text=True)
-    events = [l.split() for l in ev.stdout.splitlines() if 'ccg-gt-d' in l]
+    stream.terminate()
+    out, _ = stream.communicate(timeout=10)
+    events = [l.split() for l in out.splitlines()
+              if 'ccg-gt-d' in l and len(l.split()) == 3 and l.split()[1] in ('start', 'die')]
     last_ev = max(int(e[0]) for e in events) / 1e9 if events else last
-    logs = subprocess.run(['docker', 'logs', '--since', '%.3f' % since, 'ccg-gt-guard'], capture_output=True, text=True)
+    logs = subprocess.run(['docker', 'logs', '--since', str(int(since) - 1), 'ccg-gt-guard'], capture_output=True, text=True)
     writes = []
-    for line in logs.stdout.splitlines():
+    for line in (logs.stdout + logs.stderr).splitlines():
         try:
             e = json.loads(line)
         except ValueError:
@@ -186,6 +213,7 @@ def p05():
             sec = calendar.timegm(time.strptime(ts[:19], '%Y-%m-%dT%H:%M:%S')) + float('0.' + ts[20:-1].ljust(9, '0')[:9])
             writes.append((round(sec, 2), e.get('chain')))
     restores = sorted({w[0] for w in writes})  # one restore may write several chains
+    restores = [w for w in restores if w >= since]
     after = [w for w in restores if w >= last_ev]
     first_after = (after[0] - last_ev) if after else None
     res = {'restarts': n, 'burst_seconds': round(last - t0, 1), 'container_events': len(events),
@@ -194,6 +222,7 @@ def p05():
     save_state(ST)
     check(first_after is not None and first_after <= 1.0, 'rules rewritten within 1 s of the last event', **res)
     check(len(restores) < len(events), 'debounce: fewer iptables-restore runs than events', **res)
+    per = {}
     for k in keys:
-        wait_ready(k, ST['desired'][k]['revision'], 90)
-    record('all accounts ready again after the burst', True)
+        per[k] = core_reconcile(k, 90)
+    record('all accounts ready again after the burst', True, seconds=per)

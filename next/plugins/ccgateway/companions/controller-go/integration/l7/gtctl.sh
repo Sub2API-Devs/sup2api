@@ -134,10 +134,36 @@ cleanup)
   done
   echo cleaned ;;
 verify)
-  out=$1; mkdir -p "$out/after"; snapshot "$out/after"; rc=0
-  for f in ps.txt bridge.txt networks.txt volumes.txt iptables-nongt.txt bridge-unit.txt; do
-    if cmp -s "$out/$f" "$out/after/$f"; then echo "same $f"; else echo "DIFFERENT $f"; diff "$out/$f" "$out/after/$f" | head -20; rc=1; fi
+  out=$1; mkdir -p "$out/after"; rc=0
+  # The production bridge guard rewrites its chain every 3 s and flushes it
+  # for one pass when a veth vanishes under it (an old defect, L7 6.1): wait
+  # up to 60 s for every baseline rule to be back before judging.
+  i=0
+  while :; do
+    snapshot "$out/after"
+    sort "$out/bridge.txt" > "$out/after/.a"; sort "$out/after/bridge.txt" > "$out/after/.b"
+    [ "$(comm -23 "$out/after/.a" "$out/after/.b" | wc -l)" -eq 0 ] && break
+    i=$((i+1)); [ "$i" -ge 20 ] && break
+    sleep 3
   done
+  echo "production snapshot taken after $((i*3)) s"
+  sudo -n journalctl -u ccgateway-bridge-guard --since "-90min" --no-pager -o short-iso | grep bridge_guard_error | sed 's/^/  bridge guard: /'
+  # Production keeps running during the run (the core creates draft
+  # accounts): every baseline line must still be there unchanged (same IDs,
+  # same rules); lines production added meanwhile are listed, not failed.
+  for f in ps.txt bridge.txt networks.txt volumes.txt iptables-nongt.txt bridge-unit.txt; do
+    sort "$out/$f" > "$out/after/.a"; sort "$out/after/$f" > "$out/after/.b"
+    gone=$(comm -23 "$out/after/.a" "$out/after/.b" | wc -l)
+    added=$(comm -13 "$out/after/.a" "$out/after/.b" | wc -l)
+    echo "$f: baseline $(wc -l < "$out/$f"), now $(wc -l < "$out/after/$f"), baseline lines missing or changed $gone, added by production $added"
+    [ "$gone" -eq 0 ] || { comm -23 "$out/after/.a" "$out/after/.b" | head -10; rc=1; }
+  done
+  rm -f "$out/after/.a" "$out/after/.b"
+  sed 's/^[^ ]* //' "$out/ps.txt" | sort > "$out/after/.a"; sed 's/^[^ ]* //' "$out/after/ps.txt" | sort > "$out/after/.b"
+  for n in $(comm -13 "$out/after/.a" "$out/after/.b"); do
+    echo "  new production container $n created $(docker inspect -f '{{.Created}}' "$n" 2>/dev/null)"
+  done
+  rm -f "$out/after/.a" "$out/after/.b"
   echo "gt containers: $(docker ps -aq --filter name='^ccg-gt-' | wc -l)"
   echo "gt networks: $(docker network ls -q --filter name='^ccg-gt-' | wc -l)"
   echo "gt volumes: $(docker volume ls -q --filter name='^ccg-gt-' | wc -l)"
