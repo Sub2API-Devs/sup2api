@@ -3,13 +3,11 @@ import { onMounted, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { provideTitleContext } from '@sub2api/ui'
-import { useAppStore } from '@/stores/app'
-import { usePluginStore } from '@/stores/plugins'
+import { refreshShell, useAppStore } from '@/stores/app'
 import AppSidebar from './AppSidebar.vue'
 import AppTopbar from './AppTopbar.vue'
 
 const app = useAppStore()
-const plugins = usePluginStore()
 const route = useRoute()
 const { t } = useI18n()
 
@@ -17,10 +15,9 @@ const { t } = useI18n()
 // with the same title is only its filters and actions.
 provideTitleContext(() => (route.meta.title ? t(route.meta.title as string) : ''), toRef(app, 'pageDescription'))
 
-onMounted(async () => {
-  await plugins.refresh()
-  await app.loadMenus()
-})
+// The menus do not wait for the plugin modules: GET /me/menus already lists
+// plugin menus, and the fallback is a fixed dashboard entry.
+onMounted(() => void refreshShell())
 </script>
 
 <template>

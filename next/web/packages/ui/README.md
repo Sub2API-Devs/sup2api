@@ -166,3 +166,84 @@ const columns: TableColumn[] = [
 - Shift + 点击勾选框：把上一次点击的行到当前行设为同一状态（跳过 `rowSelectable` 为假的行）。
 - `SBulkBar` 只负责展示与事件，不保存选择、不请求接口。未选时默认隐藏，`persistent` 时显示提示（`#idle` 插槽可替换）。「选择全部 N 项」由调用方按当前筛选加载全部 key 后写回 `selected`；跨页保留选择时，业务方应在筛选条件变化后清空，避免对看不见的行执行操作。
 - 批量操作的权限检查由服务端逐条执行，界面里按钮只用于提示适用数量。原生插件使用 `SBulkBar` 时声明 `hostUICompat: "^3.2"`。
+
+## 通用页面组件（UI SDK 3.4）
+
+控制台和原生插件共用下面这些组件，页面不再各自手写同类样板。原生插件使用时声明 `hostUICompat: "^3.4"`。
+
+### 时间：`SDateTime`
+
+```vue
+<SDateTime :value="row.created_at" mode="absolute" muted />   <!-- 2026-10-31 15:04:05 -->
+<SDateTime :value="row.created_at" mode="time" />             <!-- 今天 15:04:05，其他日期 10-30 15:04:05 -->
+<SDateTime :value="row.last_heartbeat" mode="relative" live /><!-- 5s ago，每秒刷新 -->
+```
+
+默认 `auto`：7 天内显示相对时间，更早显示绝对时间。非 `absolute` 模式悬停显示完整时间；空值或无效值显示 `empty`（默认 `—`）。相对时间按间隔共用一个定时器（`live` 每秒，否则每分钟），绝对时间不计时。
+
+自绘的相对时间可直接用 `useNow(intervalMs)`：返回当前时间（毫秒）的 ref，同一间隔的订阅者共用一个定时器，最后一个退订时清理；间隔可传 getter，变化时重新订阅，`0` 表示停表。
+
+### 状态：`SStatusBadge` / `statusTone`
+
+```vue
+<SStatusBadge :status="row.status" />
+<SStatusBadge :status="job.phase" :labels="{ paused: t('jobs.paused') }" :tones="{ paused: 'info' }" />
+```
+
+常见状态（active、disabled、running、failed、expired …）内置中英文文案和色调；未知状态显示原值、灰色。`statusTone(status, extra?)` 单独给出色调。
+
+### 表单弹窗：`SFormModal`
+
+```vue
+<SFormModal v-model:open="editOpen" :title="t('users.editTitle')" :loading="saving" @submit="save">
+  <SField :label="t('common.name')" :error="errors.name"><SInput v-model="form.name" /></SField>
+</SFormModal>
+```
+
+- 字段内回车和“保存”按钮都触发 `submit`；`loading` 时不能关闭、按钮转圈。
+- `:enter-submit="false"` 时回车不提交，只能点按钮，用于调余额、删除确认、多选确认这类不应误触的弹窗。
+- `submitText`、`submitVariant="danger"`、`submitDisabled`、`submitAttrs` / `cancelAttrs`（如 `data-testid`）；其余属性落到 `<form>`。
+- `#footer-start` 在页脚左侧放提示或次要操作，`#footer` 整体替换页脚。
+- 组件只负责外壳，校验、请求和错误展示仍由页面处理。
+
+### 列表加载失败：`STable` 的 `error`
+
+```vue
+<STable :rows="list.items.value" :loading="list.loading.value" :error="list.error.value" @retry="list.reload" />
+```
+
+空表显示“加载失败”而不是“暂无数据”；已有旧数据时保留数据并在上方提示。绑定 `@retry` 才显示“重试”。`#error` 插槽可替换默认内容，`errorText` 改文案。
+
+### 自动刷新：`useAutoRefresh` / `SAutoRefresh`
+
+```ts
+const seconds = ref(10)
+useAutoRefresh(list.reload, () => seconds.value * 1000, { enabled: () => !editorOpen.value })
+// <SAutoRefresh v-model="seconds" />   关闭 / 每 10、30、60 秒
+```
+
+上一次加载结束后才排下一次，慢接口不会堆积；页面隐藏时暂停，回到页面时补一次；间隔为 0 或 `enabled` 为 false 时暂停。组件内挂载后才开始，首次加载仍由调用方负责。
+
+### 筛选条：`SFilterBar`
+
+```vue
+<SFilterBar :aria-label="t('stats.filters')" :dirty="changed" @reset="resetFilters">
+  <SDateRange … />
+  <SSelect … />
+  <template #end><span class="text-xs text-fg-subtle">UTC+8</span></template>
+</SFilterBar>
+```
+
+绑定 `@reset` 时显示“重置”，`dirty` 为假时禁用；`:card="false"` 去掉卡片外框，用于卡片内部。
+
+### 插件页懒加载：`lazyPage`
+
+```ts
+import { lazyPage } from '@sub2api/ui'
+
+export function register(host: PluginHost) {
+  host.registerComponent('MyDashboard', lazyPage(() => import('./MyDashboard.vue')))
+}
+```
+
+控制台启动时会加载所有原生入口，页面组件用 `lazyPage` 注册后单独分包，首次打开页面时才下载；加载中显示占位，失败重试两次后显示控制台的错误状态。入口只保留 slot 组件、文案和 `register` 需要的代码。

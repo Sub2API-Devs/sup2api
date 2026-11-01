@@ -1,5 +1,13 @@
 export default {
   description: 'System-wide billing, gateway and scheduling settings.',
+  navLabel: 'Settings sections',
+  groups: {
+    gateway: 'Gateway',
+    billing: 'Billing',
+    notifications: 'Notifications',
+    system: 'System',
+    plugins: 'Plugin settings'
+  },
   tabs: {
     notifications: 'Notifications',
     environment: 'Environment variables',

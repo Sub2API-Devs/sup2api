@@ -2,9 +2,9 @@
 import { computed, onMounted, onBeforeUnmount, ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, requestWithHeaders } from '@sub2api/host'
-import { SBadge, SCard, SEmpty, SHint, SSegmented, type SelectOption } from '@sub2api/ui'
+import { SBadge, SCard, SEmpty, SHint, SSegmented, SStatusBadge, useAutoRefresh, type SelectOption } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
-import { parseNodePlugin, statusTone } from '@/api/admin'
+import { parseNodePlugin } from '@/api/admin'
 import { fetchFirstPage } from '@/composables/lookups'
 import type { NodeInfo } from '@/api/types'
 import type { Release, ShellNode } from '@/api/observability'
@@ -17,7 +17,7 @@ const registered = ref<NodeInfo[]>([]), shells = ref<ShellNode[]>([]), releases 
 const primary = ref(''), shellOK = ref(false), failed = ref(false), tick = ref(Date.now())
 const offload = ref<{ enabled: boolean; cpu_threshold_percent: number } | null>(null)
 const visit = ref<{ entry: string; core: string; boot: string } | null>(null)
-let timer: ReturnType<typeof setInterval> | undefined, inflight = false, disposed = false
+let inflight = false, disposed = false
 const fresh = (date?: string, seconds = 30) => !!date && tick.value - Date.parse(date) < seconds * 1000
 async function load() {
   if (inflight) return
@@ -77,8 +77,9 @@ const graphEdges = computed(() => edges.value.flatMap(edge => {
   const to = cards.value.find(card => card.index === edge.to)?.id
   return from && to ? [{ from, to, kind: edge.kind }] : []
 }))
-onMounted(() => { void load(); timer = setInterval(() => { tick.value = Date.now(); if (document.visibilityState !== 'hidden') void load() }, 5000) })
-onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
+useAutoRefresh(load, 5000)
+onMounted(() => { void load() })
+onBeforeUnmount(() => { disposed = true })
 </script>
 <template>
   <SCard :title="t('observe.nodeView')" class="mb-5">
@@ -111,7 +112,7 @@ onBeforeUnmount(() => { disposed = true; clearInterval(timer) })
               <div class="my-1 text-xs">{{ t(card.shell?.stopped ? 'observe.stopped' : card.core ? 'observe.running' : 'observe.unknown') }} · {{ (card.shell?.core_boot_id || card.core?.boot_id)?.slice(0,8) || '—' }}</div>
               <div class="mt-3 text-xs font-semibold text-fg-muted">{{ t('observe.plugins') }}</div>
               <div v-for="plugin in card.plugins" :key="plugin.key" class="mt-2 rounded-lg border p-2" :class="plugin.fallback ? 'border-amber-400 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30' : 'border-line'">
-                <div class="flex items-center justify-between gap-1"><strong>{{ plugin.key }}</strong><SBadge :tone="statusTone(plugin.state)">{{ plugin.state || '—' }}</SBadge></div>
+                <div class="flex items-center justify-between gap-1"><strong>{{ plugin.key }}</strong><SStatusBadge :status="plugin.state" /></div>
                 <div class="font-mono text-xs">{{ plugin.serving || '—' }}<span v-if="plugin.standby"> → {{ plugin.standby }}</span></div>
                 <SHint v-if="plugin.fallback" tone="warning" size="xs">{{ t('observe.fallback') }}: {{ plugin.fallback }}</SHint>
                 <div class="text-xs text-fg-muted">{{ t('observe.instances') }} {{ plugin.instances?.length || 0 }} · {{ t('observe.restarts') }} {{ plugin.instances?.reduce((sum, i) => sum + i.restarts, 0) || 0 }}</div>

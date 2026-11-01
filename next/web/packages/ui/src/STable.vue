@@ -17,6 +17,9 @@
 //   #toolbar slot above it and the #footer slot (pagination) below it.
 // - reorderable + v-model:rows: leading drag handles; unique stable rowKey
 //   values are required. reorderDisabled/loading prevent reordering.
+// - error (truthy = the last load failed, e.g. useList's `error`): an empty
+//   table says the load failed instead of "No data" (#error slot), a filled
+//   one keeps its rows under a failure notice; @retry adds a Retry button.
 import { computed, ref, useId } from 'vue'
 import { useUiT } from './i18n'
 import SSpinner from './SSpinner.vue'
@@ -30,6 +33,7 @@ import STableColumnSettings from './STableColumnSettings.vue'
 import { useScrollClip } from './scrollClip'
 import { useTableSwipeSelect } from './tableSwipeSelect'
 import SIPAddress from './SIPAddress.vue'
+import SButton from './SButton.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -58,8 +62,13 @@ const props = withDefaults(
     columnSettingsKey?: string
     /** Optional server/custom persistence; defaults to browser localStorage. */
     columnStorage?: TableColumnStorage
+    /** The last load failed (any truthy value, e.g. useList's error). */
+    error?: unknown
+    errorText?: string
+    /** Declared as a prop so the Retry button shows only when someone listens. */
+    onRetry?: () => void
   }>(),
-  { rowKey: 'id', selected: () => [], swipeSelect: true, emptyText: undefined, rowSelectable: undefined, rowClass: undefined, rowAttrs: undefined }
+  { rowKey: 'id', selected: () => [], swipeSelect: true, emptyText: undefined, rowSelectable: undefined, rowClass: undefined, rowAttrs: undefined, error: undefined, errorText: undefined, onRetry: undefined }
 )
 const emit = defineEmits<{
   (e: 'row-click', row: T): void
@@ -245,6 +254,20 @@ function onRowKey(e: KeyboardEvent, row: T) {
               <SSpinner />
             </td>
           </tr>
+          <tr v-else-if="error && rows.length === 0">
+            <td
+              :colspan="span"
+              class="py-10 text-center"
+              data-testid="table-error"
+            >
+              <slot name="error" :error="error">
+                <div role="alert" class="flex flex-col items-center gap-3 text-sm text-red-600 dark:text-red-400">
+                  {{ errorText || t('ui.loadFailed') }}
+                  <SButton v-if="onRetry" size="sm" icon="refresh" @click="onRetry()">{{ t('ui.retry') }}</SButton>
+                </div>
+              </slot>
+            </td>
+          </tr>
           <tr v-else-if="rows.length === 0">
             <td
               :colspan="span"
@@ -253,6 +276,18 @@ function onRowKey(e: KeyboardEvent, row: T) {
               <slot name="empty">
                 {{ emptyText || t('ui.noData') }}
               </slot>
+            </td>
+          </tr>
+          <tr v-if="error && rows.length > 0 && !loading">
+            <td
+              :colspan="span"
+              class="bg-red-50 py-2 text-xs text-red-700 dark:bg-red-900/20 dark:text-red-300"
+              data-testid="table-error"
+            >
+              <div role="alert" class="flex items-center gap-3">
+                {{ errorText || t('ui.loadFailed') }}
+                <SButton v-if="onRetry" size="xs" variant="ghost" icon="refresh" @click="onRetry()">{{ t('ui.retry') }}</SButton>
+              </div>
             </td>
           </tr>
           <template

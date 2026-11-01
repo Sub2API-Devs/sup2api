@@ -501,14 +501,16 @@ func TestMenus(t *testing.T) {
 			{ID: "public", Section: "plugins", Label: manifest.LocalizedText{"en": "Info"}, Page: "info", Order: 1},
 		}}},
 	}, {
-		// A plugin with its own sidebar section (between finance and system)
-		// and an item joining a core section.
+		// A plugin with its own sidebar section (order 350: between security
+		// and finance), an item joining a core section and one joining
+		// security.
 		Key: "mod",
 		Manifest: &manifest.Manifest{UI: &manifest.UI{
 			Sections: []manifest.MenuSection{{ID: "safety", Label: manifest.LocalizedText{"en": "Safety", "zh": "安全"}, Order: 350}},
 			Menus: []manifest.Menu{
 				{ID: "dash", Section: "safety", Label: manifest.LocalizedText{"en": "Moderation"}, Page: "dashboard", Permission: "mod:read"},
 				{ID: "rules", Section: "gateway", Label: manifest.LocalizedText{"en": "Mod rules"}, Page: "rules", Permission: "mod:read"},
+				{ID: "audit", Section: "security", Label: manifest.LocalizedText{"en": "Mod audit"}, Page: "audit", Permission: "mod:read"},
 			}}},
 	}}}}
 	s := newService(t, db, newMemBus(), reg)
@@ -534,10 +536,12 @@ func TestMenus(t *testing.T) {
 	for _, m := range menus {
 		sections = append(sections, m.Section)
 	}
-	if got := join(sections); got != "overview,me,plugins" {
+	// The server orders plugins (600) before my account (800); the console
+	// lists my account first when the caller has no operator section.
+	if got := join(sections); got != "overview,plugins,me" {
 		t.Fatalf("user sections = %s", got)
 	}
-	if p := menus[2].Items; len(p) != 1 || p[0].Path != "/p/guard/info" || p[0].PluginKey != "guard" {
+	if p := menus[1].Items; len(p) != 1 || p[0].Path != "/p/guard/info" || p[0].PluginKey != "guard" {
 		t.Fatalf("user plugin menus = %+v", p)
 	}
 
@@ -551,17 +555,28 @@ func TestMenus(t *testing.T) {
 	for _, m := range menus {
 		sections = append(sections, m.Section)
 	}
-	if got := join(sections); got != "overview,gateway,mod:safety,system,me,plugins" {
+	if got := join(sections); got != "overview,gateway,security,mod:safety,finance,users,plugins,system,me" {
 		t.Fatalf("admin sections = %s", got)
 	}
-	if p := menus[5].Items; len(p) != 2 || p[1].Path != "/p/guard/dashboard" || p[1].Label.Get("zh") != "请求守卫" {
+	byKey := map[string]MenuSection{}
+	for _, m := range menus {
+		byKey[m.Section] = m
+	}
+	// Core items first, then the plugin menus of the shared section by order.
+	if p := byKey["plugins"].Items; len(p) != 5 || p[0].Path != "/plugins" || p[3].Path != "/p/guard/info" || p[4].Path != "/p/guard/dashboard" || p[4].Label.Get("zh") != "请求守卫" {
 		t.Fatalf("admin plugin menus = %+v", p)
 	}
-	if sec := menus[2]; sec.Label.Get("zh") != "安全" || len(sec.Items) != 1 || sec.Items[0].Path != "/p/mod/dashboard" {
+	if sec := byKey["mod:safety"]; sec.Label.Get("zh") != "安全" || len(sec.Items) != 1 || sec.Items[0].Path != "/p/mod/dashboard" {
 		t.Fatalf("plugin section = %+v", sec)
 	}
-	if gw := menus[1].Items; gw[len(gw)-1].Path != "/p/mod/rules" || gw[0].Path != "/groups" {
+	if sec := byKey["security"]; sec.Label.Get("zh") != "安全" || len(sec.Items) != 1 || sec.Items[0].Path != "/p/mod/audit" {
+		t.Fatalf("security section = %+v", sec)
+	}
+	if gw := byKey["gateway"].Items; gw[len(gw)-1].Path != "/p/mod/rules" || gw[0].Path != "/groups" || gw[2].Path != "/platforms" {
 		t.Fatalf("core section with plugin item = %+v", gw)
+	}
+	if f := byKey["finance"].Items; len(f) != 1 || f[0].Path != "/ledger" {
+		t.Fatalf("finance = %+v", f)
 	}
 }
 

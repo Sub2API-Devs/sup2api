@@ -1,5 +1,6 @@
 export default {
   granularity: '粒度',
+  filters: '筛选',
   day: '按天',
   hour: '按小时',
   hourTooLong: '超过 31 天只能按天',

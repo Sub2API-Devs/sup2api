@@ -17,13 +17,16 @@ import SettingsTab from './detail/SettingsTab.vue'
 // what the detail page's settings tab shows: the core settings view of
 // ccgateway, else the plugin's schema form; native settings (§75.5) send the
 // user to the plugin page that edits them.
+// The settings page embeds it with pluginKey (its "Plugin settings" group),
+// whose side menu already names the plugin, so the page header is left out.
 const CCGatewaySettings = defineAsyncComponent(() => import('@/views/ccgateway/CCGatewayView.vue'))
+const props = defineProps<{ pluginKey?: string }>()
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const plugins = usePluginStore()
-const key = computed(() => String(route.params.key))
+const key = computed(() => props.pluginKey || String(route.params.key))
 const name = computed(() => lt(plugins.plugin(key.value)?.name) || key.value)
 const coreSettings = computed(() => hasCoreSettings(key.value, (p) => auth.has(p)))
 const settings = ref<PluginSettings | null>(null)
@@ -72,7 +75,7 @@ onMounted(load)
 
 <template>
   <div>
-    <SPageHeader :title="name" :description="t('plugins.settings.pageHint')" />
+    <SPageHeader v-if="!pluginKey" :title="name" :description="t('plugins.settings.pageHint')" />
     <div v-if="loading" class="flex justify-center py-20"><SSpinner size="lg" /></div>
     <CCGatewaySettings v-else-if="coreSettings" embedded />
     <SCard v-else-if="!settings">

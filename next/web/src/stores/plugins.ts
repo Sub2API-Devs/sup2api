@@ -29,7 +29,10 @@ export const usePluginStore = defineStore('plugins', () => {
   const uiPlugins = ref<UIPlugin[]>([])
   const components = reactive<Record<string, Record<string, Component>>>({})
   const errors = reactive<Record<string, string>>({})
-  const ready = ref(false)
+  /** Plugins whose native module is being imported / registered. */
+  const pending = reactive<Record<string, boolean>>({})
+  /** GET /ui/plugins answered (menus, pages and slots are known). */
+  const listed = ref(false)
   const loaded = new Map<string, Loaded>()
 
   function nativeURL(p: UIPlugin): string | null {
@@ -86,27 +89,50 @@ export const usePluginStore = defineStore('plugins', () => {
     }
   }
 
-  /** Reloads /ui/plugins; unregisters removed/changed plugins, loads new ones. */
-  async function refresh() {
-    let list: UIPlugin[] = []
+  async function fetchList(): Promise<UIPlugin[]> {
     try {
-      list = (await api.get<UIPlugin[]>('/ui/plugins')) || []
+      return (await api.get<UIPlugin[]>('/ui/plugins')) || []
     } catch (e) {
       console.warn('[plugins] GET /ui/plugins failed', e)
+      return []
     }
+  }
+
+  /**
+   * Reloads /ui/plugins; unregisters removed/changed plugins, loads new ones.
+   * Sets `listed` as soon as the list is in and resolves once every native
+   * module this call started has loaded or failed.
+   */
+  async function refresh() {
+    const list = await fetchList()
     uiPlugins.value = list
     for (const key of [...loaded.keys()]) {
       const p = list.find((x) => x.key === key)
       if (!p || nativeURL(p) !== loaded.get(key)?.url) await unload(key)
     }
-    await Promise.all(list.filter((p) => p.native_entry && !loaded.has(p.key)).map(load))
-    ready.value = true
+    // A plugin still loading from an overlapping refresh is left to that call.
+    const todo = list.filter((p) => p.native_entry && !loaded.has(p.key) && !pending[p.key])
+    for (const p of todo) pending[p.key] = true
+    listed.value = true
+    // Each plugin finishes on its own: a slow or failing one holds up only its own pages and slots.
+    await Promise.all(todo.map((p) => loadLatest(p).finally(() => delete pending[p.key])))
+  }
+
+  /** Loads p, then follows a refresh that removed or changed it meanwhile (that refresh skipped it). */
+  async function loadLatest(p: UIPlugin) {
+    await load(p)
+    const latest = plugin(p.key)
+    const l = loaded.get(p.key)
+    if (l && (!latest || nativeURL(latest) !== l.url)) {
+      await unload(p.key)
+      if (latest) await loadLatest(latest)
+    }
   }
 
   async function reset() {
     for (const key of [...loaded.keys()]) await unload(key)
     uiPlugins.value = []
-    ready.value = false
+    listed.value = false
   }
 
   function plugin(key: string): UIPlugin | undefined {
@@ -137,5 +163,5 @@ export const usePluginStore = defineStore('plugins', () => {
     return out
   }
 
-  return { uiPlugins, components, errors, ready, refresh, reset, plugin, page, component, slotEntries, nativeAllowed }
+  return { uiPlugins, components, errors, pending, listed, refresh, reset, plugin, page, component, slotEntries, nativeAllowed }
 })

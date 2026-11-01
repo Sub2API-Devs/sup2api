@@ -2,7 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SChip, SDropdown, SEmpty, SField, SGrid, SHint, SIcon, SInput, SLink, SModal, SPageHeader, SSpinner, STextarea, confirm, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SChip, SDropdown, SEmpty, SField, SGrid, SHint, SIcon, SInput, SLink, SFormModal, SPageHeader, SSpinner, STextarea, confirm, toast } from '@sub2api/ui'
 import type { LText, PermissionModule, User } from '@/api/types'
 import { roleMemberCount, type RoleRow } from '@/api/admin'
 import { deleteWithConfirm } from '@/composables/crud'
@@ -310,27 +310,21 @@ async function restoreDefaults() {
       <SCard v-else :padded="false"><SEmpty :text="t('roles.selectRole')" /></SCard>
     </SGrid>
 
-    <SModal v-model:open="createOpen" :title="t('roles.create')">
-      <form class="space-y-4" @submit.prevent="submitCreate">
-        <SField :label="t('roles.key')" required :hint="t('roles.keyHint')" :error="createErrors.key">
-          <SInput v-model="createForm.key" mono placeholder="auditor" />
+    <SFormModal v-model:open="createOpen" :title="t('roles.create')" :loading="creating" :submit-text="t('common.create')" @submit="submitCreate">
+      <SField :label="t('roles.key')" required :hint="t('roles.keyHint')" :error="createErrors.key">
+        <SInput v-model="createForm.key" mono placeholder="auditor" />
+      </SField>
+      <SGrid>
+        <SField :label="t('roles.nameEn')" :error="createErrors.name">
+          <SInput v-model="createForm.nameEn" placeholder="Auditor" />
         </SField>
-        <SGrid>
-          <SField :label="t('roles.nameEn')" :error="createErrors.name">
-            <SInput v-model="createForm.nameEn" placeholder="Auditor" />
-          </SField>
-          <SField :label="t('roles.nameZh')">
-            <SInput v-model="createForm.nameZh" placeholder="审计" />
-          </SField>
-        </SGrid>
-        <SField :label="t('common.description')" :error="createErrors.description">
-          <STextarea v-model="createForm.description" :rows="2" />
+        <SField :label="t('roles.nameZh')">
+          <SInput v-model="createForm.nameZh" placeholder="审计" />
         </SField>
-      </form>
-      <template #footer>
-        <SButton @click="createOpen = false">{{ t('common.cancel') }}</SButton>
-        <SButton variant="primary" :loading="creating" @click="submitCreate">{{ t('common.create') }}</SButton>
-      </template>
-    </SModal>
+      </SGrid>
+      <SField :label="t('common.description')" :error="createErrors.description">
+        <STextarea v-model="createForm.description" :rows="2" />
+      </SField>
+    </SFormModal>
   </div>
 </template>

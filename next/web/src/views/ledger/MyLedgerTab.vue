@@ -39,7 +39,7 @@ onMounted(() => {
 })
 
 const range = ref<RangeKey>('month')
-const { items, loading, page, pageSize, total, filters, reload } = useList<LedgerEntry>('/me/ledger', { ...rangeBounds('month'), kind: '' })
+const { items, loading, error, page, pageSize, total, filters, reload } = useList<LedgerEntry>('/me/ledger', { ...rangeBounds('month'), kind: '' })
 const kindOptions = useKindOptions()
 
 const negative = computed(() => Number(balance.value) < 0)
@@ -74,7 +74,7 @@ watch(loading, (v) => emit('update:loading', v), { immediate: true })
       <SAlert v-if="negative" tone="danger" class="self-center md:col-span-2" data-testid="ledger-negative">{{ t('ledger.negativeHint') }}</SAlert>
     </SGrid>
 
-    <LedgerTable :rows="items" :loading="loading" :show-user="false">
+    <LedgerTable :rows="items" :loading="loading" :error="error" :show-user="false" @retry="reload">
       <template #footer><SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" /></template>
     </LedgerTable>
   </div>

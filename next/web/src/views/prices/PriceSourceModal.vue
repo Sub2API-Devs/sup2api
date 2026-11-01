@@ -2,7 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ApiError, api } from '@sub2api/host'
-import { SButton, SCheckbox, SField, SHint, SInput, SModal, SSegmented, SSettingRow, SSwitch, STagInput, toast, type SelectOption } from '@sub2api/ui'
+import { SCheckbox, SField, SHint, SInput, SFormModal, SSegmented, SSettingRow, SSwitch, STagInput, toast, type SelectOption } from '@sub2api/ui'
 import type { PriceSource, PriceSourceKind } from '@/api/types'
 import { applyFormError } from '@/utils/formErrors'
 import { DEFAULT_PROVIDERS, DEFAULT_URLS, SOURCE_KINDS, isHttpUrl } from './priceSources'
@@ -115,13 +115,17 @@ async function submit() {
 </script>
 
 <template>
-  <SModal
+  <SFormModal
     :open="open"
     :title="editing ? t('prices.sources.editTitle', { name: editing.name }) : t('prices.sources.create')"
     width="lg"
+    :loading="saving"
+    :submit-text="editing ? t('common.save') : t('common.create')"
+    :submit-attrs="{ 'data-testid': 'price-source-submit' }"
+    data-testid="price-source-form"
     @update:open="emit('update:open', $event)"
+    @submit="submit"
   >
-    <form class="space-y-4" data-testid="price-source-form" @submit.prevent="submit">
       <SField :label="t('prices.sources.kindCol')" required>
         <SSegmented
           :model-value="form.kind"
@@ -183,12 +187,5 @@ async function submit() {
       <SSettingRow :label="t('common.status')" dense flush for="price-source-enabled">
         <SSwitch id="price-source-enabled" v-model="form.enabled" :label="form.enabled ? t('common.enabled') : t('common.disabled')" />
       </SSettingRow>
-    </form>
-    <template #footer>
-      <SButton @click="emit('update:open', false)">{{ t('common.cancel') }}</SButton>
-      <SButton variant="primary" :loading="saving" data-testid="price-source-submit" @click="submit">
-        {{ editing ? t('common.save') : t('common.create') }}
-      </SButton>
-    </template>
-  </SModal>
+  </SFormModal>
 </template>

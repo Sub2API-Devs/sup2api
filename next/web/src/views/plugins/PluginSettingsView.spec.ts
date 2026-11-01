@@ -39,4 +39,14 @@ describe('PluginSettingsView', () => {
     expect(mocks.replace).toHaveBeenCalledWith("/p/moderation/dashboard?tab=settings")
     expect(w.find('[data-testid="tab"]').exists()).toBe(false)
   })
+
+  it('leaves the page header to the settings page that embeds it', async () => {
+    mocks.route = reactive({ params: { key: '' } })
+    mocks.get.mockResolvedValue(settingsOf('alpha'))
+    const header = { name: 'SPageHeader', template: '<header />' }
+    const embedded = mount(PluginSettingsView, { props: { pluginKey: 'alpha' }, global: { plugins: [i18n], stubs: { SPageHeader: header } } })
+    await flushPromises()
+    expect(embedded.find('header').exists()).toBe(false)
+    expect(embedded.get('[data-testid="tab"]').text()).toBe('alpha:alpha')
+  })
 })

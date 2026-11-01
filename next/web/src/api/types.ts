@@ -1255,6 +1255,11 @@ export interface UIPluginPage {
    * set; the typed text is sent as `?<search>=…`.
    */
   search?: string
+  /**
+   * A table page's "New" button: the form page it opens (manifest
+   * Page.Create). The core drops it for callers without its permission.
+   */
+  create?: { page: string; permission?: string }
 }
 
 export interface UIPlugin {

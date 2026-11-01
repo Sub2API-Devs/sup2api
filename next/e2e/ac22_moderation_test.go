@@ -21,9 +21,9 @@ func TestAC22_PromptModeration(t *testing.T) {
 	e := Setup(t)
 	admin := e.Admin()
 	e.EnsurePlugin(admin, moderationKey, "")
-	// The plugin's menu sits in its own sidebar section (manifest
-	// ui.sections, CONTRACTS §22): gateway(200) < safety(350) < system(400).
-	// finance(300) is omitted when empty, and other plugins may add sections.
+	// The plugin's menu joins the core "security" section (CONTRACTS §22):
+	// gateway(200) < security(300) < system(700). finance(400) sits between
+	// them when it has items, and other plugins may add sections.
 	var sections []string
 	positions := map[string]int{}
 	moderationMenus := 0
@@ -34,18 +34,13 @@ func TestAC22_PromptModeration(t *testing.T) {
 		}
 		positions[key] = len(sections)
 		sections = append(sections, key)
-		if key == moderationKey+":safety" {
-			if sec.Get("label.zh").String() != "安全" || sec.Get("label.en").String() != "Safety" {
-				t.Fatalf("moderation section: %s", sec.Raw)
-			}
-		}
 		for _, item := range sec.Get("items").Array() {
 			if item.Get("path").String() != "/p/moderation/dashboard" {
 				continue
 			}
 			moderationMenus++
-			if key != moderationKey+":safety" || item.Get("plugin_key").String() != moderationKey || item.Get("id").String() != moderationKey+":moderation" {
-				t.Fatalf("moderation menu is not in its own section: %s", sec.Raw)
+			if key != "security" || item.Get("plugin_key").String() != moderationKey || item.Get("id").String() != moderationKey+":moderation" {
+				t.Fatalf("moderation menu is not in the security section: %s", sec.Raw)
 			}
 		}
 	}
@@ -53,12 +48,12 @@ func TestAC22_PromptModeration(t *testing.T) {
 		t.Fatalf("moderation dashboard menu count = %d, want 1", moderationMenus)
 	}
 	gateway, gatewayOK := positions["gateway"]
-	safety, safetyOK := positions[moderationKey+":safety"]
+	security, securityOK := positions["security"]
 	system, systemOK := positions["system"]
-	if !gatewayOK || !safetyOK || !systemOK || gateway >= safety || safety >= system {
-		t.Fatalf("sidebar sections = %s; want gateway before moderation:safety before system", strings.Join(sections, ","))
+	if !gatewayOK || !securityOK || !systemOK || gateway >= security || security >= system {
+		t.Fatalf("sidebar sections = %s; want gateway before security before system", strings.Join(sections, ","))
 	}
-	if finance, exists := positions["finance"]; exists && (finance <= gateway || finance >= safety) {
+	if finance, exists := positions["finance"]; exists && (finance <= security || finance >= system) {
 		t.Fatalf("nonempty finance section is out of order: %s", strings.Join(sections, ","))
 	}
 	m := e.Mock()

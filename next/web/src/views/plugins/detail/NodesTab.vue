@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SCard, SCode, SHint, STable, type TableColumn } from '@sub2api/ui'
+import { SCard, SCode, SHint, SStatusBadge, STable, type TableColumn } from '@sub2api/ui'
 import { formatBytes, formatDateTime, formatRelative } from '@/utils/format'
-import { display, pick, type PluginDetail, type PluginNode } from '../pluginUtil'
-import StatusBadge from '../parts/StatusBadge.vue'
+import { PLUGIN_TONES, display, pick, usePluginStatusLabel, type PluginDetail, type PluginNode } from '../pluginUtil'
 import { parseNodePlugin } from '@/api/admin'
 
 // Per-node runtime state. The state object is owned by the runtime (C2);
 // well-known fields are pulled out, everything is available as JSON.
 const props = defineProps<{ detail: PluginDetail }>()
 const { t } = useI18n()
+const statusLabel = usePluginStatusLabel()
 
 const columns = computed<TableColumn[]>(() => [
   { key: 'node_id', label: t('plugins.nodes.node') },
@@ -69,7 +69,7 @@ function restartReason(n: PluginNode): string {
         <SHint size="xs" class="font-mono">{{ row.addr || '' }}<span v-if="row.boot_id"> · {{ String(row.boot_id).slice(0, 8) }}</span></SHint>
       </template>
       <template #cell-status="{ row }">
-        <StatusBadge :status="status(row)" />
+        <SStatusBadge :status="status(row)" :tones="PLUGIN_TONES" :label="statusLabel(status(row))" />
         <SHint v-if="restartReason(row)" size="xs" tone="danger" class="mt-0.5 max-w-[14rem] truncate" :title="restartReason(row)">{{ restartReason(row) }}</SHint>
       </template>
       <template #cell-version="{ row }">

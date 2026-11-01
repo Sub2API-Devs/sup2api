@@ -1,5 +1,5 @@
 import type { PluginHost } from '@sub2api/host'
-import GuardDashboard from './GuardDashboard.vue'
+import { lazyPage } from '@sub2api/ui'
 import BlockedTodayCard from './BlockedTodayCard.vue'
 import messages from './messages'
 import { setHost } from './host'
@@ -10,7 +10,7 @@ import { setHost } from './host'
 export function register(host: PluginHost) {
   setHost(host)
   host.addMessages(messages)
-  host.registerComponent('GuardDashboard', GuardDashboard)
+  host.registerComponent('GuardDashboard', lazyPage(() => import('./GuardDashboard.vue')))
   host.registerComponent('BlockedTodayCard', BlockedTodayCard)
 }
 

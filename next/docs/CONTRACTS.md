@@ -108,7 +108,7 @@
 | POST `/auth/refresh` | - | `{refresh_token}` → 同上（轮换 refresh token） |
 | POST `/auth/logout` | auth | 请求体 `{refresh_token?}` 可选；吊销该 refresh token |
 | GET `/me` | auth | `{id, email, display_name, roles:[key], permissions:[key], superuser}` |
-| GET `/me/menus` | auth | 侧边栏：`[{section, label:{en,zh}, items:[{id, label, icon, path, plugin_key?}]}]`；section 为 `overview/gateway/finance/system/me/plugins` 或插件自己的区 `<插件key>:<id>`（核心菜单按权限过滤，加上插件菜单；§22） |
+| GET `/me/menus` | auth | 侧边栏：`[{section, label:{en,zh}, items:[{id, label, icon, path, plugin_key?}]}]`；section 为 `overview/gateway/security/finance/users/plugins/system/me` 或插件自己的区 `<插件key>:<id>`（核心菜单按权限过滤，加上插件菜单；§22） |
 | PUT `/me/password` | auth | `{old_password, new_password}` |
 
 ### 5.2 用户、角色、权限（A）
@@ -696,7 +696,7 @@ GET `/ui/plugins`（登录即可）→ 不分页数组，只含当前 generation
 | `name` | `{en, zh}` |
 | `asset_base` | `/plugin-ui/{key}/{version_hash}`，拼接包内相对路径加载资源 |
 | `menus` | `[{id, section, label, icon?, page, permission?, order?}]`；按调用者权限过滤（`permission` 为插件内 key，检查 `plugin.<key>:<permission>`）；`section` 为 manifest 原值（§22） |
-| `pages` | `{<page_id>: {type, title?, source?, columns?, schema?, submit?, src?, component?}}`；只被无权限菜单引用的页面被去掉 |
+| `pages` | `{<page_id>: {type, title?, source?, columns?, schema?, submit?, src?, component?, search?, create?}}`；只被无权限菜单引用的页面被去掉；`create` 的权限调用者没有时，去掉该链接以及只靠它到达的表单页（§22.1） |
 | `slots` | `[{slot, component, permission?}]`，按权限过滤 |
 | `native_entry` | 仅 `trust` 为 `official`/`verified` 时返回 manifest `ui.native.entry`，否则空串；加载方式与插件可用的共享库见 §23 |
 | `trust` | |
@@ -1133,12 +1133,35 @@ type ProxyResolver interface {
 
 插件菜单原来只能进侧栏最底下的"插件"区。现在 manifest `ui` 支持：
 
-- `ui.sections: [{id, label:{en,zh}, order?}]`：插件声明自己的侧栏区。`id` 用 manifest 的 id 规则，不能是核心区的 id（`overview` `gateway` `finance` `system` `me` `plugins`）；`label` 必填；`order` 决定与核心区的相对位置（核心区固定：overview 100、gateway 200、finance 300、system 400、me 500、plugins 600；不写 `order` 排在 plugins 同级 600）。
+- `ui.sections: [{id, label:{en,zh}, order?}]`：插件声明自己的侧栏区。`id` 用 manifest 的 id 规则，不能是核心区的 id（`overview` `gateway` `security` `finance` `users` `system` `me` `plugins`）；`label` 必填；`order` 决定与核心区的相对位置（核心区固定：overview 100、gateway 200、security 300、finance 400、users 500、plugins 600、system 700、me 800；不写 `order` 排在 650，即"插件"区之后、"系统"之前）。
 - `ui.menus[].section` 可以是：`plugins`（共享的"插件"区，原行为）、核心区 id（菜单项**追加**到该核心区末尾，按 `order` 排）、或 `ui.sections` 里声明的 id。其他值校验失败 `ui.menus[i].section / invalid`。
 
-`GET /me/menus` 的输出：插件自己的区 `section` 为 `<插件key>:<section id>`，`label` 取声明；各区按 order 排序（同 order 保持核心在前、插件按 key 顺序），空区不返回；菜单项仍按权限过滤，插件禁用后随之消失。`GET /ui/plugins` 的 `menus[].section` 原样返回 manifest 值（前端回退菜单只在服务端菜单不可用时使用，仍把插件项放"插件"区）。
+`GET /me/menus` 的输出：插件自己的区 `section` 为 `<插件key>:<section id>`，`label` 取声明；各区按 order 排序（同 order 保持核心在前、插件按 key 顺序），空区不返回；菜单项仍按权限过滤，插件禁用后随之消失。`GET /ui/plugins` 的 `menus[].section` 原样返回 manifest 值。控制台不再有客户端回退菜单：`GET /me/menus` 失败时侧栏只显示仪表盘和"重试"。
 
-内置 moderation（0.1.1）声明 `sections: [{id:"safety", label:{en:"Safety", zh:"安全"}, order: 350}]`，"提示词审核"菜单放在这个区，显示在"财务"和"系统"之间。e2e AC22 断言该区的位置和内容。
+内置 moderation 0.1.1–0.6.1 声明过 `sections: [{id:"safety", …, order: 350}]`；`safety` 仍是合法的插件区 id，已安装的旧版本照常显示。
+
+### 22.1 菜单分组调整（2026-10-31，用户要求）
+
+原"系统"区有 10 项、"财务"区没有核心项，插件菜单各放各的。调整为：
+
+| 区 | order | 核心项 | 内置插件菜单 |
+| --- | --- | --- | --- |
+| overview 概览 | 100 | 仪表盘 | |
+| gateway 网关 | 200 | 分组、账号、平台、代理、模型价格、使用记录 | 模型目录（anthropic 0.2.8）、动态权重 |
+| security 安全 | 300 | 无（空区不返回） | 请求守卫（guard 0.2.7）、提示词审核（moderation 0.6.2） |
+| finance 财务 | 400 | 余额流水 `/ledger`（`balance:all:read`） | 增长管理（growth 0.1.5，去掉了自己的 growth 区） |
+| users 用户与权限 | 500 | 用户、角色与权限 | |
+| plugins 插件 | 600 | 已安装插件、插件市场、发布者；`section:"plugins"` 的插件菜单接在后面 | |
+| system 系统 | 700 | 集群节点、核心升级、审计日志、设置 | |
+| me 我的账户 | 800 | API 密钥、使用记录 | 我的邀请、每日签到 |
+
+- 只有概览和我的账户的用户（没有 gateway/security/finance/users/system 任何一区），控制台把"我的账户"排到仪表盘之后并且不画它的标题；插件区照常有标题。
+- 侧栏收起时分区标题隐藏，各区之间画一条分隔线。
+- 用到 `security`、`users` 的插件需要核心 0.1.229 或更高（guard 0.2.7、moderation 0.6.2 的 `hostCompat`）。
+
+**表格页的"新建"按钮**：manifest `ui.pages.<id>.create: {page, permission?}` 只能写在 `type:"table"` 的页面上，`page` 必须是同一插件的 `type:"form"` 页面，`permission` 是 `userPermissions` 里的 key。控制台在表格上方画一个主按钮，文字取目标页的 `title`，点击打开 `/p/<插件>/<page>`。`GET /ui/plugins` 对没有该权限的调用者去掉 `create`，表单页如果没有可见菜单指向它也一并去掉。校验错误：`ui.pages.<id>.create` invalid（非表格页）、`.create.page` unknown / invalid（不存在 / 不是表单）、`.create.permission` unknown。volcengine 0.12.6 用它替代了"新建素材组""新建素材"两个菜单项，需要核心 0.1.229。
+
+**控制台布局**：路由 `meta.parent` 指向上级页面，顶栏在标题前显示面包屑（价格详情、价格同步源、同步预览、插件详情、发布进度、安装授权、插件设置）。设置页改为左侧二级导航（网关 / 计费 / 通知 / 系统 / 插件设置），页面仍用 `?tab=` 选择；"插件设置"列出已启用且有设置表单的插件（以及 ccgateway），选中为 `?tab=plugin:<key>`，内容即插件设置页。
 
 ## 23. 原生插件 UI 的共享库：`@sub2api/ui`、`@sub2api/host`、`@sub2api/vite-preset`（2026-09-27，用户要求）
 
@@ -1146,10 +1169,10 @@ type ProxyResolver interface {
 
 ### 23.1 加载方式与 import map
 
-- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.3.0`；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。
+- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.4.0`；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试），入口只保留 slot 组件、文案和 `register` 需要的代码。
 - `entry.js` 的形状是 `NativePluginModule`：`register(host: PluginHost): void | Promise<void>`、`unregister?(): void | Promise<void>`。`register` 里用 `host.registerComponent(name, comp)` 注册 manifest `ui.pages[].component`、`ui.slots[].component` 引用的组件名，用 `host.addMessages({en, zh})` 注册文案；`unregister` 释放模块级状态（moderation 的 `entry.ts` 是最小样例）。
 - **import map**：控制台 `index.html` 注入 `<script type="importmap">`，把 `vue`、`vue-router`、`pinia`、`vue-i18n`、`@sub2api/ui`、`@sub2api/host` 映射到控制台自己构建出的 chunk（`web/vite.config.ts` 的 `SHARED`，`preserveEntrySignatures: 'strict'`，所有导出都保留；dev 下映射到源码，复用同样的预打包依赖）。插件用 `@sub2api/vite-preset` 构建时这些模块（`SHARED_MODULES`，前缀匹配 `vue/*` 之类的子路径）全部 external，**不得打进插件包**，否则页面里会出现第二份 Vue 运行时和第二套组件/状态：`toast`、`confirm`、i18n、路由、`theme` 都不再与控制台共享，组件的 `provide/inject` 也会失效。
-- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（moderation 与 dynweight 用 `^3.3`，因为它们用到 3.3 新增的 `listAll`；`sdk/manifest`：声明了 `ui.native` 时必填）。
+- 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 dynweight、growth、guard、moderation 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；`sdk/manifest`：声明了 `ui.native` 时必填）。
 - 插件的 `package.json` 只需 devDependencies：`@sub2api/vite-preset`、`@vitejs/plugin-vue`、`vite`、`vue`（类型用）；`@sub2api/ui`、`@sub2api/host` 通过 import map 在运行时解析，本地开发用 tsconfig `paths` 指到 `web/packages/*/src` 取类型。
 
 ### 23.2 `@sub2api/host`
@@ -1263,7 +1286,7 @@ type ProxyResolver interface {
 | `SCode` | 代码：块级 `<pre>`（`.code-block`）或行内 `<code>` | `inline`、`text`、`wrap`（true；false 时不折行、横向滚动） | slot 默认替代 `text` |
 | `SSectionTitle` | 小节标题（`.section-title`） | `title`、`tag`（`h3`/`h4`/`p`，h3） | slot 默认替代 `title`；slot `actions` 右对齐 |
 | `SHint` | 小号辅助文字 | `tone`（`muted`/`danger`/`success`/`warning`，muted）、`inline`（`<span>` 而非 `<p>`）、`size`（`xs`/`sm`，sm；`xs` = `text-xs`，原 `muted text-xs` / `text-[11px]` 都用它） | slot 默认 |
-| `SDateTime` | 时间显示（`<time datetime>`，悬停 `title` 为完整本地时间） | `value`（RFC 3339 / 毫秒 / `Date`）、`mode`（`absolute`/`relative`/`auto`，auto：7 天内相对时间，之前绝对时间）、`empty`（`'—'`，空或非法时显示）、`dateOnly` | 相对时间每分钟刷新；按当前语言用 `Intl` 格式化 |
+| `SDateTime` | 时间显示（`<time datetime>`；非 `absolute` 模式悬停 `title` 为完整时间） | `value`（RFC 3339 / 毫秒 / `Date`）、`mode`（`absolute`/`time`/`relative`/`auto`，auto：7 天内相对时间，之前绝对时间）、`empty`（`'—'`，空或非法时显示）、`dateOnly`、`live`、`muted` | 绝对时间固定 `YYYY-MM-DD HH:mm:ss`；相对时间按当前语言用 `Intl` 窄格式，每分钟刷新（`live` 每秒），同一间隔共用一个定时器 |
 | `SSettingsGroup` | 设置分组：卡片表面（`.card`）+ 标题栏，子项（`SSettingRow`）之间分隔线 | `title`、`description`、`collapsible`（标题栏变成折叠按钮）、`open`（`v-model:open`）、`defaultOpen`（true，非受控时的初始状态） | emits `update:open`；slots 默认、`title`、`actions`、`details`（整组的长说明，收在「查看说明」后）；其他 attrs 落到根 `<section>` |
 | `SSettingRow` | 一项设置：左侧标题与一句说明，右侧控件（窄屏换到下方）；内部第一个控件自动关联（见上） | `label`、`description`、`stacked`（控件始终在下方，宽控件用）、`dense`（只有标题和小控件的行）、`flush`（去掉上下内边距：表单、弹窗里的单独一行）、`for`（显式指定控件 id）、`error`（控件下方红字，控件 `aria-invalid`）、`required`、`size`（`sm`/`md`，内部控件默认尺寸） | slots 默认（控件）、`label`、`description`、`details`（长说明，默认收起）；其他 attrs 落到根 |
 | `SSegmented` | 分段选择：两三个选项并排，选中项浮起（底层是同名单选组，方向键切换） | `modelValue: SelectOption['value']`、`options: SelectOption[]`（必填）、`name`、`disabled`、`size`（`sm`/`md`，md；md 与输入框同高）、`block`（撑满宽度）、`ariaLabel`、`error` | emits `update:modelValue`（值保持原类型；每个 radio 的 `value` 属性为 `String(value)`）；其他 attrs 落到根 |
@@ -1315,6 +1338,8 @@ JSON Schema 表单（`schema/`；账号凭据、插件设置、声明式表单�
 **通用 IP 展示。** `TableColumn.format: 'ip'` 启用 SDK 内置 IP 单元格，`copyable` 默认为 true，`filterable` 默认为 false；开启筛选后发出 `STable` 的 `filter(column, address, row)`，业务方决定如何更新查询条件。导出的 `SIPAddress` 接收 `value`、`copyable`、`filterable`、`active`、`empty`（默认“—”），发出 `filter(address)`。保留完整 IPv4／IPv6 文本用于复制、title 和筛选；空值不产生按钮；组件不执行网络请求或 IP 地理查询。单元格插槽仍优先。使用日志表格、手机卡片、IP 汇总与详情均复用该组件。
 
 **UI 3.2 批量选择（2026-10-28）。** `STable` 在 `selectable` 时：Shift + 点击勾选框，把上次点击的行到本行设成同一状态；新增 `swipeSelect?: boolean`（默认 true），从勾选列或单元格空白处按下并拖动超过 5px，选中（起点行已选时取消）起点到指针之间所有可选行，显示半透明框，靠近视口上下边缘自动滚动，滚轮继续扩展；拖回时范围外的行恢复为拖动开始时的状态。按在单元格内容上保持浏览器文字选择，按钮、链接、输入框等控件不受影响；结束拖动的那次 click 被吞掉，不会再切换勾选框或触发 `row-click`。行 `<tr>` 带 `data-select-row`（行序号），勾选列 `<td>` 带 `data-select-handle`。新导出 `SBulkBar`：props `count`、`total`（筛选结果总数）、`pageSelected`、`allSelected`、`selectingAll`、`disabled`、`persistent`；事件 `select-page`、`select-all`（跨页全选，由调用方加载全部 key）、`clear`；默认插槽放批量操作按钮，`#idle` 插槽替换未选时的提示（仅 `persistent`）。SDK 文案新增 `ui.bulkSelected`、`ui.bulkSelectedAll`、`ui.bulkSelectPage`、`ui.bulkSelectAll`、`ui.bulkSelectingAll`、`ui.bulkClear`、`ui.bulkHint`。原生插件使用 `SBulkBar` 应声明 `hostUICompat: "^3.2"`。
+
+**UI 3.4 通用页面组件（2026-10-31）。** 新导出：`SStatusBadge`（props `status`、`label`、`labels`（状态 → 文案）、`tone`、`tones`（状态 → 色调）、`dot`、`size`；文案取 SDK 的 `ui.status.<status>`，未知状态显示原值）与 `statusTone(status, extra?)`（控制台直接从 `@sub2api/ui` 引入）；`SFormModal`（SModal + `<form>`，默认“取消／保存”页脚；props `open`、`title`、`width`、`loading`（期间不可关闭、提交按钮转圈）、`submitText`、`cancelText`、`submitVariant`（`primary`/`danger`）、`submitDisabled`、`enterSubmit`（默认 true；false 时字段内回车不提交，只能点按钮，调余额、删除确认等弹窗使用）、`submitAttrs`、`cancelAttrs`、`persistent`、`describedby`；事件 `submit`（字段内回车与提交按钮）、`update:open`；插槽 `#footer`、`#footer-start`、`#header`；其余属性落到 `<form>`）；`SFilterBar`（筛选条，`#end` 插槽靠右，绑定 `@reset` 时显示“重置”，`dirty` 控制可用，`card` 默认 true）；`useAutoRefresh(load, intervalMs, { enabled? })`（返回 `running`、`refresh()`；上一次加载结束后才排下一次、页面隐藏时不跑并在可见时补一次、间隔 ≤ 0 或 `enabled` 为 false 时暂停、组件内挂载后才开始）与 `SAutoRefresh`（v-model 为秒，0 = 关闭，`choices` 默认 `[0, 10, 30, 60]`）。`STable` 新增 `error`（真值表示上次加载失败：空表显示加载失败而不是“暂无数据”，`#error` 插槽可替换；有旧数据时在表头下方提示）、`errorText`、`@retry`（绑定时显示“重试”）。`SDateTime` 新增 `mode="time"`（今天只显示时刻，其他日期显示 `MM-DD HH:mm:ss`）、`live`（相对时间每秒刷新）、`muted`；`absolute` 固定为 `YYYY-MM-DD HH:mm:ss`（不加悬停标题），相对时间改用窄格式（`3m ago`／`3分钟前`）。新增 `useNow(intervalMs)`（当前时间的 ref；同一间隔的订阅者共用一个定时器，最后一个退订时清理；间隔可为 getter，变化时重新订阅，≤ 0 停表），`SDateTime` 用它计时，只有显示相对时间时才订阅。控制台自己的 `TimeText`、`StatusBadge` 与插件页的 `parts/StatusBadge` 已删除，统一用 SDK 组件（插件状态与通用状态不同的色调见 `pluginUtil.ts` 的 `PLUGIN_TONES`，作为 `tones` 传入）。SDK 文案新增 `ui.status.*`、`ui.loadFailed`、`ui.autoRefresh`、`ui.autoRefreshOff`、`ui.autoRefreshEvery`、`ui.resetFilters`、`ui.save`。原生插件使用这些新增导出应声明 `hostUICompat: "^3.4"`；`^3.0`–`^3.3` 的插件不受影响。
 
 控制台账号列表用它做批量操作：勾选在翻页后保留，改筛选条件清空；「选择全部 N 项」按当前筛选以每页 200 条拉取全部账号。批量编辑（优先级、权重、并发、TPM、RPM、分组〔替换／追加／移除〕、代理、允许自动禁用，只改勾选的字段）、启用／停用、重置状态、删除、测试都对每个账号调用现有单条接口（`PATCH /accounts/:id`、`POST /accounts/:id/reset-status`、`DELETE /accounts/:id`、`POST /accounts/:id/test`），最多 4 个（测试 3 个）同时进行，可中途停止；权限、插件生命周期钩子、审计与单条操作完全相同，没有新增服务端接口。每项操作只作用于所选账号中适用的那部分（按钮显示数量）；与账号现值相同的字段不发送，没有变化的账号不发请求；类型固定了「自动禁用」的账号跳过该项；删除时「保留资源」只对声明了保留天数的类型生效。
 

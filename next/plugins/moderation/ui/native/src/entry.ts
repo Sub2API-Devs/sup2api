@@ -1,5 +1,5 @@
 import type { PluginHost } from '@sub2api/host'
-import ModerationDashboard from './ModerationDashboard.vue'
+import { lazyPage } from '@sub2api/ui'
 import messages from './messages'
 import { setHost } from './host'
 import { unwatchSession, watchSession } from './session'
@@ -10,7 +10,7 @@ import './moderation.css'
 export function register(host: PluginHost) {
   setHost(host)
   host.addMessages(messages)
-  host.registerComponent('ModerationDashboard', ModerationDashboard)
+  host.registerComponent('ModerationDashboard', lazyPage(() => import('./ModerationDashboard.vue')))
   watchSession()
 }
 

@@ -20,6 +20,20 @@ const { t } = useI18n()
 const pwdOpen = ref(false)
 
 const title = computed(() => (route.meta.title ? t(route.meta.title as string) : ''))
+
+/** The pages above this one (meta.parent, followed upwards), outermost first. */
+const crumbs = computed(() => {
+  const out: Array<{ path: string; label: string }> = []
+  const seen = new Set<string>()
+  let parent = route.meta.parent
+  while (parent && !seen.has(parent) && out.length < 4) {
+    seen.add(parent)
+    const meta = router.resolve(parent).meta
+    out.unshift({ path: parent, label: meta.title ? t(meta.title) : parent })
+    parent = meta.parent
+  }
+  return out
+})
 const initial = computed(() => (auth.me?.display_name || auth.me?.email || '?').slice(0, 1).toUpperCase())
 
 const userActions = computed<MenuAction[]>(() => [
@@ -48,6 +62,12 @@ async function logout() {
   >
     <SButton variant="ghost" size="sm" icon="menu" icon-only class="lg:hidden" :aria-label="t('nav.openMenu')" :aria-expanded="app.mobileNavOpen" @click="app.mobileNavOpen = true" />
     <div class="flex min-w-0 flex-1 items-baseline gap-3">
+      <nav v-if="crumbs.length" :aria-label="t('nav.breadcrumb')" class="flex min-w-0 shrink items-center gap-1 text-sm text-fg-muted" data-testid="breadcrumbs">
+        <template v-for="c in crumbs" :key="c.path">
+          <RouterLink :to="c.path" class="truncate hover:text-fg">{{ c.label }}</RouterLink>
+          <SIcon name="chevron-right" class="h-3.5 w-3.5 shrink-0 text-fg-subtle" />
+        </template>
+      </nav>
       <h1 class="shrink-0 text-base font-semibold text-fg">{{ title }}</h1>
       <p v-if="app.pageDescription" class="hidden min-w-0 truncate text-xs text-fg-muted md:block" :title="app.pageDescription" data-testid="page-description">{{ app.pageDescription }}</p>
     </div>

@@ -2,10 +2,12 @@ export default {
   sections: {
     overview: '概览',
     gateway: '网关',
+    security: '安全',
     finance: '财务',
+    users: '用户与权限',
+    plugins: '插件',
     system: '系统',
-    me: '我的账户',
-    plugins: '插件'
+    me: '我的账户'
   },
   items: {
     dashboard: '仪表盘',
@@ -26,6 +28,14 @@ export default {
     myApiKeys: 'API 密钥',
     myUsage: '使用记录'
   },
+  crumbs: {
+    pluginDetail: '插件详情',
+    pluginRollout: '发布进度',
+    pluginConsent: '安装授权',
+    pluginSettings: '插件设置'
+  },
+  breadcrumb: '面包屑导航',
+  menuRetry: '菜单加载失败，重试',
   balance: '余额',
   changePassword: '修改密码',
   logout: '退出登录',

@@ -33,6 +33,10 @@ const title = computed(() => {
   return menu ? lt(menu.label) : lt(f.plugin.name) || f.plugin.key
 })
 
+// Waits for the plugin list, and for a native page also for that plugin's own
+// module; other plugins still loading do not hold this page up.
+const waiting = computed(() => !plugins.listed || (found.value?.page.type === 'native' && !!plugins.pending[pluginKey.value]))
+
 const nativeComponent = computed(() => (found.value?.page.type === 'native' ? plugins.component(pluginKey.value, found.value.page.component) : undefined))
 
 watch([pluginKey, pageId], () => (crashed.value = ''))
@@ -52,7 +56,7 @@ onErrorCaptured((err) => {
       :title="title"
       :description="found ? `${found.plugin.key} v${found.plugin.version}` : undefined"
     />
-    <div v-if="!plugins.ready" class="flex justify-center py-16"><SSpinner /></div>
+    <div v-if="waiting" class="flex justify-center py-16"><SSpinner /></div>
     <SEmpty v-else-if="!found" :text="t('pluginHost.notFound', { plugin: pluginKey, page: pageId })" icon="puzzle" />
     <SCard v-else-if="crashed" data-testid="plugin-page-crashed">
       <SEmpty icon="warning" :text="t('pluginHost.crashed')">

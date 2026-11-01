@@ -3,17 +3,15 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SChoiceCards, SDropdown, SEmpty, SHint, SIcon, SLink, SModal, SPageHeader, SSpinner, STabs, confirm, type ChoiceOption, type MenuAction, type TabItem } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SChoiceCards, SDropdown, SEmpty, SHint, SIcon, SLink, SFormModal, SPageHeader, SSpinner, SStatusBadge, STabs, confirm, type ChoiceOption, type MenuAction, type TabItem } from '@sub2api/ui'
 import type { Rollout } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
-import { useAppStore } from '@/stores/app'
-import { usePluginStore } from '@/stores/plugins'
+import { refreshShell } from '@/stores/app'
 import { consentPath } from './reviewCache'
-import { compareVersions, conflictLines, consoleSettings, hasCoreSettings, isPendingConsent, shownStatus, type PluginDetail, type PluginSettings } from './pluginUtil'
+import { PLUGIN_TONES, compareVersions, conflictLines, consoleSettings, hasCoreSettings, isPendingConsent, shownStatus, usePluginStatusLabel, type PluginDetail, type PluginSettings } from './pluginUtil'
 import PluginAvatar from './parts/PluginAvatar.vue'
-import StatusBadge from './parts/StatusBadge.vue'
 import TrustBadge from './parts/TrustBadge.vue'
 import OverviewTab from './detail/OverviewTab.vue'
 import GrantsTab from './detail/GrantsTab.vue'
@@ -28,6 +26,7 @@ import UninstallModal from './detail/UninstallModal.vue'
 import AuditLogTable from '@/components/AuditLogTable.vue'
 
 const { t } = useI18n()
+const statusLabel = usePluginStatusLabel()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
@@ -129,11 +128,6 @@ async function load() {
   }
 }
 
-async function refreshShell() {
-  await usePluginStore().refresh()
-  await useAppStore().loadMenus()
-}
-
 async function startRollout(action: 'enable' | 'disable' | 'upgrade', version?: string) {
   if (action === 'disable') {
     const ok = await confirm({
@@ -212,7 +206,7 @@ onMounted(load)
           <span v-if="detail.desired_version && detail.desired_version !== detail.active_version" class="font-mono text-xs text-primary-600 dark:text-primary-400">
             → v{{ detail.desired_version }}
           </span>
-          <StatusBadge :status="shownStatus(detail)" />
+          <SStatusBadge :status="shownStatus(detail)" :tones="PLUGIN_TONES" :label="statusLabel(shownStatus(detail))" />
           <TrustBadge :trust="detail.trust" />
           <SBadge v-if="detail.builtin" tone="info" :title="t('plugins.builtinHint')">{{ t('plugins.builtin') }}</SBadge>
         </template>
@@ -300,7 +294,7 @@ onMounted(load)
 
       <UninstallModal v-model:open="uninstallOpen" :plugin-key="detail.key" :name="name" @done="onUninstalled" />
 
-      <SModal v-model:open="upgradeOpen" :title="t('plugins.detail.upgradeTitle', { name })" width="sm">
+      <SFormModal v-model:open="upgradeOpen" :title="t('plugins.detail.upgradeTitle', { name })" width="sm" :loading="acting === 'upgrade'" :submit-disabled="!upgradeVersion" :submit-text="t('plugins.detail.upgrade')" :enter-submit="false" @submit="startRollout('upgrade', upgradeVersion)">
         <SHint class="mb-3">{{ t('plugins.detail.upgradeHint', { version: detail.active_version || '—' }) }}</SHint>
         <SChoiceCards
           :model-value="upgradeVersion"
@@ -309,13 +303,7 @@ onMounted(load)
           :aria-label="t('plugins.detail.upgradeTitle', { name })"
           @update:model-value="(v) => (upgradeVersion = String(v))"
         />
-        <template #footer>
-          <SButton @click="upgradeOpen = false">{{ t('common.cancel') }}</SButton>
-          <SButton variant="primary" :disabled="!upgradeVersion" :loading="acting === 'upgrade'" @click="startRollout('upgrade', upgradeVersion)">
-            {{ t('plugins.detail.upgrade') }}
-          </SButton>
-        </template>
-      </SModal>
+      </SFormModal>
     </template>
   </div>
 </template>

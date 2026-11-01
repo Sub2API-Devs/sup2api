@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SInput, SSectionTitle, SSettingRow, SSettingsGroup, SSpinner, SSwitch, STable, type TableColumn, type Tone } from '@sub2api/ui'
+import { SAlert, SBadge, SInput, SSectionTitle, SSettingRow, SSettingsGroup, SSpinner, SSwitch, STable, useAutoRefresh, type TableColumn, type Tone } from '@sub2api/ui'
 import SettingsSaveBar from '@/components/SettingsSaveBar.vue'
 import { useSettingsForm } from '@/composables/useSettingsForm'
 import { useAuthStore } from '@/stores/auth'
@@ -23,7 +23,6 @@ const canManage = computed(() => auth.has('settings:manage'))
 const first = ref(true)
 const unmanaged = ref(false)
 const nodes = ref<NodeLoad[]>([])
-let timer: ReturnType<typeof setInterval> | undefined
 
 const { form, saving, dirty, errors, save, reset, apply } = useSettingsForm<Form, Offload>({
   path: '/system/offload',
@@ -70,11 +69,8 @@ function stateOf(n: NodeLoad): string {
   return n.mode === 'forward' ? 'forwarding' : 'unavailable'
 }
 
-onMounted(() => {
-  load(true)
-  timer = setInterval(() => load(), 5000)
-})
-onBeforeUnmount(() => clearInterval(timer))
+useAutoRefresh(() => load(), 5000)
+onMounted(() => load(true))
 </script>
 
 <template>
