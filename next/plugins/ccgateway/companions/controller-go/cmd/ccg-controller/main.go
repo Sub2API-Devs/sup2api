@@ -2,18 +2,18 @@
 //
 // Subcommands:
 //
-//	serve        the HTTP API (default) - wired by writer C (api + cmd)
+//	serve        the HTTP API (default)
 //	healthcheck  the compose health check (exit 0 healthy, 1 not)
 //	version      print the version
-//
-// PLACEHOLDER: writer C replaces serve with the real wiring (02 §4.5);
-// healthcheck and version are final.
 package main
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"ccgateway/controller/internal/healthcheck"
 )
@@ -32,20 +32,26 @@ func version() string {
 }
 
 func main() {
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func run(args []string, stdout, stderr io.Writer) int {
 	cmd := "serve"
-	if len(os.Args) > 1 {
-		cmd = os.Args[1]
+	if len(args) > 0 {
+		cmd = args[0]
 	}
 	switch cmd {
 	case "healthcheck":
-		os.Exit(healthcheck.Run(context.Background(), os.Getenv))
+		return healthcheck.Run(context.Background(), os.Getenv)
 	case "version":
-		fmt.Println(version())
+		fmt.Fprintln(stdout, version())
+		return 0
 	case "serve":
-		fmt.Fprintln(os.Stderr, "ccg-controller: serve is not wired yet")
-		os.Exit(70)
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, os.Interrupt)
+		defer stop()
+		return serve(ctx, os.LookupEnv, stderr, build, nil)
 	default:
-		fmt.Fprintf(os.Stderr, "usage: ccg-controller [serve|healthcheck|version]\n")
-		os.Exit(2)
+		fmt.Fprintf(stderr, "usage: ccg-controller [serve|healthcheck|version]\n")
+		return 2
 	}
 }
