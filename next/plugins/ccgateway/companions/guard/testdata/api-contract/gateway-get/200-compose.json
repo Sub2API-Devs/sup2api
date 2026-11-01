@@ -1,0 +1,40 @@
+{
+  "name": "200 compose",
+  "covers": "R13",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ],
+    "networks": [
+      {
+        "aid": "d0000000000000000",
+        "role": "xray-uplink",
+        "subnet": "10.117.81.0/24"
+      }
+    ],
+    "gateway": {
+      "networks": {
+        "21": "10.52.74.2"
+      }
+    }
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/gateway"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "managed_by": "compose"
+    },
+    "keys": [
+      "gateway",
+      "managed_by"
+    ]
+  }
+}

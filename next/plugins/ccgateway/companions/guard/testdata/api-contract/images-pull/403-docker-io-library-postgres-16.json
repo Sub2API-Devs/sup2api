@@ -1,0 +1,26 @@
+{
+  "name": "403 docker.io/library/postgres:16",
+  "covers": "A5 03§3.6.2",
+  "setup": {
+    "pullable": [
+      "docker.io/library/postgres:16"
+    ]
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/pull",
+    "json": {
+      "ref": "docker.io/library/postgres:16"
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": "forbidden",
+      "reason": "image_not_allowed"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

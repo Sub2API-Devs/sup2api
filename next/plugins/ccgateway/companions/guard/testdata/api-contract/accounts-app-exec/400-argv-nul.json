@@ -1,0 +1,52 @@
+{
+  "name": "400 argv NUL",
+  "covers": "03§11.3",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-app:1"
+      }
+    ],
+    "networks": [
+      {
+        "aid": "21",
+        "subnet": "10.52.74.0/24"
+      }
+    ],
+    "volumes": [
+      {
+        "aid": "21",
+        "quota": true
+      }
+    ],
+    "containers": [
+      {
+        "aid": "21",
+        "status": "running",
+        "ipv4": "10.52.74.5"
+      }
+    ],
+    "files": {
+      "21/resolv.conf": "ok"
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/accounts/21/app/exec",
+    "json": {
+      "argv": [
+        "a\u0000b"
+      ],
+      "user": ""
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

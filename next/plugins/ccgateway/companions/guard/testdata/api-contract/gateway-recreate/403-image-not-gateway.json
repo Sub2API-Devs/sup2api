@@ -1,0 +1,46 @@
+{
+  "name": "403 image_not_gateway",
+  "covers": "A20",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      },
+      {
+        "ref": "ccgateway-app:1"
+      }
+    ],
+    "networks": [
+      {
+        "aid": "d0000000000000000",
+        "role": "xray-uplink",
+        "subnet": "10.117.81.0/24"
+      }
+    ],
+    "gateway": {
+      "networks": {
+        "21": "10.52.74.2"
+      }
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/gateway/recreate",
+    "json": {
+      "image": "ccgateway-app:1"
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": "forbidden",
+      "reason": "image_not_gateway"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

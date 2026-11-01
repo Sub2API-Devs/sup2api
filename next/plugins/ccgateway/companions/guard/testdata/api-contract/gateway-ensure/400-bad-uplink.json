@@ -1,0 +1,33 @@
+{
+  "name": "400 bad uplink",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ]
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/gateway/ensure",
+    "json": {
+      "uplink": {
+        "gateway": "8.8.8.1",
+        "policy_label": "{}",
+        "subnet": "8.8.8.0/24"
+      }
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

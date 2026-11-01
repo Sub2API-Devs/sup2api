@@ -1,0 +1,61 @@
+{
+  "name": "200 prepare volume",
+  "covers": "D5 BUG-20(fixed) O7",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-app:1"
+      }
+    ],
+    "networks": [
+      {
+        "aid": "21",
+        "subnet": "10.52.74.0/24"
+      }
+    ],
+    "volumes": [
+      {
+        "aid": "21",
+        "quota": true
+      }
+    ],
+    "files": {
+      "21/resolv.conf": "ok"
+    },
+    "job": {
+      "exit_code": 0,
+      "stdout": "{}"
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/accounts/21/jobs",
+    "json": {
+      "argv": [
+        "true"
+      ],
+      "caps": [
+        "CHOWN",
+        "DAC_OVERRIDE"
+      ],
+      "entrypoint": [
+        "sh",
+        "-ec"
+      ],
+      "image": "ccgateway-app:1",
+      "user": "0",
+      "volume": "rw"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "exit_code": 0,
+      "stdout": "e30="
+    },
+    "keys": [
+      "exit_code",
+      "stdout"
+    ]
+  }
+}

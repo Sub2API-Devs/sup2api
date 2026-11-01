@@ -1,0 +1,50 @@
+{
+  "name": "409 gateway_not_compose",
+  "covers": "D4",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      },
+      {
+        "ref": "ccgateway-xray:2",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ],
+    "networks": [
+      {
+        "aid": "d0000000000000000",
+        "role": "xray-uplink",
+        "subnet": "10.117.81.0/24"
+      }
+    ],
+    "gateway": {
+      "managed_by": "legacy",
+      "networks": {
+        "21": "10.52.74.2"
+      }
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/gateway/recreate",
+    "json": {
+      "image": "ccgateway-xray:2"
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": "conflict",
+      "reason": "gateway_not_compose"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

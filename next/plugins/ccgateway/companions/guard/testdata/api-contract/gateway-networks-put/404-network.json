@@ -1,0 +1,42 @@
+{
+  "name": "404 network",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ],
+    "networks": [
+      {
+        "aid": "d0000000000000000",
+        "role": "xray-uplink",
+        "subnet": "10.117.81.0/24"
+      }
+    ],
+    "gateway": {
+      "networks": {
+        "21": "10.52.74.2"
+      }
+    }
+  },
+  "request": {
+    "method": "PUT",
+    "path": "/v1/gateway/networks/21",
+    "json": {
+      "ipv4": "10.52.74.2"
+    }
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not_found",
+      "reason": "network"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

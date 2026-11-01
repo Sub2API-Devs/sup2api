@@ -1,0 +1,14 @@
+{
+  "name": "404 unknown endpoint",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/nothing"
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not_found"
+    }
+  }
+}

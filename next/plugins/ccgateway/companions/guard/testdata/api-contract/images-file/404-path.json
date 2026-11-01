@@ -1,0 +1,27 @@
+{
+  "name": "404 path",
+  "covers": "R4",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-app:1",
+        "files": {
+          "/etc/link": "x",
+          "/usr/local/lib": "\u003cdir\u003e",
+          "/usr/local/lib/version": "2.1.310"
+        }
+      }
+    ]
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/images/file?ref=ccgateway-app:1\u0026path=/nope\u0026limit=10"
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not_found",
+      "reason": "path"
+    }
+  }
+}

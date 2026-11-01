@@ -1,0 +1,26 @@
+{
+  "name": "403 caddy:latest",
+  "covers": "A5 03§3.6.2",
+  "setup": {
+    "pullable": [
+      "caddy:latest"
+    ]
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/pull",
+    "json": {
+      "ref": "caddy:latest"
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": "forbidden",
+      "reason": "image_not_allowed"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

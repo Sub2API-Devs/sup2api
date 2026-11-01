@@ -1,0 +1,40 @@
+{
+  "name": "404 volume",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-app:1"
+      }
+    ]
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/accounts/21/jobs",
+    "json": {
+      "argv": [
+        "true"
+      ],
+      "caps": [
+        "CHOWN",
+        "DAC_OVERRIDE"
+      ],
+      "entrypoint": [
+        "sh",
+        "-ec"
+      ],
+      "image": "ccgateway-app:1",
+      "user": "0",
+      "volume": "rw"
+    }
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not_found",
+      "reason": "volume"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

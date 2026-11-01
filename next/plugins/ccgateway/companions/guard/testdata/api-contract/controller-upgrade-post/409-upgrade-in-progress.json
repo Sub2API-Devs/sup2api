@@ -1,0 +1,32 @@
+{
+  "name": "409 upgrade_in_progress",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-controller:2",
+        "labels": {
+          "io.sup2api.ccgateway.guard-api": "1",
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ],
+    "lifecycle_busy": true
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/controller/upgrade",
+    "json": {
+      "image": "ccgateway-controller:2"
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": "conflict",
+      "reason": "upgrade_in_progress"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

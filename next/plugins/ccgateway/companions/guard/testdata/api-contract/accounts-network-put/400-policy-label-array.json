@@ -1,0 +1,23 @@
+{
+  "name": "400 policy_label array",
+  "covers": "03§11.3",
+  "setup": {},
+  "request": {
+    "method": "PUT",
+    "path": "/v1/accounts/21/network",
+    "json": {
+      "gateway": "10.60.1.1",
+      "policy_label": "[]",
+      "subnet": "10.60.1.0/24"
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "400 invalid ref",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/images/inspect?ref=Bad%20Ref"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  }
+}

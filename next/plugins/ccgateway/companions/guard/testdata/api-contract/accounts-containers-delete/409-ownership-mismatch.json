@@ -1,0 +1,30 @@
+{
+  "name": "409 ownership_mismatch",
+  "covers": "A13",
+  "setup": {
+    "containers": [
+      {
+        "aid": "21",
+        "owner": "22",
+        "mounts": "none"
+      }
+    ]
+  },
+  "request": {
+    "method": "DELETE",
+    "path": "/v1/accounts/21/containers/app"
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": "conflict",
+      "names": [
+        "ccg-21-app"
+      ],
+      "reason": "ownership_mismatch"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

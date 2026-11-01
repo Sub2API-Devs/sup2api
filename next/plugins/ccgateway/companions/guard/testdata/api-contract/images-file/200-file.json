@@ -1,0 +1,28 @@
+{
+  "name": "200 file",
+  "covers": "R4 R20",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-app:1",
+        "files": {
+          "/etc/link": "x",
+          "/usr/local/lib": "\u003cdir\u003e",
+          "/usr/local/lib/version": "2.1.310"
+        }
+      }
+    ]
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/images/file?ref=ccgateway-app:1\u0026path=/usr/local/lib/version\u0026limit=1024"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Length": "7",
+      "Content-Type": "application/octet-stream"
+    },
+    "body_base64": "Mi4xLjMxMA=="
+  }
+}

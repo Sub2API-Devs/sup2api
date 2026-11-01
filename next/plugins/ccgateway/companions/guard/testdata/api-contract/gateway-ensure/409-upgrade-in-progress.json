@@ -1,0 +1,36 @@
+{
+  "name": "409 upgrade_in_progress",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ],
+    "networks": [
+      {
+        "aid": "d0000000000000000",
+        "role": "xray-uplink",
+        "subnet": "10.117.81.0/24"
+      }
+    ],
+    "lifecycle_busy": true
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/gateway/ensure",
+    "json": {}
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": "conflict",
+      "reason": "upgrade_in_progress"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

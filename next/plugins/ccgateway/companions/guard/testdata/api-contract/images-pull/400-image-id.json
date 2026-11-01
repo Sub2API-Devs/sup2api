@@ -1,0 +1,20 @@
+{
+  "name": "400 image id",
+  "setup": {},
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/pull",
+    "json": {
+      "ref": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

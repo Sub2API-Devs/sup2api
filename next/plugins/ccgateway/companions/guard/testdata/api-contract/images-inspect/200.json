@@ -1,0 +1,32 @@
+{
+  "name": "200",
+  "covers": "R10",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-controller:2",
+        "labels": {
+          "io.sup2api.ccgateway.guard-api": "1",
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ]
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/images/inspect?ref=ccgateway-controller:2"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "RepoTags": [
+        "ccgateway-controller:2"
+      ]
+    },
+    "keys": [
+      "Id",
+      "RepoTags",
+      "Config"
+    ]
+  }
+}

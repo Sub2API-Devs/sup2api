@@ -1,0 +1,36 @@
+{
+  "name": "204 no network",
+  "covers": "R18",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ],
+    "networks": [
+      {
+        "aid": "d0000000000000000",
+        "role": "xray-uplink",
+        "subnet": "10.117.81.0/24"
+      }
+    ],
+    "gateway": {
+      "networks": {
+        "21": "10.52.74.2"
+      }
+    }
+  },
+  "request": {
+    "method": "DELETE",
+    "path": "/v1/gateway/networks/21"
+  },
+  "response": {
+    "status": 204
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

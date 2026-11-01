@@ -1,0 +1,36 @@
+{
+  "name": "200 created by compose",
+  "covers": "X4 R13",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ],
+    "networks": [
+      {
+        "aid": "d0000000000000000",
+        "role": "xray-uplink",
+        "subnet": "10.117.81.0/24"
+      }
+    ]
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/gateway/ensure",
+    "json": {}
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "action": "created"
+    },
+    "keys": [
+      "gateway",
+      "action"
+    ]
+  }
+}
