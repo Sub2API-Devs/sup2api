@@ -86,6 +86,8 @@
 | `~/ccg-gt-l7`、`~/ccg-gt-memfix-evidence`、`/tmp/guard-r2` | `test-evidence.tgz`（前两项） |
 | 镜像 `ccgateway-controller:0.1.16`–`0.1.118`（全部 Python 版）、`ccgateway-controller:it`、`ccgateway-guard:it`、`ccgateway-guard:0.1.120`（未带写穿修复） | 无（可从 Git 源码重建） |
 
+追加（17:45，用户确认）：10 月 CLI 2.1.296 测试留下的 8 个已停容器（`ccg-v6-*`、`ccg-request-*`、`ccg-official296-*`）、它们的 3 个数据卷（存档 `test-volumes.tgz`、inspect 存 `test-containers-inspect.json`）和镜像 `ccgateway-cli:request-2.1.296`、`ccgateway-worker:components-v6-test`、`ccgateway-worker:request-modes-v5-test`。之后 `ccg-` 开头的容器只剩共享网关、guard、控制器和各账号的 app。
+
 保留：`ccgateway-controller:0.1.119/0.1.120`、`ccgateway-guard:0.1.119/0.1.120-r2`；旧版 app、egress 等镜像不在 D10 范围内，未动。
 
 仓库侧：Python 控制器源码、CI 步骤与 bridge guard 文件单独提交删除（见 git 历史）。
