@@ -9,8 +9,8 @@
 - 手工改动：`/opt/ccgateway/compose.yml` 控制器 `mem_limit` 1g → 2g（与仓库模板逐字节一致）；`.env` 的 `CCG_GUARD_IMAGE` 改为 `ccgateway-guard:0.1.120-r2`。修改前的文件在 `backups/ccgateway-0.1.120`。
 - 验收：草稿账号建删、egress/app 原地更新、Worker+CLI 2.1.312 成对激活（27 updated，23 号没有容器）、27 个账号 healthy，规则数全程不变（62/54），网关未重建。
 - 脚本 `stage/ccgateway-0.1.119`（s0/s1/s4/s5）、`stage/ccgateway-0.1.120`、`stage/0.1.227`；备份 `backups/ccgateway-guard/{s0,s4}-20261101`、`backups/core-0.1.227`、`backups/ccgateway-0.1.120`。
-- 观察期到 2026-11-08；之后再做 S6（网关纳入 compose，全账号出网中断 10–60 秒）和收尾清理（旧 bridge guard 文件、Python 控制器镜像与源码、历史备份目录）。
-- 2026-11-02 仓库侧收尾已做：`ccgateway-bridge-guard.{py,service}`、`test_ccgateway_bridge_guard.py`、Python 控制器源码及其 CI 步骤和 `-python` 镜像已从仓库删除（最后见于 `c2fe8834a`）；ovh 上的旧镜像、unit 文件与历史备份目录仍按 04 §4 收尾处理。
+- 用户要求不等观察期：17:14 UTC 做了 S6，网关 `ccg-shared-egress` 已由 compose 管理（服务 `egress`），单个账号最长出网中断约 54 秒；**以后只能用 `--profile egress up -d --no-deps egress` 动网关，不带服务名的 up/down 会重建或删除它**。17:17–17:22 做了 D10：legacy 网关、bridge guard 脚本与 unit、`controller-before-0.1.115`、各账号 `worker-backups-before-*`、10 月的迁移遗留目录、Python 控制器镜像 0.1.16–0.1.118 与测试镜像已删，先存档在 `backups/ccgateway-guard/d10-20261101`。
+- 仓库侧同时删除：`ccgateway-bridge-guard.{py,service}`、`test_ccgateway_bridge_guard.py`、Python 控制器源码及其 CI 步骤和 `-python` 镜像（最后见于 `c2fe8834a`）。
 
 2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 

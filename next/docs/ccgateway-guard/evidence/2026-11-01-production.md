@@ -63,11 +63,33 @@
 ## 5. 备份与回滚
 
 - `~/sup2api-managed/backups/ccgateway-guard/{s0-20261101,s4-20261101}`、`backups/core-0.1.227`、`backups/ccgateway-0.1.120`（数据库、控制器状态、compose.yml 和 `.env` 的修改前版本、Python prev 容器的 inspect 与 `.env.prev`）。
-- finish 之后回到 Python 只能走 04 §5.3 的 release 手册；Python 0.1.118 控制器镜像保留到观察期结束。
+- finish 之后回到 Python 只能走 04 §5.3 的 release 手册；Python 控制器镜像已在 D10 删除（§7），需要时从 Git 源码重建。
 - guard 回滚：`.env` 的 `CCG_GUARD_IMAGE` 改回 `ccgateway-guard:0.1.119`，`up -d --no-deps guard`（会重新带回 §3.2 的问题）。
 
-## 6. 未完成
+## 6. S6：网关纳入 compose（17:14，用户要求不等观察期，直接做）
 
-- 观察期 7 天（到 2026-11-08）：每天核对 04 §4 观察期清单。
-- S6（网关纳入 compose，全账号出网中断 10–60 秒）与 D10 收尾清理：观察期后。
+- 前置：`docker inspect ccg-shared-egress` 存档（`backups/ccgateway-s6/egress-inspect.json`）。现网参数与 compose 的 egress 服务一致：镜像 `sha256:92305b5b…`、`cap_drop ALL` + `NET_ADMIN`/`NET_BIND_SERVICE`、sysctl、只读 `/config`、标签 `io.sup2api.ccgateway.shared=ccg`。compose 另加 `init`、384m、2 CPU。
+- 操作（compose 锁内）：`--profile egress config -q` → `docker stop ccg-shared-egress` 并改名 `-legacy` → `--profile egress up -d --no-deps egress`。
+- 结果：网关 17:14:54 停止，guard 17:15:02 把 `CCG-PROXY-BRIDGE` 写成 0 条，控制器 recover 逐个接回，17:15:48 回到 52 条（26 个运行中账号 × 2）。**单个账号最长中断约 54 秒。** 新网关带 compose 标签 `com.docker.compose.service=egress`，镜像未变。
+- 真实请求在窗口内失败 3 次（17:14:50–57，2 次 503 `not ready`、1 次 502），之后恢复 200。26 个账号 healthy（21 号在 17:01:57 被人从控制台删除，与本次操作无关）；guard、控制器零重启。
+
+## 7. D10 收尾清理（17:17–17:22）
+
+先存档到 `backups/ccgateway-guard/d10-20261101/`（SHA256SUMS 在内），再删除：
+
+| 内容 | 存档 |
+|---|---|
+| 容器 `ccg-shared-egress-legacy` | `egress-legacy-inspect.json` |
+| `/usr/local/libexec/ccgateway-bridge-guard.py`、`/etc/systemd/system/ccgateway-bridge-guard.service`（`daemon-reload` 后 unit 已不存在） | `bridge-guard-files.tgz` |
+| `/opt/ccgateway-runtime/controller-before-0.1.115`，5 个账号目录下的 `worker-backups-before-*`（0.1.114、0.1.123、quota-0.1.125） | `history-dirs.tgz`（约 270 MB 原始） |
+| `/opt/ccgateway-runtime/{migration-304-core172,offline-migrations,quota-0.1.125-workers}`（10 月的迁移遗留） | `runtime-old-migrations.tgz` |
+| `~/ccg-gt-l7`、`~/ccg-gt-memfix-evidence`、`/tmp/guard-r2` | `test-evidence.tgz`（前两项） |
+| 镜像 `ccgateway-controller:0.1.16`–`0.1.118`（全部 Python 版）、`ccgateway-controller:it`、`ccgateway-guard:it`、`ccgateway-guard:0.1.120`（未带写穿修复） | 无（可从 Git 源码重建） |
+
+保留：`ccgateway-controller:0.1.119/0.1.120`、`ccgateway-guard:0.1.119/0.1.120-r2`；旧版 app、egress 等镜像不在 D10 范围内，未动。
+
+仓库侧：Python 控制器源码、CI 步骤与 bridge guard 文件单独提交删除（见 git 历史）。
+
+## 8. 其他
+
 - 核心默认镜像已改为 CI 的 `3bb9d3a8d` 构建（`b121d5cfa`），随下次核心发布生效；生产 compose.yml 已是 2g 模板。
