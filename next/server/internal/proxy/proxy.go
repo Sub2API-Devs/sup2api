@@ -112,6 +112,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("PATCH", "/proxies/:id", s.update, "proxy:manage", "proxy:own:manage")
 	r.PermAny("DELETE", "/proxies/:id", s.delete, "proxy:manage", "proxy:own:manage")
 	r.PermAny("POST", "/proxies/:id/test", s.test, "proxy:manage", "proxy:own:manage")
+	r.PermAny("POST", "/proxies/:id/reveal-url", s.revealURL, "proxy:manage", "proxy:own:manage")
 	r.PermAny("POST", "/proxies/probe", s.probeURL, "proxy:manage", "proxy:own:manage")
 }
 
@@ -678,6 +679,41 @@ func (s *Service) delete(c *gin.Context) {
 	}
 	s.changed(ctx, id)
 	httpapi.NoContent(c)
+}
+
+// revealURL returns the stored proxy as one URL including the decrypted
+// password (protocol://user:pass@host:port), for the console's copy action.
+// It needs the manage key (whoever may edit the proxy may read its password),
+// is scoped like the other manage routes, and is audited.
+func (s *Service) revealURL(c *gin.Context) {
+	ctx := audit.Context(c)
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	var r row
+	err := s.db.Pool.QueryRow(ctx, `SELECT p.protocol, p.host, p.port, p.username, p.password_enc FROM proxies p
+		WHERE p.id = $1 AND `+scoped("$2"), id, core.OwnerScope(ctx, "proxy:manage")).
+		Scan(&r.Protocol, &r.Host, &r.Port, &r.Username, &r.PasswordEnc)
+	if store.IsNoRows(err) {
+		httpapi.Fail(c, notFound(ctx))
+		return
+	}
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	u, err := s.proxyURL(&r)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	uid, _ := core.UserID(ctx)
+	if err := audit.Audit(ctx, s.db.Pool, uid, "proxy.url.reveal", "proxy", strconv.FormatInt(id, 10), nil); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, gin.H{"url": u.String()})
 }
 
 // TestResult is returned by POST /proxies/:id/test.

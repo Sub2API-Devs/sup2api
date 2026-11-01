@@ -135,6 +135,7 @@
 | GET/POST `/groups`，GET/PATCH/DELETE `/groups/:id` | `group:read` / `group:manage` |
 | GET/POST `/proxies`，GET/PATCH/DELETE `/proxies/:id` | `proxy:read` / `proxy:manage`（或 `proxy:own:*`，只作用于自己创建的，§21）；密码省略或 `null` 不改、`""` 清除，没有掩码值（§15.4） |
 | POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage`（会发起外部连接） |
+| POST `/proxies/:id/reveal-url` | `proxy:manage` / `proxy:own:manage`（返回含明文密码的代理串，写审计） |
 
 ### 5.4 账号（A；类型和表单来自插件注册表）
 
@@ -583,6 +584,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | PATCH `/proxies/:id` | `proxy:manage` | 同上，全部可选 | 省略的字段不修改。**密码约定：省略或 `null` 表示不修改；`""` 表示清除密码；其他任何字符串（包括 `"******"`）都会被保存为新密码**。代理没有掩码约定，前端不要回填 `"******"` |
 | DELETE `/proxies/:id` | `proxy:manage` | | 仍被账号引用时返回 409 `conflict`，`details.account_count` |
 | POST `/proxies/:id/test` | `proxy:manage`（注意不是 `proxy:read`） | 无请求体 | `{ok, status, latency_ms, message}` |
+| POST `/proxies/:id/reveal-url` | `proxy:manage`（能改代理的人才能看密码，`proxy:read` 不够） | 无请求体 | `{url}`：`协议://用户名:密码@主机:端口`（用户名、密码按 URL 规则转义；无认证时为 `协议://主机:端口`）。供控制台「复制代理」使用；范围外 404；写审计 `proxy.url.reveal`（detail 为空，不含密码） |
 
 测试说明：用数据库中保存的设置新建客户端（**禁用状态的代理也能测**），经代理 `GET https://www.google.com/generate_204`（`proxy.Options.ProbeURL` 可配），超时 15 秒。`ok` = 上游状态码 < 400；`status` 为上游状态码（连接失败时为 0）；失败时 `message` 为错误信息或 HTTP 状态行，成功时为空串。测试失败仍返回 HTTP 200。
 

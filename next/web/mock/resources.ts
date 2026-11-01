@@ -628,6 +628,14 @@ on('DELETE', '/proxies/:id', (req) => {
   proxies.splice(proxies.indexOf(p), 1)
   return noContent()
 })
+on('POST', '/proxies/:id/reveal-url', (req) => {
+  const r = managedProxy(req)
+  if (!('p' in r)) return r
+  const p = r.p
+  const host = p.host.includes(':') ? `[${p.host}]` : p.host
+  const cred = p.username || p.password ? `${encodeURIComponent(p.username)}:${encodeURIComponent(p.password)}@` : ''
+  return { url: `${p.protocol}://${cred}${host}:${p.port}` }
+})
 on('POST', '/proxies/:id/test', async (req) => {
   const r = managedProxy(req)
   if (!('p' in r)) return r

@@ -34,6 +34,7 @@ import { applyFormError } from '@/utils/formErrors'
 import StatusBadge from '@/components/StatusBadge.vue'
 import TimeText from '@/components/TimeText.vue'
 import { parseProxyURL, type ProxySpec } from '@/utils/proxyUrl'
+import { copyText } from '@/utils/clipboard'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -89,6 +90,25 @@ async function test(p: Proxy) {
     results.value = { ...results.value, [p.id]: { ok: false, message: e instanceof Error ? e.message : String(e) } }
   } finally {
     testing.value = { ...testing.value, [p.id]: false }
+  }
+}
+
+// ------------------------------------------------------------------ copy
+
+const copying = ref<Record<number, boolean>>({})
+
+/** Copies the full proxy URL (protocol://user:pass@host:port); the password only comes from the audited reveal endpoint. */
+async function copyProxy(p: Proxy) {
+  if (copying.value[p.id]) return
+  copying.value = { ...copying.value, [p.id]: true }
+  try {
+    const { url } = await api.post<{ url: string }>(`/proxies/${p.id}/reveal-url`)
+    const ok = await copyText(url)
+    toast(t(ok ? 'common.copied' : 'proxies.copyFailed'), ok ? 'success' : 'error')
+  } catch (e) {
+    notifyError(e)
+  } finally {
+    copying.value = { ...copying.value, [p.id]: false }
   }
 }
 
@@ -315,6 +335,7 @@ function onAction(p: Proxy, key: string) {
       </template>
       <template #cell-actions="{ row }">
         <div v-if="canEditRow(row)" class="flex items-center justify-end gap-1">
+          <SButton variant="ghost" size="sm" :loading="!!copying[row.id]" :title="t('proxies.copyHint')" data-testid="proxy-copy" @click="copyProxy(row)">{{ t('common.copy') }}</SButton>
           <SButton variant="ghost" size="sm" @click="openEdit(row)">{{ t('common.edit') }}</SButton>
           <SDropdown
             :actions="[
