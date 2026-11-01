@@ -194,6 +194,11 @@ describe('SDateTime', () => {
     expect(old.get('time').attributes('datetime')).toBe('2020-01-02T03:04:05.000Z')
     expect(mount(SDateTime, { props: { value: 'nope' } }).text()).toBe('—')
   })
+  it('says now under a minute unless live, since only live texts tick every second', () => {
+    const value = new Date(Date.now() - 5_000).toISOString()
+    expect(mount(SDateTime, { props: { value, mode: 'relative' } }).text()).toBe('now')
+    expect(mount(SDateTime, { props: { value, mode: 'relative', live: true } }).text()).toBe('5s ago')
+  })
 
   it('absolute mode uses a fixed format without a tooltip; time mode drops today\'s date; muted dims', () => {
     const local = new Date(2020, 0, 2, 3, 4, 5)
@@ -206,7 +211,7 @@ describe('SDateTime', () => {
     const today = new Date()
     today.setHours(8, 9, 10)
     expect(mount(SDateTime, { props: { value: today, mode: 'time' } }).text()).toBe('08:09:10')
-    expect(mount(SDateTime, { props: { value: new Date(Date.now() - 5000), mode: 'relative' } }).text()).toBe('5s ago')
+    expect(mount(SDateTime, { props: { value: new Date(Date.now() - 5000), mode: 'relative' } }).text()).toBe('now')
   })
 })
 

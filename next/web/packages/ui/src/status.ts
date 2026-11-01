@@ -31,5 +31,14 @@ const TONES: Record<string, Tone> = {
  */
 export function statusTone(status: string | null | undefined, extra?: Record<string, Tone>): Tone {
   const s = (status || '').toLowerCase()
-  return extra?.[s] ?? TONES[s] ?? 'gray'
+  return byStatus(extra, s) ?? TONES[s] ?? 'gray'
+}
+
+/** The entry of a status map, keys compared case-insensitively (as the built-in tones and labels are). */
+export function byStatus<T>(map: Record<string, T> | undefined, status: string): T | undefined {
+  if (!map) return undefined
+  if (status in map) return map[status]
+  const s = status.toLowerCase()
+  const k = Object.keys(map).find((x) => x.toLowerCase() === s)
+  return k === undefined ? undefined : map[k]
 }

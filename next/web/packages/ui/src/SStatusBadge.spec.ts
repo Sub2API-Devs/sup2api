@@ -19,6 +19,10 @@ describe('SStatusBadge', () => {
     expect(render({ status: 'active', label: 'Live' }).text()).toBe('Live')
     expect(render({ status: 'paused', tones: { paused: 'info' } }).classes()).toContain('badge-info')
     expect(render({ status: 'active', tone: 'danger' }).classes()).toContain('badge-danger')
+    // Own labels and tones match case-insensitively, like the built-in ones.
+    expect(render({ status: 'Paused', labels: { paused: 'On hold' }, tones: { PAUSED: 'info' } }).text()).toBe('On hold')
+    expect(render({ status: 'Paused', tones: { PAUSED: 'info' } }).classes()).toContain('badge-info')
+    expect(render({ status: 'loading' }).text()).toBe('Loading')
   })
 })
 

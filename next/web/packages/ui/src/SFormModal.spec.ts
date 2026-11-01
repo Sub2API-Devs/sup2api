@@ -23,6 +23,7 @@ describe('SFormModal', () => {
     expect(w.emitted('submit')).toHaveLength(2)
     await buttons[0].trigger('click')
     expect(w.emitted('update:open')?.[0]).toEqual([false])
+    expect(w.emitted('close')).toHaveLength(1)
   })
 
   it('does not submit or close while loading, nor submit when disabled', async () => {

@@ -40,6 +40,11 @@ const props = withDefaults(
 )
 defineOptions({ inheritAttrs: false })
 const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'submit'): void; (e: 'close'): void }>()
+/** Cancel closes like ×, Esc and the overlay do (SModal emits both). */
+function cancel() {
+  emit('update:open', false)
+  emit('close')
+}
 const t = useUiT()
 
 function submit() {
@@ -68,7 +73,7 @@ function submit() {
     <template #footer>
       <slot name="footer">
         <div v-if="$slots['footer-start']" class="mr-auto flex min-w-0 items-center gap-2"><slot name="footer-start" /></div>
-        <SButton :disabled="loading" v-bind="cancelAttrs" @click="emit('update:open', false)">{{ cancelText || t('ui.cancel') }}</SButton>
+        <SButton :disabled="loading" v-bind="cancelAttrs" @click="cancel">{{ cancelText || t('ui.cancel') }}</SButton>
         <SButton :variant="submitVariant" :loading="loading" :disabled="submitDisabled" v-bind="submitAttrs" @click="submit">
           {{ submitText || t('ui.save') }}
         </SButton>
