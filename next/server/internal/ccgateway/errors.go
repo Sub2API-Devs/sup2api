@@ -50,6 +50,11 @@ var reasonMessages = map[string]string{
 	"controller_outdated":  "The controller does not support updating workers in place; upgrade the controller first (no account container was changed).",
 	"install_failed":       "The runtime could not be installed on the Docker host.",
 	"install_in_progress":  "Another runtime installation is running.",
+	// Compose installation next to the guard (§76).
+	"compose_unavailable":       "The Docker host has no docker compose v2 (needed for a controller that runs under the guard).",
+	"guard_unavailable":         "The ccgateway guard did not start or did not become ready within 30 seconds; the previous controller keeps running.",
+	"legacy_blocked":            "This Docker host is managed by docker compose already; a controller image without the guard cannot be installed the old way.",
+	"controller_adopt_required": "The controller has not been adopted by the ccgateway guard yet: a controller image that needs the guard is installed through the controller install, not by a self-upgrade.",
 	// Control panel mode (§53).
 	"runtimes_disabled":         "Turn on per-account runtimes first.",
 	"invalid_host":              "The control panel address must be an IP address or a DNS name.",

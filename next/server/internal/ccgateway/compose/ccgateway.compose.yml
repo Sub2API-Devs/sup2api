@@ -1,0 +1,127 @@
+# CCGateway compose project (CONTRACTS §76). The only source of this file is
+# the core (next/server/internal/ccgateway/compose/ccgateway.compose.yml): the
+# install script writes it verbatim to /opt/ccgateway/compose.yml, and the
+# manual guard deployment and the isolated test instance use the same text.
+#
+# Every instance value is a variable with its production value as the :-
+# default; the core writes four variables into /opt/ccgateway/.env (CCG_GUARD_IMAGE, CCG_CONTROLLER_IMAGE,
+# CCG_GATEWAY_IMAGE, CCG_GUARD_TOKEN), an isolated instance overrides the rest
+# in its own .env.
+#
+# NEVER run up or down without a service name on this project: once the
+# shared gateway is in compose that recreates or removes it and every account
+# loses its egress. Always up -d --no-deps <service>.
+name: ccgateway
+
+x-log: &log
+  driver: json-file
+  options: {max-size: 20m, max-file: "3"}
+
+services:
+  guard:
+    image: ${CCG_GUARD_IMAGE:?}
+    container_name: ${CCG_PREFIX:-ccg}-guard
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, SYS_ADMIN, SYS_PTRACE]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=0700"]
+    mem_limit: 256m
+    pids_limit: 256
+    stop_grace_period: 30s
+    environment:
+      CCG_GUARD_TOKEN: ${CCG_GUARD_TOKEN:?}
+      CCG_GUARD_PREFIX: ${CCG_PREFIX:-ccg}
+      CCG_GUARD_LISTEN: ${CCG_GUARD_ADDR:-172.29.255.1}:8790
+      CCG_GUARD_CONTROLLER_IP: ${CCG_CONTROLLER_IP:-172.29.255.2}
+      CCG_GUARD_CONTROL_NETWORK: ${CCG_CONTROL_NETWORK:-ccg-control}
+      CCG_GUARD_CONTROL_BRIDGE: ${CCG_CONTROL_BRIDGE:-ccg-control0}
+      CCG_GUARD_CONTROL_SUBNET: ${CCG_CONTROL_SUBNET:-172.29.255.0/29}
+      CCG_GUARD_CONTROL_DNS: "${CCG_CONTROL_DNS:-1}"
+      CCG_GUARD_CHAIN_PREFIX: ${CCG_CHAIN_PREFIX:-CCG}
+      CCG_GUARD_PROJECT: ${CCG_PROJECT:-ccgateway}
+      CCG_GUARD_PROJECT_DIR: ${CCG_PROJECT_DIR:-/opt/ccgateway}
+      CCG_GUARD_RUNTIME_ROOT: ${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}
+    volumes:
+      - {type: bind, source: /var/run/docker.sock, target: /var/run/docker.sock, bind: {create_host_path: false}}
+      - {type: bind, source: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}", target: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}", bind: {create_host_path: false}}
+      - {type: bind, source: "${CCG_PROJECT_DIR:-/opt/ccgateway}", target: "${CCG_PROJECT_DIR:-/opt/ccgateway}", bind: {create_host_path: false}}
+      - {type: bind, source: "${CCG_RUNTIME_ENV:-/opt/ccgateway-runtime.env}", target: "${CCG_RUNTIME_ENV:-/opt/ccgateway-runtime.env}", read_only: true, bind: {create_host_path: false}}
+      - {type: bind, source: "${CCG_GUARD_STATE:-/var/lib/ccgateway-guard}", target: /var/lib/ccgateway-guard, bind: {create_host_path: false}}
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/ccgateway-guard", "ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    labels: {io.sup2api.ccgateway.guard: "${CCG_PREFIX:-ccg}"}
+    logging: *log
+
+  controller:
+    image: ${CCG_CONTROLLER_IMAGE:?}
+    container_name: ${CCG_PREFIX:-ccg}-controller
+    restart: unless-stopped
+    networks:
+      control: {ipv4_address: "${CCG_CONTROLLER_IP:-172.29.255.2}"}
+    ports: ["127.0.0.1:${CCG_CONTROLLER_PUBLISH:-8787}:8787"]
+    env_file: ["${CCG_RUNTIME_ENV:-/opt/ccgateway-runtime.env}"]
+    # environment wins over the same names in env_file: .env is the only
+    # source of the controller image and the guard token.
+    environment:
+      CCG_RUNTIME_ROOT: /data
+      CCG_CONTROLLER_BIND: 0.0.0.0
+      CCG_CONTROLLER_IMAGE: ${CCG_CONTROLLER_IMAGE:?}
+      CCG_GUARD_URL: http://${CCG_GUARD_ADDR:-172.29.255.1}:8790
+      CCG_GUARD_TOKEN: ${CCG_GUARD_TOKEN:?}
+    volumes:
+      - {type: bind, source: "${CCG_CONTROLLER_DATA:-/opt/ccgateway-controller}", target: /data, bind: {create_host_path: false}}
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/tmp:size=64m"]
+    mem_limit: 1g
+    pids_limit: 512
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "/ccg-controller", "healthcheck"]
+      interval: 5s
+      timeout: 4s
+      retries: 3
+      start_period: 10s
+    labels: {io.sup2api.ccgateway.controller: "${CCG_PREFIX:-ccg}"}
+    logging: *log
+
+  # The shared Xray gateway: only in the maintenance window that moves it into
+  # compose (--profile egress); a plain up never touches it.
+  egress:
+    profiles: [egress]
+    image: ${CCG_GATEWAY_IMAGE:?}
+    container_name: ${CCG_PREFIX:-ccg}-shared-egress
+    restart: unless-stopped
+    init: true
+    networks: [uplink]
+    cap_drop: [ALL]
+    cap_add: [NET_ADMIN, NET_BIND_SERVICE]
+    security_opt: ["no-new-privileges:true"]
+    sysctls:
+      net.ipv4.ip_forward: "0"
+      net.ipv6.conf.all.disable_ipv6: "1"
+    environment: {GOMAXPROCS: "2"}
+    volumes:
+      - {type: bind, source: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}/shared-egress", target: /config, read_only: true, bind: {create_host_path: false}}
+    mem_limit: 384m
+    pids_limit: 256
+    cpus: 2
+    labels: {io.sup2api.ccgateway.shared: "${CCG_PREFIX:-ccg}"}
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
+
+networks:
+  control:
+    external: true
+    name: ${CCG_CONTROL_NETWORK:-ccg-control}
+  uplink:
+    external: true
+    name: ${CCG_PREFIX:-ccg}-d0000000000000000-xray-uplink

@@ -235,7 +235,7 @@ func (s *Service) runtimeBundled(c *gin.Context) {
 	}
 	current := map[string]string{"app": h.AppImage, "egress": h.EgressImage, "controller": h.ControllerImage}
 	uid, _ := core.UserID(ctx)
-	results, workers, cfg, switched := s.pushRolesAndSwitch(ctx, cfg, b, uid, wanted, current)
+	results, workers, cfg, switched := s.pushRolesAndSwitch(ctx, cfg, b, uid, wanted, current, h.has(guardAPIFeature))
 	// The worker updates may have used up the time: what follows still runs
 	// (bounded on its own).
 	tail, cancelTail := tailContext(ctx)
@@ -256,7 +256,7 @@ func (s *Service) runtimeBundled(c *gin.Context) {
 // pushRolesAndSwitch uploads, loads and switches every wanted role in order
 // and returns the per-role results, the last worker report of an app switch,
 // the configuration after the last save, and whether anything was switched.
-func (s *Service) pushRolesAndSwitch(ctx context.Context, cfg Config, b *bundle, uid int64, wanted map[string]bool, current map[string]string) ([]bundledResult, *workersReport, Config, bool) {
+func (s *Service) pushRolesAndSwitch(ctx context.Context, cfg Config, b *bundle, uid int64, wanted map[string]bool, current map[string]string, guarded bool) ([]bundledResult, *workersReport, Config, bool) {
 	results := []bundledResult{}
 	var workers *workersReport
 	switched := false
@@ -264,7 +264,7 @@ func (s *Service) pushRolesAndSwitch(ctx context.Context, cfg Config, b *bundle,
 		if !wanted[role] {
 			continue
 		}
-		r, report, saved := s.pushBundledRole(ctx, cfg, b, uid, role, current[role])
+		r, report, saved := s.pushBundledRole(ctx, cfg, b, uid, role, current[role], guarded)
 		if saved != nil {
 			cfg = *saved
 		}
@@ -311,8 +311,10 @@ func bundledRoles(c *gin.Context) (map[string]bool, bool) {
 // pushBundledRole uploads, loads and switches to the bundled image of role
 // unless the controller runs it already (current). saved is the
 // configuration after the switch was saved (nil before); report the worker
-// updates an app switch ran.
-func (s *Service) pushBundledRole(ctx context.Context, cfg Config, b *bundle, uid int64, role, current string) (r bundledResult, report *workersReport, saved *Config) {
+// updates an app switch ran. guarded: the controller reports guard-api-v1
+// (the guard adopted it), without which a guard-only controller image is
+// refused before anything is sent.
+func (s *Service) pushBundledRole(ctx context.Context, cfg Config, b *bundle, uid int64, role, current string, guarded bool) (r bundledResult, report *workersReport, saved *Config) {
 	ref := b.ref(role)
 	r = bundledResult{Role: role, Ref: ref, Status: "loaded"}
 	fail := func(err *core.Error) bundledResult {
@@ -329,6 +331,11 @@ func (s *Service) pushBundledRole(ctx context.Context, cfg Config, b *bundle, ui
 		return r, nil, nil
 	case ctx.Err() != nil:
 		r.Status, r.Reason = "failed", "timeout"
+		return r, nil, nil
+	case role == "controller" && !guarded && b.guardAPI(role):
+		// The guard has not adopted this controller (§76.6): a Go
+		// controller is installed through compose, never by self-upgrade.
+		r.Status, r.Reason = "failed", "controller_adopt_required"
 		return r, nil, nil
 	}
 	if err := s.pushBundled(ctx, cfg, b, role); err != nil {

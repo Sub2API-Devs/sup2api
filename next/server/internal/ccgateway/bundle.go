@@ -52,6 +52,9 @@ type bundleImage struct {
 	File   string `json:"file"`
 	SHA256 string `json:"sha256"`
 	Size   int64  `json:"size"`
+	// Labels (optional) copies image labels the core acts on; only
+	// io.sup2api.ccgateway.guard-api is read (§76.6).
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 // bundle is a validated images.json of one package.
@@ -72,6 +75,12 @@ func (b *bundle) ref(role string) string {
 		return ""
 	}
 	return b.images[role].Ref
+}
+
+// guardAPI reports whether the bundled image of role declares
+// io.sup2api.ccgateway.guard-api=1 in images.json.
+func (b *bundle) guardAPI(role string) bool {
+	return b != nil && b.images[role].Labels[guardAPILabel] == "1"
 }
 
 // bundledView is the bundled field of GET /system/ccgateway/runtime.

@@ -16,8 +16,8 @@ import (
 )
 
 func TestPinnedImages(t *testing.T) {
-	strict := regexp.MustCompile(`^ghcr\.io/sub2api-devs/ccgateway-(app|egress|controller)@sha256:[0-9a-f]{64}$`)
-	for role, ref := range map[string]string{"app": AppImage, "egress": EgressImage, "controller": ControllerImage} {
+	strict := regexp.MustCompile(`^ghcr\.io/sub2api-devs/ccgateway-(app|egress|controller|guard)@sha256:[0-9a-f]{64}$`)
+	for role, ref := range map[string]string{"app": AppImage, "egress": EgressImage, "controller": ControllerImage, "guard": GuardImage} {
 		m := strict.FindStringSubmatch(ref)
 		if m == nil || m[1] != role || !validImage(ref) {
 			t.Errorf("%s image %q is not ghcr.io/sub2api-devs/ccgateway-%s@sha256:<64 hex>", role, ref, role)
@@ -62,6 +62,22 @@ func TestRuntimeImageOverrides(t *testing.T) {
 	}
 	if pub, _ := c.Public()["images"].(RuntimeImages); pub.Controller != "ccg-controller:abc" || pub.App != "" {
 		t.Fatalf("public images: %+v", c.Public()["images"])
+	}
+	// images.guard: optional, validated like the others, GuardImage without.
+	if eff.Guard != GuardImage {
+		t.Fatalf("guard without override: %q", eff.Guard)
+	}
+	c, err = mergeConfig(Config{Mode: "disabled", Images: &RuntimeImages{Guard: "ccgateway-guard:0.1.0"}}, Config{})
+	if err != nil || c.EffectiveImages().Guard != "ccgateway-guard:0.1.0" || c.EffectiveImages().Controller != ControllerImage {
+		t.Fatalf("guard override: %+v %v", c.Images, err)
+	}
+	if _, err = mergeConfig(Config{Mode: "disabled", Images: &RuntimeImages{Guard: "guard;id"}}, Config{}); err == nil {
+		t.Fatal("invalid guard image accepted")
+	}
+	// The plugin package never carries the guard: a bundle does not change it.
+	bundled := Config{Images: &RuntimeImages{Guard: "ccgateway-guard:local"}, bundled: &RuntimeImages{App: "a:1", Egress: "b:1", Controller: "c:1", Gateway: "caddy:2.0.0"}}
+	if got := bundled.EffectiveImages(); got.Guard != "ccgateway-guard:local" || got.Controller != "c:1" {
+		t.Fatalf("bundled with a guard override: %+v", got)
 	}
 }
 
@@ -282,16 +298,39 @@ func TestInstallScriptContainsNoInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Everything but the three references is fixed text.
-	fixed := strings.NewReplacer(img.App, "<APP>", img.Egress, "<EGRESS>", img.Controller, "<CTL>").Replace(script)
-	again, _ := installScript(RuntimeImages{App: "a:1", Egress: "b:1", Controller: "c:1"}, false)
-	if strings.NewReplacer("a:1", "<APP>", "b:1", "<EGRESS>", "c:1", "<CTL>").Replace(again) != fixed {
+	// Everything but the four references is fixed text.
+	fixed := strings.NewReplacer(img.App, "<APP>", img.Egress, "<EGRESS>", img.Controller, "<CTL>", img.Guard, "<GUARD>").Replace(script)
+	again, _ := installScript(RuntimeImages{App: "a:1", Egress: "b:1", Controller: "c:1", Guard: "g:1"}, false)
+	if strings.NewReplacer("a:1", "<APP>", "b:1", "<EGRESS>", "c:1", "<CTL>", "g:1", "<GUARD>").Replace(again) != fixed {
 		t.Fatal("install script depends on more than the image references")
 	}
 	for _, s := range []string{"CCG_CONTROLLER_KEY", "ssh-secret"} {
 		if strings.Contains(script, s) {
 			t.Fatalf("script contains %q", s)
 		}
+	}
+	// The guard token is made on the host: no value in the script.
+	if regexp.MustCompile(`CCG_GUARD_TOKEN=[0-9a-f]{64}`).MatchString(script) || regexp.MustCompile(`[0-9a-f]{64}`).MatchString(fixed) {
+		t.Fatal("script carries a token value")
+	}
+	// The compose template goes through a quoted heredoc: no expansion, and
+	// nothing in it can end or break out of the heredoc or the quotes.
+	if !strings.Contains(script, "cat > \"$DIR/compose.yml.tmp\" <<'CCG_COMPOSE_EOF'\n"+composeTemplate+"CCG_COMPOSE_EOF\n") {
+		t.Fatal("compose template is not written verbatim through <<'CCG_COMPOSE_EOF'")
+	}
+	if strings.Contains(composeTemplate, "'") || !strings.HasSuffix(composeTemplate, "\n") {
+		t.Fatal("compose template contains a quote or does not end with a newline")
+	}
+	for _, line := range strings.Split(composeTemplate, "\n") {
+		if strings.TrimSpace(line) == composeHeredocEnd {
+			t.Fatal("compose template contains the heredoc delimiter")
+		}
+	}
+	if _, err = installScript(RuntimeImages{App: "a:1", Egress: "b:1", Controller: "c:1", Guard: "g'; id #"}, false); err == nil {
+		t.Fatal("unsafe guard reference accepted")
+	}
+	if _, err = installScript(RuntimeImages{App: "a:1", Egress: "b:1", Controller: "c:1"}, false); err == nil {
+		t.Fatal("missing guard reference accepted")
 	}
 	if !strings.Contains(script, `docker image inspect "$img" >/dev/null 2>&1 || docker pull`) {
 		t.Fatal("present images are pulled again")
@@ -307,7 +346,7 @@ func TestInstallScriptContainsNoInput(t *testing.T) {
 		!strings.Contains(optional, `docker pull -q "$CTL" >/dev/null 2>&1 || { echo CCG_RESULT=image_pull_failed; exit 1; }`) {
 		t.Fatal("control panel install requires workload images or skips the controller image")
 	}
-	if _, err = installScript(RuntimeImages{App: "x'; rm -rf / #", Egress: "b", Controller: "c"}, false); err == nil {
+	if _, err = installScript(RuntimeImages{App: "x'; rm -rf / #", Egress: "b", Controller: "c", Guard: "g"}, false); err == nil {
 		t.Fatal("unsafe reference accepted")
 	}
 	if strings.Contains(inspectScript, "CCG_CONTROLLER_KEY") || !strings.Contains(inspectScript, `grep -E '^("|CCG_APP_IMAGE=|CCG_EGRESS_IMAGE=)'`) {
@@ -344,6 +383,36 @@ func TestRuntimeInstallFailures(t *testing.T) {
 			t.Fatalf("health key %q", host.keySeen)
 		}
 	})
+	// The compose path's results (§76.7): three reach the console, the rest
+	// are logged and answered as install_failed.
+	for _, tc := range []struct {
+		output, reason string
+		code           int
+		rollback       any
+	}{
+		{"CCG_RESULT=compose_unavailable\n", "compose_unavailable", 503, nil},
+		{"CCG_RESULT=guard_unavailable\n", "guard_unavailable", 503, nil},
+		{"CCG_RESULT=legacy_blocked\n", "legacy_blocked", 409, nil},
+		{"CCG_RESULT=control_network_conflict\n", "install_failed", 503, nil},
+		{"CCG_RESULT=bridge_guard_active\n", "install_failed", 503, nil},
+		{"CCG_RESULT=data_cross_device\n", "install_failed", 503, nil},
+		{"CCG_RESULT=something_new\n", "install_failed", 503, nil},
+		{"CCG_ROLLBACK=restored\nCCG_RESULT=adopt_failed\n", "install_failed", 503, "restored"},
+		{"CCG_ROLLBACK=restore_failed\nCCG_RESULT=controller_unhealthy\n", "controller_unhealthy", 503, "restore_failed"},
+		// A result with a tail is not a result.
+		{"CCG_RESULT=legacy_blocked trailing\n", "install_failed", 503, nil},
+	} {
+		t.Run(tc.output, func(t *testing.T) {
+			f, host := newRuntimeOpsFixture(t, cfg)
+			host.install = remotedocker.ScriptResult{Output: tc.output, ExitStatus: 1}
+			code, out := f.request(1, "POST", "/system/ccgateway/runtime/install", "")
+			errObj, _ := out["error"].(map[string]any)
+			details, _ := errObj["details"].(map[string]any)
+			if code != tc.code || reason(out) != tc.reason || host.kinds() != "install" || details["rollback"] != tc.rollback {
+				t.Fatalf("%d %v %s", code, out, host.kinds())
+			}
+		})
+	}
 	t.Run("ssh", func(t *testing.T) {
 		f, host := newRuntimeOpsFixture(t, cfg)
 		host.sshErr = true

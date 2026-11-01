@@ -137,6 +137,36 @@ func (s *Service) updateConfig(ctx context.Context, uid int64, fields []string, 
 	return s.updateConfigAt(ctx, uid, fields, nil, change)
 }
 
+// guardControllerImage reports whether ref is known to be a controller image
+// that runs only under the guard (label io.sup2api.ccgateway.guard-api=1):
+// the bundled controller when images.json says so, or the pinned
+// ControllerImage when ControllerImageGuardAPI. Other references (an
+// override, an uploaded image) are unknown to the core and not refused; the
+// old controller then fails the self-upgrade on its own (§76.6).
+func guardControllerImage(b *bundle, ref string) bool {
+	if b != nil && b.ref("controller") == ref && b.guardAPI("controller") {
+		return true
+	}
+	return ControllerImageGuardAPI && ref == ControllerImage
+}
+
+// checkAdopted refuses (409 controller_adopt_required) a self-upgrade to a
+// guard-only controller image while the running controller does not report
+// guard-api-v1, i.e. the guard has not adopted it (§76.6).
+func (s *Service) checkAdopted(ctx context.Context, cfg Config, b *bundle, ref string) *core.Error {
+	if !guardControllerImage(b, ref) {
+		return nil
+	}
+	cur, e := s.health(ctx, cfg)
+	if e != nil {
+		return reasonError(core.ErrUnavailable, "controller_unhealthy")
+	}
+	if !cur.has(guardAPIFeature) {
+		return reasonError(core.ErrConflict, "controller_adopt_required")
+	}
+	return nil
+}
+
 // panelUpgrade is the one-click upgrade in control panel mode: the
 // controller switches to the effective app / egress images (pulling them if
 // needed), then upgrades itself when its image differs. An effective image
@@ -145,6 +175,11 @@ func (s *Service) updateConfig(ctx context.Context, uid int64, fields []string, 
 func (s *Service) panelUpgrade(ctx context.Context, cfg Config) *core.Error {
 	img := cfg.EffectiveImages()
 	b := s.bundle()
+	// A controller the guard has not adopted yet cannot become a Go
+	// controller by upgrading itself (§76.6): refuse before anything changes.
+	if err := s.checkAdopted(ctx, cfg, b, img.Controller); err != nil {
+		return err
+	}
 	var h controllerHealth
 	err := s.controllerJSON(ctx, cfg, "PUT", "/runtime/images", map[string]string{"app": img.App, "egress": img.Egress}, &h)
 	if reasonOf(err) == "image_pull_failed" && b != nil {
