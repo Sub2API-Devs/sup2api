@@ -56,7 +56,7 @@
 | 失败 | HTTP 状态码 + `{"error": {"code": "...", "message": "...", "details": {...}}}` |
 | 字段校验失败 | `invalid_argument`，`details.fields = [{"field","code","message"}]` |
 
-错误码（`core/errors.go`）：`invalid_argument` 400、`unauthenticated` 401、`permission_denied` 403、`not_found` 404、`conflict` 409、`insufficient_balance` 402、`model_price_not_configured` 403、`model_not_allowed` 403、`rate_limited` 429、`no_available_account` 503（网关 `anthropic` 格式渲染为 529 `overloaded_error`，§11.6）、`plugin_unavailable` 503、`unavailable` 503、`internal` 500。（原 `step_up_required` 已随二次验证一起删除，§3.3。）
+错误码（`core/errors.go`）：`invalid_argument` 400、`unauthenticated` 401、`permission_denied` 403、`not_found` 404、`conflict` 409、`insufficient_balance` 402、`model_price_not_configured` 403、`model_not_allowed` 403、`group_deleted` / `group_disabled` / `group_not_allowed` 403（API Key 所属分组已删除 / 已停用 / 不再对其所有者开放，§15.1）、`rate_limited` 429、`no_available_account` 503（网关 `anthropic` 格式渲染为 529 `overloaded_error`，§11.6）、`plugin_unavailable` 503、`unavailable` 503、`internal` 500。（原 `step_up_required` 已随二次验证一起删除，§3.3。）
 
 ### 3.2 数据格式
 
@@ -132,7 +132,7 @@
 |---|---|
 | GET/POST `/me/api-keys`，DELETE `/me/api-keys/:id` | `apikey:self:manage`；创建返回明文 `key`（`sk-s2a-` 前缀），已加密保存的新 Key 可通过显式 reveal 再复制；不含 `user_email`；普通用户不能修改自己的 Key，只能删除重建 |
 | GET `/me/groups` | auth（当前用户可用的分组） |
-| GET/POST `/groups`，GET/PATCH/DELETE `/groups/:id` | `group:read` / `group:manage` |
+| GET/POST `/groups`，GET/PATCH/DELETE `/groups/:id` | `group:read` / `group:manage`；DELETE 不再因分组下有 API Key 而拒绝（2026-11-01）：`?move_keys_to=<分组 id>` 把 Key 迁到该分组（须为另一个已存在的分组，否则 400 `details.fields[{field:"move_keys_to"}]`），不带时 Key 保留但解除绑定（`group_id` 置 `null`，§15.1）；分组下的账号只移出分组 |
 | GET/POST `/proxies`，GET/PATCH/DELETE `/proxies/:id` | `proxy:read` / `proxy:manage`（或 `proxy:own:*`，只作用于自己创建的，§21）；密码省略或 `null` 不改、`""` 清除，没有掩码值（§15.4） |
 | POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage`（会发起外部连接） |
 | POST `/proxies/:id/reveal-url` | `proxy:manage` / `proxy:own:manage`（返回含明文密码的代理串，写审计） |
@@ -498,7 +498,8 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 | `user_email` | 只在管理员接口 `/api-keys` 返回；`/me/api-keys` 不含此字段 |
 | `name` | 1–100 字符 |
 | `key_prefix` | 明文前 12 个字符（如 `sk-s2a-AbCde`），用于识别 |
-| `group_id`、`group_name` | |
+| `group_id`、`group_name` | Key 与分组松耦合：分组删除后 `group_id` 为 `null`、`group_name` 为 `""`，Key 保留，所有者用 PATCH 选新分组即恢复 |
+| `group_status` | `active` \| `disabled`（分组停用）\| `unavailable`（受限分组不再分配给所有者）\| `deleted`（分组已删除）；非 `active` 时网关鉴权分别返回 403 `group_disabled` / `group_not_allowed` / `group_deleted`，不会进入调度后才以无账号失败 |
 | `platforms` | `[id]`，该 Key 所属分组内账号类型支持的平台（去重、排序，只含当前存在的平台）；无注册表时为 `[]` |
 | `status` | `active` \| `disabled` |
 | `expires_at`、`last_used_at` | 可为 `null`；`last_used_at` 每 10 秒批量落库，有延迟 |

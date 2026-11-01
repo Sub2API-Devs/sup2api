@@ -287,19 +287,36 @@ func TestGroupCRUDAndVisibility(t *testing.T) {
 	if out["data"].(map[string]any)["api_key_count"].(float64) != 1 {
 		t.Fatalf("key count: %v", out)
 	}
-	if code, _ = e.do(e.admin, "DELETE", fmt.Sprintf("/groups/%d", defID), nil); code != 409 {
-		t.Fatalf("delete with keys: %d", code)
+	// Keys do not pin their group: deleting it moves them to another group
+	// or leaves them unbound.
+	keyGroup := func() *int64 {
+		var g *int64
+		if err := e.db.Pool.QueryRow(context.Background(), `SELECT group_id FROM api_keys`).Scan(&g); err != nil {
+			t.Fatal(err)
+		}
+		return g
 	}
-	if _, err := e.db.Pool.Exec(context.Background(), `UPDATE api_keys SET deleted_at = now()`); err != nil {
-		t.Fatal(err)
+	for _, bad := range []string{fmt.Sprint(defID), "999999", "x"} {
+		if code, _ = e.do(e.admin, "DELETE", fmt.Sprintf("/groups/%d?move_keys_to=%s", defID, bad), nil); code != 400 {
+			t.Fatalf("delete moving keys to %s: %d", bad, code)
+		}
 	}
-	if code, _ = e.do(e.admin, "DELETE", fmt.Sprintf("/groups/%d", defID), nil); code != 204 {
-		t.Fatalf("delete: %d", code)
+	if code, _ = e.do(e.admin, "DELETE", fmt.Sprintf("/groups/%d?move_keys_to=%d", defID, vipID), nil); code != 204 {
+		t.Fatalf("delete moving keys: %d", code)
+	}
+	if g := keyGroup(); g == nil || *g != vipID {
+		t.Fatalf("key not moved: %v", g)
 	}
 	if code, _ = e.do(e.admin, "GET", fmt.Sprintf("/groups/%d", defID), nil); code != 404 {
 		t.Fatalf("get deleted: %d", code)
 	}
-	if len(e.bus.msgs) != 1 || !strings.HasPrefix(e.bus.msgs[0], core.ChannelAccountChanged) {
+	if code, _ = e.do(e.admin, "DELETE", fmt.Sprintf("/groups/%d", vipID), nil); code != 204 {
+		t.Fatalf("delete with keys: %d", code)
+	}
+	if g := keyGroup(); g != nil {
+		t.Fatalf("key still bound to the deleted group: %v", *g)
+	}
+	if len(e.bus.msgs) != 2 || !strings.HasPrefix(e.bus.msgs[0], core.ChannelAccountChanged) {
 		t.Fatalf("bus: %v", e.bus.msgs)
 	}
 }

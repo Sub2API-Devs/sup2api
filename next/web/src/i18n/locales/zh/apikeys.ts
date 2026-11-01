@@ -64,6 +64,11 @@ export default {
   },
   changeGroup: '更换分组',
   groupChanged: '已更换分组',
+  groupState: {
+    deleted: '分组已删除，请重新选择分组',
+    disabled: '分组已停用',
+    unavailable: '分组已不对你开放'
+  },
   enabledToast: 'API Key 已启用',
   disabledToast: 'API Key 已停用，使用它的请求会被拒绝',
   empty: '还没有 API Key',

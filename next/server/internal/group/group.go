@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -377,11 +378,25 @@ func (s *Service) update(c *gin.Context) {
 	httpapi.OK(c, g)
 }
 
+// delete removes a group. Its API keys are only loosely bound to it: with
+// ?move_keys_to=<group id> they move to that group, otherwise they stay
+// (soft-deleted ones included) with no group and authenticate as
+// group_deleted until their owner picks another one.
 func (s *Service) delete(c *gin.Context) {
 	ctx := c.Request.Context()
 	id, ok := httpapi.PathID(c, "id")
 	if !ok {
 		return
+	}
+	var moveTo *int64
+	if v := strings.TrimSpace(c.Query("move_keys_to")); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n <= 0 || n == id {
+			httpapi.Fail(c, core.InvalidFields(core.FieldError{Field: "move_keys_to", Code: "invalid",
+				Message: t(ctx, "pick another existing group", "请选择另一个已存在的分组")}))
+			return
+		}
+		moveTo = &n
 	}
 	var hashes []string
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
@@ -392,17 +407,16 @@ func (s *Service) delete(c *gin.Context) {
 			}
 			return err
 		}
-		var live int64
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM api_keys WHERE group_id = $1 AND deleted_at IS NULL`, id).Scan(&live); err != nil {
-			return err
+		if moveTo != nil {
+			if err := tx.QueryRow(ctx, `SELECT true FROM groups WHERE id = $1 FOR SHARE`, *moveTo).Scan(&exists); err != nil {
+				if store.IsNoRows(err) {
+					return core.InvalidFields(core.FieldError{Field: "move_keys_to", Code: "not_found",
+						Message: t(ctx, "the target group does not exist", "目标分组不存在")})
+				}
+				return err
+			}
 		}
-		if live > 0 {
-			return core.ErrConflict.WithMessage(t(ctx,
-				"the group still has API keys; delete them or move them to another group first",
-				"该分组下仍有 API Key，请先删除或迁移到其他分组")).WithDetails(map[string]any{"api_key_count": live})
-		}
-		// Soft-deleted keys only keep the foreign key alive; drop them.
-		rows, err := tx.Query(ctx, `DELETE FROM api_keys WHERE group_id = $1 RETURNING key_hash`, id)
+		rows, err := tx.Query(ctx, `UPDATE api_keys SET group_id = $2 WHERE group_id = $1 RETURNING key_hash`, id, moveTo)
 		if err != nil {
 			return err
 		}

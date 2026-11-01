@@ -30,7 +30,17 @@ export default {
   allowlistPlaceholder: 'Type a model pattern and press Enter',
   accountCount: 'Accounts',
   keyCount: 'Keys',
-  deleteInUse: 'It still has {a} accounts and {k} API keys.',
+  deleteWithAccounts: 'Its {a} accounts only leave the group; they are not deleted.',
+  deleteKeys: {
+    title: 'Delete group {name}',
+    intro: 'This group still has {k} API keys. They are not deleted with the group; choose what happens to them.',
+    move: 'Move them to another group',
+    unbind: 'Unbind them',
+    target: 'Target group',
+    moveHint: 'Moved keys use the new group\'s multiplier and model rules right away; if the group is not open to a key\'s owner, its calls are refused.',
+    unbindHint: 'The keys are kept but cannot call until their owners pick another group on the API keys page; meanwhile calls answer "the group of this API key has been deleted".',
+    accounts: 'Its {a} accounts only leave the group; they are not deleted.'
+  },
   accounts: {
     title: 'Accounts',
     hint: 'Accounts of any type can be mixed in one group; they are scheduled together for every endpoint their types can serve.',

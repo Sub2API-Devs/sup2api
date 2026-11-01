@@ -98,8 +98,11 @@ export interface ApiKey extends Partial<KeyLimits> {
   id: number
   user_id?: number
   user_email?: string // assumed
-  group_id: number
+  /** null once the key's group was deleted: the key is kept, unbound, until its owner picks another group. */
+  group_id: number | null
   group_name?: string // assumed
+  /** Whether the group serves the key (deleted: unbound; unavailable: no longer open to the owner). */
+  group_status?: 'active' | 'disabled' | 'unavailable' | 'deleted'
   name: string
   key_prefix: string
   allowed_ips?: string[]
