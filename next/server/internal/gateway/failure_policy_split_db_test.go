@@ -85,7 +85,7 @@ func TestMigrationDraftNamesLoginFailures(t *testing.T) {
 	require.Empty(t, p.AccountRules[2].Match.StatusCodes)
 }
 
-// Migration 0073 splits the migrated rule where 0072 left it alone: next to
+// Migration 0074 splits the migrated rule where 0072 left it alone: next to
 // rules an administrator added, in place, keeping their order; a rule id the
 // policy already has is not added twice; 0072's result and a second run are
 // left as they are.
@@ -94,7 +94,7 @@ func TestMigrationSplitsTheMigratedRuleNextToOtherRules(t *testing.T) {
 	ctx := t.Context()
 	raw72, err := migrations.FS.ReadFile("0072_failure_policy_split_auto_disable.sql")
 	require.NoError(t, err)
-	raw73, err := migrations.FS.ReadFile("0073_failure_policy_split_auto_disable_any_position.sql")
+	raw74, err := migrations.FS.ReadFile("0074_failure_policy_split_auto_disable_any_position.sql")
 	require.NoError(t, err)
 	store := func(policy string) {
 		t.Helper()
@@ -127,7 +127,7 @@ func TestMigrationSplitsTheMigratedRuleNextToOtherRules(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"quota-cooldown", "migrated-disable", "tail"}, ids(p))
 	for range 2 {
-		run(raw73)
+		run(raw74)
 	}
 	p, err = loadFailurePolicy(ctx, db.Pool)
 	require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestMigrationSplitsTheMigratedRuleNextToOtherRules(t *testing.T) {
 	require.Empty(t, p.AccountRules[3].Match.StatusCodes)
 	want := loginAccountRules()
 	for i, r := range want {
-		require.Equal(t, r.Match.Keywords, p.AccountRules[1+i].Match.Keywords, "migration 0073 and loginAccountRules must agree")
+		require.Equal(t, r.Match.Keywords, p.AccountRules[1+i].Match.Keywords, "migration 0074 and loginAccountRules must agree")
 	}
 	d := p.decide(FailureFacts{Source: "upstream", Status: 401,
 		Text: `{"type":"error","error":{"type":"authentication_error","message":"OAuth access token has been revoked."}}`})
@@ -150,7 +150,7 @@ func TestMigrationSplitsTheMigratedRuleNextToOtherRules(t *testing.T) {
 		jsonb_build_array(jsonb_set($2::jsonb, '{id}', '"login-invalid"')) || ($1::jsonb->'account_rules'))::text`,
 		migratedPolicy, custom).Scan(&policy))
 	store(policy)
-	run(raw73)
+	run(raw74)
 	p, err = loadFailurePolicy(ctx, db.Pool)
 	require.NoError(t, err)
 	require.Equal(t, []string{"login-invalid", "account-on-hold", "migrated-disable"}, ids(p))
@@ -159,7 +159,7 @@ func TestMigrationSplitsTheMigratedRuleNextToOtherRules(t *testing.T) {
 	// 0072's result is left as it is.
 	store(migratedPolicy)
 	run(raw72)
-	run(raw73)
+	run(raw74)
 	p, err = loadFailurePolicy(ctx, db.Pool)
 	require.NoError(t, err)
 	require.Equal(t, int64(2), p.Revision)
