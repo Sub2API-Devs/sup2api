@@ -197,9 +197,12 @@ async function submit() {
 const deleting = ref<Group | null>(null)
 const deleteOpen = ref(false)
 
-function onAction(g: Group, key: string) {
-  if (key === 'toggle') return toggleStatus(`/groups/${g.id}`, g.status, changed)
+async function onAction(listed: Group, key: string) {
+  if (key === 'toggle') return toggleStatus(`/groups/${listed.id}`, listed.status, changed)
   if (key !== 'delete') return
+  // The list may be stale: a key created since would be unbound by a plain
+  // confirm that never mentions keys, so ask the group for its current count.
+  const g = (await api.get<Group>(`/groups/${listed.id}`).catch(() => null)) ?? listed
   if (keyCount(g)) {
     deleting.value = g
     deleteOpen.value = true

@@ -26,7 +26,7 @@ const replace = vi.fn()
 let query: Record<string, string> = {}
 vi.mock('vue-router', () => ({ useRoute: () => ({ query }), useRouter: () => ({ replace }) }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false }) }))
-vi.mock('./UsageTable.vue', () => ({ default: { name: 'UsageTable', props: ['rows'], template: '<div data-testid="usage-table" />' } }))
+vi.mock('./UsageTable.vue', () => ({ default: { name: 'UsageTable', props: ['rows', 'showAccount'], emits: ['filter-account-id'], template: '<div data-testid="usage-table" />' } }))
 vi.mock('./UsageIPPanel.vue', () => ({ default: { name: 'UsageIPPanel', template: '<div data-testid="ip-panel" />' } }))
 vi.mock('@/components/stats/UsageCharts.vue', () => ({ default: { name: 'UsageCharts', template: '<div data-testid="charts" />' } }))
 vi.mock('./UserRanking.vue', () => ({ default: { name: 'UserRanking', emits: ['select'], template: '<div data-testid="ranking" />' } }))
@@ -116,6 +116,17 @@ describe('usage records page', () => {
     expect(lists[0].filters.user_id).toBe('3')
     expect(w.find('[data-testid="ranking"]').exists()).toBe(false)
     expect(replace).toHaveBeenLastCalledWith({ query: { tab: undefined } })
+  })
+
+  it('shows the upstream account to operators only; clicking one filters by it', async () => {
+    expect(render().findComponent({ name: 'UsageTable' }).props('showAccount')).toBe(false)
+    lists.length = 0
+    const w = render(true)
+    const table = w.findComponent({ name: 'UsageTable' })
+    expect(table.props('showAccount')).toBe(true)
+    table.vm.$emit('filter-account-id', 9)
+    await flushPromises()
+    expect(lists[0].filters.account_id).toBe('9')
   })
 
   it('starts from the filters of a link; a user cannot preset another user', async () => {
