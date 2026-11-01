@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -629,6 +630,40 @@ func TestComposeScriptsBehaviour(t *testing.T) {
 			t.Fatalf("guard pull: %s", res)
 		}
 	})
+}
+
+// TestComposeLockPortable: the compose lock works with BusyBox flock, which
+// has no -w (Alpine hosts; found in the S0 dind drill, 2026-11-01), and gives
+// up with compose_locked while another holder (the guard) keeps the lock.
+func TestComposeLockPortable(t *testing.T) {
+	real, err := exec.LookPath("flock")
+	if err != nil {
+		t.Fatalf("needs flock: %v", err)
+	}
+	h := newFakeHost(t)
+	busybox := `#!/bin/sh
+for a in "$@"; do case "$a" in -w*|--wait*|--timeout*) echo 'flock: unrecognized option: w' >&2; exit 1 ;; esac; done
+exec ` + real + ` "$@"
+`
+	h.must(os.WriteFile(h.base+"/bin/flock", []byte(busybox), 0o755))
+	if out, res := h.install(testEnvFile); res != "started" {
+		t.Fatalf("install with a flock without -w: %q\n%s\n%s", res, out, h.calls())
+	}
+	f, err := os.OpenFile(h.dir+"/.compose.lock", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	h.must(err)
+	defer f.Close()
+	h.must(syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB))
+	before := h.read(h.dir + "/.env")
+	if out, res := h.install(testEnvFile); res != "compose_locked" || h.read(h.dir+"/.env") != before {
+		t.Fatalf("lock held elsewhere: %q\n%s", res, out)
+	}
+	if out, res := h.run(rollbackScript, ""); res != "restore_failed" {
+		t.Fatalf("rollback while the lock is held: %q\n%s", res, out)
+	}
+	h.must(syscall.Flock(int(f.Fd()), syscall.LOCK_UN))
+	if out, res := h.install(testEnvFile); res != "started" {
+		t.Fatalf("after the holder released the lock: %q\n%s", res, out)
+	}
 }
 
 func mustScript(t *testing.T, img RuntimeImages) string {
