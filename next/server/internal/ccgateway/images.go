@@ -20,7 +20,7 @@ package ccgateway
 const (
 	AppImage        = "ghcr.io/sub2api-devs/ccgateway-app@sha256:7dd6ca54aba0f893390a981ac01967601e924e6787b67a8bad6d6c70bc6d8833"
 	EgressImage     = "ghcr.io/sub2api-devs/ccgateway-egress@sha256:50c259a9b0e1256f8cd732f8aca8653d0797c7539b9f314b54a88c21b48d8373"
-	ControllerImage = "ghcr.io/sub2api-devs/ccgateway-controller@sha256:7871c73dd0c135cbaf0314b66da9b1f4ea7abe84d3c427a4ff039372e3c47eac"
+	ControllerImage = "ghcr.io/sub2api-devs/ccgateway-controller@sha256:f83a7b979d7cdc108487dbec7219b583ab0f8fe7251d6c6c51f0811b6ef4ed26"
 )
 
 // GatewayImage is the Caddy image of the control panel's HTTPS gateway
@@ -37,7 +37,7 @@ const GatewayImage = "caddy:2.11.7-alpine"
 //
 // PLACEHOLDER: the digest below is not a real image. 发布前由主控替换 with
 // the digest the workflow reports for ccgateway-guard.
-const GuardImage = "ghcr.io/sub2api-devs/ccgateway-guard@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+const GuardImage = "ghcr.io/sub2api-devs/ccgateway-guard@sha256:c1a226f4b2a3b0492fc0a6e8f86edb049c0948c6503367dc2e5921dade523fe5"
 
 // ControllerImageGuardAPI tells whether ControllerImage carries the label
 // io.sup2api.ccgateway.guard-api=1 (a Go controller, installed through
@@ -45,4 +45,4 @@ const GuardImage = "ghcr.io/sub2api-devs/ccgateway-guard@sha256:0000000000000000
 // the guard has not adopted yet to such an image (controller_adopt_required,
 // CONTRACTS §76.6). 发布前由主控替换: set to true together with
 // ControllerImage when it becomes the Go controller's digest.
-const ControllerImageGuardAPI = false
+const ControllerImageGuardAPI = true

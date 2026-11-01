@@ -1057,7 +1057,9 @@ func TestControllerRuntimeAndOneClickUpgrade(t *testing.T) {
 	f, panel := newPanelFixture(t)
 	admin := f.user("admin@x")
 	panel.mu.Lock()
-	panel.health = controllerHealth{Version: "v3", AppImage: "ccgateway:old", EgressImage: EgressImage, ControllerImage: "ccg-controller:old", Features: []string{"tunnel"}}
+	// An adopted controller (guard-api-v1): the default ControllerImage is
+	// the Go controller, which an unadopted one may not self-upgrade to (§76.6).
+	panel.health = controllerHealth{Version: "v3", AppImage: "ccgateway:old", EgressImage: EgressImage, ControllerImage: "ccg-controller:old", Features: []string{"tunnel", "guard-api-v1"}}
 	panel.mu.Unlock()
 	code, out := f.request(admin, "GET", "/system/ccgateway/runtime", "")
 	installed, _ := data(out)["installed"].(map[string]any)
