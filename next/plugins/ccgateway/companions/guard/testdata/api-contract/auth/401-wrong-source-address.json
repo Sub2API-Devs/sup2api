@@ -1,0 +1,16 @@
+{
+  "name": "401 wrong source address",
+  "covers": "U6",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/health",
+    "remote": "172.29.255.3:4000"
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "error": "unauthorized"
+    }
+  }
+}

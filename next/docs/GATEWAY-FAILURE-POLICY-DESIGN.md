@@ -43,7 +43,11 @@
 
 ## Schema 4：固定条件关系与 Go 正则
 
-- 移除“条件关系”控件。新版保存为 Schema 4，状态码与文本条件固定 OR；关键词或正则均一行一个，多行之间也是 OR，页面不再展示条件关系提示。
+> 2026-11-01 修订（用户要求）：状态码与关键词改为固定 **AND**：两者都填时，状态码命中**且**某个关键词（正则）命中才算匹配；只填其一时按那一项匹配。原来是 OR，带关键词的自动禁用规则只凭 401 就会禁用账号。Schema 3 及以上都按此执行（加载时 `mode` 统一改为 `all`，存量 Schema 3 策略里迁移生成的 `any` 不再生效），Schema 1/2 仍按存的 `mode`。自动禁用写入账号的原因带上命中的关键词，如 `failure policy <规则 ID>: upstream HTTP 401, keyword "permission denied"`；决策记录与规则预览新增 `account_keyword`。未发布失败策略时使用的旧自动禁用设置（`auto_disable`，new-api 语义）不变，仍为状态码或关键词任一命中。
+>
+> 同时拆分迁移来的自动禁用规则（迁移 0072）：已发布策略的账号规则仍只有 `migrated-disable`（401 + new-api 关键词、未改过）时，拆成三条，依次为 `login-invalid`（401 + 登录失效关键词：`oauth access token has been revoked`、`oauth refresh token is no longer valid`、`oauth_refresh_dead`、`not_logged_in`、`has cleared its stored login`、`invalid x-api-key` 等）、`account-on-hold`（403 + `oauth_account_on_hold` 等）、`migrated-disable`（原关键词，不限状态码，与原先关键词单独命中即禁用一致）。旧策略进历史，revision +1。迁移草稿（`migrationDraft`）按同样方式生成。关键词来自线上近 30 天真实 401 错误与 CLI/Worker 的登录错误码（`loginAccountRules`，测试校验与迁移一致）。
+
+- 移除“条件关系”控件。新版保存为 Schema 4，状态码与文本条件的关系固定（原为 OR，现为 AND，见上）；关键词或正则均一行一个，多行之间是 OR，页面不再展示条件关系提示。
 - 表格内复用公共 `SCheckbox` 提供“Go 正则”选项，默认为关闭。关闭时保留忽略大小写的普通子串匹配；开启时以 Go `regexp` 编译各行，区分大小写，支持 `(?i)` 显式忽略大小写。不混用 JavaScript 正则校验，不添加 `/.../` 分隔符。
 - `match.keyword_regex` 只在 Schema 4 支持；旧 Schema 1–3 继续按原模式运行，页面编辑生成新版草稿，保存才生效。升级程序不修改管理员现有策略。旧核心拒绝 Schema 4，避免把正则误当普通关键词执行。
 - 编译在保存、预览及加载策略时进行，实际错误判定复用已编译表达式。保留语法大小写及有效空格，跳过空白行并去重；每条最多 200 字符、每规则最多 100 条，错误文本仍限前 4 KiB。无效表达式返回字段错误和原始行号，拒绝保存，不回退为文本匹配。

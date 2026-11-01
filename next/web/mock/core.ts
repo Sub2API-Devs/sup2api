@@ -21,6 +21,7 @@ export const ALL_PERMISSIONS = [
   'node:read', 'gateway:use', 'settings:read', 'settings:manage',
   'audit:read', 'system:update:read', 'system:update:execute', 'system:update:recover',
   'plugin.guard:rules:read', 'plugin.guard:rules:manage', 'plugin.guard:stats:read',
+  'plugin.dynweight:dynweight:read', 'plugin.dynweight:dynweight:manage',
   'plugin.anthropic:model_catalog:read'
 ]
 

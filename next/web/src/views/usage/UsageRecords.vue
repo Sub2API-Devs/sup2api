@@ -239,6 +239,7 @@ async function exportCsv() {
         :detail-path="(id: number) => `${listPath}/${id}`"
         @filter-client-request-id="(id: string) => (filters.client_request_id = id)"
         @filter-client-ip="(ip: string) => (filters.client_ip = ip)"
+        @filter-account-id="(id: number) => (filters.account_id = String(id))"
       >
         <template #footer><SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" /></template>
       </UsageTable>
@@ -254,6 +255,7 @@ async function exportCsv() {
         data-testid="usage-errors"
         @filter-client-request-id="(id: string) => (filters.client_request_id = id)"
         @filter-client-ip="(ip: string) => (filters.client_ip = ip)"
+        @filter-account-id="(id: number) => (filters.account_id = String(id))"
       >
         <template #footer><SPagination v-model:page="errors.page.value" v-model:page-size="errors.pageSize.value" :total="errors.total.value" /></template>
       </UsageTable>

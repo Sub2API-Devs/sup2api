@@ -2,6 +2,22 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-02 核心 **0.1.228**（`3b26e11b6`，manifest `602a399e…5aef`，计划 `a78fc486e3aed4a13c383d087ce64b2f` completed/13，56 秒，北京时间 01:34，无迁移、schema 不变，Host API 8）：
+- compose 模板的控制器 `mem_limit` 2g（ovh 的 `/opt/ccgateway/compose.yml` 已提前手工改成同样内容）；核心默认 controller/guard 镜像换成 CI 的 `3bb9d3a8d` 构建；用量日志的上游账号显示为"#id 名称"（PR #8，`a9eac2ecf`）。
+- 内置插件的 ccgateway 从 0.1.118（Python 控制器）换成 0.1.120 包（与两节点在用的同一个文件），其余内置插件照搬 0.1.227。
+- sup2api-1 入口 503 约 10.6 秒（自身重启窗口）；两节点 release digest 都是 `602a399e…`、ready；ccgateway 运行环境 up_to_date，26 个账号 healthy，升级后没有 5xx。
+- 脚本 `stage/0.1.228`，备份 `backups/core-0.1.228`（`540c71f3…3b03`）。
+
+2026-11-01 **控制器去 Docker 权限：Go guard + Go 控制器**（北京时间 23:10 至 11-02 01:00；设计 [ccgateway-guard/](../../../docs/ccgateway-guard/)，CONTRACTS §76，证据 [2026-11-01-production](../../../docs/ccgateway-guard/evidence/2026-11-01-production.md)）：
+- 形态：compose 项目 `ccgateway`（`/opt/ccgateway/{compose.yml,.env}`，root 0600）。guard（`ccg-guard`）持有 docker.sock，只监听 `172.29.255.1:8790`（网络 `ccg-control`），维护 `CCG-PROXY-BRIDGE`、`CCG-CONTROL-FWD`、`CCG-CONTROL-IN`；控制器（`ccg-controller`，Go）没有 Docker 权限，数据在 `/opt/ccgateway-controller`。共享网关仍是原来的 `ccg-shared-egress`（S6 未做）。
+- 顺序：S1 guard 换下宿主服务 `ccgateway-bridge-guard`（规则逐条一致；旧服务 stop + disable，**不要再启动**）→ 核心 **0.1.227**（`8dfe959da`，manifest `066bc7bb…af81`）→ 插件 **ccgateway 0.1.119**（包 `a1b8e1a7…cdc3`）→ 接管（没有重建任何账号容器）→ 插件 **ccgateway 0.1.120**（`69385b7bd`，包 `a69b619f…bea2`，rollout 218；控制器经 guard 自升级约 4 秒）→ finish（Python `ccg-controller-prev` 已删）。
+- 两次内存事故，均已修：Go 控制器成对激活时在 1 GiB cgroup 被 OOM 杀（回读校验把 CLI 读进内存，0.1.120 修）；guard 加载 app 镜像时在 256 MiB cgroup 被 OOM 杀两次（上传归档的脏页，`3bb9d3a8d` 写穿修复，guard 换成本地构建的 `ccgateway-guard:0.1.120-r2`）。两次都自动重启，数据路径不受影响。
+- 手工改动：`/opt/ccgateway/compose.yml` 控制器 `mem_limit` 1g → 2g（与仓库模板逐字节一致）；`.env` 的 `CCG_GUARD_IMAGE` 改为 `ccgateway-guard:0.1.120-r2`。修改前的文件在 `backups/ccgateway-0.1.120`。
+- 验收：草稿账号建删、egress/app 原地更新、Worker+CLI 2.1.312 成对激活（27 updated，23 号没有容器）、27 个账号 healthy，规则数全程不变（62/54），网关未重建。
+- 脚本 `stage/ccgateway-0.1.119`（s0/s1/s4/s5）、`stage/ccgateway-0.1.120`、`stage/0.1.227`；备份 `backups/ccgateway-guard/{s0,s4}-20261101`、`backups/core-0.1.227`、`backups/ccgateway-0.1.120`。
+- 用户要求不等观察期：17:14 UTC 做了 S6，网关 `ccg-shared-egress` 已由 compose 管理（服务 `egress`），单个账号最长出网中断约 54 秒；**以后只能用 `--profile egress up -d --no-deps egress` 动网关，不带服务名的 up/down 会重建或删除它**。17:17–17:22 做了 D10：legacy 网关、bridge guard 脚本与 unit、`controller-before-0.1.115`、各账号 `worker-backups-before-*`、10 月的迁移遗留目录、Python 控制器镜像 0.1.16–0.1.118 与测试镜像已删，先存档在 `backups/ccgateway-guard/d10-20261101`。
+- 仓库侧同时删除：`ccgateway-bridge-guard.{py,service}`、`test_ccgateway_bridge_guard.py`、Python 控制器源码及其 CI 步骤和 `-python` 镜像（最后见于 `c2fe8834a`）。
+
 2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
 2026-10-31 网关 **0.1.129**（`b55479dad`，镜像 ID `b19e596b…`，两个节点都已更新）：只把 `HostAPIVersion` 从 7 改为 8，外壳才能接受并签发 Host API 8 的核心。同日核心 **0.1.222**（发布号 `v0.1.222-r2`，manifest `91c90b0c…`，迁移 0064–0070）两节点升级完成，计划约 60 秒；内置插件随之升级：moderation 0.6.0，dynweight 0.3.0、mailer 0.1.1 只安装不启用（install-only）。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
@@ -13,6 +29,33 @@
 - **ccgateway 0.1.117**（`4d53f0d81`，包 SHA `2c697efb…b477`，CLI 仍为 v41）：刷新令牌被拒后 CC 会清空 `.credentials.json` 里的两个令牌，资源身份校验（fallback credit、helper history、文件引用要用）以前在 CLI 握手阶段失败（`tokenSource:"none"`），Worker 回 503。现在检测到登录已清空就直接回 401（source `input`），不再启动 CLI；`/api/oauth/profile` 的上游 401 原样转出。
 - **核心 0.1.224**（`6771d384d`，manifest `fe12b580…c530`，无 schema / Host API 变化，内置插件与 0.1.223 相同）：Worker 在身份校验中转出的 401/403（`AccountRefusalError`）按上游错误响应处理：切换账号、套用自动禁用规则，响应体原样返回给客户端。以前报 503 “account does not provide a verified resource issuer”，只切换账号，账号一直可调度。计划 51 秒完成，没有暂停。
 - 脚本 `stage/ccgateway-0.1.116`、`stage/ccgateway-0.1.117`、`stage/0.1.224`；备份在 `backups/ccgateway-0.1.116`、`ccgateway-0.1.117`、`core-0.1.224`。#23 的 paired 更新仍是 `not_found`（0.1.115 时就有）。
+
+2026-11-01 宿主服务 **ccgateway-bridge-guard** 更新（`5b1e63bff`，北京时间 05:43）：
+- 原来按账号状态的 `egress_backend` 选对端（`shared_xray` 用共享网关，否则用账号自己的 egress）；现在一律认 `<prefix>-shared-egress`，且要求网关带本控制器的归属标签 `io.sup2api.ccgateway.shared=<prefix>`。`egress_backend` 只剩插件回滚兼容一个用途。新增 `--chain`：隔离测试可单独起一份，不会清掉生产链 `CCG-PROXY-BRIDGE`。
+- 替换前对线上只计算不写入，新旧规则一致（22 条，11 个账号）。重启后规则不中断，21:40–21:47 UTC 的 ccgateway 请求 7 次全部 200；之后控制台测试 21、51–59 为 200。旧脚本备份 `backups/ccgateway-0.1.118/ccgateway-bridge-guard.py.before`。
+- 隔离真机验证（前缀 `ccg-np-test`，独立目录和 guard 链，跑完全部删除）：用插件包的 Xray 镜像 0.1.118 从零建网关，3.3 秒就绪；同 revision 改网络池 3.1 秒完成，网关先离开旧网络再接入新网络、网关不重启，app 重建、数据卷保留，DNS 指向新网关，旧网络删除；改回默认池也正常。
+- 另删 2.1.302 测试遗留（用户确认）：4 个容器、3 个数据卷、3 个镜像，记录 `backups/ccgateway-0.1.118/cleanup-302.log`。`ccg-302-testpg`（测试 Postgres）未删。
+- 核心默认镜像（无插件包时才用）的 controller/egress digest 换成 CI 构建的 0.1.118（`fe94a8369`），随下次核心发布生效。app 镜像 CI 一直构建失败（`cli-mods/release` 不在 Git），仍是旧 digest。
+
+2026-11-01 核心 **0.1.226**（`a4f711c65`，manifest `a41f8457…d8e1`，计划 `a7097a74309551142c32c84b3c43df34` completed/13，51 秒，北京时间 05:28，无迁移、schema 不变）：
+- 控制台出口文案改为"共享出口网关（Xray）"（运行时镜像角色、上传确认、代理切换提示、`egress_not_ready`）。
+- 内置插件里的 ccgateway 从 0.1.111 换成 0.1.118 包（同一签名密钥；两节点已是 0.1.118，只影响新装机器）。payload 附带的 `sub2api-plugin` 是从 0.1.224 复制来的旧版，`verify` 不认识新清单字段 `deletion`；包本身已在构建时用新工具验签。
+- 两节点 `sub2api version` = 0.1.226，readyz 200，两边都提供新文案。升级后 ovh 发起的控制台测试 21、51–59 为 200；clicodeplus 节点同期真实客户端流量 200（插件 0.1.118 下 76 次）。插件发布时控制器自升级的几秒里 52 号有 1 次 503 `runtime not ready`，属控制器重启的正常窗口。
+- 脚本 `stage/0.1.226`，备份 `backups/core-0.1.226`（`9a931f6c…6cc7`）。
+
+2026-11-01 插件 **ccgateway 0.1.118**（`7a72fd342`，包 `7bc2c1fc…d7c`，rollout 214，北京时间 04:53，核心不变）：共享 Xray 成为唯一出口。
+- 每账号 sing-box 出口、迁移/回迁接口和 `migrate_egress.py` 已删除；插件包仍是四个镜像，`egress` 角色换成 Xray 网关镜像（`ccgateway-egress:0.1.118`，Xray 26.3.27，36 MB）。控制器 `7a72fd3424e9`；`CCG_XRAY_IMAGE` 仍固定为现有网关的镜像 `sha256:92305b5b…`，共享网关 `ccg-shared-egress` 没有重建（Up 2 weeks）。
+- 新控制器启动后自动清掉 10 个账号 egress 容器、19 张账号 uplink 网络和账号目录里的 `sing-box.json`/`firewall.nft`；网关自己的 `ccg-d0000000000000000-xray-uplink` 保留。
+- 手工清理（用户确认）：`ccg302*`/`ccg302dbg*` 测试环境（6 个容器、6 张网络、3 个数据卷）、`ccg-21-app-rollback-*` 3 个容器、`ccg-request-modes-20261018-net`、`ccg-v6-test-net`，以及 107 个镜像 tag（`ccgateway-egress:0.1.16–0.1.117`、`ccg-egress:22cfdb506`、`ccg-tls-relay-egress:mdgqm9et`、`ccgateway-worker:302-v7-test`、`ccgateway-controller:shared-xray.*`/`xray-candidate`）。清单在 `backups/ccgateway-0.1.118/cleanup.log`。未动 `*:302-v7-final`、`ccgateway-controller:302-v7-test`。
+- 验证：账号 21、51–59 控制台测试 200（54 在 Worker 原地更新后第一次 `ECONNRESET`，随后连续 5 次 200）；50 仍是刷新令牌失效 401。23 号没有容器（`not_found`，0.1.117 时就如此）。
+- 备份 `backups/ccgateway-0.1.118`（数据库 `999e8560…2f04` 和控制器状态 `runtime-state.tgz`），脚本 `stage/ccgateway-0.1.118`。回滚：插件回到 0.1.117 时旧控制器仍按 `egress_backend: shared_xray` 把账号留在共享网关，但新建账号会走已删除的 sing-box，只作应急。
+
+2026-11-01 核心 **0.1.225**（`671d1267d`，manifest `9b3cee95…a12d`，迁移 0071、0072，内置插件与 0.1.224 相同，北京时间 04:11）：
+- 失败策略 Schema 3/4 的规则同时填了状态码和关键词时，两者都命中才算匹配（原为任一）；自动禁用原因带命中的关键词，如 `failure policy login-invalid: upstream HTTP 401, keyword "oauth refresh token is no longer valid"`。
+- 迁移 0072 把线上唯一的账号规则 `migrated-disable`（401 + 7 个 new-api 关键词）拆成 `login-invalid`（401 + 登录失效关键词，取自近 30 天真实 401：`OAuth access token has been revoked.`、`OAuth refresh token is no longer valid…`，以及 CLI/Worker 的 `oauth_refresh_dead`、`not_logged_in` 等）、`account-on-hold`（403 + `oauth_account_on_hold` 等）、`migrated-disable`（原 7 个关键词，不限状态码）。revision 1→2，旧策略在 `failure_policy_history`。
+- 内置粘性规则除名称外可修改（迁移 0071 `sticky_rules.customized`，升级不覆盖，`POST /sticky-rules/:id/reset` 恢复默认）；控制台 UA 条件字段名修正为 `user_agent_contains`。
+- 重试换号并清除粘性绑定时，把会话从原账号的每分钟会话数里移除（`ReleaseSession`）。
+- 计划 49 秒完成，没有暂停，两节点 `sub2api version` = 0.1.225。脚本 `stage/0.1.225`，备份 `backups/core-0.1.225`。
 
 **2026-10-31 事故（14:22–14:32 UTC，两节点 503 约 10 分钟）**：第一次用 0.1.128 外壳签发 `v0.1.222`，manifest 的 Host API 写成 7，候选核心报 8，`start-primary` 在 Prepare 前失败、计划暂停，两节点都已停服。迁移未执行。schema 变化的计划不允许回滚、破坏性步骤后也不允许取消，最后在 `updater.upgrades` 手工把计划标为 cancelled，重启两节点外壳回到 0.1.221 基线。**教训**：核心的 `HostAPIVersion`（或集群/任务协议）变了，先升外壳，再用新外壳镜像签核心包。
 
@@ -272,7 +315,7 @@
 
 2026-10-19：已更新 Core 四节点 **0.1.159**、CCGateway/Controller/21 号 Worker 程序 **0.1.59**，上线账号删除完整清理、原地重新授权和设置页孤立资源清理。21 号保留原容器与数据卷、CLI 2.1.302/native；公网 Key 实测 `claude-opus-5-5` HTTP 200，用量记录确认 account_id=21。详细版本、备份与验证见 [账号生命周期发布记录](../../../plugins/ccgateway/docs/ACCOUNT-RUNTIME-LIFECYCLE.md#ovh-正式发布与模型验收2026-10-19北京时间)。
 
-2026-10-18：已发布 Core **0.1.158**、CCGateway/Controller/Worker **0.1.58**，21 号使用固定的定制 CLI **2.1.302**，保留 native 模式和数据卷。四节点 ready，官方 CC/Opus 工具回合及新建容器 build/direct 实测通过。部署配套新增宿主 `ccgateway-bridge-guard.service`，为 internal 桥接中的账号到指定代理 peer 维护精确 veth 规则；镜像更新本身不替代该服务。详细版本、签名检查状态、出口断路验证与备份见 [302 正式部署记录](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#9-ovh-正式部署2026-10-18北京时间)。
+2026-10-18：已发布 Core **0.1.158**、CCGateway/Controller/Worker **0.1.58**，21 号使用固定的定制 CLI **2.1.302**，保留 native 模式和数据卷。四节点 ready，官方 CC/Opus 工具回合及新建容器 build/direct 实测通过。部署配套新增宿主 `ccgateway-bridge-guard.service`（2026-11-01 已退役，由 guard 取代，CONTRACTS §76），为 internal 桥接中的账号到指定代理 peer 维护精确 veth 规则；镜像更新本身不替代该服务。详细版本、签名检查状态、出口断路验证与备份见 [302 正式部署记录](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#9-ovh-正式部署2026-10-18北京时间)。
 
 2026-10-09 21:37：Core .85（外壳 d917b8c）四个gateway-managed节点`sup2api-1..4`，3130..3133；管理/主入口3130。CCGateway Controller（0.1.49）与账号Worker已从cc-max迁到本机Docker（`ccg-controller`、端点 `https://ccmax.prophey.ai`（共用 caddy 反代）、`ccg-21-*`、`ccg-d1d2964e14bf728d9-*`），cc-max 上的旧容器停止保留作回滚；详见环境指南顶部。不在OVH重建账号。
 

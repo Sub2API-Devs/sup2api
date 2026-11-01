@@ -99,7 +99,7 @@ func TestUsageExport(t *testing.T) {
 	require.NotContains(t, mine, "exp-3")
 
 	all := get("/usage/export?lang=en&from=2026-09-20T00:00:00Z")
-	require.Contains(t, strings.SplitN(all, "\n", 2)[0], "Account")
+	require.Contains(t, strings.SplitN(all, "\n", 2)[0], "Account ID,Account")
 	require.Len(t, strings.Split(strings.TrimSpace(all), "\n"), 4)
 
 	f.get(f.user, "/me/usage/export?lang=fr", 400)

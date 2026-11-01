@@ -7,7 +7,7 @@ import IdPicker from './IdPicker.vue'
 import LayerEditor from './LayerEditor.vue'
 import { useCatalog } from './catalog'
 import {
-  canManage, clone, errorMessage, fetchChannels, fetchConfig, fetchDefaults, saveConfig, useDwHost, validateConfig,
+  canManage, clone, errorMessage, fetchChannels, fetchConfig, fetchDefaults, layerIncomplete, overrideIncomplete, saveConfig, useDwHost, validateConfig,
   type AccountOverride, type Channel, type Config, type ConfigBody, type Layer
 } from './host'
 
@@ -38,14 +38,28 @@ function setDraft(body: ConfigBody) {
   draft.value = { ...body.config, groups: body.config.groups ?? {}, accounts: body.config.accounts ?? {} }
   pristine.value = JSON.stringify(draft.value)
   version.value = body.version
+  badJson.value = {}
 }
 
 const dirty = computed(() => !!draft.value && JSON.stringify(draft.value) !== pristine.value)
 
 // Layers whose JSON panel holds text that does not parse ('' = the global
-// one, else a group id): nothing is validated or saved meanwhile.
+// one, else a group id). Only a mounted editor has such text: collapsing a
+// layer drops it.
 const badJson = ref<Record<string, boolean>>({})
-const invalid = computed(() => Object.values(badJson.value).some(Boolean))
+// Where the draft cannot be validated or saved: unparsed JSON, or a number
+// left empty in a layer (also a collapsed one) or an account override. The
+// plugin would refuse it, or read a group's as the default.
+const problems = computed(() => {
+  const c = draft.value
+  if (!c) return []
+  const out: string[] = []
+  if (badJson.value[''] || layerIncomplete(c)) out.push(t('config.global'))
+  for (const id of groupIds.value) if (badJson.value[id] || layerIncomplete(c.groups[id])) out.push(catalog.groupName(Number(id)))
+  for (const id of accountIds.value) if (overrideIncomplete(c.accounts[id])) out.push(catalog.accountName(Number(id)))
+  return out
+})
+const invalid = computed(() => problems.value.length > 0)
 
 async function reload() {
   loading.value = true
@@ -244,7 +258,7 @@ async function save() {
 
       <div v-if="manage" class="dw-toolbar">
         <SButton :disabled="!dirty && !invalid" @click="discard">{{ t('config.discard') }}</SButton>
-        <SHint v-if="invalid" inline>{{ t('json.invalid') }}</SHint>
+        <SHint v-if="invalid" inline>{{ t('json.invalid', { where: problems.join(', ') }) }}</SHint>
         <SButton :loading="saving" :disabled="invalid" @click="check">{{ t('config.validate') }}</SButton>
         <SButton variant="primary" icon="check" :loading="saving" :disabled="invalid" @click="save">{{ t('config.save') }}</SButton>
       </div>

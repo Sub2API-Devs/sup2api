@@ -1,0 +1,21 @@
+{
+  "name": "400 bad reference",
+  "covers": "A18",
+  "setup": {},
+  "request": {
+    "method": "POST",
+    "path": "/v1/controller/upgrade",
+    "json": {
+      "image": "a:1\nCCG_GUARD_IMAGE=x"
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

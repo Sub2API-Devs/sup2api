@@ -1,0 +1,19 @@
+{
+  "name": "204 any repository by digest",
+  "covers": "03§3.6.2",
+  "setup": {
+    "pullable": [
+      "caddy@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    ]
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/pull",
+    "json": {
+      "ref": "caddy@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  },
+  "response": {
+    "status": 204
+  }
+}

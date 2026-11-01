@@ -1,0 +1,55 @@
+{
+  "name": "400 user 1000",
+  "covers": "D5 A8 03§11.3",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-app:1"
+      }
+    ],
+    "networks": [
+      {
+        "aid": "21",
+        "subnet": "10.52.74.0/24"
+      }
+    ],
+    "volumes": [
+      {
+        "aid": "21",
+        "quota": true
+      }
+    ],
+    "files": {
+      "21/resolv.conf": "ok"
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/accounts/21/jobs",
+    "json": {
+      "argv": [
+        "true"
+      ],
+      "caps": [
+        "CHOWN",
+        "DAC_OVERRIDE"
+      ],
+      "entrypoint": [
+        "sh",
+        "-ec"
+      ],
+      "image": "ccgateway-app:1",
+      "user": "1000",
+      "volume": "rw"
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

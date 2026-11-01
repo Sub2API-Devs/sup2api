@@ -67,7 +67,6 @@ export default {
     rate_limit_exceeded: '超过速率限制'
   },
   cols: {
-    modelAccount: '模型 / 账号',
     timing: '计时',
     detail: '详情',
     input: '输入',
@@ -77,6 +76,8 @@ export default {
     upstreamProtocol: '上游协议'
   },
   filterByClientRequestId: '{id}（点击按此 ID 筛选）',
+  filterByAccount: '{account}（点击按此账号筛选）',
+  noAccount: '未分配上游账号（请求在选号前结束）',
   cacheTitle: '缓存读 {r} · 缓存写 {w}',
   cached: '缓存',
   cacheEvidence: {

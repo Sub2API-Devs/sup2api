@@ -1,0 +1,20 @@
+{
+  "name": "204 boot.json without a gateway",
+  "covers": "R13 A11",
+  "setup": {},
+  "request": {
+    "method": "PUT",
+    "path": "/v1/gateway/files/boot.json",
+    "body_base64": "eyJ2IjoxfQ==",
+    "content_type": "application/octet-stream"
+  },
+  "response": {
+    "status": 204
+  },
+  "after": {
+    "docker_unchanged": true,
+    "files": {
+      "shared-egress/boot.json": "{\"v\":1}"
+    }
+  }
+}

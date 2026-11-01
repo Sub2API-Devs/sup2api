@@ -47,6 +47,10 @@ func (l *Limiter) TryHit(ctx context.Context, ref core.AccountRef, model, sessio
 	return ok, err
 }
 
+func (l *Limiter) ReleaseSession(ctx context.Context, ref core.AccountRef, model, session string) {
+	l.w.ReleaseSession(ctx, limitsOf(ref, model), session)
+}
+
 func (l *Limiter) AddTokens(ctx context.Context, id int64, list string, n int64) {
 	l.w.AddTokens(ctx, id, n)
 	if list != "" {

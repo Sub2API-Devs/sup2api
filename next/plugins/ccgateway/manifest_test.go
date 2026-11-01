@@ -15,12 +15,14 @@ import (
 	"testing"
 )
 
-func TestQuotaReleaseHostCompatibility(t *testing.T) {
+// The Go controller needs a core that installs it with compose and refuses to
+// switch an unadopted controller to it (CONTRACTS §76).
+func TestGuardReleaseHostCompatibility(t *testing.T) {
 	var m manifest.Manifest
 	if err := json.Unmarshal(manifestJSON, &m); err != nil {
 		t.Fatal(err)
 	}
-	for version, want := range map[string]bool{"0.1.124": false, "0.1.171": false, "0.1.172": true, "0.1.172-dev": true, "0.2.0": false} {
+	for version, want := range map[string]bool{"0.1.172": false, "0.1.226": false, "0.1.227": true, "0.1.227-dev": true, "0.2.0": false} {
 		got, err := check.HostCompatible(m.HostCompat, version)
 		if err != nil || got != want {
 			t.Fatalf("host %s: compatible=%v want=%v err=%v", version, got, want, err)

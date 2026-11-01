@@ -193,6 +193,8 @@ func TestFailurePolicyStickyResetAndPreserve(t *testing.T) {
 	for _, action := range []string{failureSwitch, failureReset} {
 		t.Run(action, func(t *testing.T) {
 			e := newEnv(t)
+			lim := newFakeLimiter()
+			e.gw.d.Limiter = lim
 			e.enableSticky(onFailureStick)
 			p := testFailurePolicy()
 			p.RetryRules[0].Action = action
@@ -217,8 +219,11 @@ func TestFailurePolicyStickyResetAndPreserve(t *testing.T) {
 			require.NoError(t, err)
 			if action == failureSwitch {
 				require.Equal(t, before, after)
+				require.Empty(t, lim.released, "a kept binding keeps the session on its account")
 			} else {
 				require.Equal(t, int64(2), bindingAccount(after))
+				// The session moved with its binding: account 1 no longer holds it.
+				require.Equal(t, []string{"1:" + key}, lim.released)
 			}
 		})
 	}

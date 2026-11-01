@@ -1,0 +1,42 @@
+{
+  "name": "200 started (docker API, not compose)",
+  "covers": "03§9.3",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ],
+    "networks": [
+      {
+        "aid": "d0000000000000000",
+        "role": "xray-uplink",
+        "subnet": "10.117.81.0/24"
+      }
+    ],
+    "gateway": {
+      "status": "exited",
+      "managed_by": "legacy",
+      "networks": {
+        "21": "10.52.74.2"
+      }
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/gateway/ensure"
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "action": "started"
+    },
+    "keys": [
+      "gateway",
+      "action"
+    ]
+  }
+}

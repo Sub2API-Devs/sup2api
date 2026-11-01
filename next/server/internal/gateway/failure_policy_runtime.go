@@ -98,6 +98,9 @@ func (c *call) decideFailure(ctx context.Context, accountID int64, f FailureFact
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 	defer cancel()
 	reason := "failure policy " + s.decision.AccountRule + ": " + f.Source + " HTTP " + strconv.Itoa(f.Status)
+	if s.decision.AccountKeyword != "" {
+		reason += ", keyword " + strconv.Quote(s.decision.AccountKeyword)
+	}
 	switch s.decision.AccountAction {
 	case "disable":
 		disabled, err := c.g.d.Accounts.AutoDisableByPolicy(ctx, accountID, reason)
@@ -307,6 +310,7 @@ func (c *call) prepareRetry(ctx context.Context, ref *core.AccountRef, action st
 		if err := c.resetPolicyBinding(ctx); err != nil {
 			return "sticky_reset_failed"
 		}
+		c.releaseSession(ctx, ref)
 	}
 	s.preserveSticky = action == failureSwitch
 	s.sameID = 0

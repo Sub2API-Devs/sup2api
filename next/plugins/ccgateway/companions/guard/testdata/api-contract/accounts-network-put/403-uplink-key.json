@@ -1,0 +1,24 @@
+{
+  "name": "403 uplink key",
+  "covers": "03§3.5.2",
+  "setup": {},
+  "request": {
+    "method": "PUT",
+    "path": "/v1/accounts/d0000000000000000/network",
+    "json": {
+      "gateway": "10.60.1.1",
+      "policy_label": "{\"allocation\": \"random\", \"pool\": \"10.0.0.0/8\"}",
+      "subnet": "10.60.1.0/24"
+    }
+  },
+  "response": {
+    "status": 403,
+    "body": {
+      "error": "forbidden",
+      "reason": "policy"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

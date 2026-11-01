@@ -1,0 +1,15 @@
+{
+  "name": "400 invalid account key 0",
+  "covers": "03§11.3",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/accounts/0"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  }
+}

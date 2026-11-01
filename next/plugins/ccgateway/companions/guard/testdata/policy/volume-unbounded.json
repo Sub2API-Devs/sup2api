@@ -1,0 +1,7 @@
+{
+  "Name": "ccg-21-data",
+  "Driver": "local",
+  "Labels": {
+    "io.sup2api.ccgateway.account": "21"
+  }
+}

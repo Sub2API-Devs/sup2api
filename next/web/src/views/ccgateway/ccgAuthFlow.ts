@@ -78,6 +78,11 @@ export const CCG_REASONS = [
   'ssh_not_configured',
   'install_in_progress',
   'install_failed',
+  // compose installation next to the guard, and its adoption (CONTRACTS §76)
+  'compose_unavailable',
+  'guard_unavailable',
+  'legacy_blocked',
+  'controller_adopt_required',
   // control-panel install (POST /system/ccgateway/controller/install, CONTRACTS §53.3)
   'runtimes_disabled',
   'invalid_host',

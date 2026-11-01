@@ -141,7 +141,7 @@ func TestStickyClearQueued(t *testing.T) {
 	e := newEnv(t)
 	e.configure(func(c *rules.Config) {
 		c.Notify = rules.Notify{Enabled: true, Channel: "email", Recipients: []string{"ops@example.com"}}
-		c.Strategies[0].Actions = append(c.Strategies[0].Actions, rules.Action{Type: rules.ActionAffinityClear, Percent: 50})
+		c.Strategies[0].Actions[1].Percent = 50 // the default clears 30%
 	})
 	clearErr := status.Error(codes.Unavailable, "sticky store unavailable")
 	var calls []*pluginv1.ClearStickyBindingsRequest
@@ -191,7 +191,7 @@ func TestSlowStickyClearKeepsEvents(t *testing.T) {
 	e := newEnv(t)
 	e.configure(func(c *rules.Config) {
 		c.Notify = rules.Notify{Enabled: true, Channel: "email", Recipients: []string{"ops@example.com"}}
-		c.Strategies[0].Actions = append(c.Strategies[0].Actions, rules.Action{Type: rules.ActionAffinityClear, Percent: 50})
+		c.Strategies[0].Actions[1].Percent = 50 // the default clears 30%
 	})
 	stall := true
 	e.fh.ClearStickyBindingsFunc = func(ctx context.Context, in *pluginv1.ClearStickyBindingsRequest) (*pluginv1.ClearStickyBindingsResponse, error) {
@@ -233,7 +233,8 @@ func TestZeroClearsStickyBindings(t *testing.T) {
 	for _, on := range []bool{true, false} {
 		e := newEnv(t)
 		e.configure(func(c *rules.Config) {
-			c.Strategies[0].Actions[0] = rules.Action{Type: rules.ActionWeightDegrade, Mode: rules.ModeCurrentPercent, Value: 100}
+			// No affinity_clear: only the clearing at 0.
+			c.Strategies[0].Actions = []rules.Action{{Type: rules.ActionWeightDegrade, Mode: rules.ModeCurrentPercent, Value: 100}}
 			c.ClearStickyOnZero = on
 		})
 		e.rank(100)
@@ -344,7 +345,51 @@ func TestMigrationMovesOldDefaults(t *testing.T) {
 	}
 }
 
-// rules020 / strategies020 are the 0.2.0 defaults as 0.2.0 saved them.
+// Migration 0003 gives layers whose strategies are exactly the 0.3.0
+// defaults the 0.4.0 ones (each degrade clears 30% of the sticky sessions),
+// leaves changed ones alone, and runs again as a no-op.
+func TestMigrationAddsDefaultClearing(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	s, err := e.p.store(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := strings.Replace(strategies020, `"value":30}`, `"value":40}`, 1)
+	doc := `{"enabled":true,"window_seconds":60,"min_samples":10,"exempt_status_codes":"400","min_weight_mode":"base_percent","min_weight":0,` +
+		`"rules":` + rules020 + `,"strategies":` + strategies020 + `,` +
+		`"groups":{"5":{"window_seconds":30,"strategies":` + strategies020 + `},"6":{"strategies":` + changed + `}},"notify":{"enabled":false,"channel":"","recipients":[],"language":"zh"},"log_events":true}`
+	if _, err := s.db.Exec(ctx, `INSERT INTO config (id, doc, version) VALUES (1, $1, 4)`, doc); err != nil {
+		t.Fatal(err)
+	}
+	migration, err := os.ReadFile(filepath.Join("..", "..", "migrations", "0003_default_affinity_clear.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := s.db.Exec(ctx, string(migration)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c, version, _, err := s.loadConfig(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Two updates (the global layer, the groups), then nothing.
+	if version != 6 {
+		t.Fatalf("version %d", version)
+	}
+	def := rules.DefaultLayer()
+	if !reflect.DeepEqual(c.Strategies, def.Strategies) || !reflect.DeepEqual(c.Groups[5].Strategies, def.Strategies) || c.Groups[5].WindowSeconds != 30 {
+		t.Fatalf("not moved: %+v / %+v", c.Strategies, c.Groups[5].Strategies)
+	}
+	if g := c.Groups[6].Strategies; g[0].Actions[0].Value != 40 || len(g[0].Actions) != 1 {
+		t.Fatalf("a changed layer moved: %+v", g)
+	}
+}
+
+// rules020 / strategies020 are the 0.2.0 defaults as 0.2.0 saved them (the
+// strategies are also the 0.3.0 ones).
 const (
 	rules020 = `[{"name":"错误率过高","conditions":[{"metric":"error_rate","op":"gte","value":30}],"periods":3,"hit_periods":2},` +
 		`{"name":"首字 p95 过慢","conditions":[{"metric":"ttfb","p":95,"op":"gte","value":10000}],"periods":3,"hit_periods":2},` +

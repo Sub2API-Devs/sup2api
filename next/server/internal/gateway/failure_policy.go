@@ -96,6 +96,7 @@ type FailureFacts struct {
 type FailureDecision struct {
 	RetryRule          string `json:"retry_rule,omitempty"`
 	AccountRule        string `json:"account_rule,omitempty"`
+	AccountKeyword     string `json:"account_keyword,omitempty"` // the account rule's matched keyword, "" when status alone matched
 	Action             string `json:"action"`
 	AccountAction      string `json:"account_action"`
 	SameAccountRetries int    `json:"same_account_retries,omitempty"`
@@ -109,8 +110,38 @@ func defaultFailurePolicy() FailurePolicy {
 		RetryRules: []FailureRule{}, AccountRules: []FailureRule{}}
 }
 
+// loginAccountRules disable an account on a login failure the provider,
+// Claude Code or the Worker names (401) and on an account the provider holds
+// (403). Migration 0072 writes the same rules into a published policy that
+// still had only the migrated rule.
+func loginAccountRules() []FailureRule {
+	rule := func(id, name, status string, keywords ...string) FailureRule {
+		return FailureRule{ID: id, Name: name, Enabled: true, Action: "disable",
+			Match: FailureMatch{Source: "upstream", StatusCodes: status, Keywords: keywords, Mode: "all"}}
+	}
+	return []FailureRule{
+		rule("login-invalid", "Login invalid (401)", "401",
+			"oauth access token has been revoked",
+			"oauth token has been revoked",
+			"oauth refresh token is no longer valid",
+			"oauth_refresh_dead",
+			"not_logged_in",
+			"has cleared its stored login",
+			"invalid x-api-key",
+			"invalid bearer token",
+			"the security token included in the request is invalid",
+			"your account is not authorized"),
+		rule("account-on-hold", "Account on hold (403)", "403",
+			"oauth_account_on_hold",
+			"oauth authentication is currently not allowed for this organization"),
+	}
+}
+
 // migrationDraft is a visible starting point, not an executable replacement
 // until published. Legacy plugin-specific decisions are intentionally not copied.
+// The old settings disabled on a status code or a keyword; a rule needs both
+// now, so the draft names login failures precisely, keeps the old keywords
+// at any status and keeps status codes other than the default 401 alone.
 func migrationDraft(gw GatewaySettings, ad AutoDisableSettings) FailurePolicy {
 	p := defaultFailurePolicy()
 	p.MaxRetries = gw.normalized().MaxAttempts - 1
@@ -119,17 +150,24 @@ func migrationDraft(gw GatewaySettings, ad AutoDisableSettings) FailurePolicy {
 	p.RetryRules = []FailureRule{{ID: "http-transient", Name: "HTTP transient errors", Enabled: true,
 		Match:  FailureMatch{Source: "upstream", StatusCodes: "408,429,500-599", Mode: "all"},
 		Action: failureRetry}}
-	if ad.StatusCodes != "" || len(ad.Keywords) > 0 {
-		p.AccountRules = []FailureRule{{ID: "migrated-disable", Name: "Existing automatic disable", Enabled: true,
-			Match: FailureMatch{Source: "upstream", StatusCodes: ad.StatusCodes, Keywords: ad.Keywords, Mode: "any"}, Action: "disable"}}
+	p.AccountRules = loginAccountRules()
+	if ad.StatusCodes != "" && ad.StatusCodes != "401" {
+		p.AccountRules = append(p.AccountRules, FailureRule{ID: "migrated-status", Name: "Existing automatic disable (status)", Enabled: true,
+			Match: FailureMatch{Source: "upstream", StatusCodes: ad.StatusCodes, Mode: "all"}, Action: "disable"})
+	}
+	if len(ad.Keywords) > 0 {
+		p.AccountRules = append(p.AccountRules, FailureRule{ID: "migrated-disable", Name: "Existing automatic disable", Enabled: true,
+			Match: FailureMatch{Source: "upstream", Keywords: ad.Keywords, Mode: "all"}, Action: "disable"})
 	}
 	return p
 }
 
-func (m FailureMatch) matches(f FailureFacts) bool {
+// matches reports whether the failure matches, and the keyword (the
+// expression, for regex keywords) that matched, "" when none did.
+func (m FailureMatch) matches(f FailureFacts) (bool, string) {
 	if m.Source != f.Source || len(m.Groups) > 0 && !slices.Contains(m.Groups, f.GroupID) ||
 		!anyGlob(m.Models, f.Model) || !matchList(m.Protocols, f.Protocol) {
-		return false
+		return false, ""
 	}
 	statusMatch := false
 	for _, r := range m.ranges {
@@ -142,39 +180,44 @@ func (m FailureMatch) matches(f FailureFacts) bool {
 	if len(text) > classifyPrefix {
 		text = text[:classifyPrefix]
 	}
-	keywordMatch := m.matchesText(text)
+	keyword := m.matchedKeyword(text)
+	keywordMatch := keyword != ""
 	if len(m.ranges) == 0 && len(m.Keywords) == 0 {
-		return m.Source == "transport"
+		return m.Source == "transport", ""
 	}
 	if m.Mode == "any" {
-		return statusMatch || keywordMatch
+		return statusMatch || keywordMatch, keyword
 	}
-	return (len(m.ranges) == 0 || statusMatch) && (len(m.Keywords) == 0 || keywordMatch)
+	return (len(m.ranges) == 0 || statusMatch) && (len(m.Keywords) == 0 || keywordMatch), keyword
 }
 
-func (m FailureMatch) matchesText(text []byte) bool {
+// matchedKeyword is the first keyword (expression) found in text.
+func (m FailureMatch) matchedKeyword(text []byte) string {
 	if m.KeywordRegex {
-		for _, pattern := range m.patterns {
+		for i, pattern := range m.patterns {
 			if pattern.Match(text) {
-				return true
+				return m.Keywords[i]
 			}
 		}
-		return false
+		return ""
 	}
 	text = bytes.ToLower(text)
 	for _, keyword := range m.Keywords {
 		if bytes.Contains(text, []byte(keyword)) {
-			return true
+			return keyword
 		}
 	}
-	return false
+	return ""
 }
 
 func (p *FailurePolicy) decide(f FailureFacts) FailureDecision {
 	d := FailureDecision{Action: failureReturn, AccountAction: "none"}
 	if p.RetryEnabled && p.MaxRetries > 0 {
 		for _, r := range p.RetryRules {
-			if r.Enabled && r.Match.matches(f) {
+			if !r.Enabled {
+				continue
+			}
+			if ok, _ := r.Match.matches(f); ok {
 				d = p.retryDecision(r)
 				break
 			}
@@ -182,8 +225,11 @@ func (p *FailurePolicy) decide(f FailureFacts) FailureDecision {
 	}
 	if p.AccountEnabled {
 		for _, r := range p.AccountRules {
-			if r.Enabled && r.Match.matches(f) {
-				d.AccountRule, d.AccountAction, d.CooldownSeconds = r.ID, r.Action, r.CooldownSeconds
+			if !r.Enabled {
+				continue
+			}
+			if ok, keyword := r.Match.matches(f); ok {
+				d.AccountRule, d.AccountKeyword, d.AccountAction, d.CooldownSeconds = r.ID, keyword, r.Action, r.CooldownSeconds
 				break
 			}
 		}

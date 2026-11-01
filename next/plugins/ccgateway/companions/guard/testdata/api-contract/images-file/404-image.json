@@ -1,0 +1,15 @@
+{
+  "name": "404 image",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/images/file?ref=ccgateway-app:404\u0026path=/x\u0026limit=10"
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not_found",
+      "reason": "image"
+    }
+  }
+}

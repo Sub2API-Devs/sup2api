@@ -1,0 +1,21 @@
+{
+  "name": "401 two authorization headers",
+  "covers": "U6",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/inventory",
+    "headers": {
+      "Authorization": [
+        "Bearer 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "Bearer 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      ]
+    }
+  },
+  "response": {
+    "status": 401,
+    "body": {
+      "error": "unauthorized"
+    }
+  }
+}

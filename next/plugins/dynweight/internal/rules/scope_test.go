@@ -246,7 +246,8 @@ func TestStrictSignature(t *testing.T) {
 // turned off.
 func TestZeroClearsSticky(t *testing.T) {
 	toZero := func(c *Config) {
-		c.Strategies[2].Actions[0] = Action{Type: ActionWeightDegrade, Mode: ModeCurrentPercent, Value: 100}
+		// No affinity_clear: only the clearing at 0.
+		c.Strategies[2].Actions = []Action{{Type: ActionWeightDegrade, Mode: ModeCurrentPercent, Value: 100}}
 	}
 	s := newSim(t, compiled(t, toZero), 100)
 	out := s.step(1, 0, 61000)

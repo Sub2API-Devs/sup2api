@@ -226,6 +226,12 @@ func TestProxyCRUDTestAndDirectory(t *testing.T) {
 		t.Fatalf("proxy auth %q", auth.Load())
 	}
 
+	// reveal-url returns the full proxy URL with the decrypted password.
+	code, out = do(t, engine, admin, "POST", fmt.Sprintf("/proxies/%d/reveal-url", id), nil)
+	if want := fmt.Sprintf("http://bob:s3cret@%s:%d", host, port); code != 200 || data(out)["url"] != want {
+		t.Fatalf("reveal-url: %d %v, want %s", code, out, want)
+	}
+
 	// Directory: cached client per proxy.
 	c1, err := svc.HTTPClient(ctx, &id)
 	if err != nil {
@@ -356,6 +362,10 @@ func TestProxyCRUDTestAndDirectory(t *testing.T) {
 			if detail["auto"] != false || detail["name"] != "p1" || detail["password"] != nil {
 				t.Fatalf("create detail %v", detail)
 			}
+		case "proxy.url.reveal":
+			if len(detail) != 0 {
+				t.Fatalf("reveal detail %v", detail)
+			}
 		case "proxy.update":
 			if f, _ := detail["fields"].([]any); len(f) != 1 || f[0] != "password" {
 				t.Fatalf("update detail %v", detail)
@@ -363,7 +373,7 @@ func TestProxyCRUDTestAndDirectory(t *testing.T) {
 		}
 		actions = append(actions, action)
 	}
-	if strings.Join(actions, ",") != "proxy.create,proxy.update,proxy.delete" {
+	if strings.Join(actions, ",") != "proxy.create,proxy.url.reveal,proxy.update,proxy.delete" {
 		t.Fatalf("audit actions %v", actions)
 	}
 }
@@ -460,6 +470,9 @@ func TestOwnership(t *testing.T) {
 		if code, _ := do(t, engine, alice, "POST", fmt.Sprintf("/proxies/%d/test", other), nil); code != 404 {
 			t.Fatalf("alice test %d: %d", other, code)
 		}
+		if code, _ := do(t, engine, alice, "POST", fmt.Sprintf("/proxies/%d/reveal-url", other), nil); code != 404 {
+			t.Fatalf("alice reveal-url %d: %d", other, code)
+		}
 	}
 	var name string
 	_ = db.Pool.QueryRow(ctx, `SELECT name FROM proxies WHERE id = $1`, pBob).Scan(&name)
@@ -477,6 +490,14 @@ func TestOwnership(t *testing.T) {
 	// stored proxy, so only the status matters here).
 	if code, _ = do(t, engine, alice, "POST", fmt.Sprintf("/proxies/%d/test", pAlice), nil); code != 200 {
 		t.Fatalf("alice test own: %d", code)
+	}
+
+	if code, out = do(t, engine, alice, "POST", fmt.Sprintf("/proxies/%d/reveal-url", pAlice), nil); code != 200 || data(out)["url"] != "http://h.example:8080" {
+		t.Fatalf("alice reveal-url own: %d %v", code, out)
+	}
+	// Read-only keys cannot see the password.
+	if code, _ = do(t, engine, reader, "POST", fmt.Sprintf("/proxies/%d/reveal-url", pAdmin), nil); code != 403 {
+		t.Fatalf("reader reveal-url: %d", code)
 	}
 
 	// The all range reaches every row, including legacy ones, and shows the

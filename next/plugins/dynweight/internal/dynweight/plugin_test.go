@@ -155,7 +155,7 @@ func TestDegradeNotifyAndReset(t *testing.T) {
 	e := newEnv(t)
 	e.configure(func(c *rules.Config) {
 		c.Notify = rules.Notify{Enabled: true, Channel: "email", Recipients: []string{"ops@example.com"}}
-		c.Strategies[0].Actions = append(c.Strategies[0].Actions, rules.Action{Type: rules.ActionAffinityClear, Percent: 50})
+		c.Strategies[0].Actions[1].Percent = 50 // the default clears 30%
 		// A second strategy clearing on the same hit shares the call.
 		c.Strategies = append(c.Strategies, rules.Strategy{Name: "clear", When: c.Strategies[0].When,
 			Actions: []rules.Action{{Type: rules.ActionAffinityClear, Percent: 80}}})
@@ -487,7 +487,9 @@ func TestGlobalDisablePinsToBase(t *testing.T) {
 		Data []eventItem `json:"data"`
 	}
 	e.decode(e.h.Do("GET", "/events", nil, nil), http.StatusOK, &events)
-	if len(events.Data) != 1 || events.Data[0].Kind != rules.EventWeightDown {
+	// Only the degrade's (newest first, with the default clearing): pinning
+	// to the base is no change.
+	if len(events.Data) != 2 || events.Data[0].Kind != rules.EventAffinityClear || events.Data[1].Kind != rules.EventWeightDown {
 		t.Fatalf("events %+v", events.Data)
 	}
 }

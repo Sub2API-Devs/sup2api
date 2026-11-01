@@ -1,0 +1,17 @@
+{
+  "name": "400 limit 0",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/images/file?ref=ccgateway-app:1\u0026path=/x\u0026limit=0"
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

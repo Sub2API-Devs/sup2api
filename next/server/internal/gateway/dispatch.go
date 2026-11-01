@@ -174,6 +174,7 @@ func (c *call) dispatch(ctx context.Context) {
 				c.finishSticky(ctx, ref.ID, false)
 				return
 			}
+			c.releaseSession(ctx, ref)
 		}
 	}
 	if last == nil || (last.RecordType != errTypeUpstream && last.RecordType != errTypeInvalidRequest && last.RecordType != errTypeModelAvailability &&

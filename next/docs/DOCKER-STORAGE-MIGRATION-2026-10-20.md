@@ -92,7 +92,7 @@ ccgateway-bridge-guard 仍保持运行，rsync daemon 未启动。
 5. 保留系统盘原目录作为回滚副本，不删除原数据。配置池挂载与两个绑定挂载，
    同步保存 fstab、mdadm 和必要 systemd 依赖。Docker/containerd 必须依赖
    正确的新存储挂载，挂载失败时禁止悄悄使用旧目录启动。
-6. 启动 containerd、Docker 和 bridge guard。按依赖顺序，仅启动切换前运行
+6. 启动 containerd、Docker 和 bridge guard（2026-11-01 已退役，由 guard 取代，CONTRACTS §76）。按依赖顺序，仅启动切换前运行
    的容器，恢复各自重启策略。使用原容器 ID，不运行 compose 重建，也不
    用旧镜像覆盖账号容器内原地更新过的 Worker/CLI。
 7. 检查容器及镜像身份、数据卷、挂载、健康、Core 节点、CCGateway 路由和

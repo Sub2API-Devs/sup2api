@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -27,10 +29,12 @@ import (
 
 // row is one accounts row.
 type row struct {
-	ID                int64
-	Name              string
-	PluginKey         string
-	Type              string
+	ID        int64
+	Name      string
+	PluginKey string
+	Type      string
+	// CredEnc is nil on rows of the account list (listSelectRow): never
+	// decrypt or write back a list row.
 	CredEnc           []byte
 	Settings          []byte
 	ProxyID           *int64
@@ -277,80 +281,129 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 	if len(rows) == 0 {
 		return out, nil
 	}
+	// Every read below fills its own View fields from read-only inputs (rows,
+	// ids, byID and the fields set above), so they run concurrently: the page
+	// waits for the slowest read instead of the sum of all round trips. Only
+	// the group and lifecycle reads fail the request, as before; the others
+	// log and leave their column empty.
+	var groupsErr, lifecycleErr error
+	tasks := []func(){
+		func() { s.fillCooldowns(ctx, ids, out) },
+		func() {
+			if s.d.Slots == nil {
+				return
+			}
+			inUse, err := s.d.Slots.InUseMany(ctx, "account", ids)
+			if err != nil {
+				slog.WarnContext(ctx, "account: read slots", "err", err)
+				return
+			}
+			for _, v := range out {
+				v.InUse = inUse[v.ID]
+			}
+		},
+		// fillModelInUse writes into RateUsage.Models: same task, after it.
+		func() {
+			s.fillRateUsage(ctx, out)
+			s.fillModelInUse(ctx, out)
+		},
+		func() { s.fillOutcomes(ctx, out) },
+		func() { s.fillQuota(ctx, rows, out) },
+		func() { s.fillBalance(ctx, rows, out) },
+	}
+	// The database-bound reads share a bound of their own (viewsPGParallel
+	// connections per page; quota and balance read PG only on a cache miss).
+	pgTasks := []func(){
+		func() {
+			groupsErr = errViewPanicked
+			groupsErr = s.fillGroups(ctx, ids, byID)
+		},
+		func() { s.fillUsage(ctx, out) },
+		func() { s.fillRefresh(ctx, rows, out) },
+		func() {
+			lifecycleErr = errViewPanicked
+			lifecycleErr = s.fillLifecycleStatus(ctx, out)
+		},
+	}
+	tasks = append(tasks, func() { runParallel(ctx, viewsPGParallel, pgTasks...) })
+	runParallel(ctx, 0, tasks...)
+	if groupsErr != nil {
+		return nil, groupsErr
+	}
+	if lifecycleErr != nil {
+		return nil, lifecycleErr
+	}
+	s.fillActions(ctx, rows, out)
+	return out, nil
+}
+
+// errViewPanicked is the error of a list read that panicked (the panic is
+// recovered and logged by runParallel).
+var errViewPanicked = errors.New("account: list read failed")
+
+// fillGroups sets GroupIDs and Groups (ordered by group id).
+func (s *Service) fillGroups(ctx context.Context, ids []int64, byID map[int64]*View) error {
 	gr, err := s.d.DB.Pool.Query(ctx, `SELECT ag.account_id, g.id, g.name FROM account_groups ag
 		JOIN groups g ON g.id = ag.group_id WHERE ag.account_id = ANY($1) ORDER BY g.id`, ids)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer gr.Close()
 	for gr.Next() {
 		var aid int64
 		var g GroupRef
 		if err := gr.Scan(&aid, &g.ID, &g.Name); err != nil {
-			return nil, err
+			return err
 		}
 		v := byID[aid]
 		v.GroupIDs = append(v.GroupIDs, g.ID)
 		v.Groups = append(v.Groups, g)
 	}
-	if err := gr.Err(); err != nil {
-		return nil, err
+	return gr.Err()
+}
+
+// fillCooldowns sets CooldownUntil and CooldownReason from Redis.
+func (s *Service) fillCooldowns(ctx context.Context, ids []int64, out []*View) {
+	if s.d.Redis == nil {
+		return
 	}
-	if s.d.Redis != nil {
-		now := time.Now().UTC()
-		pipe := s.d.Redis.Pipeline()
-		gets := make([]*redis.StringCmd, len(ids))
-		ttls := make([]*redis.DurationCmd, len(ids))
-		for i, id := range ids {
-			gets[i] = pipe.Get(ctx, cooldownKey(id))
-			ttls[i] = pipe.PTTL(ctx, cooldownKey(id))
-		}
-		if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
-			slog.WarnContext(ctx, "account: read cooldowns", "err", err)
-		}
-		for i, v := range out {
-			if reason, err := gets[i].Result(); err == nil {
-				if ttl, err := ttls[i].Result(); err == nil && ttl > 0 {
-					until := now.Add(ttl).Truncate(time.Second)
-					v.CooldownUntil, v.CooldownReason = &until, reason
-				}
+	now := time.Now().UTC()
+	pipe := s.d.Redis.Pipeline()
+	gets := make([]*redis.StringCmd, len(ids))
+	ttls := make([]*redis.DurationCmd, len(ids))
+	for i, id := range ids {
+		gets[i] = pipe.Get(ctx, cooldownKey(id))
+		ttls[i] = pipe.PTTL(ctx, cooldownKey(id))
+	}
+	if _, err := pipe.Exec(ctx); err != nil && err != redis.Nil {
+		slog.WarnContext(ctx, "account: read cooldowns", "err", err)
+	}
+	for i, v := range out {
+		if reason, err := gets[i].Result(); err == nil {
+			if ttl, err := ttls[i].Result(); err == nil && ttl > 0 {
+				until := now.Add(ttl).Truncate(time.Second)
+				v.CooldownUntil, v.CooldownReason = &until, reason
 			}
 		}
 	}
-	if s.d.Slots != nil {
-		inUse, err := s.d.Slots.InUseMany(ctx, "account", ids)
-		if err != nil {
-			slog.WarnContext(ctx, "account: read slots", "err", err)
-		} else {
-			for _, v := range out {
-				v.InUse = inUse[v.ID]
-			}
-		}
+}
+
+// fillRateUsage sets RateUsage (rpm/tpm/sessions of the last minute).
+func (s *Service) fillRateUsage(ctx context.Context, out []*View) {
+	if s.d.Limiter == nil {
+		return
 	}
-	if s.d.Limiter != nil {
-		refs := make([]core.AccountRef, len(out))
-		for i, v := range out {
-			refs[i] = core.AccountRef{ID: v.ID, ModelLimits: v.ModelLimits}
-		}
-		usage, err := s.d.Limiter.Usage(ctx, refs)
-		if err != nil {
-			slog.WarnContext(ctx, "account: read rate usage", "err", err)
-		}
-		for _, v := range out {
-			v.RateUsage = usage[v.ID]
-		}
+	refs := make([]core.AccountRef, len(out))
+	for i, v := range out {
+		refs[i] = core.AccountRef{ID: v.ID, ModelLimits: v.ModelLimits}
 	}
-	s.fillModelInUse(ctx, out)
-	s.fillOutcomes(ctx, out)
-	s.fillUsage(ctx, out)
-	s.fillQuota(ctx, rows, out)
-	s.fillBalance(ctx, rows, out)
-	s.fillRefresh(ctx, rows, out)
-	s.fillActions(ctx, rows, out)
-	if err := s.fillLifecycleStatus(ctx, out); err != nil {
-		return nil, err
+	usage, err := s.d.Limiter.Usage(ctx, refs)
+	if err != nil {
+		slog.WarnContext(ctx, "account: read rate usage", "err", err)
 	}
-	return out, nil
+	for _, v := range out {
+		v.RateUsage = usage[v.ID]
+	}
 }
 
 // credentialView returns the merged credentials with sensitive values masked.
@@ -478,19 +531,7 @@ func (s *Service) list(c *gin.Context) {
 		filter.And("(a.models = '{}' OR ? = ANY(a.models))", v)
 	}
 	where, args := filter.Cond(), filter.Args()
-	var total int64
-	if err := s.d.DB.Pool.QueryRow(ctx, `SELECT count(*) FROM accounts a`+where, args...).Scan(&total); err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	n := len(args)
-	rs, err := s.d.DB.Pool.Query(ctx, selectRow+where+fmt.Sprintf(` ORDER BY a.priority, a.weight DESC, a.id LIMIT $%d OFFSET $%d`, n+1, n+2),
-		append(args, size, (page-1)*size)...)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	rows, err := pgx.CollectRows(rs, func(r pgx.CollectableRow) (*row, error) { return scanRow(r) })
+	total, rows, err := s.listPage(ctx, where, args, page, size)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -501,6 +542,36 @@ func (s *Service) list(c *gin.Context) {
 		return
 	}
 	httpapi.List(c, vs, httpapi.Page{Page: page, PageSize: size, Total: total})
+}
+
+// listSelectRow is selectRow without the encrypted credentials, which no list
+// column needs: CredEnc stays nil on rows read with it, so such rows must not
+// be decrypted or written back (fullView and every write path use loadRow).
+var listSelectRow = strings.Replace(selectRow, "a.credentials_enc", "NULL::bytea", 1)
+
+// listPage reads the total and one page of the filtered accounts in a single
+// round trip (one batch, two statements, unchanged SQL).
+func (s *Service) listPage(ctx context.Context, where string, args []any, page, size int) (int64, []*row, error) {
+	n := len(args)
+	batch := &pgx.Batch{}
+	batch.Queue(`SELECT count(*) FROM accounts a`+where, args...)
+	batch.Queue(listSelectRow+where+fmt.Sprintf(` ORDER BY a.priority, a.weight DESC, a.id LIMIT $%d OFFSET $%d`, n+1, n+2),
+		append(slices.Clip(args), size, (page-1)*size)...)
+	br := s.d.DB.Pool.SendBatch(ctx, batch)
+	defer br.Close()
+	var total int64
+	if err := br.QueryRow().Scan(&total); err != nil {
+		return 0, nil, err
+	}
+	rs, err := br.Query()
+	if err != nil {
+		return 0, nil, err
+	}
+	rows, err := pgx.CollectRows(rs, func(r pgx.CollectableRow) (*row, error) { return scanRow(r) })
+	if err != nil {
+		return 0, nil, err
+	}
+	return total, rows, br.Close()
 }
 
 func (s *Service) get(c *gin.Context) {

@@ -1,0 +1,15 @@
+{
+  "name": "405 after auth",
+  "covers": "BUG-12(fixed)",
+  "setup": {},
+  "request": {
+    "method": "PATCH",
+    "path": "/v1/inventory"
+  },
+  "response": {
+    "status": 405,
+    "body": {
+      "error": "method_not_allowed"
+    }
+  }
+}

@@ -679,12 +679,13 @@ export interface CcgWorkersReport {
   cli_version?: string
 }
 
-/** Image overrides of the CCGateway connection; '' uses the core's fixed reference. `gateway` is the Caddy image of the control panel (§53.3). */
+/** Image overrides of the CCGateway connection; '' uses the core's fixed reference. `gateway` is the Caddy image of the control panel (§53.3), `guard` the ccgateway guard of a compose install (§76). */
 export interface CcgRemoteImages {
   app: string
   egress: string
   controller: string
   gateway?: string
+  guard?: string
 }
 
 /**
@@ -1110,12 +1111,14 @@ export interface StickyRule {
   source: 'builtin' | 'admin'
   enabled: boolean
   priority: number
-  match: { protocols?: string[]; models?: string[]; userAgentContains?: string[] }
+  match: { protocols?: string[]; models?: string[]; user_agent_contains?: string[] }
   key_sources: Array<{ type: 'body' | 'header' | 'api_key' | 'user'; path?: string; name?: string }>
   value_regex: string
   ttl_seconds: number
   key_includes: string[]
   on_failure: 'failover' | 'stick'
+  // A built-in rule whose definition an administrator edited; upgrades keep it.
+  customized?: boolean
 }
 
 export interface StickyStats {

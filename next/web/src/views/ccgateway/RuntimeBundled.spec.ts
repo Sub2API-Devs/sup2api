@@ -150,7 +150,8 @@ describe('CCGateway images bundled in the plugin package', () => {
 
   it.each([
     ['install_in_progress', '运行环境正在安装，请稍后刷新状态'],
-    ['no_bundled_images', '当前启用的 ccgateway 插件包没有内置镜像']
+    ['no_bundled_images', '当前启用的 ccgateway 插件包没有内置镜像'],
+    ['controller_adopt_required', '控制器尚未由 guard 接管，不能通过一键升级或推送镜像切换到新版控制器：请先完成接管（重新安装控制器）']
   ])('shows the translated reason of a refused push (%s)', async (reason, text) => {
     mocks.post.mockRejectedValue(Object.assign(new Error('refused'), { details: { reason } }))
     const w = await render()
@@ -173,6 +174,19 @@ describe('CCGateway images bundled in the plugin package', () => {
     expect(resultOf(w, 'app').text()).toContain('校验和不符')
     expect(resultOf(w, 'egress').text()).toContain('镜像上传到控制器失败')
     expect(resultOf(w, 'controller').text()).toContain('some_new_code')
+    w.unmount()
+  })
+
+  it('explains a controller the guard has not adopted yet (CONTRACTS §76)', async () => {
+    mocks.post.mockResolvedValue({ results: [
+      { role: 'controller', ref: bundled.images.controller, status: 'failed', reason: 'controller_adopt_required' },
+      { role: 'app', ref: bundled.images.app, status: 'loaded' }
+    ] })
+    const w = await render()
+    await w.get('[data-testid="ccgateway-bundled-push"]').trigger('click')
+    await flushPromises()
+    expect(resultOf(w, 'controller').text()).toContain('控制器尚未由 guard 接管')
+    expect(resultOf(w, 'app').text()).toContain('已上传并启用')
     w.unmount()
   })
 

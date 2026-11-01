@@ -1,0 +1,19 @@
+{
+  "name": "502 pull_failed",
+  "covers": "R4",
+  "setup": {},
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/pull",
+    "json": {
+      "ref": "ghcr.io/sub2api-devs/ccgateway-app:404"
+    }
+  },
+  "response": {
+    "status": 502,
+    "body": {
+      "error": "docker_error",
+      "reason": "pull_failed"
+    }
+  }
+}

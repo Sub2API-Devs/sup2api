@@ -1,0 +1,60 @@
+{
+  "name": "400 address of the app",
+  "setup": {
+    "images": [
+      {
+        "ref": "ccgateway-app:1"
+      },
+      {
+        "ref": "ccgateway-xray:1",
+        "labels": {
+          "io.sup2api.ccgateway.shared-egress": "1"
+        }
+      }
+    ],
+    "networks": [
+      {
+        "aid": "21",
+        "subnet": "10.52.74.0/24"
+      },
+      {
+        "aid": "d0000000000000000",
+        "role": "xray-uplink",
+        "subnet": "10.117.81.0/24"
+      }
+    ],
+    "volumes": [
+      {
+        "aid": "21",
+        "quota": true
+      }
+    ],
+    "containers": [
+      {
+        "aid": "21",
+        "status": "running",
+        "ipv4": "10.52.74.5"
+      }
+    ],
+    "gateway": {},
+    "files": {
+      "21/resolv.conf": "ok"
+    }
+  },
+  "request": {
+    "method": "PUT",
+    "path": "/v1/gateway/networks/21",
+    "json": {
+      "ipv4": "10.52.74.5"
+    }
+  },
+  "response": {
+    "status": 400,
+    "body": {
+      "error": "invalid_request"
+    }
+  },
+  "after": {
+    "docker_unchanged": true
+  }
+}

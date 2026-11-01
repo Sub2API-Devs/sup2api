@@ -1,0 +1,16 @@
+{
+  "name": "404 image",
+  "covers": "R10",
+  "setup": {},
+  "request": {
+    "method": "GET",
+    "path": "/v1/images/inspect?ref=ccgateway-app:404"
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not_found",
+      "reason": "image"
+    }
+  }
+}

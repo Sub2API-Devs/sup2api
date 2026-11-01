@@ -71,27 +71,54 @@ func TestFailurePolicyRegexValidation(t *testing.T) {
 	require.NotEmpty(t, p.validate(t.Context()), "old schemas cannot silently accept regex rules")
 }
 
-func TestFailurePolicyV4AlwaysUsesORAndKeepsLegacyMatching(t *testing.T) {
+// With status codes and keywords both given, a Schema 3/4 rule matches only
+// when the status and a keyword both match, whatever mode was stored; one
+// condition alone matches on that one (2026-11-01, was OR).
+func TestFailurePolicyStatusAndKeywordBothMatch(t *testing.T) {
 	p := regexTestPolicy(`quota`)
 	p.RetryRules[0].Match.StatusCodes = "429"
+	p.RetryRules[0].Match.Mode = "any"
 	require.Empty(t, p.validate(t.Context()))
-	require.Equal(t, "any", p.RetryRules[0].Match.Mode)
+	require.Equal(t, "all", p.RetryRules[0].Match.Mode)
+	require.Equal(t, failureRetry, p.decide(FailureFacts{Source: "upstream", Status: 429, Text: "quota"}).Action)
 	for _, facts := range []FailureFacts{
 		{Source: "upstream", Status: 429, Text: "unrelated"},
 		{Source: "upstream", Status: 503, Text: "quota"},
 	} {
-		require.Equal(t, failureRetry, p.decide(facts).Action)
+		require.Equal(t, failureReturn, p.decide(facts).Action)
 	}
 	p.RetryRules[0].Match.KeywordRegex = false
+	p.RetryRules[0].Match.StatusCodes = ""
 	p.RetryRules[0].Match.Keywords = []string{`[QUOTA]`}
 	require.Empty(t, p.validate(t.Context()))
 	require.Equal(t, failureRetry, p.decide(FailureFacts{Source: "upstream", Status: 503, Text: "[quota]"}).Action)
 	require.Equal(t, failureReturn, p.decide(FailureFacts{Source: "upstream", Status: 503, Text: "q"}).Action)
 	p.SchemaVersion = 3
 	p.AccountRules = nil
-	p.RetryRules[0].Match.Mode = "all"
+	p.RetryRules[0].Match.StatusCodes = "429"
+	p.RetryRules[0].Match.Mode = "any"
 	require.Empty(t, p.validate(t.Context()))
 	require.Equal(t, failureReturn, p.decide(FailureFacts{Source: "upstream", Status: 429, Text: "unrelated"}).Action)
+	p.RetryRules[0].Match.Keywords = nil
+	require.Empty(t, p.validate(t.Context()))
+	require.Equal(t, failureRetry, p.decide(FailureFacts{Source: "upstream", Status: 429, Text: "unrelated"}).Action)
+}
+
+// An account rule disables only with a matched keyword when it has keywords,
+// and the account's reason names the keyword.
+func TestFailurePolicyDisableNamesTheMatchedKeyword(t *testing.T) {
+	e := newEnv(t)
+	p := simpleTestPolicy()
+	p.RetryEnabled, p.AccountEnabled = false, true
+	p.AccountRules = []FailureRule{{ID: "migrated-disable", Name: "Disable", Enabled: true, Action: "disable",
+		Match: FailureMatch{Source: "upstream", StatusCodes: "401", Keywords: []string{"Permission Denied"}, Mode: "any"}}}
+	e.setFailurePolicy(p)
+	e.up.set("acc-1", &upstreamRule{status: 401, body: `{"error":{"type":"authentication_error","message":"invalid token"}}`})
+	require.Equal(t, 401, e.messages(body(testModel, false)).status)
+	require.NotContains(t, e.accounts.disabled, int64(1), "a 401 without a configured keyword must not disable")
+	e.up.set("acc-1", &upstreamRule{status: 401, body: `{"error":{"type":"permission_error","message":"PERMISSION DENIED for this org"}}`})
+	require.Equal(t, 401, e.messages(body(testModel, false)).status)
+	require.Equal(t, `failure policy migrated-disable: upstream HTTP 401, keyword "permission denied"`, e.accounts.disabled[1])
 }
 
 func TestFailurePolicyRegexDrivesRetryAndDisable(t *testing.T) {

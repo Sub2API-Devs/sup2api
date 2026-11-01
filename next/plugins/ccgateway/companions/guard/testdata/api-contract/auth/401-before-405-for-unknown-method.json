@@ -1,0 +1,13 @@
+{
+  "name": "401 before 405 for unknown method",
+  "covers": "BUG-12(fixed)",
+  "setup": {},
+  "request": {
+    "method": "HEAD",
+    "path": "/v1/inventory",
+    "auth": "none"
+  },
+  "response": {
+    "status": 401
+  }
+}

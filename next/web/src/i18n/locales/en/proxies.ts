@@ -21,6 +21,8 @@ export default {
   failed: 'Failed',
   exitIp: 'Exit IP',
   createdBy: 'Created by',
+  copyHint: "Copy the full proxy URL (protocol://user:pass{'@'}host:port)",
+  copyFailed: 'Copy failed. Check the browser clipboard permission.',
   pasteUrl: 'Paste a proxy URL to fill the form',
   pasteUrlHint: "scheme://user:pass{'@'}host:port, host:port:user:pass or user:pass{'@'}host:port. Without a scheme, socks5, http and https are tried in that order and the first that works is used. Test also detects the exit IP and its location; Fill only parses.",
   pasteFill: 'Fill',

@@ -135,6 +135,7 @@
 | GET/POST `/groups`，GET/PATCH/DELETE `/groups/:id` | `group:read` / `group:manage` |
 | GET/POST `/proxies`，GET/PATCH/DELETE `/proxies/:id` | `proxy:read` / `proxy:manage`（或 `proxy:own:*`，只作用于自己创建的，§21）；密码省略或 `null` 不改、`""` 清除，没有掩码值（§15.4） |
 | POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage`（会发起外部连接） |
+| POST `/proxies/:id/reveal-url` | `proxy:manage` / `proxy:own:manage`（返回含明文密码的代理串，写审计） |
 
 ### 5.4 账号（A；类型和表单来自插件注册表）
 
@@ -427,7 +428,7 @@ compose 里的 `mock-upstream` 服务模拟 Anthropic `/v1/messages` 与 `/v1/me
 
 **core**：`EndpointBinding{Plugin, Platform, Endpoint}`；`PlatformBinding{Plugin, Builtin, Platform}`（去掉 `Client`）；`Generation.Platforms()`、`Platform(id)`、`PlatformForProtocol(protocol)`、`AccountTypesForPlatform(platformID)`（取代 `PlatformsForProtocol`、`AccountTypesForProtocol`）；`AccountTypeBinding.Supports(platformID)`（取代 `Protocol()`）。`Generation.Endpoints()` 包含内置平台和已启用插件平台的端点。
 
-**调度**：端点 → 平台 P、协议 X；候选账号类型 = `AccountTypesForPlatform(P)`（原生），加上支持其他平台 Q、且 Q 的某个协议 Y 满足 `CanConvert(X, Y)` 的类型；候选账号 = API Key 所属分组中这些类型的账号。requestFields / passHeaders：账号类型对该平台的覆盖 → 平台默认。用量规则：账号类型 `usage[协议]` → 端点 `usage` → 平台 `usage`（需转换时按上游协议 Y 所属平台和端点取）。内置平台的默认粘性规则写入 `sticky_rules`，`source='builtin'`、`plugin_key` 为空，只允许改启用状态和优先级。
+**调度**：端点 → 平台 P、协议 X；候选账号类型 = `AccountTypesForPlatform(P)`（原生），加上支持其他平台 Q、且 Q 的某个协议 Y 满足 `CanConvert(X, Y)` 的类型；候选账号 = API Key 所属分组中这些类型的账号。requestFields / passHeaders：账号类型对该平台的覆盖 → 平台默认。用量规则：账号类型 `usage[协议]` → 端点 `usage` → 平台 `usage`（需转换时按上游协议 Y 所属平台和端点取）。内置平台的默认粘性规则写入 `sticky_rules`，`source='builtin'`、`plugin_key` 为空，除名称外都可修改，改过的定义升级不覆盖、可恢复默认（§15.5）。
 
 **REST 变更**
 
@@ -583,6 +584,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | PATCH `/proxies/:id` | `proxy:manage` | 同上，全部可选 | 省略的字段不修改。**密码约定：省略或 `null` 表示不修改；`""` 表示清除密码；其他任何字符串（包括 `"******"`）都会被保存为新密码**。代理没有掩码约定，前端不要回填 `"******"` |
 | DELETE `/proxies/:id` | `proxy:manage` | | 仍被账号引用时返回 409 `conflict`，`details.account_count` |
 | POST `/proxies/:id/test` | `proxy:manage`（注意不是 `proxy:read`） | 无请求体 | `{ok, status, latency_ms, message}` |
+| POST `/proxies/:id/reveal-url` | `proxy:manage`（能改代理的人才能看密码，`proxy:read` 不够） | 无请求体 | `{url}`：`协议://用户名:密码@主机:端口`（用户名、密码按 URL 规则转义；无认证时为 `协议://主机:端口`）。供控制台「复制代理」使用；范围外 404；写审计 `proxy.url.reveal`（detail 为空，不含密码） |
 
 测试说明：用数据库中保存的设置新建客户端（**禁用状态的代理也能测**），经代理 `GET https://www.google.com/generate_204`（`proxy.Options.ProbeURL` 可配），超时 15 秒。`ok` = 上游状态码 < 400；`status` 为上游状态码（连接失败时为 0）；失败时 `message` 为错误信息或 HTTP 状态行，成功时为空串。测试失败仍返回 HTTP 200。
 
@@ -606,13 +608,15 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | `ttl_seconds` | 0–2592000，0 表示使用 `/settings/sticky` 的 `default_ttl_seconds` |
 | `key_includes` | `group` \| `model` \| `rule` 的子集，新建默认三项全含 |
 | `on_failure` | `failover`（默认）\| `stick` |
+| `customized` | 只读；`builtin` 规则的定义被管理员改过为 `true`（迁移 0071），启动同步不再覆盖它，直到恢复默认；`admin` 规则总是 `false` |
 | `updated_by`、`updated_at` | |
 
 | 方法 路径 | 权限 | 请求 / 响应 | 约定 |
 |---|---|---|---|
 | GET `/sticky-rules` | `sticky:read` | → `[规则]` | 不分页 |
 | POST `/sticky-rules` | `sticky:manage` | `{name, enabled?, priority?, match?, key_sources, value_regex?, ttl_seconds?, key_includes?, on_failure?}` → 201 规则 | 只能创建 `source=admin`；同名 admin 规则已存在返回 409 |
-| PATCH `/sticky-rules/:id` | `sticky:manage` | 同上字段均可选 → 200 规则 | `admin` 规则可改全部字段；`builtin` 规则**只能改 `enabled`、`priority`**，带其他字段返回 400 `invalid_argument`（如需改定义，新建同名 admin 规则覆盖）；控制台编辑内置规则时只提交这两项 |
+| PATCH `/sticky-rules/:id` | `sticky:manage` | 同上字段均可选 → 200 规则 | `admin` 规则可改全部字段；`builtin` 规则除 `name` 外都可改（改名返回 400，字段 `name`：内置规则按名称同步和遮蔽），定义（`match`、`key_sources`、`value_regex`、`ttl_seconds`、`key_includes`、`on_failure`）确实变了才置 `customized=true`，提交未变的全量 body 不算修改（2026-11-01，原先只能改 `enabled`、`priority`） |
+| POST `/sticky-rules/:id/reset` | `sticky:manage` | → 200 规则 | 只对 `builtin` 规则：定义恢复为代码里的默认，`customized=false`，`enabled`、`priority` 不变；`admin` 规则返回 400 |
 | DELETE `/sticky-rules/:id` | `sticky:manage` | 204 | 只能删 `admin` 规则，其他返回 400；已有绑定不删除（等 TTL 过期），若没有其他同名规则则清除统计 |
 | POST `/sticky-rules/:id/flush` | `sticky:manage` | → `{deleted: n}` | 删除该规则名下的全部绑定，`deleted` 为删除的 Redis key 数（无 Redis 时为 0）；Redis 出错返回 503。`key_includes` 不含 `rule` 的规则返回 409 `conflict`：它的绑定 key 是 `sticky:_:…`，与其他同类规则共用，无法单独清除，只能等 TTL 过期 |
 | GET `/sticky-rules/stats` | `sticky:read` | → `[{rule_id, rule, source, hits, misses, rebinds}]` | 每条规则一项，顺序同规则列表；`rule_id` 对应规则 `id`，`rule` 为规则名 |
@@ -622,7 +626,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 - **同名遮蔽**：同名规则只有来源级别最高的一条参与调度（`admin` > `builtin`），级别比较时**不看 `enabled`**，所以停用的同名 admin 规则也会遮蔽内置规则。
 - **统计与绑定按规则名**（不是 id）：统计 key `sticky:stats:{name}`，绑定 key `sticky:{name}:{group}:{model}:{sha256}`（名称中 `[A-Za-z0-9_.-]` 以外的字符替换为 `_`）。同名规则共享同一份统计，`/stats` 中同名的多项数值相同；flush 任一同名规则都会清除该名称下的全部绑定。
 - `key_includes` 不含 `rule` 的规则，其绑定 key 的规则段为 `_`，与其他同类规则共用；flush 这类规则返回 409，控制台不显示"清除绑定"。
-- 内置规则在网关启动时同步：定义跟随代码，保留管理员设置的 `enabled`、`priority`，代码里不再有的内置规则删除。插件安装、升级、卸载都不改规则表。
+- 内置规则在网关启动时同步：定义跟随代码（`customized` 的除外，保留管理员改过的定义），保留管理员设置的 `enabled`、`priority`，代码里不再有的内置规则删除（改过的也删）。插件安装、升级、卸载都不改规则表。
 - **`match.protocols` 的取值与校验**：协议的权威来源是平台的端点声明 —— 内置平台（`sdk/platforms/{anthropic,openai,gemini}.json` 的 `endpoints[].protocol`）与插件 manifest 的 `platforms[].endpoints[].protocol`；注册表按协议建索引（`Generation.PlatformForProtocol`）。空数组表示不限；含 `*`/`?` 的值按通配与已注册协议集合比较（与运行时 `matchList` 的语义一致），匹配不到任何协议才算无效。
   - 管理员规则（`source=admin`）保存时校验：POST 中每个协议都必须命中，否则 400，`error.details.fields` 含一项 `{field:"match.protocols", code:"invalid"}`，消息点明是哪些协议无效（同一次提交的多个无效协议合并为一条错误）。
   - **PATCH 只校验本次新增的协议**：不在库中原有 `match.protocols` 里的值才校验，原有值一律放行（即使它现在已经无法命中注册表）。控制台提交的是全量 body，这样一条引用了已停用/卸载插件协议的旧规则，改 TTL 或开关不会被锁死，只能删掉重建；而编辑时新加一个拼错的协议仍会被拒。不带 `match` 的 PATCH（只改 `enabled`/`priority`）完全不校验协议。
@@ -3283,7 +3287,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 用户决定：容器镜像与控制器发布到 GHCR（`.github/workflows/ccgateway-images.yml`），由核心经已保存的 SSH 连接在 Docker 主机上直接拉取并启动，不再在主机上构建。GHCR 包暂时不能公开期间，可以在主机上手动构建镜像，再用配置里的 `images` 指向这些本地标签，同样用"一键升级"切换。
 
-**镜像引用。** `server/internal/ccgateway/images.go` 固定三个引用 `ghcr.io/sub2api-devs/ccgateway-{app,egress,controller}@sha256:<64 hex>`（测试保证格式）。更新方法：`tools/ccgateway` 的改动推送后，从 "CCGateway images" workflow 的 summary 取三个 digest 替换。CCGateway 远程配置（`ccgateway_remote`）可选字段 `images: {app, egress, controller}`：经 `PUT /system/ccgateway/remote-config` 保存、`GET` 原样返回（未覆盖的为空串）；某一项为空时用固定引用。非空值必须匹配 `^[a-z0-9][a-z0-9._/-]{0,127}(:[A-Za-z0-9._-]{1,128})?(@sha256:[0-9a-f]{64})?$` 或本地镜像 id `^sha256:[0-9a-f]{64}$`，否则保存失败（400）。PUT 不带 `images` 时保留已保存的值，带 `{}`（全空）时恢复固定引用；`mode: disabled` 清空全部配置。生效引用 = 覆盖值 ∪ 固定引用。
+**镜像引用。** `server/internal/ccgateway/images.go` 固定三个引用 `ghcr.io/sub2api-devs/ccgateway-{app,egress,controller}@sha256:<64 hex>`（测试保证格式）。更新方法：`tools/ccgateway` 的改动推送后，从 "CCGateway images" workflow 的 summary 取三个 digest 替换。CCGateway 远程配置（`ccgateway_remote`）可选字段 `images: {app, egress, controller}`：经 `PUT /system/ccgateway/remote-config` 保存、`GET` 原样返回（未覆盖的为空串）；某一项为空时用固定引用。非空值必须匹配 `^[a-z0-9][a-z0-9._/-]{0,127}(:[A-Za-z0-9._-]{1,128})?(@sha256:[0-9a-f]{64})?$` 或本地镜像 id `^sha256:[0-9a-f]{64}$`，否则保存失败（400）。PUT 不带 `images` 时保留已保存的值，带 `{}`（全空）时恢复固定引用；`mode: disabled` 清空全部配置。生效引用 = 覆盖值 ∪ 固定引用。（2026-11-01，§76.8：另有固定的 `GuardImage` 与可选覆盖值 `images.guard`，只在 compose 路径写进主机的 `/opt/ccgateway/.env`。）
 
 **`GET /system/ccgateway/runtime`**（`settings:read`）→
 
@@ -3305,6 +3309,8 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 4. 成功后对所有运行环境（账号 + 未认领草稿）各 Kick 一次，只是重新同步：已有 app 容器**不会**因目标镜像变化而重建（`provision` 只在凭据指纹或网络策略变化时重建，2026-10-09 核对代码更正），新镜像只用于新建的容器；现有容器的 worker 用 §53.7 原地更新。返回 200 与 `GET runtime` 相同的结构。
 
 安装错误（`details.reason`）：`ssh_not_configured`（400）、`install_in_progress`（409）、`ssh_failed` / `image_pull_failed` / `controller_unhealthy` / `install_failed`（其他脚本失败、密钥保存失败）（503）。
+
+> 2026-11-01（核心 0.1.227，§76.2）：第 2 步的固定脚本按控制器镜像标签 `io.sup2api.ccgateway.guard-api` 分两条路径。不是 `1` 时执行上面的 docker run 路径（文本与 0.1.226 逐字相同，只在已由 compose 管理的主机上返回 409 `legacy_blocked`）；是 `1` 时执行 compose 路径（§76.4）。新增对外错误码 `compose_unavailable`、`guard_unavailable`（503）与 `legacy_blocked`（409）；compose 路径的其他失败对外为 `install_failed`。失败的 compose 安装自己回滚时，`details.rollback` 同样给出结果。控制面板模式（`controller`）的"一键升级"仍是控制器自升级，不执行安装脚本。
 
 `remotedocker.RunScript(ctx, cfg, script, stdin, limit)` 是新增的"带 stdin 执行固定脚本"能力：返回 stdout（有上限，SSH 凭据被替换为 `[REDACTED]`）和退出码；只有连不上 / 认证失败 / 会话失败才返回 error（→ `ssh_failed`）。调用方负责只传固定脚本。
 
@@ -3796,7 +3802,7 @@ GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的�
 
 权限 `settings:manage`，审计 `ccgateway.controller.install`。请求体 `{"host"?: string, "port"?: int, "email"?: string}`：`host` 缺省为已保存的 SSH 主机，`port` 缺省 443，`email` 可选（ACME 账号邮箱，须匹配 `^[^@\s]{1,64}@[A-Za-z0-9.-]{1,190}$`）。`host` 必须是 IP 字面量或 DNS 名（`^(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$` 风格，不允许下划线、通配符），否则 400 `invalid_host`。
 
-前置：已保存 `mode: ssh` 且 `account_runtimes: true`，否则 400，`details.reason` 为 `ssh_not_configured` / `runtimes_disabled`。与 §49.16 共用安装锁（409 `install_in_progress`），不随调用方断开中止，整体上限约 20 分钟。
+前置：已保存 `mode: ssh` 且 `account_runtimes: true`，否则 400，`details.reason` 为 `ssh_not_configured` / `runtimes_disabled`。与 §49.16 共用安装锁（409 `install_in_progress`），不随调用方断开中止，整体上限约 20 分钟。控制器镜像带 `guard-api=1` 标签（Go 控制器，2026-11-01 起）时，Docker 主机还需要 `docker compose` v2；安装会创建 compose 项目 `ccgateway` 和 `ccg-control` 网络，并先启动 guard（§76）。
 
 1. 控制器：调用 §49.16 的安装流程（密钥、固定脚本、健康检查、回滚、清理 prev），区别是只有控制器镜像必须存在或可拉取，app / egress 镜像本地没有且拉不到时不报错（之后经控制面板上传，§53.6）。环境文件新增一行 `CCG_CONTROLLER_IMAGE=<控制器镜像引用>`（同一固定写法，经 stdin）。若当前 `GET runtime` 已是 `up_to_date` 且健康报告含 `features` 中的 `tunnel`，跳过替换。
 2. 网关：经 SSH 执行固定脚本（只拼接通过镜像正则的 Caddy 镜像引用，缺省 `caddy:2-alpine`，可用 `images.gateway` 覆盖），从 stdin 写 `/opt/ccgateway-gateway/Caddyfile`（目录 700，文件 644），镜像本地没有才 `docker pull`（失败 → `image_pull_failed`），删除旧 `ccg-gateway` 后启动：`docker run -d --name ccg-gateway --restart unless-stopped --network host -v /opt/ccgateway-gateway/Caddyfile:/etc/caddy/Caddyfile:ro -v ccg-gateway-data:/data -v ccg-gateway-config:/config --log-opt max-size=20m --log-opt max-file=3 <caddy>`；启动失败 → `gateway_failed`。Caddyfile 由核心按校验过的输入生成：
@@ -3822,7 +3828,7 @@ GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的�
 4. 核心直接经 HTTPS（按第 2/3 步的信任方式校验证书）调 `GET https://<host>:<port>/health`，最多 120 秒（每 3 秒）直到成功且 `features` 含 `tunnel`。失败 → 503 `gateway_unreachable`，`details.stage` 为 `connect` / `tls` / `http`；**配置不变**（仍为 SSH 模式），已启动的网关保留，便于排查防火墙 / DNS 后重试。
 5. 原子保存配置：`mode: controller`、`host`、`port`、`controller_ca`，`admin_key` 不变，清空 SSH 字段（审计 `ccgateway.config.update`，`fields: ["mode","host","port","controller_ca","ssh"]`）。并发保存时若已不是 SSH 模式 → 409 `config_changed`。返回 200 与 `GET remote-config` 相同的公开视图，然后 Kick 所有运行环境。
 
-错误码（`details.reason`）：`ssh_not_configured`、`runtimes_disabled`、`invalid_host`、`invalid_email`（400）；`install_in_progress`、`config_changed`（409）；`ssh_failed`、`image_pull_failed`、`controller_unhealthy`、`install_failed`、`gateway_failed`、`ca_unavailable`、`gateway_unreachable`（503）。
+错误码（`details.reason`）：`ssh_not_configured`、`runtimes_disabled`、`invalid_host`、`invalid_email`（400）；`install_in_progress`、`config_changed`（409）；`ssh_failed`、`image_pull_failed`、`controller_unhealthy`、`install_failed`、`gateway_failed`、`ca_unavailable`、`gateway_unreachable`（503）。2026-11-01 起另有 `legacy_blocked`（409）、`compose_unavailable`、`guard_unavailable`（503），见 §76.7。
 
 需要重新安装（换主机、修复网关）时，把连接方式改回 SSH 并重新填写 SSH 凭据即可。
 
@@ -3856,6 +3862,8 @@ GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的�
 - **控制器自升级** `POST /runtime/controller` `{"image": ref}`：确保镜像在本地（同上拉取规则），然后用**该新镜像**启动一次性辅助容器 `<name>-upgrade`（`<name>` 取环境变量 `CCG_CONTROLLER_NAME`，缺省 `ccg-controller`，须匹配 `^[a-z][a-z0-9-]{0,40}$`，prev 为 `<name>-prev`；同一主机上的隔离测试实例因此不会碰到线上控制器；`--rm`、host 网络、挂 Docker socket 与环境文件 `CCG_RUNTIME_ENV_FILE`（缺省 `/opt/ccgateway-runtime.env`）**所在目录**（读写；对单文件 bind mount 做 rename 会 EBUSY，所以挂目录以便原子替换）。新控制器容器的环境里强制写入 `CCG_CONTROLLER_NAME` 与 `CCG_CONTROLLER_PORT`，避免下次自升级找错容器），执行 `python upgrade.py <image>` 后回 202 `{"accepted": true}`（辅助容器可能在 202 写完前就停掉旧控制器，核心把请求发出后的连接中断也当作已受理，继续轮询 `/health`）；辅助容器已在运行 → 409 `upgrade_in_progress`。`upgrade.py` 等价于 §49.16 的安装脚本（名字、端口、环境文件、`CCG_RUNTIME_ROOT` 挂载都取自上述配置，不写死）：环境文件写入 `CCG_CONTROLLER_IMAGE=<image>`（原子替换）→ 删除残留 prev → 旧控制器改名 `ccg-controller-prev` 并停止 → 按原参数创建并启动新控制器 → 60 秒内 `GET http://127.0.0.1:<port>/health` 报告的 `controller_image` 等于 `<image>` 即删除 prev；否则删除新容器、把 prev 改回原名启动、恢复环境文件。
 - ~~旧的模型转发路径保留（SSH 模式不用）~~（2026-10-24 更正，审核 02 §5 第 1 条）：这条保留理由不成立。核心在任何模式下都先 `GET /accounts/<key>/connection`，再经隧道（或本机直连）把模型请求发到账号 Worker 的 `app_ip:8787`，从不调用控制器的 `/accounts/<key>/v1/messages`；SSH 也只剩安装方式（§53.9）。控制器里这段转发代码还在（`manager.py` `handle_request` 的 `v1/messages` 分支，转发改为收到多少写多少 `iter_content(chunk_size=None)`），但没有调用方（审核 B5），不是可用的模型路径。
 - 修正：`self.boots = {}`；Dockerfile 拷贝 `images.py`、`upgrade.py`。
+
+> 2026-11-01（ccgateway 0.1.119，§76）：Go 控制器的 `/health.features` 增加 `guard-api-v1`。`POST /runtime/controller` 不再使用辅助容器和 `upgrade.py`：控制器把请求交给 guard，guard 只改 `/opt/ccgateway/.env` 的 `CCG_CONTROLLER_IMAGE` 一行，执行 `compose up -d --no-deps controller`，等新容器的 Docker 健康状态变成 `healthy` 且镜像正确，失败就改回原镜像（只接受带 `guard-api=1` 与 `shared-egress=1` 标签的镜像）。核心经 Caddy 访问 `127.0.0.1:8787`，`/health` 的地址不变。Python 0.1.118 控制器被要求自升级到 Go 镜像时，辅助容器因为镜像里没有 `python` 而起不来，返回 503 `runtime_unavailable`，旧控制器不受影响；核心在这之前就会返回 `controller_adopt_required`（§76.6）。
 
 ### 53.6 核心的镜像上传与升级接口（只在 `controller` 模式；其他模式 400 `controller_not_configured`）
 
@@ -3928,7 +3936,7 @@ GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的�
 ```
 
 - `method: "ssh"`：`ssh` 必填，按 `remotedocker.Validate` 校验（失败 400 `invalid_ssh`），只用于本次请求的脚本执行，不写配置、不进日志与审计。`host` 缺省为 `ssh.host`。
-- `method: "local"`：在核心所在机器上直接执行同样的固定脚本（`sh -c`，脚本经 stdin 传数据）；要求核心进程能使用 `docker` 命令且有权写 `/opt`，否则脚本报 `docker_not_installed` / `docker_not_running` / `install_failed`（400 / 503）。`host` 缺省 `127.0.0.1`（核心与控制器同机）。核心跑在容器里且没有挂 Docker socket 时本机安装不可用，应改用 SSH。
+- `method: "local"`：在核心所在机器上直接执行同样的固定脚本（`sh -c`，脚本经 stdin 传数据）；要求核心进程能使用 `docker` 命令且有权写 `/opt`，否则脚本报 `docker_not_installed` / `docker_not_running` / `install_failed`（400 / 503）。控制器镜像带 `guard-api=1` 标签时，还要求核心所在环境里有 `docker compose` v2，否则报 `compose_unavailable`（§76）。`host` 缺省 `127.0.0.1`（核心与控制器同机）。核心跑在容器里且没有挂 Docker socket 时本机安装不可用，应改用 SSH。
 - 兼容：请求不带 `method` 且已保存 `mode: ssh` 时，用已保存的 SSH 连接（旧流程），成功后同样清除 SSH 凭据。
 - `port`：`0` 或省略 → 自动选择空闲端口：`https` 从 18443 起、`http` 从 18080 起各试 100 个；指定端口时检查是否被占用（属于当前 `ccg-gateway` 的端口视为可用）。占用检查读 `/proc/net/tcp` 与 `/proc/net/tcp6` 的 LISTEN 项，结果用 `CCG_PORT=<n>` 行报告；指定端口被占 → 409 `port_in_use`，自动范围内都被占 → 409 `no_free_port`。
 - `scheme: http` 的 Caddyfile：
@@ -3967,7 +3975,13 @@ images/controller.tar.gz   # 控制器
 images/gateway.tar.gz      # Caddy 网关
 ```
 
-`images/images.json`：`{"version": 1, "images": {"app": {"ref", "file"（images/ 下的裸文件名，如 `app.tar.gz`）, "sha256", "size"}, "egress": {…}, "controller": {…}, "gateway": {…}}}`。`ref` 是镜像加载后的标签：`ccgateway-app:<插件版本>`、`ccgateway-egress:<插件版本>`、`ccgateway-controller:<插件版本>`、`caddy:<固定版本>-alpine`（构建脚本里固定，不用 `latest` / `2-alpine` 浮动标签）；`sha256` 是 `file` 的 SHA-256；整个包由插件签名覆盖。四个角色缺一不可。
+`images/images.json`：`{"version": 1, "images": {"app": {"ref", "file"（images/ 下的裸文件名，如 `app.tar.gz`）, "sha256", "size"}, "egress": {…}, "controller": {…}, "gateway": {…}}}`。`ref` 是镜像加载后的标签：`ccgateway-app:<插件版本>`、`ccgateway-egress:<插件版本>`、`ccgateway-controller:<插件版本>`、`caddy:<固定版本>-alpine`（构建脚本里固定，不用 `latest` / `2-alpine` 浮动标签）；`sha256` 是 `file` 的 SHA-256；整个包由插件签名覆盖。四个角色缺一不可。`egress` 角色自 2026-11-01（ccgateway 0.1.118）起是共享 Xray 出口网关的镜像（`companions/xray-egress`，带 `io.sup2api.ccgateway.shared-egress=1` 标签），不再是每账号 sing-box 出口；镜像名 `ccgateway-egress:<插件版本>` 不变，核心照旧处理（§57）。
+
+2026-11-01（ccgateway 0.1.119，§76）：
+- 条目可以带可选字段 `"labels": {"io.sup2api.ccgateway.guard-api": "1"}`。构建脚本只给控制器写这一项；核心据此拦截接管前的自升级（§76.6），旧核心用非严格 JSON 解析，会忽略它。
+- `controller` 角色改为 Go 控制器（`companions/controller-go`）。构建脚本要求它带 `guard-api=1` 和 `shared-egress=1` 两个标签，缺一个就失败。
+- 插件 `hostCompat` 为 `>=0.1.227`。
+- guard **不是**包内角色，仍然只有四个角色。
 
 **构建**：
 - 新脚本 `next/deploy/docker/build-ccgateway-images.sh <插件版本> <输出目录>` 在**有 Docker 的主机上**运行（Dockerfile 的 build 阶段没有 Docker 守护进程）：用 `companions/worker/Dockerfile`、`egress/Dockerfile`、`controller/Dockerfile` 构建三个镜像（构建参数带源码提交号），拉取固定版本的 Caddy，各自 `docker save | gzip -6` 到输出目录并写 `images.json`。输出目录约定为 `next/plugins/ccgateway/images/`（git 忽略，但要进入核心 Docker 构建上下文）。
@@ -4257,17 +4271,25 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 ## 57. CCGateway 共享 Xray 出口
 
-- 控制器能力 `shared-egress-v1`，与现有核心配置下发、账号生命周期、Worker 协议兼容。既有账号默认 `per_account_singbox`，只有显式迁移才采用 `shared_xray`；普通 `PUT /accounts/<key>/config` 不得覆盖本地 backend。
-- 控制器私有 `GET /accounts/<key>/egress` 返回 backend、migration、ready；`POST` 接收且仅接收 `{"backend":"shared_xray"}` 或 `{"backend":"per_account_singbox"}`。沿用控制器 Bearer 鉴权，不向业务网络开放。繁忙返回 `status: busy`，调用者限时重试；新后端必须通过探测后才能 ready。
-- 每宿主机共享服务接入各账号独立内部网及一张共享 uplink，源 IP 与入口接口共同约束来源。默认拒绝未知来源、普通转发和 IPv6；直连仅限明确配置。Xray 版本固定为 26.3.27，管理 API 和 DNS 专用 SOCKS 入口仅监听 loopback。
+> 2026-11-01（ccgateway 0.1.118）起共享 Xray 是唯一出口，每账号 sing-box 出口（`per_account_singbox`）、迁移/回迁接口和 `migrate_egress.py` 全部删除（用户决定；ovh 的 11 个运行环境已于 10-31/11-01 迁完）。下面是现行规则；原迁移与回迁规则见 git 历史与 [迁移方案](CCGATEWAY-XRAY-MIGRATION.md)。
+
+- 控制器能力 `shared-egress-v1`。每个账号（新建的也一样）都经宿主机唯一的共享网关 `<prefix>-shared-egress` 出网；没有 per-account egress 容器和 uplink 网络。核心配置下发、账号生命周期、Worker 协议不变。
+- 网关镜像就是插件包的 `egress` 角色镜像（`CCG_EGRESS_IMAGE` / `PUT /runtime/images` 的 `egress`）；`CCG_XRAY_IMAGE` 可另行固定（自建镜像的宿主机）。`PUT /runtime/images` 拒绝不带 `io.sup2api.ccgateway.shared-egress=1` 标签的 egress 镜像（`invalid_image`），旧 sing-box 镜像因此进不来。运行中的网关不因镜像变化而重建，只有之后新建的网关才用新镜像；重建网关会中断所有账号的连接，属于维护操作。
+- 控制器私有 `GET /accounts/<key>/egress` 返回 `{"backend":"shared_xray","ready"}`；`POST` 已删除（405）。沿用控制器 Bearer 鉴权，不向业务网络开放。
+- 网关接入各账号独立内部网，自己另有一张网络 `<prefix>-d0000000000000000-xray-uplink`；源 IP 与入口接口共同约束来源。默认拒绝未知来源、普通转发和 IPv6；直连仅限明确配置。Xray 版本固定为 26.3.27，管理 API 和 DNS 专用 SOCKS 入口仅监听 loopback。
 - 核心 0.1.142 起，已绑定代理的记录缺失或协议异常必须返回 `proxy_unavailable`，不得把 LEFT JOIN 的空字段视为显式直连（2026-10-21 起不再停止容器，只让请求失败，§49.22）。共享网关防火墙表缺失时仍关闭普通转发，控制器须能重新创建该表。
-- 代理修改复用原配置事件；控制器按不可变出站 tag 合成全量路由，串行更新 Xray、DNS 和防火墙。新 TCP 连接切换出口，已有连接保留；HTTP/2 新流仍可复用旧连接。不提供 Worker 每请求出口版本保证。
-- DNS 转发组件不缓存，按来源选择对应本地 SOCKS 入口，通过账号出站访问固定 DoH 地址，验证 TLS；无宿主机 DNS 兜底。UDP/TCP 53 均受来源限制。无缓存替代了设计中的按代理版本隔离缓存。
-- 控制器在私有目录保存共享状态及迁移日志；ready 绑定 app/Xray 启动身份和账号 revision。控制器或 Xray 重启逐账号恢复；失败的新配置由核心既有重试链处理，不能假报旧 revision 已成功。
-- 首次迁移等待 CLI/网络空闲，停止并启动原 app，保持 ID 和数据卷；不是零中断迁移。成功后停止但保留旧 egress 供回滚。失败尝试恢复旧路径，未完成日志在恢复时回退到来源后端。被停用账号可离线回迁，不因此启动容器（2026-10-21 起停用账号的容器照常运行，§49.22；离线回迁仍适用于已停止的容器）。
-- 单账号删除只撤销自己的共享绑定。无引用旧出站在整个共享出口无 established TCP 时保守回收；至多保留 256 个出站，达到上限拒绝继续增加而非无限增长。共享服务及旧 egress 容器的最终删除属于维护操作。
-- 已迁移账号要修改网络池时先回迁旧后端；账号代理和授权变更仍走现有入口。控制器自升级拒绝降级到不声明共享状态兼容的镜像；手动替换或外部安装器也必须先回迁全部共享账号。
-- 操作步骤、维护边界见 [迁移方案](CCGATEWAY-XRAY-MIGRATION.md)。部署是否完成以环境运行记录为准。
+- 代理修改复用原配置事件；控制器按不可变出站 tag 合成全量路由，串行更新 Xray、DNS 和防火墙，网关不重启。新 TCP 连接切换出口，已有连接保留；HTTP/2 新流仍可复用旧连接。不提供 Worker 每请求出口版本保证。
+- DNS 转发组件不缓存，按来源选择对应本地 SOCKS 入口，通过账号出站访问固定 DoH 地址，验证 TLS；无宿主机 DNS 兜底。UDP/TCP 53 均受来源限制。
+- 控制器在私有目录保存共享状态；ready 绑定 app/Xray 启动身份和账号 revision。控制器或 Xray 重启逐账号恢复；失败的新配置由核心既有重试链处理，不能假报旧 revision 已成功。
+- 修改网络池时，控制器先让网关离开账号的旧内部网，再重建网络和容器并重新绑定；数据卷与授权保留。
+- 旧宿主机上 sing-box 时代的遗留（账号的 `-egress` 容器、`-uplink` 网络、`sing-box.json`/`firewall.nft`、状态里的 `uplink_ip`/`legacy_gateway_ip`/`egress_migration`）由控制器后台按归属标签自动清理，每个进程每个运行环境一次；失败只记日志、下一轮再试，不让账号下线。网关自己的 `xray-uplink` 网络不在清理范围。删除账号、运行环境清理（§53）同样会删掉这些遗留。
+- 单账号删除只撤销自己的共享绑定。无引用旧出站在整个共享出口无 established TCP 时保守回收；至多保留 256 个出站，达到上限拒绝继续增加而非无限增长。
+- 控制器自升级拒绝降级到不声明共享网关（镜像无上述标签）的控制器镜像。控制器仍在账号状态里写 `egress_backend: shared_xray`（只有 0.1.117 及更早的控制器读它）：插件回滚到这些版本时，旧控制器把已绑定共享网关的账号照常当共享账号处理；新建账号会回到 sing-box，因此回滚只作应急。
+- 部署是否完成以环境运行记录为准。
+- 2026-11-01（ccgateway 0.1.119，§76）：
+  - 网关容器的参数由 guard 写死，控制器只能请求"确保存在"。
+  - 控制器的共享状态（含所有账号的代理凭证）搬到 `/opt/ccgateway-controller/shared-egress-state.json`（容器内 `/data/shared-egress-state.json`），网关挂载的 `shared-egress/` 目录里不再有它。
+  - 网关纳入 compose 之后，只能经 compose 维护操作（`--profile egress up -d --no-deps egress`）重建；在此之前，`recreate` 一律拒绝。
 
 ## 58. 核心通用失败处理
 
@@ -4744,6 +4766,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 - `Exhausted(ctx, refs, model, session)` 只读预判（一次 pipeline：各层 RPM/TPM 窗口 + `ZCOUNT` + 该会话的 `ZSCORE`），会拒绝该会话的账号不进候选池。粘性绑定的账号在 60 秒内持有该会话，所以照常放行；新会话改去别的账号并绑定到那里。会话在绑定账号上空闲超过 60 秒后不再算持有：该账号 SPM 已满时，`failover` 规则改绑到别的账号（提示缓存随之失效），`stick` 规则回 429；与 new-api 相同。WebSocket 连接首轮得到 `req:{首轮请求 ID}`（或粘性键），后续轮次沿用，一条连接算一个会话。`SPMLimit > 0`（账号或任一模型列表）也算 `Limited()`。
 - Redis 出错：预判放行（与 RPM / TPM 预判一致）；原子准入出错时整次请求失败（`account limits unavailable`，与 §18.1 现行 RPM / TPM 一致，不是放行）。
+- **重试换号时会话跟着走**（2026-11-01）：失败策略换号并清除粘性绑定（`switch_reset`，Schema 3 起总是如此），或未发布失败策略时按插件分类切换账号，核心在换号前把本次会话从离开的账号各层 ZSET 里移除（`core.AccountLimiter.ReleaseSession`，尽力而为，`ZREM`；`gateway` `releaseSession`）。否则同一会话在 60 秒内同时占着两个账号的会话槽。已计的 RPM 不退。旧版失败策略的 `switch`（换号但保留绑定）不移除：会话仍绑定在原账号上。
 
 ### 71.4 插件
 
@@ -5545,7 +5568,8 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 账号覆盖的豁免状态码有三种：不写（沿用所在层）、`""`（不豁免任何状态码）、具体列表。控制台按"沿用 / 单独设置"区分，单独设置时留空即为不豁免。
   - 和 new-api 的差别：豁免状态码只在层上配置，规则上不能单独配；保存时除了"有降权没有回升"，还多一条警告：没有引用权重条件的回升策略且下限为 0 时，降到 0 的权重不会自己恢复。
   - **规则的保存警告**（0.3.0 起，不阻止保存）：`latency` 条件读到流式请求（统计范围不是 `non_stream`）时，警告长流式会触发它、也会让"健康"条件不成立；被回升策略引用的规则里有可能没有样本的条件（`ttfb`，或只读流式 / 只读非流式的 `latency`）却没写 `when_empty: pass` 时，警告没有这类流量的键回不来；一个 and 组的样本条件全部 `pass` 时，警告它在没有流量的窗口也成立。用户自己改过、迁移 0002 没有替换的旧规则，保存时会因此看到警告。
-  - **默认规则**（`GET /defaults`）：错误率 ≥ 30%（3 个窗口命中 2 次）降 30%；首字 p95 ≥ 10 秒（3 中 2）降 30%；"首字挂死"——首字 p100 ≥ 60 秒，或非流式整次耗时 p100 ≥ 120 秒（1 中 1）降 50%；"健康恢复"——错误率 < 15% 且首字 p95 < 10 秒、首字 p100 < 60 秒、非流式整次耗时 p100 < 120 秒，后三个 `when_empty: pass`，回升基准的 10%；权重 ≤ 0 持续 2 个窗口时回升基准的 10%（复活）。
+  - **默认规则**（`GET /defaults`）：错误率 ≥ 30%（3 个窗口命中 2 次）降 30%；首字 p95 ≥ 10 秒（3 中 2）降 30%；"首字挂死"——首字 p100 ≥ 60 秒，或非流式整次耗时 p100 ≥ 120 秒（1 中 1）降 50%；"健康恢复"——错误率 < 15% 且首字 p95 < 10 秒、首字 p100 < 60 秒、非流式整次耗时 p100 < 120 秒，后三个 `when_empty: pass`，回升基准的 10%；权重 ≤ 0 持续 2 个窗口时回升基准的 10%（复活）。三条降权策略每次触发时同时清理该键 30% 的粘性会话（`affinity_clear`，0.4.0 起）：命中粘性绑定的请求不经过调度，只降权重只能引走新会话。
+  - **0.3.0 的默认策略迁到 0.4.0**（迁移 `0003_default_affinity_clear`）：全局层或某个分组层的 `strategies` 与 0.3.0 出厂默认策略在 jsonb 上完全相等时，整组换成 0.4.0 的默认策略（名称、触发条件和降权幅度不变，三条降权策略各加一个 30% 的 `affinity_clear`），配置版本加一，各节点重新加载。有任何改动的层不动。策略在规则签名里，受影响的键在下一次评估时清空历史、记一条 `rules_change` 事件，有效权重保留。迁移是幂等的。
   - **0.2.0 的默认规则迁到 0.3.0**（迁移 `0002_sticky_pending_defaults`）：全局层或某个分组层的 `rules` 与 0.2.0 出厂默认规则在 jsonb 上完全相等（每条规则、每个条件和值、顺序都没变；键的顺序和数字写法不影响）时，整组换成 0.3.0 的默认规则，配置版本加一，各节点重新加载。规则名不变，策略照常引用。有任何改动的层不动。新规则的签名不同，受影响的键在下一次评估时清空历史、记一条 `rules_change` 事件，有效权重保留。迁移是幂等的：换过的层不再相等。
   - `min_samples_strict`、`clear_sticky_on_zero`（0.3.0 起，层上，默认开启）：文档里没写时按开启读，所以 0.2.0 保存的配置升级后两者都开启。分组层没写时同样取默认（开启）。
   - **窗口长度 10..3600 秒**（new-api 是 3..3600）：new-api 在请求到来时懒评估，随时能评估刚关闭的窗口；这里由每 10 秒一次的 `evaluate` 评估，每次只评估最新一个已关闭的窗口，短于 10 秒的窗口在两次运行之间会关闭不止一个，中间的窗口只能按"跳过的窗口"补位。所以下限取任务间隔 `rules.MinWindowSeconds`（manifest 测试校验两者一致）。新提交的配置（`PUT /config`、`POST /config/validate`）窗口小于 10 秒时拒绝；0.1.0 已保存的小于 10 秒的窗口（全局层或分组层）在加载时提升到 10 秒，照常生效，插件为每处记一条警告日志，`GET /config` 返回提升后的配置并在 `warnings` 里说明，控制台显示为警告，管理员保存一次即写回。
@@ -5612,7 +5636,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - **菜单**：网关分组下的"动态权重"，有三个标签页：
   - 有效权重：本节点运行指标（折叠面板）；按名称选账号和分组筛选；展开一行看该键的详情（对应 new-api 的悬浮详情：有效/基准与下限、配置来源、成功率、进行中窗口、上一窗口与阈值计数、每条规则的"N 个窗口命中 M 次"进度和位图、最近变化、最早下次评估、没有回升策略的告警）；单键重置、勾选多行后按账号批量重置（可再限定分组和模型；显示"已选 N 个账号（最多 500）"，超过 500 不能提交；筛选、翻页、刷新都会清空勾选）、按筛选结果批量重置、跳转到该键的事件。
   - 权重事件：账号和分组显示名称。
-  - 配置：全局层、分组层、账号覆盖、事件日志开关、通知。层上有"样本不足不判定"（`min_samples_strict`）和"降到 0 时清理粘性会话"（`clear_sticky_on_zero`）两个开关；样本条件的行内可选条件自己的统计范围（"同规则"即不写）和"无样本时成立 / 不成立"（0.3.0 起）。分组和账号按名称选择。规则和策略可以可视化编辑（上移、下移、复制、删除；顺序有意义），也可以切到 JSON 直接编辑两个数组（解析失败，或条目缺少可视化编辑要用的结构——`conditions`、`actions` 不是对象数组，`when` 不是规则名或 all / any 数组——时提示，不写回，"校验"和"保存"不可用，"放弃修改"可用；缺少的 `conditions`、`actions` 按空数组补上，缺少的 `when` 按未设置；恢复默认、放弃修改和保存后文本跟着配置刷新，输入中的文本不会被重排）。新建分组层复制全局层，但不复制只在全局的 `log_events`。"校验"调 `/config/validate` 只显示错误或警告，"保存"先校验，有警告时确认后再保存。
+  - 配置：全局层、分组层、账号覆盖、事件日志开关、通知。层上有"样本不足不判定"（`min_samples_strict`）和"降到 0 时清理粘性会话"（`clear_sticky_on_zero`）两个开关；样本条件的行内可选条件自己的统计范围（"同规则"即不写）和"无样本时成立 / 不成立"（0.3.0 起）。分组和账号按名称选择。规则和策略可以可视化编辑（上移、下移、复制、删除；顺序有意义），也可以切到 JSON 直接编辑两个数组（解析失败，或条目缺少可视化编辑要用的结构——`conditions`、`actions` 不是对象数组，第二条起的条件 `join` 不是 and / or（0.4.0 起），`when` 不是规则名或 all / any 数组——时提示，不写回，"校验"和"保存"不可用，"放弃修改"可用；缺少的 `conditions`、`actions` 按空数组补上，缺少的 `when` 按未设置；恢复默认、放弃修改和保存后文本跟着配置刷新，输入中的文本不会被重排）。新建分组层复制全局层，但不复制只在全局的 `log_events`。数值框清空（层上的、规则里的、策略动作的幅度和清理比例、账号覆盖选了下限方式后的下限）时标红；是否可以校验和保存按整份草稿判断，折叠起来的分组层同样算，提示里列出是全局、哪个分组还是哪个账号（0.4.0 起；之前只看展开的编辑器，折叠后标记残留，放弃修改也清不掉）。规则重名时规则名标红；改名时只有旧名不再被别的规则使用、新名也没被别的规则占用，策略里的引用才跟着改（0.4.0 起；之前复制规则后把副本改成原名再改走，会把原规则的策略一起带走）。停用的策略引用已删除的规则时同样提示（插件对它也拒绝）。"校验"调 `/config/validate` 只显示错误或警告，"保存"先校验，有警告时确认后再保存。
   - 分组和账号的名称经核心接口取得，用的是查看者自己的 `group:read` / `account:read`：分组一次读入（`@sub2api/host` 的 `listAll`，最多 1000 个，失败后下次再读）；账号不整表读入，选择框按输入的名称搜索 `GET /accounts?q=`（前 20 个），其他地方要显示的账号名按 id 读 `GET /accounts/:id`。选择框总能直接输入数字 id；选中的 id 不在列表里时显示为名称或 `#id`。没有这些权限时名称显示为 `#id`（状态和事件里的账号名仍来自插件自己记下的名称）。
 - **账号列表**：`account.list.weight` 插槽在权重下方显示"动态 N"。同一帧内所有行的请求合并成一次 `/weights`。
 
@@ -5622,6 +5646,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - 所有节点都是新核心后，再由管理员启用 `dynweight`。
 - dynweight 0.2.0 新增 `app.events.v1` 能力和 `events` 授权（`account.status_changed`），升级时需要管理员重新确认授权。状态文档新增的 `last_ln`、`last_latency_counts` 字段在旧状态里缺省为空，下一次评估写入；没有迁移。
 - dynweight 0.3.0：能力和授权不变（`sticky.clear` 的说明加上了降到 0 时的清理）。迁移 `0002_sticky_pending_defaults` 新建 `sticky_pending`，并把仍是 0.2.0 出厂默认的规则换成新默认（见 §74.5"0.2.0 的默认规则迁到 0.3.0"）；换过规则的层，键在下一次评估时各记一条 `rules_change`，有效权重保留。`min_samples_strict`、`clear_sticky_on_zero` 在旧配置里按开启读：升级后被降权和清理策略引用的规则，样本不足时不再判定。状态的 `last_rules` 多了字符 `2`（未判定），旧版插件读到时按未命中显示。迁移 0001 第一行注释写成了 §73.5（应为 §74.5），没有改：插件迁移按整个文件的 sha256 记校验和，改注释会让核心把 0001 重跑一遍（幂等，但没有必要）。
+- dynweight 0.4.0：能力和授权不变。默认降权策略加上清理 30% 粘性会话，迁移 `0003_default_affinity_clear` 把仍是 0.3.0 出厂默认的策略换成新默认（见 §74.5"0.3.0 的默认策略迁到 0.4.0"）。控制台配置页的修正见 §74.5"界面"。
 
 ## 75. 插件设置权限、插件写操作审计、按 id 查用户（2026-10-31，审计 moderation 与 dynweight 时发现的通用缺口）
 
@@ -5711,3 +5736,139 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - 核心：只要表单带 schema，不论模式，`GET/PUT /plugins/:key/settings` 都按它掩码密钥（§75.1）并校验；存储、通知插件、权限都与 schema 模式相同。不带 schema 的 native/iframe 设置仍不掩码，所以有密钥的插件必须带 schema。
 - 控制台：插件详情页只在 `mode` 为 `schema` 时显示设置标签；`/plugins/:key/settings`（只有插件权限的人用）遇到 native 设置时转到 `/p/:key/<page>?tab=settings`。插件页面自己用 `GET/PUT /plugins/:key/settings` 读写，回传 `******` 表示沿用密钥。
 - 兼容：0.1.222 及更早的核心对 native 设置不读 schema，GET 会把密钥明文返回，所以用这种写法的插件 `hostCompat` 要求 ≥ 0.1.223（moderation 0.6.1 起）。
+
+## 76. CCGateway guard 与 compose 部署（2026-11-01，用户决定；核心 0.1.227、插件 ccgateway 0.1.119）
+
+用户决定（2026-11-01）：控制器用 Go 重写，不再持有 `docker.sock`；新增宿主机服务 **guard** 代为执行 Docker 操作；guard、控制器和共享 Xray 网关都由 docker compose 启动，不用 systemd。设计与决定见 `docs/ccgateway-guard/`（`00-decisions.md` 优先），本节只写各方必须遵守的契约。
+
+### 76.1 拓扑
+
+- compose 项目 `ccgateway`，目录 `/opt/ccgateway`（root 0700），`compose.yml` 与 `.env` 都是 root 0600。
+- 服务：
+  - `guard`：host 网络、`pid: host`，持有 `docker.sock`，监听控制网 `172.29.255.1:8790`；
+  - `controller`：Go 控制器，在外部网络 `ccg-control`（`172.29.255.0/29`，网桥 `ccg-control0`，由安装脚本创建）上固定 `172.29.255.2`，只把 8787 映射到 `127.0.0.1:8787`（Caddy 和 SSH 转发的路径不变）；
+  - `egress`：共享网关，放在 `profiles: [egress]` 下，只在网关纳入 compose 的维护窗口里显式启用。
+- 数据根拆分：
+  - `/opt/ccgateway-controller` 挂成控制器的 `/data`，放控制器自己的状态；
+  - `/opt/ccgateway-runtime` 只放账号与网关容器的挂载源（`<key>/resolv.conf`、`<key>/app.nft`、`shared-egress/` 下的网关配置），归 guard 使用。
+- **任何时候都不对 `ccgateway` 项目执行不带服务名的 `up`、`down`、`rm`**，一律 `up -d --no-deps <服务>`：网关纳入 compose 后，不带服务名的命令会重建或删除网关，所有账号断网。
+
+### 76.2 安装路径按控制器镜像的标签选择
+
+安装脚本（§49.16，SSH 或本机）拉到控制器镜像后读标签 `io.sup2api.ccgateway.guard-api`：
+
+- 不是 `1`（Python 0.1.118 及更早）→ **docker run 路径**，与 0.1.226 逐字相同（`testdata/install-legacy-0.1.226*.sh` 守护）。唯一新增的检查：`ccg-controller` 带 `com.docker.compose.project=ccgateway` 标签，或 `/opt/ccgateway-controller/.adopted`（或 `.adopting`）存在时，返回 `legacy_blocked` 并退出。这时控制器数据已经搬走，旧控制器会看到空状态。回到 Python 只能按 release 手册（`docs/ccgateway-guard/04-migration-rollout.md` §5.3）。
+- 是 `1`（Go 控制器）→ **compose 路径**（§76.4）。
+
+插件回滚到 0.1.118 时，核心因此自动走回旧路径，不需要开关。
+
+### 76.3 compose 模板与 `.env`
+
+- 模板只有一份：`server/internal/ccgateway/compose/ccgateway.compose.yml`，`//go:embed` 嵌入核心。安装脚本用带引号的 heredoc（`<<'CCG_COMPOSE_EOF'`）原样写到 `/opt/ccgateway/compose.yml`。手工部署 guard 和隔离实例都用这份文件。
+- 实例相关的值都写成 `${VAR:-生产值}`，生产默认值由测试固定。guard 和 controller 的权限由测试断言：
+  - guard：`cap_drop: [ALL]`，只加回 `NET_ADMIN`、`SYS_ADMIN`、`SYS_PTRACE`；`no-new-privileges`，根文件系统只读；挂载全部用长语法加 `create_host_path: false`。挂载项：`docker.sock`、运行环境根、`/opt/ccgateway`、只读的 `/opt/ccgateway-runtime.env`、`/var/lib/ccgateway-guard`。不挂 `/run/xtables.lock`（决定 D6），也不挂控制器数据目录。
+  - controller：没有 `network_mode`、`pid`、`privileged`、`cap_add`，`cap_drop: [ALL]`，`no-new-privileges`，根文件系统只读；只挂 `…:/data`，不挂 `docker.sock`；端口只绑定 `127.0.0.1`；健康检查是 `/ccg-controller healthcheck`。
+  - 两个网络都是 `external`。
+- `.env` 是镜像和令牌的**唯一来源**。核心只写四个变量：`CCG_GUARD_IMAGE`、`CCG_CONTROLLER_IMAGE`、`CCG_GATEWAY_IMAGE`、`CCG_GUARD_TOKEN`。主机上已有的其他 `CCG_*` 行原样保留。
+  - `CCG_GATEWAY_IMAGE` 已有就保留，没有才写插件的 egress 镜像。
+  - 控制器的 `CCG_CONTROLLER_IMAGE` 由 `environment` 从 `.env` 取，覆盖 `env_file`（`/opt/ccgateway-runtime.env`，内容仍由 §49.16 的 `controllerEnv` 写）中的同名行；`CCG_RUNTIME_ROOT` 被覆盖为 `/data`。
+- **guard 令牌**：32 字节随机数的 hex，**只在主机上生成**（`od -An -N32 -tx1 /dev/urandom`），已有且格式正确就保留。它不在脚本文本、stdin、核心的数据库或日志里，只以环境变量交给 guard 和控制器。
+
+### 76.4 compose 路径的安装、finish、rollback
+
+CCG_RESULT 协议不变：结果只由脚本打印，以最后一行 `^CCG_RESULT=[a-z_]+$` 为准；docker 和 compose 的输出全部丢弃。失败的安装自己回滚时，在结果之前另起一行 `CCG_ROLLBACK=restored|removed|restore_failed`，核心把它放进 `details.rollback`。
+
+**安装**依次执行：
+
+1. `docker compose version`（没有 → `compose_unavailable`）。
+2. systemd `ccgateway-bridge-guard` 仍在运行 → `bridge_guard_active`。
+3. 拉 guard 镜像（失败 → `image_pull_failed`）。
+4. 建目录，并检查运行环境根和控制器数据在同一文件系统（`stat -c %d`）。
+5. 取 compose 锁 `/opt/ccgateway/.compose.lock`（`flock`，主机没有 `flock` 时不加锁），持有到脚本结束；guard 的自升级取同一把锁。
+6. 从 stdin 写环境文件，写 `compose.yml`。
+7. 写 `.env`。本次安装第一次改动前，把原文件留作 `.env.prev`。
+8. 建或核对控制网 `ccg-control`（子网不一致 → `control_network_conflict`）。
+9. `compose config -q`。
+10. **先起 guard**（`up -d --no-deps guard`），最多 30 秒轮询 `exec -T guard ccgateway-guard ready`，失败 → 恢复 `.env` 与 guard → `guard_unavailable`。
+11. 处理现有控制器：
+    - docker run 起的控制器 → 改名 `ccg-controller-prev` 并停止，写 `.transition`（过渡）；
+    - 已经是 compose 管理的控制器 → 删除上一轮未完成安装留下的 prev；
+    - 只剩 prev（上次安装在改名后中断）→ 先改回原名。
+12. **adopt** 搬数据（§76.5），失败 → release，启动 prev → `adopt_failed`（对外 `install_failed`）。
+13. `up -d --no-deps controller`。失败就内联执行与 rollback 相同的恢复 → `controller_unhealthy`。
+14. 成功打印 `started`。
+
+`started` 之后与旧路径相同：核心轮询 `/health`，成功执行 finish，失败执行 rollback。
+
+**finish**：删除 `ccg-controller-prev` 以及 `.env.prev`、`.transition`，打印 `done`。在 docker run 主机上，两个文件不存在，行为与 0.1.226 相同。
+
+**rollback**：`ccg-controller` 归 compose 管理，或者 `.env.prev`、`.transition` 存在时走 compose 分支，否则执行 0.1.226 原文（同样有逐字测试）。compose 分支：
+
+- 先 `rm -sf controller`。
+- 过渡中：release 搬回数据，恢复 `.env.prev` 并重起 guard，把 prev 改回原名并启动，结果 `restored`；没有 prev 时为 `removed`。
+- compose 主机上的重装或升级：恢复 `.env.prev`，再 `up -d --no-deps guard controller`，结果 `restored`。
+- 全新主机：`removed`。
+- 搬不回或起不来：`restore_failed`。
+
+guard 只维护网桥规则，与 host 网络的 Python 控制器互不干扰，所以过渡回滚后 guard 保持运行。
+
+只有显式执行"安装控制器 / 重新安装"（SSH 或本机）才会写入或更新 guard 镜像。guard 镜像**不进插件包**，`runtime/bundled` 和一键升级都不碰它。
+
+### 76.5 数据搬迁（adopt / release）
+
+由核心脚本在主机上执行（guard 不做），只用同一文件系统内的 `mv`，目标已存在即失败。`KEY` 是 `[1-9][0-9]*` 或 `d[0-9a-f]{16}`。
+
+| 相对 `/opt/ccgateway-runtime` | adopt |
+|---|---|
+| `.lock`、`runtime.json`、`uploads/`、`backups/` | 搬到 `/opt/ccgateway-controller/` 同名 |
+| `<KEY>/` 下除 `resolv.conf`、`app.nft` 外的所有项（含隐藏文件、`worker-backups*`、`cli-backups`、不认识的文件） | 搬到 `/opt/ccgateway-controller/<KEY>/` |
+| `<KEY>/resolv.conf`、`<KEY>/app.nft` | 留（已挂进账号容器，inode 不能变） |
+| `shared-egress/state.json` | 搬为 `/opt/ccgateway-controller/shared-egress-state.json` |
+| `shared-egress/` 下其他文件 | 留（网关配置目录；`*.tmp` 等记入清单） |
+| 不是 `KEY` 的顶层项（如 `controller-before-0.1.115/`）、符号链接 | 留，记入清单 |
+
+- 每搬一项，先在 `.adopting` 记一行 `mv <相对路径>`；不搬的项记 `keep <相对路径>`。全部完成后改名为 `.adopted`。`.adopted` 已存在时 adopt 直接成功。全新主机也写一个空的 `.adopted`。
+- release 按清单逐项搬回（目标已存在就停下，报 `restore_failed`，两边都保留）。之后再把 Go 控制器后来新建的项（新账号目录、新备份）也搬回，因为 Python 控制器也要用。最后删除清单。
+- 中断后再执行安装：已搬的项不会重复搬，清单接着写。
+
+### 76.6 接管前拦截：`controller_adopt_required`
+
+- `images.json` 的控制器条目带 `"labels": {"io.sup2api.ccgateway.guard-api": "1"}`（§53.10）。固定引用 `ControllerImage` 换成 Go 控制器后，常量 `ControllerImageGuardAPI` 改为 `true`。
+- 满足以下两条时，核心拒绝把这个控制器自升级到带标签的镜像，返回 409 `controller_adopt_required`：
+  - 目标是带标签的内置控制器，或者是声明了标签的固定引用；
+  - 当前控制器的 `/health.features` 里没有 `guard-api-v1`。
+- 拒绝发生在任何改动之前，覆盖以下入口：
+  - 一键升级（`POST runtime/install`）：整个请求 409；
+  - `runtime/bundled`：controller 一项 `failed` + `controller_adopt_required`，不上传；egress、app 照常执行；
+  - 手动上传 load + apply 的 controller：409，配置不改。
+- 核心不认识的引用（手动覆盖值）不拦截。旧控制器自己会失败：Go 镜像里没有 `python`，辅助容器起不来，返回 503 `runtime_unavailable`，旧控制器不受影响（04 §3.5）。
+- 接管只能走"安装控制器"（compose 路径的过渡）。
+
+### 76.7 结果码
+
+| 结果 | HTTP | 对外 `details.reason` |
+|---|---|---|
+| `compose_unavailable` | 503 | `compose_unavailable` |
+| `guard_unavailable` | 503 | `guard_unavailable` |
+| `legacy_blocked` | 409 | `legacy_blocked` |
+| `control_network_conflict`、`bridge_guard_active`、`data_cross_device`、`compose_locked`、`compose_config_failed`、`controller_name_taken`、`adopt_failed` 及其他未知结果 | 503 | `install_failed`（日志写原值） |
+| `controller_adopt_required`（核心，§76.6） | 409 | `controller_adopt_required` |
+
+控制台为这四个对外结果码提供中英文文案。
+
+### 76.8 镜像
+
+- `images.go` 新增 `GuardImage = ghcr.io/sub2api-devs/ccgateway-guard@sha256:<64 hex>`，由 CI（`ccgateway-images.yml` 的 `ccgateway-guard` 矩阵项）构建推送后填入。配置可选字段 `images.guard` 可以覆盖它，与 `gateway` 一样，例如在 GHCR 私有期间指向主机上本地构建的标签（`build-ccgateway-images.sh` 加 `CCG_BUILD_GUARD=1`）。插件包里没有 guard：包内引用不影响它，`runtime/bundled` 的角色里也没有它。
+- 控制器镜像（Go）：
+  - 标签：`io.sup2api.ccgateway.guard-api=1` 与 `io.sup2api.ccgateway.shared-egress=1`，构建脚本缺任一个就失败；
+  - 不含 `python`，缺 `CCG_GUARD_URL` 或 `CCG_GUARD_TOKEN` 时立即以非零码退出；
+  - `/health.features` 含 `guard-api-v1`。
+- `CCG_CONTROLLER_IMPL=python` 仍能构建旧 Python 控制器，CI 以 `-python` 后缀标签推送，用于回滚，保留到观察期结束。
+
+### 76.9 兼容与限制
+
+- 不改 Host API，没有迁移。`ccgateway_remote` 只多一个可选字段 `images.guard`。
+- `controller` 模式（ovh）的一键升级和 `runtime/bundled` 只调用控制器 API，不执行安装脚本。
+- 核心回滚到 0.1.226 期间，不得经 SSH 或本机在已过渡的主机上安装控制器：旧核心没有 `legacy_blocked` 检查。
+- 本机安装（§53.9）要求核心所在环境本身有 `docker compose` v2。
+- 控制台重装会从 stdin 重写 `/opt/ccgateway-runtime.env`，手工加的行（如 `CCG_XRAY_IMAGE`）会丢失。这是现有行为，S4 的手工接管保留原文件。

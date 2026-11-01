@@ -1,0 +1,23 @@
+{
+  "name": "409 no gateway",
+  "setup": {},
+  "request": {
+    "method": "POST",
+    "path": "/v1/gateway/exec",
+    "json": {
+      "argv": [
+        "true"
+      ]
+    }
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": "conflict",
+      "names": [
+        "ccg-shared-egress"
+      ],
+      "reason": "not_running"
+    }
+  }
+}

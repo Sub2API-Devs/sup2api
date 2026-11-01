@@ -80,6 +80,7 @@ export interface FailureDecision {
   account_action: string
   retry_rule?: string
   account_rule?: string
+  account_keyword?: string
   egress?: string
   reason?: string
   account_result?: string
@@ -115,7 +116,7 @@ export function newFailureRule(name: string, account: boolean): FailureRule {
     id: createItemId(),
     name,
     enabled: true,
-    match: { source: 'upstream', status_codes: '', keywords: [], keyword_regex: false, mode: 'any', groups: [], models: [], protocols: [] },
+    match: { source: 'upstream', status_codes: '', keywords: [], keyword_regex: false, mode: 'all', groups: [], models: [], protocols: [] },
     action: account ? 'disable' : 'retry',
     same_account_retries: 0,
     exhausted_action: '',
@@ -136,7 +137,8 @@ export function normalizedPolicy<T extends FailurePolicyForm>(policy: T): T {
   }
   for (const r of [...p.retry_rules, ...p.account_rules]) {
     r.name = r.name.trim()
-    if (p.schema_version >= 4) r.match.mode = 'any'
+    // Status codes and keywords must both match when both are given.
+    if (p.schema_version >= 3) r.match.mode = 'all'
     // Preserve regex syntax, whitespace and line numbers for Go validation.
     if (!r.match.keyword_regex) r.match.keywords = [...new Set((r.match.keywords || []).map(k => k.trim()).filter(Boolean))]
     r.match.status_codes = normalizeStatusCodes(r.match.status_codes)

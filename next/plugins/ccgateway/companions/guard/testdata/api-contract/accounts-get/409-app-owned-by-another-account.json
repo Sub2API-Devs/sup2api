@@ -1,0 +1,27 @@
+{
+  "name": "409 app owned by another account",
+  "covers": "I5 03§3.5.1",
+  "setup": {
+    "containers": [
+      {
+        "aid": "21",
+        "owner": "22",
+        "mounts": "none"
+      }
+    ]
+  },
+  "request": {
+    "method": "GET",
+    "path": "/v1/accounts/21"
+  },
+  "response": {
+    "status": 409,
+    "body": {
+      "error": "conflict",
+      "names": [
+        "ccg-21-app"
+      ],
+      "reason": "ownership_mismatch"
+    }
+  }
+}

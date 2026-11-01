@@ -1,0 +1,16 @@
+{
+  "name": "404 container",
+  "setup": {},
+  "request": {
+    "method": "POST",
+    "path": "/v1/accounts/21/app/start",
+    "json": {}
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not_found",
+      "reason": "container"
+    }
+  }
+}

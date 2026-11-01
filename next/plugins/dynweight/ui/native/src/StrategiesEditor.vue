@@ -79,9 +79,9 @@ function add() {
             <SSelect class="dw-w-10" :model-value="a.type" :options="typeOptions(s, a)" @update:model-value="setType(a, $event as ActionType)" />
             <template v-if="isWeight(a)">
               <SSelect v-model="a.mode" class="dw-w-10" :options="modeOptions" />
-              <SInput v-model="a.value" class="dw-w-8" type="number" min="1" :aria-label="t('strategies.value')" :suffix="a.mode === 'fixed' ? '' : '%'" />
+              <SInput v-model="a.value" class="dw-w-8" type="number" min="1" :error="a.value == null" :aria-label="t('strategies.value')" :suffix="a.mode === 'fixed' ? '' : '%'" />
             </template>
-            <SInput v-else v-model="a.percent" class="dw-w-8" type="number" min="1" max="100" :aria-label="t('strategies.percent')" suffix="%" />
+            <SInput v-else v-model="a.percent" class="dw-w-8" type="number" min="1" max="100" :error="a.percent == null" :aria-label="t('strategies.percent')" suffix="%" />
             <SButton size="sm" variant="ghost" icon="x" icon-only :aria-label="t('remove')" :disabled="s.actions.length <= 1" @click="s.actions.splice(j, 1)" />
           </div>
           <div>

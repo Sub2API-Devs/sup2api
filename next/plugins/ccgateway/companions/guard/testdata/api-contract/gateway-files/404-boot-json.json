@@ -1,0 +1,16 @@
+{
+  "name": "404 boot.json/",
+  "setup": {},
+  "request": {
+    "method": "PUT",
+    "path": "/v1/gateway/files/boot.json/",
+    "body_base64": "e30=",
+    "content_type": "application/octet-stream"
+  },
+  "response": {
+    "status": 404,
+    "body": {
+      "error": "not_found"
+    }
+  }
+}
