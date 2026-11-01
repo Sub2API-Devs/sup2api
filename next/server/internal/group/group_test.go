@@ -310,8 +310,15 @@ func TestGroupCRUDAndVisibility(t *testing.T) {
 	if code, _ = e.do(e.admin, "GET", fmt.Sprintf("/groups/%d", defID), nil); code != 404 {
 		t.Fatalf("get deleted: %d", code)
 	}
+	// Plugin traffic leaves provider_* rows keyed by the group; they must not
+	// pin it (migration 0073 dropped those foreign keys).
+	if _, err := e.db.Pool.Exec(context.Background(), `INSERT INTO provider_resources
+		(public_id, user_id, group_id, request_id, plugin_key, kind, account_id, principal_id, generation, state, operation_id, bytes, intent_hash)
+		VALUES ('res-1', $1, $2, 'req-1', 'anthropic', 'file', 1, 'p', 'g', 'ready', 'op-1', 0, 'h')`, e.user, vipID); err != nil {
+		t.Fatal(err)
+	}
 	if code, _ = e.do(e.admin, "DELETE", fmt.Sprintf("/groups/%d", vipID), nil); code != 204 {
-		t.Fatalf("delete with keys: %d", code)
+		t.Fatalf("delete with keys and plugin resources: %d", code)
 	}
 	if g := keyGroup(); g != nil {
 		t.Fatalf("key still bound to the deleted group: %v", *g)

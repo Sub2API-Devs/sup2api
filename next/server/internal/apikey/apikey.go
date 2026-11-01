@@ -422,11 +422,15 @@ func (s *Service) loadKey(ctx context.Context, id, ownerID int64) (*APIKey, erro
 	return k, nil
 }
 
-// groupAvailable reports whether group is active and usable by user.
+// groupAvailable reports whether group is active and usable by user. Inside a
+// transaction the row stays key-share locked, so a concurrent group delete
+// waits for the key write (and then unbinds it) instead of turning it into a
+// foreign key violation.
 func groupAvailable(ctx context.Context, q store.Querier, userID, groupID int64) (bool, error) {
 	var ok bool
 	err := q.QueryRow(ctx, `SELECT true FROM groups g WHERE g.id = $2 AND g.status = 'active'
-		AND (g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.group_id = g.id AND ug.user_id = $1))`,
+		AND (g.visibility = 'public' OR EXISTS (SELECT 1 FROM user_groups ug WHERE ug.group_id = g.id AND ug.user_id = $1))
+		FOR KEY SHARE OF g`,
 		userID, groupID).Scan(&ok)
 	if store.IsNoRows(err) {
 		return false, nil
