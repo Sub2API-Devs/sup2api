@@ -15,9 +15,8 @@ name: CCGateway images
 # The guard (CONTRACTS §76) is NOT in the plugin package: its GHCR digest
 # (the `images` summary of ccgateway-guard) is pinned as GuardImage in
 # next/server/internal/ccgateway/images.go. The controller is the Go
-# controller (companions/controller-go); the matrix entry with the -python
-# tag suffix still builds the old Python controller for a rollback to
-# ccgateway 0.1.118 until the observation period ends.
+# controller (companions/controller-go); the Python controller of ccgateway
+# 0.1.118 and earlier was removed on 2026-11-01.
 
 on:
   push:
@@ -99,16 +98,6 @@ jobs:
         run: |
           npm install --ignore-scripts --no-audit --no-fund
           node --test $(ls test/*.test.mjs | grep -v patch-wire-preservation-304)
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      # Kept until the observation period ends: a rollback goes back to the
-      # Python controller of ccgateway 0.1.118.
-      - name: controller (Python)
-        working-directory: next/plugins/ccgateway/companions/controller
-        run: |
-          pip install -r requirements.txt
-          python -m unittest discover -v -p 'test_*.py'
 
   # The release path of §53.10: build-ccgateway-images.sh on a Docker host,
   # then `sub2api-plugin pack --images` exactly as deploy/docker/build-go.sh
@@ -180,12 +169,6 @@ jobs:
           - name: ccgateway-controller
             context: next/plugins/ccgateway/companions/controller-go
             file: next/plugins/ccgateway/companions/controller-go/Dockerfile
-          # The Python controller (ccgateway 0.1.118 and earlier), kept for a
-          # rollback: same package, tags with the -python suffix.
-          - name: ccgateway-controller
-            suffix: -python
-            context: next/plugins/ccgateway/companions/controller
-            file: next/plugins/ccgateway/companions/controller/Dockerfile
           # Not in the plugin package: its digest is GuardImage in the core.
           - name: ccgateway-guard
             context: next/plugins/ccgateway/companions/guard
@@ -218,8 +201,8 @@ jobs:
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
           tags: |
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.short }}${{ matrix.suffix }}
-            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.branch }}${{ matrix.suffix }}
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.short }}
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.branch }}
       - name: Digest
         run: |
-          echo "${{ matrix.name }}${{ matrix.suffix }}: ${{ steps.meta.outputs.image }}@${{ steps.build.outputs.digest }}" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "${{ matrix.name }}: ${{ steps.meta.outputs.image }}@${{ steps.build.outputs.digest }}" | tee -a "$GITHUB_STEP_SUMMARY"

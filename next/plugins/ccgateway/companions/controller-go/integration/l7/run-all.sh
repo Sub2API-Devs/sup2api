@@ -3,6 +3,8 @@
 #   run-all.sh            baseline, Python start, all scenarios, cleanup, verify
 # Results append to $GT_WORK/results.jsonl; the production baseline and the
 # cleanup check go to $GT_WORK/base. Scenario failures do not stop the run.
+# The setup migrates from the Python controller and the bridge guard, both
+# retired on 2026-11-01: see gtctl.sh (GT_SRC from c2fe8834a).
 set -u
 cd "$(dirname "$0")"
 . ./gt-vars.sh

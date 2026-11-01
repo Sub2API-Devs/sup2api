@@ -21,9 +21,10 @@ import (
 	"ccgateway/controller/internal/store"
 )
 
-// The HTTP golden files (05-test-plan §6, 02 §8.5): python.json is
+// The HTTP golden files (05-test-plan §6, 02 §8.5): python.json was
 // recorded by companions/controller/differential_dump.py from the Python
-// Handler over FakeDocker; intended.json lists the deliberate differences
+// Handler over FakeDocker (removed on 2026-11-01, last in c2fe8834a; the
+// file stays fixed); intended.json lists the deliberate differences
 // (05 §8 BUG-11, BUG-12; the new egress recreate endpoint; net/http's own
 // Content-Length parsing) with the answer Go must give instead.
 const goldenDir = "../../testdata/http-golden"

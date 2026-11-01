@@ -382,7 +382,8 @@ func TestSpoolAndUploads(t *testing.T) {
 }
 
 // TestWriteCompatFixtures writes Go-made state files with the values
-// Python must read back (reference_vectors.py --check-go). The directory is
+// Python had to read back (reference_vectors.py --check-go, removed with the
+// Python controller on 2026-11-01, last in c2fe8834a). The directory is
 // CCG_COMPAT_OUT when set (the cross-language job), else a temporary one.
 // covers: RB1 RB5 RB7
 func TestWriteCompatFixtures(t *testing.T) {

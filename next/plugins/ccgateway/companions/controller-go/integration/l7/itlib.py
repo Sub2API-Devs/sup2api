@@ -40,7 +40,7 @@ CONTROLLER = 'ccg-gt-controller'
 A1, A2, A3 = 'd00000000000a0001', 'd00000000000a0002', 'd00000000000a0003'
 APP_118, APP_117 = 'ccgateway-app:0.1.118', 'ccgateway-app:0.1.117'
 CLI_VERSION = '2.1.312'
-FIXTURE_SRC = os.path.join(WORK, 'src/next/plugins/ccgateway/companions/controller/shared_proxy_fixture.py')
+FIXTURE_SRC = os.path.join(WORK, 'src/next/plugins/ccgateway/companions/controller-go/integration/l7/shared_proxy_fixture.py')
 POOL = {'pool': '10.0.0.0/8', 'allocation': 'random'}
 FAKE_AUTH = {'mode': 'api_key', 'api_key': 'gt-fake-key-not-a-secret', 'base_url': 'https://198.18.0.10'}
 

@@ -162,6 +162,8 @@ Worker 每请求日志仍为 `/work/data/request-logs/<id>/`，包含请求/响�
 
 服务已启用为 `/etc/systemd/system/ccgateway-bridge-guard.service`，程序安装在 `/usr/local/libexec/ccgateway-bridge-guard.py`。当前 OVH Docker 网络模式需要此宿主配套服务；仅复制 Worker/Controller 镜像到另一台采用相同 internal 桥接过滤的主机，不能认为透明出口自动可用。
 
+> 2026-11-01 起该宿主服务已退役，由 guard 取代（CONTRACTS §76）；上面两个文件已从仓库删除（最后见于 `c2fe8834a`）。
+
 ### 9.2 正式验收与恢复材料
 
 1. 官方 Windows CC 2.1.302 经生产 21 号调用 `claude-opus-5-5`，完成一次 Read 与两次模型请求，17 秒正常退出，工具错误为 0，项目文件和 Git diff 不变。

@@ -10,6 +10,7 @@
 - 验收：草稿账号建删、egress/app 原地更新、Worker+CLI 2.1.312 成对激活（27 updated，23 号没有容器）、27 个账号 healthy，规则数全程不变（62/54），网关未重建。
 - 脚本 `stage/ccgateway-0.1.119`（s0/s1/s4/s5）、`stage/ccgateway-0.1.120`、`stage/0.1.227`；备份 `backups/ccgateway-guard/{s0,s4}-20261101`、`backups/core-0.1.227`、`backups/ccgateway-0.1.120`。
 - 观察期到 2026-11-08；之后再做 S6（网关纳入 compose，全账号出网中断 10–60 秒）和收尾清理（旧 bridge guard 文件、Python 控制器镜像与源码、历史备份目录）。
+- 2026-11-02 仓库侧收尾已做：`ccgateway-bridge-guard.{py,service}`、`test_ccgateway_bridge_guard.py`、Python 控制器源码及其 CI 步骤和 `-python` 镜像已从仓库删除（最后见于 `c2fe8834a`）；ovh 上的旧镜像、unit 文件与历史备份目录仍按 04 §4 收尾处理。
 
 2026-10-29 网关 **0.1.128**（`43bd72fff`，镜像 ID `b1951457…`，两个节点都已更新，核心仍是 0.1.214）：发布包下载不再有 10 分钟总时限，只有连续 2 分钟收不到数据才失败；节点锁的工作时限对 prepare 放宽到 24 小时兜底。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
@@ -308,7 +309,7 @@
 
 2026-10-19：已更新 Core 四节点 **0.1.159**、CCGateway/Controller/21 号 Worker 程序 **0.1.59**，上线账号删除完整清理、原地重新授权和设置页孤立资源清理。21 号保留原容器与数据卷、CLI 2.1.302/native；公网 Key 实测 `claude-opus-5-5` HTTP 200，用量记录确认 account_id=21。详细版本、备份与验证见 [账号生命周期发布记录](../../../plugins/ccgateway/docs/ACCOUNT-RUNTIME-LIFECYCLE.md#ovh-正式发布与模型验收2026-10-19北京时间)。
 
-2026-10-18：已发布 Core **0.1.158**、CCGateway/Controller/Worker **0.1.58**，21 号使用固定的定制 CLI **2.1.302**，保留 native 模式和数据卷。四节点 ready，官方 CC/Opus 工具回合及新建容器 build/direct 实测通过。部署配套新增宿主 `ccgateway-bridge-guard.service`，为 internal 桥接中的账号到指定代理 peer 维护精确 veth 规则；镜像更新本身不替代该服务。详细版本、签名检查状态、出口断路验证与备份见 [302 正式部署记录](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#9-ovh-正式部署2026-10-18北京时间)。
+2026-10-18：已发布 Core **0.1.158**、CCGateway/Controller/Worker **0.1.58**，21 号使用固定的定制 CLI **2.1.302**，保留 native 模式和数据卷。四节点 ready，官方 CC/Opus 工具回合及新建容器 build/direct 实测通过。部署配套新增宿主 `ccgateway-bridge-guard.service`（2026-11-01 已退役，由 guard 取代，CONTRACTS §76），为 internal 桥接中的账号到指定代理 peer 维护精确 veth 规则；镜像更新本身不替代该服务。详细版本、签名检查状态、出口断路验证与备份见 [302 正式部署记录](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.302-ANALYSIS-AND-CHANGES.md#9-ovh-正式部署2026-10-18北京时间)。
 
 2026-10-09 21:37：Core .85（外壳 d917b8c）四个gateway-managed节点`sup2api-1..4`，3130..3133；管理/主入口3130。CCGateway Controller（0.1.49）与账号Worker已从cc-max迁到本机Docker（`ccg-controller`、端点 `https://ccmax.prophey.ai`（共用 caddy 反代）、`ccg-21-*`、`ccg-d1d2964e14bf728d9-*`），cc-max 上的旧容器停止保留作回滚；详见环境指南顶部。不在OVH重建账号。
 

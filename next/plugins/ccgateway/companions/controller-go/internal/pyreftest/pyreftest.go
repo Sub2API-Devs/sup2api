@@ -1,6 +1,7 @@
 // Package pyreftest loads the Python reference vectors in
-// testdata/pyref (written by companions/controller/reference_vectors.py).
-// Test-only helper.
+// testdata/pyref. They were written by companions/controller/reference_vectors.py,
+// removed with the Python controller on 2026-11-01 (last in c2fe8834a); the
+// files stay as fixed vectors (05-test-plan §6). Test-only helper.
 package pyreftest
 
 import (
@@ -22,7 +23,7 @@ func Load(t testing.TB, name string, v any) {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(Dir(), name))
 	if err != nil {
-		t.Fatalf("reference vectors %s: %v (generate them with reference_vectors.py)", name, err)
+		t.Fatalf("reference vectors %s: %v (fixed files since the Python controller was removed; restore them from git)", name, err)
 	}
 	if err := json.Unmarshal(b, v); err != nil {
 		t.Fatalf("reference vectors %s: %v", name, err)

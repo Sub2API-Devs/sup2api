@@ -48,7 +48,7 @@ ccgateway/
 
 - **核心**按全局 → 分组 → 账号解析 CC 特性策略与请求日志级别，每个请求带 `X-CCGateway-Request-Policy`（`contracts/features.WorkerPolicy`，CONTRACTS §53.18、§65）；发送前读 Worker `/healthz` 预检 CLI 版本与能力。核心不记任何请求日志。
 - **插件**把 CC 上下文头（请求类别、agent、prompt ID、压缩标记）按 `contracts/features.AgentContextHeaders` 转发，按 `X-CCGateway-Error-Source` 区分网关自己的拒绝与上游错误（CONTRACTS §53.20）。
-- **控制器**管理每个账号的容器、数据卷、内部网络与出口容器，做 Worker+CLI 的配对原地更新（不重建账号容器），见 [控制器 README](companions/controller/README.md)。
+- **控制器**管理每个账号的容器、数据卷、内部网络与出口容器，做 Worker+CLI 的配对原地更新（不重建账号容器），控制器是 Go 实现，经宿主机上的 guard 操作 Docker（CONTRACTS §76），见 [controller-go IMPLEMENTATION](companions/controller-go/IMPLEMENTATION.md)。
 - **Worker**只做鉴权、策略、身份与 agent 上下文映射、并发槽位、请求日志和错误来源标记，见 [Worker 引擎](docs/WORKER-ENGINE.md)。
 - **CLI**用 Claude Code 自己的函数生成上游请求与全部请求头，见 [REQUEST-HEADERS](../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)。
 
@@ -82,7 +82,7 @@ ccgateway/
 | [CLIENT-SETUP](docs/CLIENT-SETUP.md) | 把 Claude Code 客户端指向本平台的推荐配置（按 2.1.304 验证） |
 | [CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY](docs/CLAUDE-CODE-2.1.304-SYSTEM-PROMPT-ASSEMBLY.md) | 2.1.304 主/子代理 system 提示词的组装分析与 AST 工具 |
 | [CLAUDE-CODE-2.1.304-HARDWARE-PRIVACY-AUDIT](docs/CLAUDE-CODE-2.1.304-HARDWARE-PRIVACY-AUDIT.md) | 2.1.304 环境与资源信息的采集与上报路径审计 |
-| [companions README](companions/README.md)、[Worker README](companions/worker/README.md)、[cli-mods README](companions/cli-mods/README.md)、[控制器 README](companions/controller/README.md) | 各组件的目录、配置、构建、测试；cli-mods 含 CLI 版本记录 |
+| [companions README](companions/README.md)、[Worker README](companions/worker/README.md)、[cli-mods README](companions/cli-mods/README.md)、[controller-go IMPLEMENTATION](companions/controller-go/IMPLEMENTATION.md)、[guard README](companions/guard/README.md) | 各组件的目录、配置、构建、测试；cli-mods 含 CLI 版本记录 |
 | `next/docs/ccgateway-feature-support/` | [REQUEST-HEADERS](../../docs/ccgateway-feature-support/REQUEST-HEADERS.md)（上游请求头的来源与已知边界）、[CC-INJECTION-LEVELS-DESIGN](../../docs/ccgateway-feature-support/CC-INJECTION-LEVELS-DESIGN.md)（注入等级 0/微/低/高）、请求日志五篇：[级别](../../docs/ccgateway-feature-support/REQUEST-LOG-LEVELS-DESIGN.md)、[查看](../../docs/ccgateway-feature-support/REQUEST-LOG-VIEWER-DESIGN.md)、[上游请求记录](../../docs/ccgateway-feature-support/REQUEST-LOG-UPSTREAM-CAPTURE-DESIGN.md)、[随请求下发](../../docs/ccgateway-feature-support/REQUEST-LOG-POLICY-DESIGN.md)、[异步写入](../../docs/ccgateway-feature-support/REQUEST-LOG-ASYNC-DESIGN.md) |
 | `next/docs/CONTRACTS.md` | §53（控制面板、原地更新、WorkerPolicy、错误来源、只运行请求命令）、§63（首 token 延迟）、§64–§65（请求日志） |
 

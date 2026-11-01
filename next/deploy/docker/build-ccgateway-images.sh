@@ -35,10 +35,8 @@
 #                     untagged, and floating tags (latest, 2-alpine) are refused.
 #   CCG_CGROUP_PARENT passed to `docker build --cgroup-parent` (resource-limited
 #                     builds on a production host, see prepare-core-release.sh).
-#   CCG_CONTROLLER_IMPL  go (default): companions/controller-go, must carry the
-#                     guard-api=1 and shared-egress=1 labels. python: the old
-#                     controller of companions/controller (0.1.118 and earlier),
-#                     only to rebuild a package for a rollback.
+#   CCG_CONTROLLER_IMPL  accepted for older callers, only go (the default):
+#                     the Python controller was removed on 2026-11-01.
 #   CCG_BUILD_GUARD   1: also build ccgateway-guard:<version> (not packed).
 #
 # POSIX sh (dash), GNU coreutils, gzip, git and docker.
@@ -50,7 +48,7 @@ DEFAULT_CADDY_IMAGE=caddy:2.11.7-alpine
 die() { echo "build-ccgateway-images: $*" >&2; exit 1; }
 
 if [ "$#" -ne 2 ]; then
-  sed -n '2,44p' "$0" >&2
+  sed -n '2,42p' "$0" >&2
   exit 2
 fi
 version=$1
@@ -66,12 +64,10 @@ NEXT=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 companions=$NEXT/plugins/ccgateway/companions
 manifest=$NEXT/plugins/ccgateway/manifest.json
 [ -f "$companions/worker/Dockerfile" ] || die "$companions/worker/Dockerfile not found"
-impl=${CCG_CONTROLLER_IMPL:-go}
-case "$impl" in
-  go) controller_dir=$companions/controller-go ;;
-  python) controller_dir=$companions/controller ;;
-  *) die "CCG_CONTROLLER_IMPL must be go or python: $impl" ;;
-esac
+[ "${CCG_CONTROLLER_IMPL:-go}" = go ] || die "CCG_CONTROLLER_IMPL must be go (the Python controller was removed on 2026-11-01): $CCG_CONTROLLER_IMPL"
+# The controller is companions/controller-go: it must carry the guard-api=1
+# and shared-egress=1 labels.
+controller_dir=$companions/controller-go
 [ -f "$controller_dir/Dockerfile" ] || die "$controller_dir/Dockerfile not found"
 build_guard=${CCG_BUILD_GUARD:-0}
 case "$build_guard" in 0|1) ;; *) die "CCG_BUILD_GUARD must be 0 or 1: $build_guard" ;; esac
@@ -119,18 +115,14 @@ docker build "$@" $labels -f "$companions/worker/Dockerfile" \
 echo "==> building $egress"
 # shellcheck disable=SC2086
 docker build "$@" $labels -t "$egress" "$companions/xray-egress"
-echo "==> building $controller ($impl controller, VERSION $short)"
+echo "==> building $controller (VERSION $short)"
 # shellcheck disable=SC2086
 docker build "$@" $labels --build-arg VERSION="$short" -f "$controller_dir/Dockerfile" -t "$controller" "$controller_dir"
 label() { docker image inspect --format "{{index .Config.Labels \"$2\"}}" "$1"; }
 [ "$(label "$controller" io.sup2api.ccgateway.shared-egress)" = 1 ] || die "$controller lacks io.sup2api.ccgateway.shared-egress=1"
 guard_api=$(label "$controller" io.sup2api.ccgateway.guard-api)
-if [ "$impl" = go ]; then
-  # A controller without the label would be installed the docker run way.
-  [ "$guard_api" = 1 ] || die "$controller lacks io.sup2api.ccgateway.guard-api=1"
-else
-  [ "$guard_api" != 1 ] || die "the python controller $controller must not carry io.sup2api.ccgateway.guard-api=1"
-fi
+# A controller without the label would be installed the docker run way.
+[ "$guard_api" = 1 ] || die "$controller lacks io.sup2api.ccgateway.guard-api=1"
 if [ "$build_guard" = 1 ]; then
   echo "==> building $guard (not packed)"
   # shellcheck disable=SC2086

@@ -11,6 +11,9 @@
 #   release             04 §5.3 steps 2-4 (compose controller out, release, Python back)
 #   cleanup             04 §7 cleanup
 #   verify OUT          04 §7 checks against the baseline in OUT
+# py-start and bridge-start need the retired Python 0.1.118 controller image
+# and next/deploy/gateway/ovh/ccgateway-bridge-guard.py, both removed on
+# 2026-11-01: rerun the migration setup from a GT_SRC checkout of c2fe8834a.
 set -eu
 . "$(dirname "$0")/gt-vars.sh"
 GEN=$GT_WORK/gen

@@ -20,7 +20,8 @@ Worker 不组装请求：build 下把客户端的块原样包进信封交给 CLI
 - `worker/`：账号 Worker 程序（Go 模块 `ccgateway/worker`）：配置、生命周期、`/health`、`/admin/features`；只使用 `engine.NewRuntime`。见 [Worker README](worker/README.md)。
 - `contracts/`：跨组件合同（Go 模块）：WorkerPolicy、能力名、CC 上下文头表（插件转发与 Worker 读取共用）、错误来源、资源接口、契约夹具 `testdata/`。
 - `cli-mods/`：定制 CLI 的补丁与打包（`request` 命令及其支持模块、每版的 `profiles/` 与 `patches/`），测试在 `test/`，离线端到端套件在 `test/e2e/`；`release/` 不进 Git，构建 Worker 前准备。见 [cli-mods README](cli-mods/README.md)。
-- `controller/`：Python 容器控制器（账号容器、网络、出口、隧道、配对原地更新）。见 [控制器 README](controller/README.md)。
+- `controller-go/`：Go 容器控制器（账号容器、网络、出口、隧道、配对原地更新），经 guard 操作 Docker（CONTRACTS §76）。见 [IMPLEMENTATION](controller-go/IMPLEMENTATION.md)。原来的 Python 控制器 `controller/`（0.1.118 及更早）已于 2026-11-01 删除。
+- `guard/`：宿主机上的 guard（代控制器执行 Docker 操作、维护防火墙规则，取代已退役的宿主服务 ccgateway-bridge-guard），不进插件包。见 [guard README](guard/README.md)。
 - `xray-egress/`：共享 Xray 出口网关镜像（插件包里的 egress 角色），所有账号经它出网。
 
 ## 构建
@@ -28,7 +29,8 @@ Worker 不组装请求：build 下把客户端的块原样包进信封交给 CLI
 仓库根目录执行：
 
     docker build -f next/plugins/ccgateway/companions/worker/Dockerfile -t ccgateway-worker:dev next/plugins/ccgateway/companions
-    docker build -f next/plugins/ccgateway/companions/controller/Dockerfile -t ccg-controller:dev next/plugins/ccgateway/companions/controller
+    docker build -f next/plugins/ccgateway/companions/controller-go/Dockerfile -t ccgateway-controller:dev next/plugins/ccgateway/companions/controller-go
+    docker build -f next/plugins/ccgateway/companions/guard/Dockerfile -t ccgateway-guard:dev next/plugins/ccgateway/companions/guard
     docker build -f next/plugins/ccgateway/companions/xray-egress/Dockerfile -t ccgateway-egress:dev next/plugins/ccgateway/companions/xray-egress
 
 发布用 `next/deploy/docker/build-ccgateway-images.sh <插件版本> <输出目录>`（版本必须等于插件 `manifest.json`）。Worker 镜像从 `cli-mods/release/` 安装指定版本的定制 CLI，不在构建时下载官方 CLI；准备 `release/`（补丁、Bun 编译、打包）见 [CLI 升级手册](../docs/CLI-UPGRADE-RUNBOOK.md) 第 4–6 节。
@@ -39,7 +41,8 @@ Worker 不组装请求：build 下把客户端的块原样包进信封交给 CLI
     (cd worker && go test ./...)
     (cd contracts && go test ./...)
     (cd cli-mods && npm test)          # node --test test/*.test.mjs
-    (cd controller && python -m unittest discover -p 'test_*.py')
+    (cd controller-go && go test -count=1 ./...)
+    (cd guard && go test -count=1 ./...)
 
 本机是 Windows 时，部分进程级用例只在 Linux 上执行（CI 与发布主机）；`CCG_REAL_CLI` 指向真实 CLI 时才跑真实 CLI 用例。改 engine 后要同时 `GOOS=linux go vet ./...`。Worker → CLI 的请求字节由 `contracts/testdata/worker-cli-requests.json` 固定，核心 → Worker 的策略由 `contracts/testdata/core-worker-policies.json` 固定，改动后用 `CCG_UPDATE_CONTRACT_FIXTURES=1` 重新生成并检查差异。
 
