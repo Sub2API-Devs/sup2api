@@ -1015,7 +1015,8 @@ func (f *Fake) networks(w http.ResponseWriter, r *http.Request, seg []string) {
 				c.Networks[n.Name] = body.EndpointConfig.IPAMConfig.IPv4Address
 			} else {
 				if _, ok := c.Networks[n.Name]; !ok {
-					errMsg(w, 403, "container is not connected to the network")
+					// Docker 29.5 (ovh, L7 2026-11-01) answers 500 here.
+					errMsg(w, 500, "container "+c.ID+" is not connected to network "+n.Name)
 					return
 				}
 				delete(c.Networks, n.Name)

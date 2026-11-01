@@ -586,6 +586,13 @@ func (s *Server) disconnectGateway(w http.ResponseWriter, r *http.Request, p par
 	if net == nil {
 		return noContent(w)
 	}
+	// Not on the network: nothing to do (03 §3.7.6). Docker 29 answers a
+	// disconnect of a container that is not connected with a 500, so the
+	// membership is checked here, as the Python controller did (G13); the
+	// controller detaches twice when deleting a runtime (L7 IT-F01).
+	if _, attached := gw.NetworkSettings.Networks[net.Name]; !attached {
+		return noContent(w)
+	}
 	if err := s.D.NetworkDisconnect(ctx, net.ID, gw.ID, true); err != nil && !dockerapi.IsNotFound(err) &&
 		dockerapi.StatusOf(err) != http.StatusForbidden {
 		return dockerErr(err)
