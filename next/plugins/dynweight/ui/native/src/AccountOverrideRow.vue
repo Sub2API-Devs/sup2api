@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { SButton, SField, SInput, SSelect } from '@sub2api/ui'
-import { enumOptions, useDwHost, type AccountOverride } from './host'
+import { enumOptions, overrideIncomplete, useDwHost, type AccountOverride } from './host'
 
 // One account override: each field left to inherit follows the account's
 // layer. The exempt status codes can also be overridden to none (an empty
@@ -44,7 +44,7 @@ function setExempt(v: string) {
     <SField class="dw-w-10" :label="t('layer.floorMode')">
       <SSelect :model-value="o.min_weight_mode ?? ''" :options="floorOptions" @update:model-value="setFloorMode($event as string)" />
     </SField>
-    <SField class="dw-w-8" :label="t('layer.floor')">
+    <SField class="dw-w-8" :label="t('layer.floor')" :error="overrideIncomplete(o) ? t('layer.required') : undefined">
       <SInput v-model="o.min_weight" type="number" min="0" :disabled="!o.min_weight_mode" />
     </SField>
     <SButton class="dw-end" size="sm" variant="ghost" icon="trash" icon-only :aria-label="t('remove')" @click="emit('remove')" />

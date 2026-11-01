@@ -56,6 +56,9 @@ function rename(r: Rule, name: string) {
   emit('rename', from, name)
 }
 
+// The plugin refuses two rules of the same name.
+const duplicated = (name: string) => rules.value.filter((r) => r.name === name).length > 1
+
 const copyName = (name: string, n: number) => t('item.copyName', { name, n })
 
 function removeCondition(r: Rule, i: number) {
@@ -68,7 +71,7 @@ function removeCondition(r: Rule, i: number) {
   <div class="dw-list">
     <div v-for="(r, i) in rules" :key="i" class="dw-item">
       <div class="dw-row">
-        <SField class="dw-grow" :label="t('rules.name')">
+        <SField class="dw-grow" :label="t('rules.name')" :error="duplicated(r.name) ? t('rules.duplicate') : undefined">
           <SInput :model-value="r.name" :maxlength="64" lazy @update:model-value="rename(r, String($event))" />
         </SField>
         <SField class="dw-w-10" :label="t('rules.scope')">
