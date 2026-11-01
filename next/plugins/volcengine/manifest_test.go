@@ -53,9 +53,9 @@ func TestManifest(t *testing.T) {
 	if m.Runtime != "grpc" || m.Entry.GRPC == nil || m.Entry.GRPC.Binaries == "" || m.HostCompat == "" {
 		t.Fatalf("runtime/entry/hostCompat = %s %+v %s", m.Runtime, m.Entry, m.HostCompat)
 	}
-	// 0.1.224 is the first core that renders a table page's "create" link
+	// 0.1.229 is the first core that renders a table page's "create" link
 	// (the asset forms have no sidebar entry of their own).
-	for version, want := range map[string]bool{"0.1.125": false, "0.1.223": false, "0.1.224": true} {
+	for version, want := range map[string]bool{"0.1.125": false, "0.1.228": false, "0.1.229": true} {
 		if got, err := check.HostCompatible(m.HostCompat, version); err != nil || got != want {
 			t.Fatalf("host %s compatibility: %v %v", version, got, err)
 		}
@@ -600,7 +600,7 @@ func TestValidate(t *testing.T) {
 	for _, icon := range []string{"assets/volcengine-color.svg", "assets/doubao-color.svg"} {
 		files[icon] = mustFile(t, icon)
 	}
-	if err := check.Validate(decodeManifest(t), files, check.ValidateOptions{HostVersion: "0.1.224"}); err != nil {
+	if err := check.Validate(decodeManifest(t), files, check.ValidateOptions{HostVersion: "0.1.229"}); err != nil {
 		t.Fatalf("core manifest validation: %v", err)
 	}
 }

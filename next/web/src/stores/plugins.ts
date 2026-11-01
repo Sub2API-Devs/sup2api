@@ -115,7 +115,18 @@ export const usePluginStore = defineStore('plugins', () => {
     for (const p of todo) pending[p.key] = true
     listed.value = true
     // Each plugin finishes on its own: a slow or failing one holds up only its own pages and slots.
-    await Promise.all(todo.map((p) => load(p).finally(() => delete pending[p.key])))
+    await Promise.all(todo.map((p) => loadLatest(p).finally(() => delete pending[p.key])))
+  }
+
+  /** Loads p, then follows a refresh that removed or changed it meanwhile (that refresh skipped it). */
+  async function loadLatest(p: UIPlugin) {
+    await load(p)
+    const latest = plugin(p.key)
+    const l = loaded.get(p.key)
+    if (l && (!latest || nativeURL(latest) !== l.url)) {
+      await unload(p.key)
+      if (latest) await loadLatest(latest)
+    }
   }
 
   async function reset() {

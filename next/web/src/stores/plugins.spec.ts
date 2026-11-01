@@ -28,6 +28,7 @@ describe('plugin store loading', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mocks.get.mockReset()
+    delete (globalThis as { __releaseSlowPlugin?: () => void }).__releaseSlowPlugin
   })
 
   it('publishes the list before the native modules finish and tracks each plugin on its own', async () => {
@@ -53,6 +54,20 @@ describe('plugin store loading', () => {
     release()!()
     await done
     expect(store.component(SLOW, 'SlowPage')).toBeTruthy()
+    expect(store.pending[SLOW]).toBeUndefined()
+  })
+
+  it('drops a plugin removed by a refresh that ran while it was loading', async () => {
+    mocks.get.mockResolvedValueOnce([plugin(SLOW, 'slow-plugin.ts')])
+    const store = usePluginStore()
+    const done = store.refresh()
+    await until(() => release())
+
+    mocks.get.mockResolvedValueOnce([])
+    await store.refresh()
+    release()!()
+    await done
+    expect(store.component(SLOW, 'SlowPage')).toBeUndefined()
     expect(store.pending[SLOW]).toBeUndefined()
   })
 

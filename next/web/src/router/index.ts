@@ -69,7 +69,7 @@ const children: RouteRecordRaw[] = [
     }
   },
   // Access is the plugin's settings permission or plugin:read, checked by the core.
-  { path: 'plugins/:key/settings', component: () => import('@/views/plugins/PluginSettingsView.vue'), meta: { title: 'nav.crumbs.pluginSettings', parent: '/plugins' } },
+  { path: 'plugins/:key/settings', component: () => import('@/views/plugins/PluginSettingsView.vue'), meta: { title: 'nav.crumbs.pluginSettings', parent: '/settings' } },
   { path: 'market', component: () => import('@/views/plugins/MarketView.vue'), meta: { perm: 'plugin:market:read', title: 'nav.items.market' } },
   { path: 'publishers', component: () => import('@/views/plugins/PublishersView.vue'), meta: { perm: 'publisher:read', title: 'nav.items.publishers' } },
   { path: 'nodes', component: () => import('@/views/nodes/NodesView.vue'), meta: { perm: 'node:read', title: 'nav.items.nodes' } },
