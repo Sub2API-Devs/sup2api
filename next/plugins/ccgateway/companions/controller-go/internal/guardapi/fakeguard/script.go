@@ -129,7 +129,8 @@ type execHook struct {
 }
 
 // OnExec answers execs whose argv starts with prefix in target ("app:<aid>",
-// "app:*" or "gateway"). The latest matching hook wins.
+// "app:*" or "gateway"). The latest matching hook wins. An output over 16
+// MiB answers 502 output_too_large; see ExitTimeout and ExitStartFailed.
 func (g *Guard) OnExec(target string, prefix []string, fn func(argv []string, user string) (int, []byte)) {
 	g.hooksMu.Lock()
 	defer g.hooksMu.Unlock()
@@ -166,14 +167,41 @@ func (g *Guard) execHook(target string, argv []string) func([]string, string) (i
 	return nil
 }
 
-// OnJob answers every job (exit code, stdout).
+// Special exit codes of OnExec, OnJob and OnFirewall hooks (a real exit
+// code is never negative).
+const (
+	// ExitStartFailed: the container could not run. A job answers 502
+	// job_failed, the firewall helper 502 helper_failed, an exec 502
+	// docker_error. Any other negative code means the same.
+	ExitStartFailed = -1
+	// ExitTimeout: the guard's time limit passed. An exec answers 504
+	// timeout/exec_timeout, a job and the firewall helper 504
+	// timeout/job_timeout.
+	ExitTimeout = -2
+)
+
+// OnJob answers every job (exit code, stdout). A stdout over 64 KiB
+// answers 502 output_too_large; see ExitTimeout and ExitStartFailed.
 func (g *Guard) OnJob(fn func(aid string, job guardapi.Job) (int, []byte)) {
 	g.hooksMu.Lock()
 	defer g.hooksMu.Unlock()
 	g.jobHook = fn
 }
 
-// OnLoad answers image loads (the archive bytes, decompressed if gzip).
+// OnFirewall answers the firewall helper of PUT firewall: its exit code
+// (default 0). Non-zero answers 502 helper_failed; see ExitTimeout. The
+// rules are recorded (Firewall) before the helper runs, as the guard writes
+// app.nft first.
+func (g *Guard) OnFirewall(fn func(aid string, rec FirewallRecord) int) {
+	g.hooksMu.Lock()
+	defer g.hooksMu.Unlock()
+	g.firewallHook = fn
+}
+
+// OnLoad answers image loads after the guard's archive checks: it gets the
+// archive bytes (decompressed if gzip) and returns what Docker loaded. A
+// returned tag the archive does not name answers 502 load_failed, as does
+// an error that is not a guard answer. The loaded images become local.
 func (g *Guard) OnLoad(fn func(data []byte) ([]guardapi.LoadedImage, error)) {
 	g.hooksMu.Lock()
 	defer g.hooksMu.Unlock()

@@ -33,8 +33,13 @@ func (e *Error) Error() string {
 	return b.String()
 }
 
-// Is matches another *Error on Status and Code (and Reason when set).
+// Is matches another *Error on Status and Code (and Reason when set). A
+// 503 unavailable answer (the guard is starting) also matches
+// ErrUnavailable: the guard could not handle the call yet.
 func (e *Error) Is(target error) bool {
+	if target == ErrUnavailable {
+		return e.Status == 503 && e.Code == CodeUnavailable
+	}
 	t, ok := target.(*Error)
 	if !ok {
 		return false
@@ -123,6 +128,16 @@ var (
 	// ErrNotRegularFile and ErrFileTooLarge are the 422 answers of images/file.
 	ErrNotRegularFile = &Error{Status: 422, Code: CodeUnprocessable, Reason: ReasonNotRegularFile}
 	ErrFileTooLarge   = &Error{Status: 422, Code: CodeUnprocessable, Reason: ReasonTooLarge}
+	// ErrStarting is 503 unavailable/starting: the guard is still starting
+	// (it also matches ErrUnavailable).
+	ErrStarting = &Error{Status: 503, Code: CodeUnavailable, Reason: ReasonStarting}
+	// ErrMountRejected is 403 mount_source_rejected (resolv.conf or
+	// shared-egress/ is not a plain file or directory the guard wrote, or
+	// the container's mounts are not the expected ones).
+	ErrMountRejected = &Error{Status: 403, Code: CodeForbidden, Reason: ReasonMountSourceRejected}
+	// ErrMountReplaced is 409 mount_source_replaced of PUT resolv: the file
+	// was rewritten as a new inode; the running container must be recreated.
+	ErrMountReplaced = &Error{Status: 409, Code: CodeConflict, Reason: ReasonMountSourceReplaced}
 )
 
 // ErrUnavailable matches every transport failure (connection refused,

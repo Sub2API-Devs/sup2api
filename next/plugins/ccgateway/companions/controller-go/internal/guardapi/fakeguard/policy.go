@@ -1,7 +1,10 @@
 package fakeguard
 
 import (
+	"mime"
+	"net/http"
 	"net/netip"
+	"net/url"
 	"path"
 	"regexp"
 	"strings"
@@ -45,28 +48,31 @@ var (
 )
 
 const (
-	maxEnv          = 128
-	maxEnvBytes     = 64 << 10
-	maxArgv         = 256
-	maxArgBytes     = 128 << 10
-	maxArgvBytes    = 1 << 20
-	maxJobArgv      = 64
-	maxRules        = 64 << 10
-	maxLabel        = 4096
-	maxAuthLabel    = 256
-	maxPath         = 4096
-	minAppMemory    = 256 << 20
-	maxAppMemory    = 4 << 30
-	minNanoCPUs     = 1e8
-	maxNanoCPUs     = 4e9
-	maxJobMemory    = 2 << 30
-	minVolume       = 1 << 30
-	maxVolume       = 1 << 40
-	maxImageFile    = 512 << 20
-	maxGatewayFile  = 4 << 20
-	maxArchivePut   = 600 << 20
-	maxLoad         = 4 << 30
-	gatewayLockName = "<gateway>"
+	maxEnv         = 128
+	maxEnvBytes    = 64 << 10
+	maxArgv        = 256
+	maxArgBytes    = 128 << 10
+	maxArgvBytes   = 1 << 20
+	maxJobArgv     = 64
+	maxRules       = 64 << 10
+	maxLabel       = 4096
+	maxAuthLabel   = 256
+	maxPath        = 4096
+	minAppMemory   = 256 << 20
+	maxAppMemory   = 4 << 30
+	minNanoCPUs    = 1e8
+	maxNanoCPUs    = 4e9
+	minJobMemory   = 64 << 20
+	maxJobMemory   = 2 << 30
+	minVolume      = 1 << 30
+	maxVolume      = 1 << 40
+	maxImageFile   = 512 << 20
+	maxGatewayFile = 4 << 20
+	maxArchivePut  = 600 << 20
+	maxLoad        = 4 << 30
+	maxJSONBody    = 1 << 20
+	maxExecOutput  = 16 << 20
+	maxJobStdout   = 64 << 10
 )
 
 func checkAID(aid string) *apiError {
@@ -113,18 +119,6 @@ func checkPolicyLabel(label string) *apiError {
 	return nil
 }
 
-// hostInSubnet: in the subnet, not the network address, .1 or broadcast.
-func hostInSubnet(ip string, p netip.Prefix) (netip.Addr, *apiError) {
-	a, err := pyjson.IPv4Address(ip)
-	if err != nil {
-		return netip.Addr{}, badRequest("invalid IPv4 address")
-	}
-	if !p.Contains(a) || a == p.Masked().Addr() || a == hostAt(p, 1) || a == broadcast(p) {
-		return netip.Addr{}, badRequest("address outside the account subnet")
-	}
-	return a, nil
-}
-
 func checkEnv(env map[string]string) *apiError {
 	if len(env) > maxEnv {
 		return badRequest("too many environment variables")
@@ -146,8 +140,8 @@ func checkEnv(env map[string]string) *apiError {
 }
 
 func checkAuthLabel(s string) *apiError {
-	if len(s) > maxAuthLabel {
-		return badRequest("auth_label too long")
+	if s == "" || len(s) > maxAuthLabel {
+		return badRequest("invalid auth_label")
 	}
 	for i := 0; i < len(s); i++ {
 		if s[i] < 0x20 || s[i] > 0x7e {
@@ -188,17 +182,23 @@ func checkImageRef(ref string) *apiError {
 	return nil
 }
 
+// validCaps is the guard's job capability rule (D5): only CHOWN and
+// DAC_OVERRIDE, each once, and only with a writable volume; anything else
+// is 400 (FOWNER included).
 func validCaps(caps []string, volume string) *apiError {
-	allowed := map[string]bool{"CHOWN": true, "DAC_OVERRIDE": true, "FOWNER": true}
+	allowed := map[string]bool{"CHOWN": true, "DAC_OVERRIDE": true}
 	seen := map[string]bool{}
 	for _, c := range caps {
-		if !allowed[c] || seen[c] {
-			return forbidden("policy", "capability not allowed")
+		if !allowed[c] {
+			return badRequest("capability not allowed")
+		}
+		if seen[c] {
+			return badRequest("duplicate capability")
 		}
 		seen[c] = true
 	}
 	if len(caps) > 0 && volume != "rw" {
-		return forbidden("policy", "capabilities only with a writable volume")
+		return badRequest("capabilities require volume rw")
 	}
 	return nil
 }
@@ -227,15 +227,156 @@ func qualified(repo string) string {
 	return "docker.io/library/" + repo
 }
 
+// qualifiedRef is a reference with a qualified repository and the default
+// tag latest (images.archive names compare this way).
+func qualifiedRef(ref string) string {
+	digest := ""
+	if i := strings.Index(ref, "@"); i >= 0 {
+		ref, digest = ref[:i], ref[i+1:]
+	}
+	repo, tag := ref, ""
+	if i := strings.LastIndexByte(ref, ':'); i > strings.LastIndexByte(ref, '/') {
+		repo, tag = ref[:i], ref[i+1:]
+	}
+	out := qualified(repo)
+	if tag == "" && digest == "" {
+		tag = "latest"
+	}
+	if tag != "" {
+		out += ":" + tag
+	}
+	if digest != "" {
+		out += "@" + digest
+	}
+	return out
+}
+
+// patternMatch is the guard's repository pattern (CCG_GUARD_PULL_REPOS,
+// CCG_GUARD_LOAD_REPOS): an exact repository, or one ending in a single '*'
+// that matches within the last path segment; both sides qualified.
+func patternMatch(pattern, repo string) bool {
+	q := qualified(repo)
+	base, glob := strings.CutSuffix(pattern, "*")
+	base = qualified(base)
+	if !glob {
+		return q == base
+	}
+	rest, ok := strings.CutPrefix(q, base)
+	return ok && !strings.Contains(rest, "/")
+}
+
+// repoAllowed: nil repos allow any repository (the fake's default).
 func repoAllowed(ref string, repos []string) bool {
 	if repos == nil {
 		return true
 	}
 	repo := repoOf(ref)
 	for _, r := range repos {
-		if r == repo || r == qualified(repo) || qualified(r) == qualified(repo) {
+		if patternMatch(r, repo) {
 			return true
 		}
 	}
 	return false
+}
+
+// validToken is the guard's token syntax: 64 lowercase hex characters.
+func validToken(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func tooLarge(msg string) *apiError { return &apiError{status: 413, code: "too_large", message: msg} }
+
+// parseIPv4 is the guard's address syntax (net/netip, IPv4 only).
+func parseIPv4(s, field string) (netip.Addr, *apiError) {
+	ip, err := netip.ParseAddr(s)
+	if err != nil || !ip.Is4() {
+		return netip.Addr{}, badRequest(field + " must be an IPv4 address")
+	}
+	return ip, nil
+}
+
+// inSubnet: a host address of the subnet other than .1 (03 §2.3).
+func inSubnet(ip netip.Addr, p netip.Prefix, field string) *apiError {
+	if !p.Contains(ip) || ip == p.Masked().Addr() || ip == hostAt(p, 1) || ip == broadcast(p) {
+		return badRequest(field + " outside account subnet or reserved")
+	}
+	return nil
+}
+
+// mediaType is the request's Content-Type without parameters ("" when invalid).
+func mediaType(r *http.Request) string {
+	mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil {
+		return ""
+	}
+	return mt
+}
+
+// rawBody is the guard's rule for byte-stream bodies: a Content-Length
+// (never chunked), at most max bytes, one of the media types.
+func rawBody(r *http.Request, max int64, types ...string) *apiError {
+	if len(r.TransferEncoding) > 0 || r.ContentLength < 0 {
+		return badRequest("Content-Length is required")
+	}
+	if r.ContentLength > max {
+		return tooLarge("request body too large")
+	}
+	mt := mediaType(r)
+	for _, t := range types {
+		if mt == t {
+			return nil
+		}
+	}
+	return badRequest("unsupported content type")
+}
+
+// exactBody: the body read must have exactly Content-Length bytes.
+func exactBody(r *http.Request, body []byte) *apiError {
+	if int64(len(body)) != r.ContentLength {
+		return badRequest("request body does not match Content-Length")
+	}
+	return nil
+}
+
+// routeQuery are the query parameters each route accepts (once each).
+var routeQuery = map[string][]string{
+	"GET /v1/images/inspect":              {"ref"},
+	"GET /v1/images/file":                 {"ref", "path", "limit"},
+	"GET /v1/accounts/{aid}":              {"fields"},
+	"GET /v1/accounts/{aid}?fields=state": {"fields"},
+	"DELETE /v1/accounts/{aid}/network":   {"role"},
+	"GET /v1/accounts/{aid}/app/archive":  {"path"},
+	"PUT /v1/accounts/{aid}/app/archive":  {"path"},
+}
+
+// checkQuery: unknown or repeated query parameters are 400.
+func checkQuery(route, raw string) *apiError {
+	q, err := url.ParseQuery(raw)
+	if err != nil {
+		return badRequest("invalid query")
+	}
+	for k, v := range q {
+		ok := false
+		for _, a := range routeQuery[route] {
+			if a == k {
+				ok = true
+			}
+		}
+		if !ok {
+			return badRequest("unknown query parameter")
+		}
+		if len(v) != 1 {
+			return badRequest("repeated query parameter")
+		}
+	}
+	return nil
 }

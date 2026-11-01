@@ -50,14 +50,15 @@ type idleKey struct{}
 type idlePolicy struct{ read, write time.Duration }
 
 // New is a client of the guard at baseURL (http://<IPv4>:<port>) with the
-// 64-hex-character token.
+// token: 64 lowercase hex characters, sent as "Bearer <token>" (the guard
+// refuses any other form with 401).
 func New(baseURL, token string, opts ...Option) (*HTTPClient, error) {
 	base, err := config.CheckGuardURL(baseURL)
 	if err != nil {
 		return nil, err
 	}
-	if len(token) != 64 {
-		return nil, errors.New("guard token must be 64 hex characters")
+	if !validToken(token) {
+		return nil, errors.New("guard token must be 64 lowercase hex characters")
 	}
 	c := &HTTPClient{base: base, token: token, Timeouts: DefaultTimeouts}
 	for _, o := range opts {
@@ -130,10 +131,52 @@ type call struct {
 	contentType         string
 	timeout             time.Duration // total; 0 for streams
 	idle                *idlePolicy   // streams
-	ok                  []int         // accepted statuses
+	ok                  []int         // accepted statuses (exactly the guard's success status)
 }
 
+// MaxJSONRequest is the guard's limit on a JSON request body (03 §3.3); a
+// larger body is answered 413 too_large without being sent.
+const MaxJSONRequest = 1 << 20
+
+func validToken(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// roundTrip sends one request. Every request carries "Bearer <token>"; a
+// JSON body is application/json (at most MaxJSONRequest); a raw body is
+// sent with its Content-Length, never chunked. The answer must have one of
+// k.ok; another 2xx/3xx status is a protocol error (ErrUnavailable), an
+// error status an *Error (classified).
 func (c *HTTPClient) roundTrip(ctx context.Context, k call) (*http.Response, context.CancelFunc, error) {
+	var body io.Reader
+	size := int64(0)
+	ctype := ""
+	switch {
+	case k.json != nil:
+		b, err := json.Marshal(k.json)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(b) > MaxJSONRequest {
+			return nil, nil, &Error{Status: http.StatusRequestEntityTooLarge, Code: CodeTooLarge,
+				Message: "request body too large (not sent)", Endpoint: k.route}
+		}
+		body, size, ctype = bytes.NewReader(b), int64(len(b)), "application/json"
+	case k.raw != nil:
+		if k.size < 0 {
+			return nil, nil, fmt.Errorf("guardapi: %s needs the body size (the guard refuses chunked bodies)", k.route)
+		}
+		body, size, ctype = k.raw, k.size, k.contentType
+	}
 	cancel := context.CancelFunc(func() {})
 	if k.timeout > 0 {
 		ctx, cancel = context.WithTimeout(ctx, k.timeout)
@@ -148,20 +191,6 @@ func (c *HTTPClient) roundTrip(ctx context.Context, k call) (*http.Response, con
 	u := c.base + k.path
 	if len(k.query) > 0 {
 		u += "?" + k.query.Encode()
-	}
-	var body io.Reader
-	size := int64(0)
-	ctype := ""
-	switch {
-	case k.json != nil:
-		b, err := json.Marshal(k.json)
-		if err != nil {
-			cancel()
-			return nil, nil, err
-		}
-		body, size, ctype = bytes.NewReader(b), int64(len(b)), "application/json"
-	case k.raw != nil:
-		body, size, ctype = k.raw, k.size, k.contentType
 	}
 	req, err := http.NewRequestWithContext(ctx, k.method, u, body)
 	if err != nil {
@@ -193,6 +222,10 @@ func (c *HTTPClient) roundTrip(ctx context.Context, k call) (*http.Response, con
 	}
 	defer cancel()
 	defer resp.Body.Close()
+	if resp.StatusCode < 400 {
+		io.Copy(io.Discard, io.LimitReader(resp.Body, MaxErrorAnswer))
+		return nil, nil, &TransportError{Endpoint: k.route, Err: fmt.Errorf("unexpected status %d", resp.StatusCode)}
+	}
 	return nil, nil, c.answerError(k.route, resp)
 }
 
@@ -320,7 +353,7 @@ func (c *HTTPClient) ImageInspect(ctx context.Context, ref string) (*Image, erro
 
 // ImagePull is POST /v1/images/pull; every failure is ImagePullFailed.
 func (c *HTTPClient) ImagePull(ctx context.Context, ref string) error {
-	k := c.normal("POST", "POST /v1/images/pull", "/v1/images/pull", map[string]string{"ref": ref}, 204, 200)
+	k := c.normal("POST", "POST /v1/images/pull", "/v1/images/pull", map[string]string{"ref": ref}, 204)
 	k.timeout = c.Timeouts.Pull
 	if _, err := c.do(ctx, k, MaxJSONAnswer); err != nil {
 		return errs.Wrap(errs.ImagePullFailed, "image pull failed", err)
@@ -349,7 +382,9 @@ func (c *HTTPClient) ImageLoad(ctx context.Context, archive io.Reader, size int6
 	return out, nil
 }
 
-// ImageFile is GET /v1/images/file.
+// ImageFile is GET /v1/images/file. The guard answers the file with its
+// exact Content-Length; an answer without one, larger than limit, or that
+// ends before Content-Length bytes (a cut transfer) is a transport error.
 func (c *HTTPClient) ImageFile(ctx context.Context, ref, path string, limit int64) (io.ReadCloser, int64, error) {
 	k := call{method: "GET", route: "GET /v1/images/file", path: "/v1/images/file",
 		query: url.Values{"ref": {ref}, "path": {path}, "limit": {strconv.FormatInt(limit, 10)}},
@@ -358,20 +393,29 @@ func (c *HTTPClient) ImageFile(ctx context.Context, ref, path string, limit int6
 	if err != nil {
 		return nil, 0, err
 	}
-	if resp.ContentLength > limit {
+	switch {
+	case resp.ContentLength < 0:
+		resp.Body.Close()
+		cancel()
+		return nil, 0, &TransportError{Endpoint: k.route, Err: errors.New("answer without Content-Length")}
+	case resp.ContentLength > limit:
 		resp.Body.Close()
 		cancel()
 		return nil, 0, &TransportError{Endpoint: k.route, Err: errors.New("file larger than its limit")}
 	}
-	return &limitedBody{rc: resp.Body, cancel: cancel, left: limit, route: k.route}, resp.ContentLength, nil
+	return &limitedBody{rc: resp.Body, cancel: cancel, left: resp.ContentLength, want: resp.ContentLength, route: k.route},
+		resp.ContentLength, nil
 }
 
 // limitedBody fails a stream that delivers more than its limit (the peer's
-// declared size is not trusted).
+// declared size is not trusted) and, when want >= 0, one that ends before
+// want bytes. Any read error is a *TransportError.
 type limitedBody struct {
 	rc     io.ReadCloser
 	cancel context.CancelFunc
 	left   int64
+	want   int64 // exact size, -1 when unknown (chunked)
+	got    int64
 	route  string
 }
 
@@ -384,8 +428,12 @@ func (b *limitedBody) Read(p []byte) (int, error) {
 	}
 	n, err := b.rc.Read(p)
 	b.left -= int64(n)
+	b.got += int64(n)
 	if b.left < 0 {
 		return n, &TransportError{Endpoint: b.route, Err: errors.New("stream exceeds its limit")}
+	}
+	if err == io.EOF && b.want >= 0 && b.got != b.want {
+		err = io.ErrUnexpectedEOF
 	}
 	if err != nil && err != io.EOF {
 		err = &TransportError{Endpoint: b.route, Err: err}
@@ -422,7 +470,7 @@ func (c *HTTPClient) AccountState(ctx context.Context, aid string) (*AccountStat
 
 // CreateNetwork is PUT /v1/accounts/{aid}/network (201).
 func (c *HTTPClient) CreateNetwork(ctx context.Context, aid string, req NetworkRequest) (*Network, error) {
-	v, err := c.do(ctx, c.normal("PUT", "PUT /v1/accounts/{aid}/network", accountPath(aid, "/network"), req, 201, 200), MaxJSONAnswer)
+	v, err := c.do(ctx, c.normal("PUT", "PUT /v1/accounts/{aid}/network", accountPath(aid, "/network"), req, 201), MaxJSONAnswer)
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +480,7 @@ func (c *HTTPClient) CreateNetwork(ctx context.Context, aid string, req NetworkR
 
 // DeleteNetwork is DELETE /v1/accounts/{aid}/network?role=.
 func (c *HTTPClient) DeleteNetwork(ctx context.Context, aid, role string) error {
-	k := c.normal("DELETE", "DELETE /v1/accounts/{aid}/network", accountPath(aid, "/network"), nil, 204, 200)
+	k := c.normal("DELETE", "DELETE /v1/accounts/{aid}/network", accountPath(aid, "/network"), nil, 204)
 	k.query = url.Values{"role": {role}}
 	_, err := c.do(ctx, k, MaxJSONAnswer)
 	return err
@@ -459,7 +507,7 @@ func (c *HTTPClient) EnsureVolume(ctx context.Context, aid string, req VolumeReq
 
 // DeleteVolume is DELETE /v1/accounts/{aid}/volume.
 func (c *HTTPClient) DeleteVolume(ctx context.Context, aid string) error {
-	_, err := c.do(ctx, c.normal("DELETE", "DELETE /v1/accounts/{aid}/volume", accountPath(aid, "/volume"), nil, 204, 200), MaxJSONAnswer)
+	_, err := c.do(ctx, c.normal("DELETE", "DELETE /v1/accounts/{aid}/volume", accountPath(aid, "/volume"), nil, 204), MaxJSONAnswer)
 	return err
 }
 
@@ -468,7 +516,7 @@ func (c *HTTPClient) CreateApp(ctx context.Context, aid string, req AppRequest) 
 	if req.Env == nil {
 		req.Env = map[string]string{}
 	}
-	v, err := c.do(ctx, c.normal("PUT", "PUT /v1/accounts/{aid}/app", accountPath(aid, "/app"), req, 201, 200), MaxJSONAnswer)
+	v, err := c.do(ctx, c.normal("PUT", "PUT /v1/accounts/{aid}/app", accountPath(aid, "/app"), req, 201), MaxJSONAnswer)
 	if err != nil {
 		return nil, err
 	}
@@ -486,7 +534,7 @@ func (c *HTTPClient) AppAction(ctx context.Context, aid, action string, timeout 
 	} else {
 		total = 10*time.Second + c.Timeouts.ActionPlus
 	}
-	k := c.normal("POST", "POST /v1/accounts/{aid}/app/{action}", accountPath(aid, "/app/"+esc(action)), body, 204, 200)
+	k := c.normal("POST", "POST /v1/accounts/{aid}/app/{action}", accountPath(aid, "/app/"+esc(action)), body, 204)
 	k.timeout = total
 	_, err := c.do(ctx, k, MaxJSONAnswer)
 	return err
@@ -495,7 +543,7 @@ func (c *HTTPClient) AppAction(ctx context.Context, aid, action string, timeout 
 // DeleteContainer is DELETE /v1/accounts/{aid}/containers/{suffix}.
 func (c *HTTPClient) DeleteContainer(ctx context.Context, aid, suffix string) error {
 	_, err := c.do(ctx, c.normal("DELETE", "DELETE /v1/accounts/{aid}/containers/{suffix}",
-		accountPath(aid, "/containers/"+esc(suffix)), nil, 204, 200), MaxJSONAnswer)
+		accountPath(aid, "/containers/"+esc(suffix)), nil, 204), MaxJSONAnswer)
 	return err
 }
 
@@ -533,14 +581,14 @@ func (c *HTTPClient) AppArchiveGet(ctx context.Context, aid, path string) (io.Re
 	if err != nil {
 		return nil, err
 	}
-	return &limitedBody{rc: resp.Body, cancel: cancel, left: MaxArchiveGet, route: k.route}, nil
+	return &limitedBody{rc: resp.Body, cancel: cancel, left: MaxArchiveGet, want: resp.ContentLength, route: k.route}, nil
 }
 
 // AppArchivePut is PUT /v1/accounts/{aid}/app/archive?path=.
 func (c *HTTPClient) AppArchivePut(ctx context.Context, aid, path string, archive io.Reader, size int64) error {
 	k := call{method: "PUT", route: "PUT /v1/accounts/{aid}/app/archive", path: accountPath(aid, "/app/archive"),
 		query: url.Values{"path": {path}}, raw: archive, size: size, contentType: "application/x-tar",
-		idle: &idlePolicy{read: c.Timeouts.StreamIdle, write: c.Timeouts.StreamIdle}, ok: []int{204, 200}}
+		idle: &idlePolicy{read: c.Timeouts.StreamIdle, write: c.Timeouts.StreamIdle}, ok: []int{204}}
 	if archive == nil {
 		k.raw = bytes.NewReader(nil)
 	}
@@ -557,14 +605,14 @@ func (c *HTTPClient) AppTop(ctx context.Context, aid string) (*Top, error) {
 // WriteResolv is PUT /v1/accounts/{aid}/resolv.
 func (c *HTTPClient) WriteResolv(ctx context.Context, aid, nameserver string) error {
 	_, err := c.do(ctx, c.normal("PUT", "PUT /v1/accounts/{aid}/resolv", accountPath(aid, "/resolv"),
-		map[string]string{"nameserver": nameserver}, 204, 200), MaxJSONAnswer)
+		map[string]string{"nameserver": nameserver}, 204), MaxJSONAnswer)
 	return err
 }
 
 // InstallFirewall is PUT /v1/accounts/{aid}/firewall.
 func (c *HTTPClient) InstallFirewall(ctx context.Context, aid, rules, defaultGateway string) error {
 	k := c.normal("PUT", "PUT /v1/accounts/{aid}/firewall", accountPath(aid, "/firewall"),
-		map[string]string{"rules": rules, "default_gateway": defaultGateway}, 204, 200)
+		map[string]string{"rules": rules, "default_gateway": defaultGateway}, 204)
 	k.timeout = c.Timeouts.Job
 	_, err := c.do(ctx, k, MaxJSONAnswer)
 	return err
@@ -643,7 +691,7 @@ func (c *HTTPClient) EnsureGateway(ctx context.Context, uplink *UplinkRequest) (
 	return &EnsureResult{Gateway: gw, Action: str(get(obj(v), "action"))}, nil
 }
 
-// RecreateGateway is POST /v1/gateway/recreate.
+// RecreateGateway is POST /v1/gateway/recreate: 200 {"gateway": <raw inspect>}.
 func (c *HTTPClient) RecreateGateway(ctx context.Context, image string) (*Container, error) {
 	k := c.normal("POST", "POST /v1/gateway/recreate", "/v1/gateway/recreate", map[string]string{"image": image}, 200)
 	k.timeout = c.Timeouts.Recreate
@@ -651,12 +699,11 @@ func (c *HTTPClient) RecreateGateway(ctx context.Context, image string) (*Contai
 	if err != nil {
 		return nil, err
 	}
-	if o := obj(v); o != nil && o.Has("gateway") {
-		gw, _, err := parseGatewayAnswer(k.route, v)
-		return gw, err
+	if o := obj(v); o == nil || !o.Has("gateway") {
+		return nil, &TransportError{Endpoint: k.route, Err: errShape}
 	}
-	x, perr := ParseContainer(v)
-	return wrapShape(k.route, x, perr)
+	gw, _, err := parseGatewayAnswer(k.route, v)
+	return gw, err
 }
 
 // GatewayExec is POST /v1/gateway/exec.
@@ -667,13 +714,13 @@ func (c *HTTPClient) GatewayExec(ctx context.Context, argv []string) (*ExecResul
 // ConnectGateway is PUT /v1/gateway/networks/{aid}.
 func (c *HTTPClient) ConnectGateway(ctx context.Context, aid, ipv4 string) error {
 	_, err := c.do(ctx, c.normal("PUT", "PUT /v1/gateway/networks/{aid}", "/v1/gateway/networks/"+esc(aid),
-		map[string]string{"ipv4": ipv4}, 204, 200), MaxJSONAnswer)
+		map[string]string{"ipv4": ipv4}, 204), MaxJSONAnswer)
 	return err
 }
 
 // DisconnectGateway is DELETE /v1/gateway/networks/{aid}.
 func (c *HTTPClient) DisconnectGateway(ctx context.Context, aid string) error {
-	_, err := c.do(ctx, c.normal("DELETE", "DELETE /v1/gateway/networks/{aid}", "/v1/gateway/networks/"+esc(aid), nil, 204, 200), MaxJSONAnswer)
+	_, err := c.do(ctx, c.normal("DELETE", "DELETE /v1/gateway/networks/{aid}", "/v1/gateway/networks/"+esc(aid), nil, 204), MaxJSONAnswer)
 	return err
 }
 
@@ -681,20 +728,26 @@ func (c *HTTPClient) DisconnectGateway(ctx context.Context, aid string) error {
 func (c *HTTPClient) WriteGatewayFile(ctx context.Context, name string, data []byte) error {
 	k := call{method: "PUT", route: "PUT /v1/gateway/files/{name}", path: "/v1/gateway/files/" + esc(name),
 		raw: bytes.NewReader(data), size: int64(len(data)), contentType: "application/octet-stream",
-		timeout: c.Timeouts.Normal, ok: []int{204, 200}}
+		timeout: c.Timeouts.Normal, ok: []int{204}}
 	_, err := c.do(ctx, k, MaxJSONAnswer)
 	return err
 }
 
-// UpgradeController is POST /v1/controller/upgrade (202).
+// UpgradeController is POST /v1/controller/upgrade: 202 {"accepted": true}.
 func (c *HTTPClient) UpgradeController(ctx context.Context, image string) error {
 	k := c.normal("POST", "POST /v1/controller/upgrade", "/v1/controller/upgrade", map[string]string{"image": image}, 202)
 	k.timeout = c.Timeouts.Upgrade
-	_, err := c.do(ctx, k, MaxJSONAnswer)
+	v, err := c.do(ctx, k, MaxJSONAnswer)
 	if e, ok := AsError(err); ok && e.Status == 403 {
 		return errs.Wrap(errs.InvalidImage, "controller image does not support the guard", err)
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	if ok, _ := get(obj(v), "accepted").(bool); !ok {
+		return &TransportError{Endpoint: k.route, Err: errShape}
+	}
+	return nil
 }
 
 // UpgradeStatus is GET /v1/controller/upgrade.

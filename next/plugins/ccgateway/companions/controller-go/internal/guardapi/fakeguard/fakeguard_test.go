@@ -1,6 +1,8 @@
 package fakeguard_test
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -52,7 +54,12 @@ func TestAccountLifecycle(t *testing.T) {
 		strings.Join(app.Env, ",") != "B=2,CCG_API_KEY=k" || app.Labels[names.LabelAuth] != strings.Repeat("a", 64) {
 		t.Fatalf("%+v", app)
 	}
-	if _, err := c.CreateApp(ctx, "21", appReq()); !errors.Is(err, guardapi.ErrExists) {
+	if _, err := c.CreateApp(ctx, "21", appReq()); guardapi.ReasonOf(err) != "" || !isStatus(err, 400) {
+		t.Fatal("the guard checks the address before the container: the same address again is 400:", err)
+	}
+	again := appReq()
+	again.IPv4 = "10.20.30.6"
+	if _, err := c.CreateApp(ctx, "21", again); !errors.Is(err, guardapi.ErrExists) {
 		t.Fatal("R21: a second create is exists:", err)
 	}
 	if err := c.AppAction(ctx, "21", guardapi.ActionStart, nil); err != nil {
@@ -213,12 +220,14 @@ func TestPolicyRejections(t *testing.T) {
 	}
 	for name, mutate := range map[string]func(*guardapi.Job){
 		"NET_ADMIN":       func(j *guardapi.Job) { j.Caps = []string{"NET_ADMIN"} },
+		"FOWNER (D5)":     func(j *guardapi.Job) { j.Caps = []string{"FOWNER"} },
+		"duplicate cap":   func(j *guardapi.Job) { j.Caps = []string{"CHOWN", "CHOWN"} },
 		"caps without rw": func(j *guardapi.Job) { j.Volume = "ro" },
 	} {
 		j := job
 		mutate(&j)
 		_, err := c.RunJob(ctx, "21", j)
-		bad(name, err, 403)
+		bad(name, err, 400)
 	}
 	for name, mutate := range map[string]func(*guardapi.Job){
 		"user":       func(j *guardapi.Job) { j.User = "1000" },
@@ -433,12 +442,31 @@ func TestImagesAndUpgrade(t *testing.T) {
 	if err := c.ImagePull(ctx, "missing:1"); !errs.Is(err, errs.ImagePullFailed) {
 		t.Fatal(err)
 	}
+	g.SetLoadRepos("ccgateway-*")
+	archive := saveArchive(t, "ccgateway-app:9")
+	id := "sha256:" + strings.Repeat("1", 64)
 	g.OnLoad(func(data []byte) ([]guardapi.LoadedImage, error) {
-		return []guardapi.LoadedImage{{ID: "sha256:" + strings.Repeat("1", 64), Tags: []string{string(data)}}}, nil
+		if !bytes.Equal(data, archive) {
+			t.Error("the hook gets the archive")
+		}
+		return []guardapi.LoadedImage{{ID: id, Tags: []string{"ccgateway-app:9"}}}, nil
 	})
-	got, err := c.ImageLoad(ctx, strings.NewReader("x:1"), 3)
-	if err != nil || got[0].Tags[0] != "x:1" {
+	got, err := c.ImageLoad(ctx, bytes.NewReader(archive), int64(len(archive)))
+	if err != nil || len(got) != 1 || got[0].ID != id || got[0].Tags[0] != "ccgateway-app:9" || g.ImageID("ccgateway-app:9") != id {
 		t.Fatal(got, err)
+	}
+	if _, err := c.ImageLoad(ctx, strings.NewReader("x:1"), 3); guardapi.ReasonOf(err) != "load_forbidden" {
+		t.Fatal("not an image archive:", err)
+	}
+	foreign := saveArchive(t, "caddy:latest")
+	if _, err := c.ImageLoad(ctx, bytes.NewReader(foreign), int64(len(foreign))); !errors.Is(err, guardapi.ErrLoadForbidden) {
+		t.Fatal("R9: a name outside the load whitelist:", err)
+	}
+	g.OnLoad(func([]byte) ([]guardapi.LoadedImage, error) {
+		return []guardapi.LoadedImage{{ID: id, Tags: []string{"ccgateway-other:1"}}}, nil
+	})
+	if _, err := c.ImageLoad(ctx, bytes.NewReader(archive), int64(len(archive))); guardapi.ReasonOf(err) != "load_failed" {
+		t.Fatal("a loaded name the archive does not give:", err)
 	}
 	g.AddImage("ctl:py", fakeguard.ImageSpec{Labels: map[string]string{names.LabelSharedSchema: "1"}})
 	g.AddImage("ctl:go", fakeguard.ImageSpec{Labels: map[string]string{names.LabelSharedSchema: "1", names.LabelGuardAPI: "1"}})
@@ -575,4 +603,23 @@ func TestArchiveRoundTrip(t *testing.T) {
 		t.Fatal(r)
 	}
 	_ = base64.StdEncoding
+}
+
+func isStatus(err error, status int) bool {
+	e, ok := guardapi.AsError(err)
+	return ok && e.Status == status
+}
+
+// saveArchive is a minimal `docker save` archive naming ref.
+func saveArchive(t *testing.T, ref string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	manifest := `[{"Config":"blobs/sha256/` + strings.Repeat("1", 64) + `","RepoTags":["` + ref + `"],"Layers":[]}]`
+	if err := tw.WriteHeader(&tar.Header{Name: "manifest.json", Mode: 0o644, Size: int64(len(manifest)), Typeflag: tar.TypeReg}); err != nil {
+		t.Fatal(err)
+	}
+	tw.Write([]byte(manifest))
+	tw.Close()
+	return buf.Bytes()
 }
