@@ -2,6 +2,12 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-02 核心 **0.1.228**（`3b26e11b6`，manifest `602a399e…5aef`，计划 `a78fc486e3aed4a13c383d087ce64b2f` completed/13，56 秒，北京时间 01:34，无迁移、schema 不变，Host API 8）：
+- compose 模板的控制器 `mem_limit` 2g（ovh 的 `/opt/ccgateway/compose.yml` 已提前手工改成同样内容）；核心默认 controller/guard 镜像换成 CI 的 `3bb9d3a8d` 构建；用量日志的上游账号显示为"#id 名称"（PR #8，`a9eac2ecf`）。
+- 内置插件的 ccgateway 从 0.1.118（Python 控制器）换成 0.1.120 包（与两节点在用的同一个文件），其余内置插件照搬 0.1.227。
+- sup2api-1 入口 503 约 10.6 秒（自身重启窗口）；两节点 release digest 都是 `602a399e…`、ready；ccgateway 运行环境 up_to_date，26 个账号 healthy，升级后没有 5xx。
+- 脚本 `stage/0.1.228`，备份 `backups/core-0.1.228`（`540c71f3…3b03`）。
+
 2026-11-01 **控制器去 Docker 权限：Go guard + Go 控制器**（北京时间 23:10 至 11-02 01:00；设计 [ccgateway-guard/](../../../docs/ccgateway-guard/)，CONTRACTS §76，证据 [2026-11-01-production](../../../docs/ccgateway-guard/evidence/2026-11-01-production.md)）：
 - 形态：compose 项目 `ccgateway`（`/opt/ccgateway/{compose.yml,.env}`，root 0600）。guard（`ccg-guard`）持有 docker.sock，只监听 `172.29.255.1:8790`（网络 `ccg-control`），维护 `CCG-PROXY-BRIDGE`、`CCG-CONTROL-FWD`、`CCG-CONTROL-IN`；控制器（`ccg-controller`，Go）没有 Docker 权限，数据在 `/opt/ccgateway-controller`。共享网关仍是原来的 `ccg-shared-egress`（S6 未做）。
 - 顺序：S1 guard 换下宿主服务 `ccgateway-bridge-guard`（规则逐条一致；旧服务 stop + disable，**不要再启动**）→ 核心 **0.1.227**（`8dfe959da`，manifest `066bc7bb…af81`）→ 插件 **ccgateway 0.1.119**（包 `a1b8e1a7…cdc3`）→ 接管（没有重建任何账号容器）→ 插件 **ccgateway 0.1.120**（`69385b7bd`，包 `a69b619f…bea2`，rollout 218；控制器经 guard 自升级约 4 秒）→ finish（Python `ccg-controller-prev` 已删）。
