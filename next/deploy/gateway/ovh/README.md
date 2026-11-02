@@ -4,6 +4,13 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-02 核心 **0.1.231**（`376864427`，北京时间 18:33；manifest `18856a62…c7cb`，计划 `f7bb406bcf645fed61be487828769376` completed/13，56 秒，无迁移、schema 不变 `45c3a343…`，Host API 8，内置插件与 0.1.230 相同）：
+- 起因：sup2api-ccp 高峰每小时 2–23 个 503 `model_availability`，无账号、无原因。模型可用性预检每个请求现查 PG（读快照与插件调用共用 200 ms），ccp 到 Supabase 新建连接约 430 ms。
+- 内容（设计 `next/docs/MODEL-AVAILABILITY-PRECHECK-DESIGN.md`，CONTRACTS §44.7/§51.3/§15.2）：额度快照改读节点内存镜像，请求路径不查库；预检只有插件明确 `UNAVAILABLE` 才拦（全拦 429），检查失败一律放行并记 WARN、节点级熔断；结论写入 `anomalies.availability`，使用记录详情新增"模型可用性预检"卡片；额度写入只失效镜像（`kind: quota`），不再清空分组快照与 CCGateway 请求缓存；模型名含空白/控制字符回 400；自助使用记录显示 5xx 错误消息；列表"详情"列显示 `status_code=…, 消息`；无 `account:read` 的管理员详情不再看到 `failure_policy` 的账号 id。
+- 核验：两节点 0.1.231、`/readyz` 200，账号容器无重建；升级后首批请求全部 200，无 `model_availability`。
+- 未做：ccp 连接池热连接（`pool_min_conns`）。`DATABASE_URL` 外壳与核心共用，改它要重建 ccp 容器，且会改变两节点对 Supabase 的常驻连接数，先观察镜像上线后的效果再定。
+- 脚本 `stage/0.1.231/{build.sh,release.sh}`，备份 `backups/core-0.1.231`（`ec40a3c2…`）。
+
 2026-11-02 网关（外壳）**0.1.130**（`6384710fd`，镜像 `ca0640ac…`，两个节点都已更新）：核心启动成功后自动清理旧核心发布包，只留 current / previous 及 6 小时内准备过的；sup2api-1 删 74 个（65 GB → 2 GB），sup2api-ccp 删 1 个。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
 
 2026-11-02 ccgateway **0.1.121** + 核心 **0.1.230**（`63a5b36d2`，北京时间 15:23–15:52；核心 manifest `7dc3168f…64a0`，计划 `9d36fca8a252bcc504a06905cbfd42a6` completed/13，66 秒，无迁移、schema 不变，Host API 8）：
