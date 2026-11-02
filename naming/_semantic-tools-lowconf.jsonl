@@ -1,0 +1,298 @@
+{"file":"chunk-0h4e7gnq.js","key":"@82494","name":"getLatestAgentReportText","source":"semantic","confidence":0.5,"note":"旧版名配错：取代理最近一次自报文本（带 warning 前缀），被 runAgent 使用"}
+{"file":"chunk-0h4e7gnq.js","key":"@103896","name":"agentStickyBetas","source":"semantic","confidence":0.55,"note":"子代理请求的 sticky betas"}
+{"file":"chunk-0h4e7gnq.js","key":"@118494","name":"stopAgentNonShellMonitors","source":"semantic","confidence":0.45,"note":"子代理退出清理：停止该代理的非 shell 监视任务（keepalive 门控）"}
+{"file":"chunk-0h4e7gnq.js","key":"@118520","name":"isPlainSpawnShape","source":"semantic","confidence":0.55,"note":"无 stickyBetas/useExactTools/name/recordedUuids 的普通派生（决定能否复用缓存参数）"}
+{"file":"chunk-0h4e7gnq.js","key":"@149735","name":"REPORT_TRIM_SLACK_CHARS","source":"semantic","confidence":0.55,"note":"Bu 里额外预留的 1000 字符"}
+{"file":"chunk-0h4e7gnq.js","key":"@149907","name":"HARNESS_NOTE_RESERVE_CHARS","source":"semantic","confidence":0.55,"note":"2*1000+1000"}
+{"file":"chunk-0h4e7gnq.js","key":"@151017","name":"WORKFLOW_GATE_TIMEOUT_MS","source":"semantic","confidence":0.5,"note":"2*wfn+60000（未确认用途）"}
+{"file":"chunk-0h4e7gnq.js","key":"@151231","name":"SCHEMA_JSON_MAX_CHARS","source":"semantic","confidence":0.5,"note":"4000000"}
+{"file":"chunk-0tkmvwy0.js","key":"@3934","name":"watch","source":"semantic","confidence":0.55,"note":"参数（jt(n,e,s,f){…）"}
+{"file":"chunk-0tkmvwy0.js","key":"@3936","name":"settledTaskId","source":"semantic","confidence":0.55,"note":"参数（jt(n,e,s,f){…）"}
+{"file":"chunk-0tkmvwy0.js","key":"@3938","name":"stranded","source":"semantic","confidence":0.55,"note":"参数（jt(n,e,s,f){…）"}
+{"file":"chunk-0tkmvwy0.js","key":"@3940","name":"evicted","source":"semantic","confidence":0.55,"note":"参数（jt(n,e,s,f){…）"}
+{"file":"chunk-0tkmvwy0.js","key":"@5570","name":"CHECK_INTERRUPT_ONLY","source":"semantic","confidence":0.5,"note":"At(_o) 的参数常量 true"}
+{"file":"chunk-0tkmvwy0.js","key":"@5580","name":"CHECK_ALL","source":"semantic","confidence":0.5,"note":"At(To) 的参数常量 false"}
+{"file":"chunk-0tkmvwy0.js","key":"@8348","name":"toolUseContext","source":"semantic","confidence":0.55,"note":"参数（Gn({agentId:…）"}
+{"file":"chunk-0wdgqhcf.js","key":"@53237","name":"getNativeHostManifestPaths","source":"semantic","confidence":0.45,"note":"旧版名 renderToolResultMessage 配错：拼 native host manifest 路径列表"}
+{"file":"chunk-18hwfzwa.js","key":"@130570","name":"EMPTY_ARRAY","source":"semantic","confidence":0.5,"note":"[] 常量"}
+{"file":"chunk-1wpnxx5r.js","key":"@15818","name":"isKnownProxyEndpointUrl","source":"semantic","confidence":0.55,"note":"旧版名不符：解包 CCR 代理 URL 后主机在集合 T 且 path===ae"}
+{"file":"chunk-3s7ydtfd.js","key":"@40273","name":"MAX_COLUMN_SUMMARY_LINES","source":"semantic","confidence":0.5}
+{"file":"chunk-3s7ydtfd.js","key":"@40283","name":"MAX_SAMPLE_TEXT_CHARS","source":"semantic","confidence":0.5}
+{"file":"chunk-3s7ydtfd.js","key":"@40293","name":"MAX_SAMPLE_VALUES","source":"semantic","confidence":0.5}
+{"file":"chunk-3s7ydtfd.js","key":"@40686","name":"describeColumnKinds","source":"semantic","confidence":0.5,"note":"按 number/time/text 统计列单元格并给示例"}
+{"file":"chunk-3s7ydtfd.js","key":"@41016","name":"describeColumn","source":"semantic","confidence":0.5}
+{"file":"chunk-3s7ydtfd.js","key":"@41090","name":"formatTableHeaderLine","source":"semantic","confidence":0.45,"note":"旧版名 renderToolUseRejectedMessage 配错"}
+{"file":"chunk-3s7ydtfd.js","key":"@41141","name":"makeTableColumnSummarizer","source":"semantic","confidence":0.45}
+{"file":"chunk-3s7ydtfd.js","key":"@41248","name":"summarizeTableColumns","source":"semantic","confidence":0.45}
+{"file":"chunk-4121qate.js","key":"@83379","name":"createHopStage","source":"semantic","confidence":0.45,"note":"把同一 hop 的多个成员合并为一个阶段（插件钩子链）；与 spawnMultiAgent 无关"}
+{"file":"chunk-4121qate.js","key":"@83727","name":"groupConsecutiveByHop","source":"semantic","confidence":0.5,"note":"按 hop 分组；旧版名 generateUniqueTeammateName 错配"}
+{"file":"chunk-4121qate.js","key":"@83910","name":"buildHookStages","source":"semantic","confidence":0.45,"note":"把成员列表转为阶段（hop 合并）"}
+{"file":"chunk-4j20twbf.js","key":"@1249","name":"isWithinSanitizeBudget","source":"semantic","confidence":0.55,"note":"旧版名 URL_CACHE 不符：size<=maxSize 且 sixteenthsToSanitize<=上限"}
+{"file":"chunk-530hfzwb.js","key":"@754","name":"getDisplayColumn","source":"semantic","confidence":0.55,"note":"光标所在逻辑行的显示列（考虑制表符）"}
+{"file":"chunk-5ghnps9r.js","key":"@944","name":"canOfferStandingPermissionUpdates","source":"semantic","confidence":0.55,"note":"旧版名不符：当前非沙箱且设置无错误时返回 true"}
+{"file":"chunk-5ghnps9r.js","key":"@1087","name":"isOfferedStandingRule","source":"semantic","confidence":0.55,"note":"切分错误"}
+{"file":"chunk-5ghnps9r.js","key":"@1218","name":"getEffectiveSessionPermissionUpdates","source":"semantic","confidence":0.55,"note":"切分错误"}
+{"file":"chunk-6cc2zqkz.js","key":"@3396","name":"leadProcess","source":"semantic","confidence":0.55,"note":"当前并发会话计数（lead 进程标记）"}
+{"file":"chunk-6vnxsn99.js","key":"@24631","name":"isTaskStillRunningInBackground","source":"semantic","confidence":0.55,"note":"running/pending 且非前台"}
+{"file":"chunk-6vnxsn99.js","key":"@24715","name":"isForegroundTask","source":"semantic","confidence":0.55,"note":"isBackgrounded === false"}
+{"file":"chunk-6xf89m6d.js","key":"@532","name":"isValidRefComponent","source":"semantic","confidence":0.55,"note":"git ref 名合法性；旧版名误配"}
+{"file":"chunk-7kpfrhzn.js","key":"@6768","name":"MAX_STREAMED_UPLOAD_BYTES","source":"semantic","confidence":0.55,"note":"Lun"}
+{"file":"chunk-7kpfrhzn.js","key":"@6775","name":"BUFFERED_UPLOAD_MAX_BYTES","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@6790","name":"LOST_ANSWER_BYTES_THRESHOLD","source":"semantic","confidence":0.45}
+{"file":"chunk-7kpfrhzn.js","key":"@7059","name":"PERMANENT_NETWORK_ERROR_CODES","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@7115","name":"RESEND_MIN_MAX_BYTES","source":"semantic","confidence":0.5,"note":"30 MiB"}
+{"file":"chunk-7kpfrhzn.js","key":"@7123","name":"RESEND_BACKOFF_FLOOR_MS","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@7130","name":"RESEND_BACKOFF_BASE_MS","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@7138","name":"RESEND_DEADLINE_MS","source":"semantic","confidence":0.5}
+{"file":"chunk-7kpfrhzn.js","key":"@7147","name":"RESEND_DEADLINE_LARGE_MS","source":"semantic","confidence":0.5}
+{"file":"chunk-7kpfrhzn.js","key":"@7157","name":"MAX_CONCURRENT_RESENDS","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@7162","name":"RESEND_COOLDOWN_MS","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@7456","name":"RETRYABLE_COPY_FAILURES","source":"semantic","confidence":0.4}
+{"file":"chunk-7kpfrhzn.js","key":"@12127","name":"isStoredLoginRefused","source":"semantic","confidence":0.5}
+{"file":"chunk-7kpfrhzn.js","key":"@12455","name":"uploadBufferForUuid","source":"semantic","confidence":0.55,"note":"旧版名 uploadResponseSchema 配错：上传 buffer 返回 file_uuid 或错误"}
+{"file":"chunk-7kpfrhzn.js","key":"@19804","name":"IMAGE_SNIFF_BYTES","source":"semantic","confidence":0.55,"note":"512 KiB"}
+{"file":"chunk-7kpfrhzn.js","key":"@23144","name":"answerMayBeLost","source":"semantic","confidence":0.55}
+{"file":"chunk-7kpfrhzn.js","key":"@23349","name":"uploadBufferedAttachment","source":"semantic","confidence":0.55,"note":"先尝试预览副本，否则上传原文件"}
+{"file":"chunk-7sw8gya5.js","key":"@950","name":"renderDimBulletLine","source":"semantic","confidence":0.5,"note":"旧版名 renderToolResultMessage 配错：显示 \"· 文本\" 行（ManagedSettingsSecurityDialog 用）"}
+{"file":"chunk-847rdpmn.js","key":"@7867","name":"toRelativeFromCwd","source":"semantic","confidence":0.55}
+{"file":"chunk-847rdpmn.js","key":"@9296","name":"ownerWritableMode","source":"semantic","confidence":0.55,"note":"(mode & 0o777) | 0o200"}
+{"file":"chunk-85kmkm1x.js","key":"@14116","name":"readPluginJsonFile","source":"semantic","confidence":0.55,"note":"读 JSON 并按 cOn schema 校验，失败返回 undefined"}
+{"file":"chunk-93kwxas0.js","key":"@163172","name":"getCronListJobs","source":"semantic","confidence":0.5,"note":"旧版名 renderListResultMessage 不确切：只返回 output.jobs ?? []"}
+{"file":"chunk-a5k9jscj.js","key":"@4439","name":"isPluginSkillAliasHit","source":"semantic","confidence":0.55,"note":"旧版名 formatCommandDescription_2 配错：插件 prompt 命令通过别名（非正名）命中"}
+{"file":"chunk-a5k9jscj.js","key":"@13276","name":"isHandedOff","source":"semantic","confidence":0.55}
+{"file":"chunk-a5k9jscj.js","key":"@14840","name":"readOnlyContent","source":"semantic","confidence":0.55}
+{"file":"chunk-a5k9jscj.js","key":"@16575","name":"definitionTarget","source":"semantic","confidence":0.55}
+{"file":"chunk-a5k9jscj.js","key":"@19652","name":"pluginLoadStatus","source":"semantic","confidence":0.55}
+{"file":"chunk-a5k9jscj.js","key":"@22817","name":"heldBackKind","source":"semantic","confidence":0.55}
+{"file":"chunk-a5k9jscj.js","key":"@22930","name":"heldBackReason","source":"semantic","confidence":0.55}
+{"file":"chunk-aepeg2w5.js","key":"@18072","name":"getInnerHtml","source":"semantic","confidence":0.5}
+{"file":"chunk-aepeg2w5.js","key":"@18107","name":"setInnerHtml","source":"semantic","confidence":0.5}
+{"file":"chunk-aepeg2w5.js","key":"@18155","name":"getLazyHtml","source":"semantic","confidence":0.4,"note":"旧版名 PREVIEW_FEATURE_PROMPT 配错：取节点缓存的 html（innerHTML 访问器）"}
+{"file":"chunk-aepeg2w5.js","key":"@458358","name":"LEGACY_CLAUDE3_MODEL_PREFIXES","source":"semantic","confidence":0.5,"note":"new Set([\"claude-3-opus\",\"claude-3-sonnet\",\"claude-3-haiku\"])"}
+{"file":"chunk-aepeg2w5.js","key":"@626189","name":"GateReaderRegistry","source":"semantic","confidence":0.55,"note":"注册一个开关读取器与问题报告器（org-config gate）；不属于 agents，切分错误"}
+{"file":"chunk-aepeg2w5.js","key":"@626446","name":"gatePlanCache","source":"semantic","confidence":0.5,"note":"{record,plan} 单项缓存"}
+{"file":"chunk-aepeg2w5.js","key":"@626514","name":"gateReaderRegistry","source":"semantic","confidence":0.5,"note":"GateReaderRegistry 单例"}
+{"file":"chunk-ah34pb7m.js","key":"@14453","name":"makeSummaryResultRenderer","source":"semantic","confidence":0.5,"note":"旧版名 renderToolResultMessage 不确切：按键查 RESULT_SUMMARY，返回一行摘要的渲染函数（computerUse 使用）"}
+{"file":"chunk-ah34pb7m.js","key":"@243302","name":"flushOpenSearchGroup","source":"semantic","confidence":0.55,"note":"结束当前搜索/读取分组并输出摘要行"}
+{"file":"chunk-ah34pb7m.js","key":"@244397","name":"getRowsWithOpenGroupSummary","source":"semantic","confidence":0.55,"note":"stable 行 + 当前分组摘要"}
+{"file":"chunk-ah34pb7m.js","key":"@244494","name":"countStableCountableRows","source":"semantic","confidence":0.45,"note":"计算稳定行中可计数项数（进度渲染）"}
+{"file":"chunk-ah34pb7m.js","key":"@244760","name":"buildProgressLookups","source":"semantic","confidence":0.55,"note":"生成渲染用 lookups 与进行中 tool_use 集合"}
+{"file":"chunk-ah34pb7m.js","key":"@245329","name":"isProgressWithMessage_2","source":"semantic","confidence":0.5,"note":"进度 data 含 message（React Compiler 提取的回调）"}
+{"file":"chunk-ah34pb7m.js","key":"@245391","name":"isRenderableProgressMessage","source":"semantic","confidence":0.5,"note":"有 message 且（非 user 或有 toolUseResult）"}
+{"file":"chunk-astf3mhy.js","key":"@32577","name":"PendingResumeMap","source":"semantic","confidence":0.55,"note":"toolState 键：agentId → 正在恢复中的任务 Promise"}
+{"file":"chunk-astf3mhy.js","key":"@36153","name":"logNotifyIdleRefusedPrincipal","source":"semantic","confidence":0.55,"note":"记录 subscribe_refused_principal"}
+{"file":"chunk-astf3mhy.js","key":"@36462","name":"requestsOrRequestedNotifyIdle","source":"semantic","confidence":0.55,"note":"当前或原始输入请求 notify_when_idle"}
+{"file":"chunk-astf3mhy.js","key":"@37210","name":"NOTIFY_IDLE_SCOPE_NOTE","source":"semantic","confidence":0.55,"note":"消息已送达但未订阅（范围限制）"}
+{"file":"chunk-astf3mhy.js","key":"@37328","name":"HANDLER_EMPTIED_WITH_NOTIFY_RESULT","source":"semantic","confidence":0.55,"note":"处理器清空消息（带 notify）的失败结果"}
+{"file":"chunk-astf3mhy.js","key":"@37596","name":"HANDLER_EMPTIED_RESULT","source":"semantic","confidence":0.55,"note":"处理器清空消息的失败结果"}
+{"file":"chunk-astf3mhy.js","key":"@37725","name":"HANDLER_REWROTE_EMPTY_RESULT","source":"semantic","confidence":0.55,"note":"处理器改写后无可发送内容"}
+{"file":"chunk-astf3mhy.js","key":"@37871","name":"checkHandlerEmptiedMessage","source":"semantic","confidence":0.55,"note":"message 为空时记录并返回 HANDLER_REWROTE_EMPTY_RESULT"}
+{"file":"chunk-astf3mhy.js","key":"@37874","name":"message","source":"semantic","confidence":0.55,"note":"参数（Ns(s,h){if(t…）"}
+{"file":"chunk-astf3mhy.js","key":"@37876","name":"onEmpty","source":"semantic","confidence":0.55,"note":"参数（Ns(s,h){if(t…）"}
+{"file":"chunk-astf3mhy.js","key":"@37946","name":"MESSAGE_NOT_DELIVERED_NOTE","source":"semantic","confidence":0.55,"note":"未送达提示"}
+{"file":"chunk-astf3mhy.js","key":"@38164","name":"NOTIFY_IDLE_MAIN_ONLY_NOTE","source":"semantic","confidence":0.5,"note":"送达但未订阅（非主会话）"}
+{"file":"chunk-astf3mhy.js","key":"@38238","name":"NOTIFY_IDLE_MAIN_ONLY_DISPLAY","source":"semantic","confidence":0.5,"note":"同上的显示文本"}
+{"file":"chunk-astf3mhy.js","key":"@38317","name":"NOTIFY_IDLE_STRIPPED_NOTE","source":"semantic","confidence":0.5,"note":"送达但处理器移除了订阅"}
+{"file":"chunk-astf3mhy.js","key":"@38447","name":"NOTIFY_IDLE_STRIPPED_DISPLAY","source":"semantic","confidence":0.5,"note":"同上的显示文本"}
+{"file":"chunk-astf3mhy.js","key":"@38540","name":"getNotifyIdleSkippedNotes","source":"semantic","confidence":0.55,"note":"送达后未订阅时附加的 model/display 文本"}
+{"file":"chunk-astf3mhy.js","key":"@38543","name":"refusedForPrincipal","source":"semantic","confidence":0.55,"note":"参数（Es(s,h,e,r){…）"}
+{"file":"chunk-astf3mhy.js","key":"@38545","name":"input","source":"semantic","confidence":0.55,"note":"参数（Es(s,h,e,r){…）"}
+{"file":"chunk-astf3mhy.js","key":"@38547","name":"assistantMessage","source":"semantic","confidence":0.55,"note":"参数（Es(s,h,e,r){…）"}
+{"file":"chunk-astf3mhy.js","key":"@38549","name":"toolUseId","source":"semantic","confidence":0.55,"note":"参数（Es(s,h,e,r){…）"}
+{"file":"chunk-astf3mhy.js","key":"@38706","name":"getNotifyIdleFailureNote","source":"semantic","confidence":0.55,"note":"发送失败时关于订阅的附加说明"}
+{"file":"chunk-astf3mhy.js","key":"@38709","name":"refusedForPrincipal","source":"semantic","confidence":0.55,"note":"参数（$s(s,h,e,r){…）"}
+{"file":"chunk-astf3mhy.js","key":"@38711","name":"input","source":"semantic","confidence":0.55,"note":"参数（$s(s,h,e,r){…）"}
+{"file":"chunk-astf3mhy.js","key":"@38713","name":"assistantMessage","source":"semantic","confidence":0.55,"note":"参数（$s(s,h,e,r){…）"}
+{"file":"chunk-astf3mhy.js","key":"@38715","name":"toolUseId","source":"semantic","confidence":0.55,"note":"参数（$s(s,h,e,r){…）"}
+{"file":"chunk-astf3mhy.js","key":"@43299","name":"shortenAgentIdForDisplay","source":"semantic","confidence":0.55,"note":"agentId 形式时截断显示"}
+{"file":"chunk-astf3mhy.js","key":"@48525","name":"provider","source":"semantic","confidence":0.5,"note":"参数（Me(s){let h=…）"}
+{"file":"chunk-astf3mhy.js","key":"@48709","name":"getReplyAddressProblem","source":"semantic","confidence":0.55,"note":"本会话无回信地址的原因（rc-disconnected/no-container-address）"}
+{"file":"chunk-astf3mhy.js","key":"@48850","name":"describeReplyAddressProblem","source":"semantic","confidence":0.55,"note":"原因 → 文本"}
+{"file":"chunk-astf3mhy.js","key":"@48964","name":"getUnnamedSessionNote","source":"semantic","confidence":0.5,"note":"远程会话未命名时的提示"}
+{"file":"chunk-astf3mhy.js","key":"@48967","name":"hasName","source":"semantic","confidence":0.5,"note":"参数（Ds(s){return…）"}
+{"file":"chunk-astf3mhy.js","key":"@49150","name":"isSendMessageInputSplitEnabled","source":"semantic","confidence":0.5,"note":"tengu_deep_feather（coerceInput applySplit）"}
+{"file":"chunk-astf3mhy.js","key":"@49198","name":"isIntentForwardingEnabled","source":"semantic","confidence":0.5,"note":"tengu_jaunty_ember"}
+{"file":"chunk-astf3mhy.js","key":"@49246","name":"getLiveMessagesReader","source":"semantic","confidence":0.5,"note":"主线程时返回读取实时消息的函数"}
+{"file":"chunk-astf3mhy.js","key":"@49370","name":"forwardUserIntent","source":"semantic","confidence":0.55,"note":"CLAUDE_CODE_FORWARD_USER_INTENT 下把用户意图附件转给被恢复的代理"}
+{"file":"chunk-cne5hsvz.js","key":"@17959","name":"resolveTeammateModel","source":"semantic","confidence":0.55,"note":"优先 Hk(显式模型)，否则默认子代理模型"}
+{"file":"chunk-cne5hsvz.js","key":"@18018","name":"getDefaultTeammateModel","source":"semantic","confidence":0.55,"note":"默认子代理模型非 inherit 时用之，否则回退"}
+{"file":"chunk-cne5hsvz.js","key":"@33051","name":"PaneFallbackNoticeState","source":"semantic","confidence":0.55,"note":"{shown}：pane 后端不可用回退 in-process 的提示只显示一次"}
+{"file":"chunk-cpqpnzp4.js","key":"@21483","name":"hasRoutingTarget","source":"semantic","confidence":0.5,"note":"结果对象含 target 字段（MCP 列表面板用）；旧版名 renderToolResultMessage 误配"}
+{"file":"chunk-dcmhvw5a.js","key":"@195108","name":"mergeManagedSettingsPaths","source":"semantic","confidence":0.5,"note":"旧版名配错：合并受管设置路径"}
+{"file":"chunk-dsy6gyxv.js","key":"@5658","name":"extractHostsFromConfig","source":"semantic","confidence":0.55,"note":"按正则从配置文本（去掉 # ; 注释行）提取主机名"}
+{"file":"chunk-dz36xfxg.js","key":"@15936","name":"isNarrowablePrefixRule","source":"semantic","confidence":0.55,"note":"旧版名配错"}
+{"file":"chunk-e6aww6q8.js","key":"@824203","name":"buildSourceCommandArgs","source":"semantic","confidence":0.55,"note":"旧版名配错：拼接 source 命令（单引号转义）"}
+{"file":"chunk-e6aww6q8.js","key":"@957304","name":"graphemeSegmenter","source":"semantic","confidence":0.55,"note":"惰性创建的字形分段器（Bun.ant.CellSegmenter 类）"}
+{"file":"chunk-e6aww6q8.js","key":"@957363","name":"foldConfusableGraphemes","source":"semantic","confidence":0.55,"note":"按字形分段并替换为规范字形，用于识别仿冒的保留名"}
+{"file":"chunk-e6aww6q8.js","key":"@957927","name":"matchReservedSkillNamespaceCached","source":"semantic","confidence":0.55,"note":"覆盖误配名 FileStateCache：带 LRU 缓存的保留命名空间匹配"}
+{"file":"chunk-e6aww6q8.js","key":"@958140","name":"matchReservedSkillNamespace","source":"semantic","confidence":0.55,"note":"去控制字符/折叠后按子序列匹配 r8e"}
+{"file":"chunk-e6aww6q8.js","key":"@959439","name":"isUnprefixedSkillListingEnabled","source":"semantic","confidence":0.5,"note":"旧版名 formatCommandDescription 配错：非插件 prompt 命令且 k2e 且 V1t()"}
+{"file":"chunk-e6aww6q8.js","key":"@1115210","name":"cpCopiesSourcesOnly","source":"semantic","confidence":0.55}
+{"file":"chunk-e6aww6q8.js","key":"@1130648","name":"SAFE_FLAG_LIST_VALUE_RE","source":"semantic","confidence":0.55}
+{"file":"chunk-e6aww6q8.js","key":"@1130788","name":"divergentShapesStore","source":"semantic","confidence":0.55}
+{"file":"chunk-e6aww6q8.js","key":"@1130809","name":"runWithDivergentShapes","source":"semantic","confidence":0.55}
+{"file":"chunk-e6aww6q8.js","key":"@1143130","name":"INTERNAL_COMMAND_ALLOWLIST","source":"semantic","confidence":0.55,"note":"含内部 aki 命令，316 中未被引用"}
+{"file":"chunk-e6aww6q8.js","key":"@1146458","name":"PRINTF_OCTAL_ESCAPE_RE","source":"semantic","confidence":0.55}
+{"file":"chunk-e6aww6q8.js","key":"@1146506","name":"PRINTF_CONVERSION_RE","source":"semantic","confidence":0.55}
+{"file":"chunk-e6aww6q8.js","key":"@1225793","name":"mergeRuleAndSafetyDecision","source":"semantic","confidence":0.55}
+{"file":"chunk-e6aww6q8.js","key":"@1243592","name":"isExtraGitCommand","source":"semantic","confidence":0.5,"note":"316 恒返回 false"}
+{"file":"chunk-e6aww6q8.js","key":"@1249643","name":"splitArgsMaskingQuotedDollar","source":"semantic","confidence":0.45,"note":"切分错误：Bash 侧代码执行参数检测"}
+{"file":"chunk-e6aww6q8.js","key":"@1249878","name":"splitArgsMaskingQuotedGlobs","source":"semantic","confidence":0.45,"note":"切分错误"}
+{"file":"chunk-e6aww6q8.js","key":"@1250166","name":"hasCodeExecutingArgs","source":"semantic","confidence":0.5,"note":"旧版名配错：命令参数是否能执行任意代码（-e/--eval、config 别名、docker -H 等），返回 true 表示危险"}
+{"file":"chunk-e6aww6q8.js","key":"@1257704","name":"hasGitConfigCodeKey","source":"semantic","confidence":0.5}
+{"file":"chunk-e6aww6q8.js","key":"@1257899","name":"expandParamDefaults","source":"semantic","confidence":0.45}
+{"file":"chunk-e6aww6q8.js","key":"@1258121","name":"isCodeExecutingInvocation","source":"semantic","confidence":0.45}
+{"file":"chunk-e6aww6q8.js","key":"@1258335","name":"BUN_SAFE_SUBCOMMANDS","source":"semantic","confidence":0.5}
+{"file":"chunk-e6aww6q8.js","key":"@1258479","name":"DENO_SAFE_SUBCOMMANDS","source":"semantic","confidence":0.5}
+{"file":"chunk-e6aww6q8.js","key":"@1258682","name":"isDenoCodeRun","source":"semantic","confidence":0.5}
+{"file":"chunk-e6aww6q8.js","key":"@1258918","name":"isBunCodeRun","source":"semantic","confidence":0.5}
+{"file":"chunk-e6aww6q8.js","key":"@1259035","name":"DOCKER_SUBCOMMANDS","source":"semantic","confidence":0.45}
+{"file":"chunk-e6aww6q8.js","key":"@1259569","name":"DOCKER_HOST_SHORT_FLAGS","source":"semantic","confidence":0.45}
+{"file":"chunk-e6aww6q8.js","key":"@1259587","name":"DOCKER_BOOLEAN_GLOBAL_FLAGS","source":"semantic","confidence":0.5}
+{"file":"chunk-e6aww6q8.js","key":"@1259674","name":"dockerHasRemoteHostFlag","source":"semantic","confidence":0.5,"note":"旧版名配错：docker -c/-H 指向其他上下文/主机"}
+{"file":"chunk-e6aww6q8.js","key":"@1259976","name":"hasDangerousFlagPair","source":"semantic","confidence":0.4}
+{"file":"chunk-e6aww6q8.js","key":"@1260194","name":"gitSubcommandHasGlobArg","source":"semantic","confidence":0.45}
+{"file":"chunk-e6aww6q8.js","key":"@1260395","name":"commandHasGlobChars","source":"semantic","confidence":0.45}
+{"file":"chunk-e6aww6q8.js","key":"@1260430","name":"DANGEROUS_GIT_SHORT_FLAGS","source":"semantic","confidence":0.55}
+{"file":"chunk-e6aww6q8.js","key":"@1260446","name":"DANGEROUS_GIT_LONG_FLAGS","source":"semantic","confidence":0.55}
+{"file":"chunk-e6aww6q8.js","key":"@1380153","name":"MTIME_RECENT_WINDOW_MS","source":"semantic","confidence":0.55,"note":"2000：备份时间与 mtime 相差在此内视为可能已变"}
+{"file":"chunk-e6aww6q8.js","key":"@1453027","name":"NO_LIMIT","source":"semantic","confidence":0.5,"note":"恒为 undefined 的占位"}
+{"file":"chunk-e6aww6q8.js","key":"@1482451","name":"getGitExtraInstructions","source":"semantic","confidence":0.5}
+{"file":"chunk-e6aww6q8.js","key":"@1729612","name":"toQuestionSummaryInput","source":"semantic","confidence":0.5,"note":"旧版名 UNIQUENESS_REFINE 配错：清洗输入，只保留第一题的问题文本与最多 4 个选项 label"}
+{"file":"chunk-e6aww6q8.js","key":"@2361507","name":"cwd","source":"semantic","confidence":0.55,"note":"参数（QR(e,n){let …）"}
+{"file":"chunk-e6aww6q8.js","key":"@2361509","name":"options","source":"semantic","confidence":0.55,"note":"参数（QR(e,n){let …）"}
+{"file":"chunk-e6aww6q8.js","key":"@2361643","name":"fallback","source":"semantic","confidence":0.55,"note":"参数（NUo(e,n,r){t…）"}
+{"file":"chunk-e6aww6q8.js","key":"@2361645","name":"cwd","source":"semantic","confidence":0.55,"note":"参数（NUo(e,n,r){t…）"}
+{"file":"chunk-e6aww6q8.js","key":"@2361647","name":"options","source":"semantic","confidence":0.55,"note":"参数（NUo(e,n,r){t…）"}
+{"file":"chunk-e6aww6q8.js","key":"@3017386","name":"checkToolPermissionsForAskRule","source":"semantic","confidence":0.55,"note":"旧版名配错：通用的 ask 规则下运行工具 checkPermissions"}
+{"file":"chunk-e6aww6q8.js","key":"@3105643","name":"DEFAULT_PS_SEMANTIC","source":"semantic","confidence":0.55,"note":"切分错误：PowerShell 退出码语义表"}
+{"file":"chunk-e6aww6q8.js","key":"@3105732","name":"exitOneIsNotError","source":"semantic","confidence":0.55}
+{"file":"chunk-e6aww6q8.js","key":"@3105798","name":"noMatchesSemantic","source":"semantic","confidence":0.55}
+{"file":"chunk-e6aww6q8.js","key":"@3105825","name":"filesDifferSemantic","source":"semantic","confidence":0.55}
+{"file":"chunk-e6aww6q8.js","key":"@3105849","name":"PS_COMMAND_SEMANTICS","source":"semantic","confidence":0.5}
+{"file":"chunk-e6aww6q8.js","key":"@3106103","name":"PS_CMDLET_SEMANTICS","source":"semantic","confidence":0.45}
+{"file":"chunk-e6aww6q8.js","key":"@3196743","name":"listAddressablePeers","source":"semantic","confidence":0.55,"note":"汇总可寻址的会话/队友/云端/bridge 对象（@ 补全与附件用）；旧版名 resolveTeamName 不准"}
+{"file":"chunk-e6aww6q8.js","key":"@4197428","name":"normalizeRelativeKey","source":"semantic","confidence":0.55,"note":"旧版名配错"}
+{"file":"chunk-e6aww6q8.js","key":"@4236082","name":"getMergedOperatorDeclaredExtras","source":"semantic","confidence":0.5,"note":"旧版名 tryUnwrapTextPayload 配错：合并各来源 extras 并按输入做 memo（operatorDeclaredMemo），与 MCP UI 无关"}
+{"file":"chunk-fnhsh6ng.js","key":"@2104","name":"getClassifierPermissionMode","source":"semantic","confidence":0.55,"note":"旧版名不符：把权限模式规整为分类器可用的模式"}
+{"file":"chunk-fq0cr76a.js","key":"@876921","name":"splitWindowsPathUpper","source":"semantic","confidence":0.55,"note":"旧版名不符：规范化后大写并按 \\ 拆分"}
+{"file":"chunk-fq0cr76a.js","key":"@877006","name":"resolveWindowsRealPath","source":"semantic","confidence":0.55}
+{"file":"chunk-fq0cr76a.js","key":"@879949","name":"MAX_RIPGREP_STREAM_CHUNK_BYTES","source":"semantic","confidence":0.5,"note":"1MB"}
+{"file":"chunk-gfa3ceg6.js","key":"@2836","name":"SAFE_GIT_CONFIG_KEY_PATTERNS","source":"semantic","confidence":0.55,"note":"旧版名配错（GIT_REBASE_RE）：git 配置键白名单"}
+{"file":"chunk-gfa3ceg6.js","key":"@3468","name":"SENSITIVE_GIT_CONFIG_KEY_PATTERNS","source":"semantic","confidence":0.5}
+{"file":"chunk-gfa3ceg6.js","key":"@3593","name":"SUBMODULE_UPDATE_MODES","source":"semantic","confidence":0.5}
+{"file":"chunk-ha3km179.js","key":"@76318","name":"MAX_CHECKLIST_LINE_CHARS","source":"semantic","confidence":0.55,"note":"512"}
+{"file":"chunk-ha3km179.js","key":"@76325","name":"MAX_CHECKLIST_ITEMS","source":"semantic","confidence":0.55,"note":"32"}
+{"file":"chunk-hwmsct5x.js","key":"@61112","name":"runToolForSession","source":"semantic","confidence":0.55,"note":"旧版名配错：SDK tool runner 里解析输入并运行工具，异常转为 isError 文本"}
+{"file":"chunk-hwmsct5x.js","key":"@248180","name":"parseToolNamesFromText","source":"semantic","confidence":0.55,"note":"旧版名 makeToolSchema 配错：从文本中解析工具名列表（含 web_search 关键词兜底）"}
+{"file":"chunk-j2t139r9.js","key":"@57520","name":"normalizeRefineMessage","source":"semantic","confidence":0.5,"note":"zod 自定义 refine 的参数归一（属于 zod 第三方代码）"}
+{"file":"chunk-j2t139r9.js","key":"@57645","name":"zodCustom","source":"semantic","confidence":0.5,"note":"旧版名 inputSchema 配错：zod 的 custom()（第三方）"}
+{"file":"chunk-ja1jtv44.js","key":"@1540","name":"getApiBaseUrl","source":"semantic","confidence":0.55,"note":"ANTHROPIC_BASE_URL（去尾 /）或 OAuth BASE_API_URL"}
+{"file":"chunk-kxyd0g16.js","key":"@130470","name":"countNestedWorktrees","source":"semantic","confidence":0.45,"note":"外部构建中恒为 0（内部功能被裁剪）"}
+{"file":"chunk-kxyd0g16.js","key":"@130494","name":"formatNestedWorktreesNote","source":"semantic","confidence":0.45,"note":"外部构建中恒为空串"}
+{"file":"chunk-m2yw48pg.js","key":"@6885","name":"isPlainPushToOrigin","source":"semantic","confidence":0.55,"note":"旧版名配错：命令中的 push 全部只推 origin 且无特殊选项"}
+{"file":"chunk-m79qv8gp.js","key":"@11467","name":"isClassifierDecision","source":"semantic","confidence":0.55,"note":"旧版名不符：检查对象上的 classifier 标记"}
+{"file":"chunk-mdb2vxrz.js","key":"@4921","name":"isFirstPartyBaseUrl","source":"semantic","confidence":0.55,"note":"旧版名 getBridgeBaseUrl 配错：未设置或与官方 BASE_API_URL 同 host 时为 true"}
+{"file":"chunk-mvvq2nx1.js","key":"@8902","name":"MAX_IMAGE_DIMENSION","source":"semantic","confidence":0.5,"note":"8000"}
+{"file":"chunk-mxpjbr4y.js","key":"@27100","name":"describeCloudRulesNotice","source":"semantic","confidence":0.5,"note":"覆盖误配名 isResultTruncated：返回云会话 deny/ask 规则提示行，与 Write UI 无关"}
+{"file":"chunk-ncz9bgnh.js","key":"@2521","name":"passthroughTypedObjectSchema","source":"semantic","confidence":0.5,"note":"旧版名 inputSchema 配错：{type}.passthrough()，被 chromeNativeHost 使用"}
+{"file":"chunk-nw7jbebs.js","key":"@9354","name":"listTasksForUi","source":"semantic","confidence":0.55,"note":"v5 存储可用时读存储，否则读文件"}
+{"file":"chunk-nw7jbebs.js","key":"@13820","name":"storeUpdateBackoff","source":"semantic","confidence":0.55,"note":"重试退避"}
+{"file":"chunk-p7xejzdb.js","key":"@14291","name":"normalizeAgentStatus","source":"semantic","confidence":0.55,"note":"idle/waiting/busy；旧版名误配"}
+{"file":"chunk-q8cqcff6.js","key":"@33817","name":"EXTRA_SECRET_ENV_GLOBS","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@35717","name":"BUILD_TOOL_VALUE_FLAGS_REGEX","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@37386","name":"expandNestedDefineWords","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@37429","name":"parseNestedDefineValue","source":"semantic","confidence":0.55,"note":"-Dx= 后面又是一串选项时拆开"}
+{"file":"chunk-q8cqcff6.js","key":"@37560","name":"isUnparseableNestedDefine","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@38056","name":"JVM_NON_SECRET_OPTION_REGEX","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@38556","name":"PATH_SYSTEM_PROPERTY_REGEX","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@39450","name":"DEFAULT_CREDENTIAL_DEFINE_REGEX","source":"semantic","confidence":0.55,"note":"代理用户/口令、trustStorePassword=changeit 等视为残留可保留"}
+{"file":"chunk-q8cqcff6.js","key":"@40014","name":"SETTINGS_FILE_PROPERTY_REGEX","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@40906","name":"isSecretPropertyAssignment","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@40981","name":"isSecretPropertyName","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@41155","name":"SECRET_ID_SUFFIX_REGEX","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@41369","name":"isScalarNonSecretValue","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@41943","name":"hasSecretQualifierSegment","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@42244","name":"NON_SECRET_TAIL_SEGMENT_REGEX","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@42963","name":"AUTH0_PREFIX_GLOB","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@42988","name":"BUNDLE_NON_SECRET_WORDS","source":"semantic","confidence":0.55}
+{"file":"chunk-q8cqcff6.js","key":"@43076","name":"BUNDLE_HOST_PATTERN","source":"semantic","confidence":0.5}
+{"file":"chunk-q8cqcff6.js","key":"@43216","name":"BUNDLE_CREDENTIAL_GLOB","source":"semantic","confidence":0.5}
+{"file":"chunk-q8cqcff6.js","key":"@43302","name":"BUNDLE_NON_SECRET_GLOBS","source":"semantic","confidence":0.5}
+{"file":"chunk-qq39x404.js","key":"@2557","name":"isMislabeledImageCopy","source":"semantic","confidence":0.55,"note":"预览副本的 media_type 与扩展名不符"}
+{"file":"chunk-s06523pk.js","key":"@1147","name":"hasTaskBackgroundKeybindingConflict","source":"semantic","confidence":0.55,"note":"Task 上下文中 task:background 绑定被改/被占用；旧版名 LEGACY_AGENT_TOOL_NAME 是错配（键位绑定）"}
+{"file":"chunk-s61vbvea.js","key":"@84113","name":"MEMORY_FILE_TOOL_REGEX","source":"semantic","confidence":0.5,"note":"旧版名 SEARCH_TOOLS 配错：memory read/write/str_replace/append 工具名"}
+{"file":"chunk-s61vbvea.js","key":"@84170","name":"MEMORY_VERSION_LINE_REGEX","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@84211","name":"MEMORY_FILE_HEADER_REGEX","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@84233","name":"MEMORY_SEARCH_TOOL_NAME","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@84251","name":"MEMORY_DOCUMENT_PREAMBLE_REGEX","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@568721","name":"OWNER_REPO_RE","source":"semantic","confidence":0.55}
+{"file":"chunk-s61vbvea.js","key":"@571787","name":"GERRIT_REMOTE_LINE_RE","source":"semantic","confidence":0.55}
+{"file":"chunk-s61vbvea.js","key":"@572628","name":"GIT_REF_NAME_PATTERN","source":"semantic","confidence":0.5,"note":"git 分支名正则（误归 utils/tasks）"}
+{"file":"chunk-s61vbvea.js","key":"@572840","name":"emitCodeChangePublished","source":"semantic","confidence":0.55,"note":"PR URL 有效时发 code_change_published 系统事件"}
+{"file":"chunk-s61vbvea.js","key":"@575482","name":"getPushArgs","source":"semantic","confidence":0.55}
+{"file":"chunk-s61vbvea.js","key":"@576550","name":"MAX_PENDING_PUSH_BRANCHES","source":"semantic","confidence":0.55}
+{"file":"chunk-s61vbvea.js","key":"@576555","name":"MAX_PUSH_PR_CHECK_ATTEMPTS","source":"semantic","confidence":0.55}
+{"file":"chunk-s61vbvea.js","key":"@576560","name":"GIT_HOST_CLI_RE","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@576594","name":"pendingBranchKey","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@576619","name":"isTrackableBranch","source":"semantic","confidence":0.55}
+{"file":"chunk-s61vbvea.js","key":"@576687","name":"rememberPushedBranch","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@576830","name":"forgetPushedBranchesForCwd","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@576895","name":"updatePushedBranch","source":"semantic","confidence":0.45}
+{"file":"chunk-s61vbvea.js","key":"@577007","name":"isOnlyPrCreateCommand","source":"semantic","confidence":0.55}
+{"file":"chunk-s61vbvea.js","key":"@577557","name":"PR_HEAD_LOOKUP_TIMEOUT_MS","source":"semantic","confidence":0.4}
+{"file":"chunk-s61vbvea.js","key":"@577574","name":"getPrCreateHeadBranch","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@578345","name":"checkPushedBranchesForPr","source":"semantic","confidence":0.45}
+{"file":"chunk-s61vbvea.js","key":"@578562","name":"MAX_COMMAND_LENGTH_FOR_COUNTING","source":"semantic","confidence":0.5}
+{"file":"chunk-s61vbvea.js","key":"@578578","name":"isRawPrCreateRequest","source":"semantic","confidence":0.55,"note":"curl POST 到 /pulls 或 gh api repos/x/y/pulls"}
+{"file":"chunk-s61vbvea.js","key":"@578794","name":"countGitOperationsFromRemoteCommand","source":"semantic","confidence":0.55,"note":"跨进程执行时只做提交/PR 计数"}
+{"file":"chunk-s61vbvea.js","key":"@581333","name":"trackBackgroundPromise","source":"semantic","confidence":0.55}
+{"file":"chunk-s67vc0kc.js","key":"@5041","name":"isVariableParamAbbrev","source":"semantic","confidence":0.5}
+{"file":"chunk-s67vc0kc.js","key":"@12799","name":"getWrittenFileStems","source":"semantic","confidence":0.55}
+{"file":"chunk-s67vc0kc.js","key":"@12888","name":"getPathBaseAndStemVariants","source":"semantic","confidence":0.55}
+{"file":"chunk-s67vc0kc.js","key":"@13053","name":"normalizedLeafName","source":"semantic","confidence":0.55}
+{"file":"chunk-s67vc0kc.js","key":"@15514","name":"normalizeParamDashes","source":"semantic","confidence":0.45}
+{"file":"chunk-s67vc0kc.js","key":"@17330","name":"needsQuotingForNativeArg","source":"semantic","confidence":0.45}
+{"file":"chunk-s67vc0kc.js","key":"@17726","name":"hasNativeArgQuotingRisk","source":"semantic","confidence":0.45}
+{"file":"chunk-s67vc0kc.js","key":"@18056","name":"isHazyPeachEnabled","source":"semantic","confidence":0.5,"note":"开关 tengu_hazy_peach（命令名切分方式）"}
+{"file":"chunk-s67vc0kc.js","key":"@20260","name":"GIT_DANGEROUS_GLOBAL_FLAGS","source":"semantic","confidence":0.55}
+{"file":"chunk-s67vc0kc.js","key":"@20521","name":"GIT_SHORT_VALUE_FLAGS","source":"semantic","confidence":0.5}
+{"file":"chunk-s67vc0kc.js","key":"@20545","name":"isGitValueFlag","source":"semantic","confidence":0.5}
+{"file":"chunk-s67vc0kc.js","key":"@20592","name":"argsUnchangedByUnescape","source":"semantic","confidence":0.5}
+{"file":"chunk-s67vc0kc.js","key":"@20816","name":"unescapePsArgs","source":"semantic","confidence":0.55}
+{"file":"chunk-s67vc0kc.js","key":"@21789","name":"isGhSafePS","source":"semantic","confidence":0.45,"note":"316 中 K 恒 false"}
+{"file":"chunk-s67vc0kc.js","key":"@21854","name":"isGhSafe","source":"semantic","confidence":0.45,"note":"316 恒返回 false（gh 不再视为只读）"}
+{"file":"chunk-s67vc0kc.js","key":"@21872","name":"DOCKER_DANGEROUS_SHORT_FLAGS","source":"semantic","confidence":0.5}
+{"file":"chunk-s67vc0kc.js","key":"@21933","name":"DOCKER_DANGEROUS_LONG_FLAGS","source":"semantic","confidence":0.5}
+{"file":"chunk-sycgf9xs.js","key":"@6387","name":"isAlternateRefsGuardEnabled","source":"semantic","confidence":0.45,"note":"切分错误：git 安全配置"}
+{"file":"chunk-sycgf9xs.js","key":"@6644","name":"REPO_HOOK_CONFIG_KEYS","source":"semantic","confidence":0.45}
+{"file":"chunk-sycgf9xs.js","key":"@6826","name":"getGitSafetyEnv","source":"semantic","confidence":0.55}
+{"file":"chunk-sycgf9xs.js","key":"@7720","name":"overrideHooksPathArgs","source":"semantic","confidence":0.55}
+{"file":"chunk-t0gq9gyw.js","key":"@55926","name":"fsWrappedErrorCategory","source":"semantic","confidence":0.55}
+{"file":"chunk-v0yfsee9.js","key":"@22127","name":"CMD_WHITESPACE_RE","source":"semantic","confidence":0.55}
+{"file":"chunk-v0yfsee9.js","key":"@25017","name":"walkCmdTokens","source":"semantic","confidence":0.55}
+{"file":"chunk-v0yfsee9.js","key":"@27956","name":"skipToSeparator","source":"semantic","confidence":0.5}
+{"file":"chunk-v0yfsee9.js","key":"@28101","name":"skipRedirectTarget","source":"semantic","confidence":0.5}
+{"file":"chunk-v0yfsee9.js","key":"@28239","name":"blankPsVariables","source":"semantic","confidence":0.55}
+{"file":"chunk-v0yfsee9.js","key":"@39642","name":"normalizeWindowsPathSegments","source":"semantic","confidence":0.5}
+{"file":"chunk-v0yfsee9.js","key":"@39767","name":"stripBackticks","source":"semantic","confidence":0.45}
+{"file":"chunk-v0yfsee9.js","key":"@40858","name":"isProviderPathClean","source":"semantic","confidence":0.45}
+{"file":"chunk-v0yfsee9.js","key":"@47196","name":"PATH_READING_CMDLETS","source":"semantic","confidence":0.55}
+{"file":"chunk-v0yfsee9.js","key":"@48941","name":"checkReadBlockForExternalCommand","source":"semantic","confidence":0.55,"note":"读封锁下外部程序参数的路径检查"}
+{"file":"chunk-v0yfsee9.js","key":"@50529","name":"isLinkWithValueArgs","source":"semantic","confidence":0.55,"note":"旧版名不符：同时有 -ItemType *link/junction 和 -Value"}
+{"file":"chunk-v0yfsee9.js","key":"@72619","name":"getFirstTokenLower","source":"semantic","confidence":0.55}
+{"file":"chunk-v0yfsee9.js","key":"@72837","name":"trimEndIndex","source":"semantic","confidence":0.55,"note":"去掉末尾空白（含 U+0085/U+180E）的长度"}
+{"file":"chunk-v0yfsee9.js","key":"@72995","name":"stripOddWhitespaceEdges","source":"semantic","confidence":0.5}
+{"file":"chunk-v0yfsee9.js","key":"@73196","name":"removeOddWhitespaceAtEdges","source":"semantic","confidence":0.5}
+{"file":"chunk-v0yfsee9.js","key":"@90174","name":"PROGRESS_INTERVAL_MS","source":"semantic","confidence":0.55}
+{"file":"chunk-w5ndchqs.js","key":"@11147","name":"extractApiErrorSummary","source":"semantic","confidence":0.55,"note":"截断的 {error:{type,message}}；旧版名 hasProgressMessage 误配"}
+{"file":"chunk-wd9kxbpn.js","key":"@18177","name":"syncWorktreeMetadataFromProgress","source":"semantic","confidence":0.4,"note":"旧版名 renderToolResultMessage 配错：按进度消息更新已保存的 worktree 元数据"}
+{"file":"chunk-wyqg6m3h.js","key":"@17709","name":"GIT_REFS_PATTERN","source":"semantic","confidence":0.55,"note":"refs/ 路径正则"}
+{"file":"chunk-wyqg6m3h.js","key":"@17764","name":"isSafeRefPath","source":"semantic","confidence":0.55,"note":"refs 路径安全检查；旧版名误配"}
+{"file":"chunk-wyqg6m3h.js","key":"@28952","name":"toFileChangeDisplay","source":"semantic","confidence":0.55,"note":"Edit/Write 结果转 {path, hunks,...} 显示数据（staged 返回 null）"}
+{"file":"chunk-wyqg6m3h.js","key":"@64134","name":"applyDiffPanelPreference","source":"semantic","confidence":0.45,"note":"旧版名 outputSchema 配错：读/迁移内置 diff 面板偏好，为 true 时启用 diff 插件面板"}
+{"file":"chunk-y8ff1x9z.js","key":"@4993","name":"RUN_LOG_HEADER_RESERVE","source":"semantic","confidence":0.5,"note":"800"}
+{"file":"chunk-y8ff1x9z.js","key":"@5993","name":"MAX_SANITIZE_INPUT_CHARS","source":"semantic","confidence":0.55,"note":"16000"}
+{"file":"chunk-y8ff1x9z.js","key":"@13344","name":"RUN_LOG_JSON_RESERVE","source":"semantic","confidence":0.5}
+{"file":"chunk-z4g2ta8k.js","key":"@4880","name":"isDefaultMainThreadBuiltInAgentTask","source":"semantic","confidence":0.5,"note":"主线程默认启动的内建本地代理任务判定；旧版名 getTaskOutputData 误配"}
+{"file":"chunk-zethn0a3.js","key":"@3806","name":"splitSessionIdFromToolArgs","source":"semantic","confidence":0.55,"note":"旧版名 renderToolUseMessage 配错：从输入中拆出 session_id，其余作为 toolArgs"}
