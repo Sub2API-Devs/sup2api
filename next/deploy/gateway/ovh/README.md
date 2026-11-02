@@ -4,6 +4,17 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-02 ccgateway **0.1.122** + 核心 **0.1.232**（`502fbc27f`，北京时间 22:40–22:50；插件包 `c8f24182…fe32`，核心 manifest `45d6a998…256c`，计划 `b05b3a312b629a03e99fc9b0aa0b6911` completed/13，67 秒，无迁移、schema 不变 `45c3a343…`，Host API 8，内置插件为 0.1.231 的一套把 ccgateway 换成 0.1.122）：
+- 内容：
+  - 定制 CLI 升到 Claude Code 2.1.316 / `ccgateway-v43-cc-2-1-316`（ELF `f8f9afa4…3a0`，迁移记录 `plugins/ccgateway/docs/CLAUDE-CODE-2.1.316-MIGRATION.md`）。CLI 启动时报官方的运行时版本 `v26.12.1`（`x-stainless-runtime-version`，v38–v41 一直发 `v26.3.0`）。
+  - 低注入可选内置系统提示词（默认关）；高注入多 6 个可选工具 Skill、ToolSearch、ListAgents、ReportFindings、ScheduleWakeup、Workflow（默认关，只带定义），没有 `build_injection_tools_v2` 的 CLI 由核心去掉（CONTRACTS §53.22）。
+  - 账号列表：自动禁用没有恢复时间时徽章为红色。
+- **只有新账号用 2.1.316**（用户决定）：推送 app 镜像只换新建容器的镜像，没有做 `runtime/workers`；旧账号保持 CLI 2.1.312 v41，仍发 `v26.3.0`。旧账号还在跑 2.1.312 时不要清理 `ccgateway-app:0.1.115` / `0.1.118`；旧账号单独升级要用 `components:["worker","cli"]` 不带 `cli_version`，只换 Worker 用 `components:["worker"]`。
+- 顺序：插件上传/升级（rollout 224）→ `runtime/bundled {"roles":["controller"]}` → 核心 0.1.232 → `runtime/bundled {"roles":["egress","app"]}`（`up_to_date: true`）。
+- 核验：两节点 0.1.232、`/readyz` 200，api.prophey.ai 200；账号容器与发布前快照（`stage/ccgateway-0.1.122/containers-before.txt`）比只有控制器换了，无重建；核心近 30 分钟 0 条 ERROR。`testall`：1×200、23×401、11×429；比 0.1.121 多出的 401（55、60、61、63、64、68、69、70、72、76）都是上游 OAuth 吊销或刷新令牌失效，最晚 14:37 UTC，在发布开始（14:40）前，已被失败策略禁用。
+- 测试：Linux（`golang:1.27-bookworm`，发布提交）engine、worker、contracts、controller-go、guard 全过；核心全量通过（`plugin/egress` 一个计时用例偶发失败，单独重跑 3/3 通过）；web 968 过（`plugins.spec.ts` 4 个是已知的 Windows 路径问题）；cli-mods 2.1.316/2.1.312/2.1.310/2.1.304 全过；v43 的 L4–L7、TLS 指纹、离线回归见迁移记录 §7。
+- 脚本 `stage/ccgateway-0.1.122/{prepare-src.sh,build.sh,rollout.py}`（build 增加"app 镜像只能有 2.1.316"检查）、`stage/0.1.232/{build.sh,release.sh}`；v43 release 在 `~/sup2api/checks/cli-releases/release-v43-2.1.316`；备份 `backups/ccgateway-0.1.122`（`e1381447…`）、`backups/core-0.1.232`。
+
 2026-11-02 核心 **0.1.231**（`376864427`，北京时间 18:33；manifest `18856a62…c7cb`，计划 `f7bb406bcf645fed61be487828769376` completed/13，56 秒，无迁移、schema 不变 `45c3a343…`，Host API 8，内置插件与 0.1.230 相同）：
 - 起因：sup2api-ccp 高峰每小时 2–23 个 503 `model_availability`，无账号、无原因。模型可用性预检每个请求现查 PG（读快照与插件调用共用 200 ms），ccp 到 Supabase 新建连接约 430 ms。
 - 内容（设计 `next/docs/MODEL-AVAILABILITY-PRECHECK-DESIGN.md`，CONTRACTS §44.7/§51.3/§15.2）：额度快照改读节点内存镜像，请求路径不查库；预检只有插件明确 `UNAVAILABLE` 才拦（全拦 429），检查失败一律放行并记 WARN、节点级熔断；结论写入 `anomalies.availability`，使用记录详情新增"模型可用性预检"卡片；额度写入只失效镜像（`kind: quota`），不再清空分组快照与 CCGateway 请求缓存；模型名含空白/控制字符回 400；自助使用记录显示 5xx 错误消息；列表"详情"列显示 `status_code=…, 消息`；无 `account:read` 的管理员详情不再看到 `failure_policy` 的账号 id。
