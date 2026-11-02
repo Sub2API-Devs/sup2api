@@ -45,27 +45,53 @@ func requestPolicyCapabilities(p features.WorkerPolicy) []string {
 	if p.BuildInjection != nil {
 		required = append(required, features.BuildInjectionCapability)
 	}
+	// Only sent to a CLI that has them (withConfirmedTools).
+	if p.BuildInjection.UsesToolsV2() {
+		required = append(required, features.BuildInjectionToolsV2Capability)
+	}
 	return required
+}
+
+// withConfirmedTools is p without the tools a CLI lacking
+// build_injection_tools_v2 cannot render (features.InjectionToolsV2,
+// 2026-11-02): an account kept on an older CLI is sent the rest of its
+// injection unchanged and never refused for them. capabilities nil is a
+// Worker not asked (none confirmed).
+func withConfirmedTools(p features.WorkerPolicy, capabilities []string) features.WorkerPolicy {
+	if p.BuildInjection.UsesToolsV2() && !slices.Contains(capabilities, features.BuildInjectionToolsV2Capability) {
+		p.BuildInjection = p.BuildInjection.WithoutToolsV2()
+	}
+	return p
 }
 
 // requireRequestPolicyCapabilities confirms the Worker behind r (nil: a
 // connection of this request only) can apply p, reusing r's health answer
-// while it is fresh.
-func (s *Service) requireRequestPolicyCapabilities(ctx context.Context, client *http.Client, base, key string, r *accountRoute, p features.WorkerPolicy) error {
-	required := requestPolicyCapabilities(p)
-	if r != nil {
-		if h := s.routeHealth(r); h != nil {
-			return h.require(p.CLIVersion, required)
+// while it is fresh, and returns p as it may be sent: without the tools its
+// CLI cannot render (withConfirmedTools).
+func (s *Service) requireRequestPolicyCapabilities(ctx context.Context, client *http.Client, base, key string, r *accountRoute, p features.WorkerPolicy) (features.WorkerPolicy, error) {
+	var h workerHealth
+	if cached := s.routeHealthIfFresh(r); cached != nil {
+		h = *cached
+	} else {
+		var err error
+		if h, err = readWorkerHealth(ctx, client, base, key); err != nil {
+			return p, err
+		}
+		if r != nil && h.Status == "ok" {
+			s.keepRouteHealth(r, h)
 		}
 	}
-	h, err := readWorkerHealth(ctx, client, base, key)
-	if err != nil {
-		return err
+	p = withConfirmedTools(p, h.Capabilities)
+	return p, h.require(p.CLIVersion, requestPolicyCapabilities(p))
+}
+
+// routeHealthIfFresh is routeHealth for a route of the request cache; nil
+// without one.
+func (s *Service) routeHealthIfFresh(r *accountRoute) *workerHealth {
+	if r == nil {
+		return nil
 	}
-	if r != nil && h.Status == "ok" {
-		s.keepRouteHealth(r, h)
-	}
-	return h.require(p.CLIVersion, required)
+	return s.routeHealth(r)
 }
 
 // workerHealth is the Worker's GET /healthz answer; why is set when it could

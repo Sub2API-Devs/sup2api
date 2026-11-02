@@ -40,12 +40,12 @@ export default {
     desc: {
       none: '只处理开头的计费头（direct），其余逐字节不动',
       micro: '计费头 + 身份行（build）',
-      low: '微注入 + 环境：附件字段转换，缺的首轮附件补上',
-      high: '低注入 + Claude Code 内置系统提示词和常用工具'
+      low: '微注入 + 环境：附件字段转换，缺的首轮附件补上；可选补内置系统提示词',
+      high: '低注入 + Claude Code 内置系统提示词和常用工具，可选更多工具'
     },
     defaultMark: '（默认）',
     layerNames: { billing: '计费头', identity: '身份行', environment: '环境', prompt: '提示词与工具' },
-    from: { billing: '所有等级', identity: '微注入起', environment: '低注入起', prompt: '高注入' },
+    from: { billing: '所有等级', identity: '微注入起', environment: '低注入起', prompt: '提示词低注入起，工具高注入' },
     locked: '提升到{level}后生效；已保存的配置保留。',
     lockedPlain: '提升到{level}后生效。',
     billingMissing: '没有时补（按主代理）',
@@ -57,7 +57,7 @@ export default {
     identityRules: '查看规则',
     identityRulesClose: '收起规则',
     identityRule: {
-      sdk: '高注入（补了内置提示词）时 {withPrompt}，其余 {plain}',
+      sdk: '补了内置提示词时 {withPrompt}，其余 {plain}',
       other: '其他入口',
       otherLine: '按服务端入口',
       kept: '只补没有计费头的请求；带计费头的 Claude Code 请求和已带身份行的请求不改。文字由 Claude Code 生成。'
@@ -82,12 +82,18 @@ export default {
     promptToolsShort: '只对没有计费头的请求补；请求已有内置提示词或同名工具时保留客户端的。',
     systemPrompt: '内置系统提示词',
     systemPromptHint: '客户端 system 并入 CC 动态块，与 --append-system-prompt 相同',
+    systemPromptHintLow: '补 Claude Code 的两块内置系统提示词（静态块与动态块），客户端 system 并入动态块，与 --append-system-prompt 相同；默认不补。部分模型的提示词（“# Using your tools”一段）会提到 Read、Edit、Write 等工具，低注入不补工具，请求里只有客户端自己带的工具；需要这些工具时用高注入。',
     tools: '工具',
     toolsHint: '工具调用都交回客户端执行，客户端必须能执行',
     toolHintLine: '{tools}：{text}',
     toolHints: {
+      Bash: '后台运行的超时默认值按原生 -p 会话',
       Agent: '不补“可用代理类型”清单',
-      deferred: '没有 ToolSearch 时按完整定义发送'
+      ListAgents: '说明文字按工具池里有没有 SendMessage 生成',
+      Skill: '不补技能清单',
+      v2: '与官方 2.1.316 首轮一致，默认不选；只带定义，调用交回客户端。CLI 不支持（build_injection_tools_v2）的账号自动不带，其余照常',
+      ToolSearch: '选中时按官方带上延迟加载的占位工具，WebSearch、NotebookEdit 改为延迟加载、不发送',
+      deferred: '没有 ToolSearch 时按完整定义发送；选了 ToolSearch 时不发送，与官方首轮一致'
     }
   },
   buildAttachments: {

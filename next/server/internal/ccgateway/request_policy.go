@@ -104,7 +104,10 @@ func keepLegacyInjection(level string, injection *features.BuildInjection) *feat
 		out = &features.BuildInjection{}
 	}
 	out.Attachments = markNotAdded(out.Attachments, features.InjectionAttachments, added.Attachments)
-	if features.LevelHasPromptAndTools(level) {
+	// Low adds the prompt only when it is chosen (2026-11-02), which a policy
+	// saved before levels that low is given never was: only high writes its
+	// "not added".
+	if features.LevelHasTools(level) {
 		if added.SystemPrompt == nil {
 			off := false
 			out.SystemPrompt = &off

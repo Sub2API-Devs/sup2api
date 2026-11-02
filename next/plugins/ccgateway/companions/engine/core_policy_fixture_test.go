@@ -44,9 +44,11 @@ func TestCorePoliciesAreReadByTheWorker(t *testing.T) {
 			modes[policy.RelayMode] = true
 			root := t.TempDir()
 			envCapture := filepath.Join(root, "env.json")
+			// A Worker whose CLI has every capability: the fixture is the policy
+			// before the core drops the 2026-11-02 tools for an older CLI.
 			g := &Gateway{RequestMode: policy.RelayMode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
 				CLIInfo: cliRequestInfo{Version: ownCLI, Capabilities: []string{"request_direct", "request_build", features.BuildContentPreservationCapability,
-					features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.BuildInjectionCapability, features.RequestIdentityCapability, features.DirectBillingCapability, features.RequestLevelsCapability, features.RequestAgentContextCapability}},
+					features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.BuildInjectionCapability, features.BuildInjectionToolsV2Capability, features.RequestIdentityCapability, features.DirectBillingCapability, features.RequestLevelsCapability, features.RequestAgentContextCapability}},
 				Runner: &Runner{CLI: exe, Version: ownCLI, Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{
 					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "input.jsonl"), "CCG_TEST_REQUEST_ENV_CAPTURE": envCapture,
 				})}}

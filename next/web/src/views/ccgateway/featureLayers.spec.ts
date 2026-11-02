@@ -31,7 +31,7 @@ describe('CC feature layer contract', () => {
     expect(featureDifferenceCount(parent, override)).toBe(2)
     expect(parent.build_injection.attachments).toEqual({ environment: true, date: true })
     expect(validFeatureOverrides(override)).toBe(true)
-    for (const bad of [{ build_injection: { tools: { Glob: true } } }, { build_injection: { tools: { ToolSearch: true } } }, { build_injection: { attachments: { skills: true } } }, { build_injection: { system_prompt: 'yes' } }]) {
+    for (const bad of [{ build_injection: { tools: { Glob: true } } }, { build_injection: { tools: { DeferredToolPlaceholder: true } } }, { build_injection: { attachments: { skills: true } } }, { build_injection: { system_prompt: 'yes' } }]) {
       expect(validFeatureOverrides(bad as never)).toBe(false)
     }
   })
@@ -99,9 +99,11 @@ describe('CC feature layer contract', () => {
     expect(w.get<HTMLInputElement>('[data-testid="billing-cc_version"] input[value="worker"]').element.checked).toBe(true)
     expect(w.get('[data-testid="billing-cc_version"]').findAll('input').every(i => i.attributes('disabled') !== undefined)).toBe(true)
     expect(w.get('[data-testid="injection-attachments-date"] button').attributes('disabled')).toBeDefined()
-    // The prompt layer is above low: folded, and its toggle waits for the level.
-    expect(w.get('[data-testid="prompt-tools"]').attributes('data-locked')).toBe('true')
-    expect(w.get('[data-testid="layer-mode-prompt"] input').attributes('disabled')).toBeDefined()
+    // The prompt layer starts at low (its system prompt, 2026-11-02): open and
+    // followable; its tools row waits for high.
+    expect(w.get('[data-testid="prompt-tools"]').attributes('data-locked')).toBeUndefined()
+    expect(w.get('[data-testid="layer-mode-prompt"] input').attributes('disabled')).toBeUndefined()
+    expect(w.get('[data-testid="injection-tools"]').attributes('data-locked')).toBe('true')
     await w.get('[data-testid="layer-mode-billing"] input[value="custom"]').setValue(true)
     expect(w.emitted('update:overrides')?.at(-1)?.[0]).toEqual({ build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'client' } })
     await w.setProps({ overrides: w.emitted('update:overrides')!.at(-1)![0] as FeatureOverrides })

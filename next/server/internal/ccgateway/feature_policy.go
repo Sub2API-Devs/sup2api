@@ -406,8 +406,9 @@ func (s *Service) resolvedWorkerPolicy(ctx context.Context, c Config, accountID,
 // what goes along:
 //
 //	none  - the billing entrypoint and sources
-//	low   - plus the attachment sources and the attachments added
-//	high  - plus the system prompt and the tools added
+//	low   - plus the attachment sources, the attachments added and the
+//	        system prompt when chosen (2026-11-02)
+//	high  - plus the tools added, and the system prompt unless turned off
 //
 // Layers above the level stay configured but are not sent. The identity line
 // adapts to the billing header's entrypoint in the CLI and the identity is

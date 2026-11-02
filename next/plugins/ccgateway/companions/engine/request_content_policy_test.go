@@ -203,11 +203,10 @@ func TestInjectionPolicyNeedsTheCapability(t *testing.T) {
 	}
 	policy := `{"relay_mode":"build","cli_version":"2.1.304","build_injection":{"system_prompt":true,"attachments":{"date":true,"environment":true,"model":false},"tools":{"Read":true,"Bash":true,"NotebookEdit":true,"WebSearch":false}}}`
 	require.Equal(t, 409, send(policy).Code)
-	// Only Bash, Read, Edit, Write, Agent, WebSearch and NotebookEdit may be
-	// added (request levels): the rest of the CLI's pool, and tools 2.1.304
-	// does not have, are refused before the CLI runs.
+	// Only the candidates (features.InjectionTools) may be added: the rest of
+	// the CLI's pool is refused before the CLI runs.
 	for _, p := range []string{`{"build_injection":{"attachments":{"skills":true}}}`, `{"build_injection":{"tools":{"Glob":true}}}`,
-		`{"build_injection":{"tools":{"ToolSearch":true}}}`, `{"build_injection":{"tools":{"Skill":true}}}`, `{"build_injection":{"tools":{"Bash":true,"CronCreate":true}}}`} {
+		`{"build_injection":{"tools":{"DeferredToolPlaceholder":true}}}`, `{"build_injection":{"tools":{"Bash":true,"CronCreate":true}}}`} {
 		require.Equal(t, 400, send(p).Code, p)
 	}
 	out := send(`{"relay_mode":"build","build_injection":{"system_prompt":false,"attachments":{"date":false},"tools":{}}}`)
@@ -224,6 +223,25 @@ func TestInjectionPolicyNeedsTheCapability(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(bytes.TrimSpace(data), &components))
 	require.JSONEq(t, `{"system_prompt":true,"attachments":{"environment":true,"date":true},"tools":{"Read":true,"Bash":true,"NotebookEdit":true}}`, string(components.RequestPolicy["build_injection"]))
+
+	// The tools added on 2026-11-02 need build_injection_tools_v2 (the core
+	// drops them for a CLI without it; this is the second line): refused
+	// before the CLI runs, then passed on once the CLI declares it. A tool
+	// turned off needs nothing.
+	tools := `{"relay_mode":"build","build_injection":{"tools":{"Bash":true,"Skill":true,"ToolSearch":true}}}`
+	require.NotContains(t, g.requestCapabilities(), features.BuildInjectionToolsV2Capability, "never claimed for a CLI that does not declare it")
+	require.Equal(t, 409, send(tools).Code)
+	out = send(`{"relay_mode":"build","build_injection":{"tools":{"Bash":true,"Skill":false}}}`)
+	require.Equal(t, 200, out.Code, out.Body.String())
+	g.CLIInfo.Capabilities = append(capabilities, features.BuildInjectionCapability, features.BuildInjectionToolsV2Capability)
+	require.Contains(t, g.requestCapabilities(), features.BuildInjectionToolsV2Capability)
+	require.NoError(t, os.Remove(capture))
+	out = send(tools)
+	require.Equal(t, 200, out.Code, out.Body.String())
+	data, err = os.ReadFile(capture)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(bytes.TrimSpace(data), &components))
+	require.JSONEq(t, `{"tools":{"Bash":true,"Skill":true,"ToolSearch":true}}`, string(components.RequestPolicy["build_injection"]))
 }
 
 // Direct hands the CLI its billing context only on a CLI that applies it; a

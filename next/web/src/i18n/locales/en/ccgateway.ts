@@ -40,12 +40,12 @@ export default {
     desc: {
       none: 'Only the leading billing header (direct); the rest byte for byte',
       micro: 'Billing header + identity line (build)',
-      low: 'Micro + environment: attachment fields converted, missing first-turn attachments added',
-      high: "Low + Claude Code's system prompt and common tools"
+      low: "Micro + environment: attachment fields converted, missing first-turn attachments added; Claude Code's system prompt optional",
+      high: "Low + Claude Code's system prompt and common tools, more tools optional"
     },
     defaultMark: ' (default)',
     layerNames: { billing: 'Billing header', identity: 'Identity line', environment: 'Environment', prompt: 'Prompt and tools' },
-    from: { billing: 'Every level', identity: 'From micro', environment: 'From low', prompt: 'High' },
+    from: { billing: 'Every level', identity: 'From micro', environment: 'From low', prompt: 'Prompt from low, tools at high' },
     locked: 'Applies from {level}; saved settings are kept.',
     lockedPlain: 'Applies from {level}.',
     billingMissing: 'Add when missing (main thread)',
@@ -57,7 +57,7 @@ export default {
     identityRules: 'Show rules',
     identityRulesClose: 'Hide rules',
     identityRule: {
-      sdk: '{withPrompt} at high when the system prompt is added, otherwise {plain}',
+      sdk: '{withPrompt} when the system prompt is added, otherwise {plain}',
       other: 'Other entrypoints',
       otherLine: 'As the server entrypoint',
       kept: "Added only to requests without a billing header; Claude Code's own requests and a client's own line are left as they are. Claude Code renders the text."
@@ -82,12 +82,18 @@ export default {
     promptToolsShort: "Only for requests without a billing header; a request's own system prompt or same-named tool is kept.",
     systemPrompt: "Claude Code's system prompt",
     systemPromptHint: "The client's system is merged into CC's dynamic block, as --append-system-prompt does",
+    systemPromptHintLow: "Adds Claude Code's two system prompt blocks (static and dynamic); the client's system is merged into the dynamic block, as --append-system-prompt does. Off by default. For some models the prompt (its \"# Using your tools\" section) names Read, Edit, Write and other tools; low adds no tools, so the request has only the client's own. Use high when those tools are needed.",
     tools: 'Tools',
     toolsHint: 'Every tool call goes back to the client, which must be able to execute it',
     toolHintLine: '{tools}: {text}',
     toolHints: {
+      Bash: 'The background timeout default follows a native -p session',
       Agent: 'The available agent types listing is not added',
-      deferred: 'Sent with its full definition when there is no ToolSearch'
+      ListAgents: 'Its description follows whether SendMessage is in the tool pool',
+      Skill: 'The skills listing is not added',
+      v2: "As official 2.1.316 sends on a session's first turn; off by default. Only the definitions are carried and every call goes back to the client. Accounts whose CLI lacks build_injection_tools_v2 are sent the rest without them",
+      ToolSearch: 'When chosen, the deferred placeholder tool goes with it as in official Claude Code, and WebSearch and NotebookEdit are deferred, not sent',
+      deferred: 'Sent with the full definition without ToolSearch; with ToolSearch not sent, as on the official first turn'
     }
   },
   buildAttachments: {

@@ -73,10 +73,10 @@ describe('CCGateway request levels', () => {
     expect(cards.findAll('option').map(o => o.text())).toEqual(['0 注入', '微注入', '低注入（默认）', '高注入'])
     expect(levelPicked(w)).toBe('low')
     expect(w.get('[data-testid="level-desc"]').text()).toContain('缺的首轮附件补上')
-    // The layers the level includes, the last one not.
+    // The layers the level includes: from low the prompt layer too (its
+    // system prompt is a choice there, 2026-11-02).
     const layers = w.get('[data-testid="level-layers"]').findAll('[data-on]').map(c => c.text())
-    expect(layers).toEqual(['计费头', '身份行', '环境'])
-    expect(w.get('[data-testid="level-layers"]').text()).toContain('提示词与工具')
+    expect(layers).toEqual(['计费头', '身份行', '环境', '提示词与工具'])
     await level(w, 'none')
     expect(w.get('[data-testid="level-desc"]').text()).toContain('只处理开头的计费头（direct）')
     expect(w.get('[data-testid="level-layers"]').findAll('[data-on]').map(c => c.text())).toEqual(['计费头'])
@@ -119,7 +119,7 @@ describe('CCGateway request levels', () => {
     for (const id of ['billing-cc_version', 'billing-cc_entrypoint', 'billing-entrypoint']) expect(w.find(`[data-testid="${id}"]`).exists()).toBe(true)
     expect(w.get('[data-testid="billing-sources"]').text()).toContain('请求没有计费头时补完整的主代理计费头')
     expect(w.get('[data-testid="billing-sources"]').text()).toContain('所有等级')
-    for (const [id, needs] of [['identity-lines', '微注入'], ['build-attachments', '低注入'], ['prompt-tools', '高注入']] as const) {
+    for (const [id, needs] of [['identity-lines', '微注入'], ['build-attachments', '低注入'], ['prompt-tools', '低注入']] as const) {
       expect(w.get(`[data-testid="${id}"]`).attributes('data-locked')).toBe('true')
       expect(w.get(`[data-testid="${id}"]`).text()).toContain(`提升到${needs}后生效`)
     }
@@ -156,7 +156,7 @@ describe('CCGateway request levels', () => {
     expect(rules).toEqual([
       ['cli', 'Claude Code CLI（终端）'],
       ['claude-desktop、claude-vscode', 'Claude Code + Agent SDK'],
-      ['sdk-cli、sdk-ts、sdk-py', '高注入（补了内置提示词）时 Claude Code + Agent SDK，其余 Claude Agent SDK'],
+      ['sdk-cli、sdk-ts、sdk-py', '补了内置提示词时 Claude Code + Agent SDK，其余 Claude Agent SDK'],
       ['其他入口', '按服务端入口']
     ])
     await w.get('[data-testid="billing-entrypoint-select"]').setValue('5')
@@ -172,7 +172,8 @@ describe('CCGateway request levels', () => {
     w.unmount()
   })
   // Omitted choices are the level's defaults (LevelInjection): low adds every
-  // first-turn attachment, high also the prompt and Bash, Read, Edit, Write.
+  // first-turn attachment and offers the system prompt, off (2026-11-02);
+  // high adds the prompt and Bash, Read, Edit, Write, the other tools off.
   it('shows the level defaults, saves the choices made and keeps them below their level', async () => {
     const stored = storing()
     let w = await render()
@@ -181,22 +182,43 @@ describe('CCGateway request levels', () => {
     const promptOn = () => w.get<HTMLInputElement>(prompt).element.checked
     for (const name of ['environment', 'model', 'total_tokens', 'date']) expect(pressed(w, `[data-testid="injection-attachments-${name}"]`)).toBe(true)
     expect(w.get('[data-testid="environment-inject"]').text()).toContain('缺少时补')
-    expect(w.find(prompt).exists()).toBe(false)
+    // Low: the prompt switch, off, says what it adds; the tools wait for high.
+    expect(promptOn()).toBe(false)
+    expect(w.get(prompt).attributes('disabled')).toBeUndefined()
+    expect(w.get('[data-testid="system-prompt-row"]').text()).toContain('两块内置系统提示词')
+    expect(w.get('[data-testid="system-prompt-row"]').text()).toContain('# Using your tools')
+    expect(w.get('[data-testid="injection-tools"]').attributes('data-locked')).toBe('true')
+    expect(w.get('[data-testid="tools-locked"]').text()).toContain('提升到高注入后生效')
+    expect(chip(w, tool('Bash')).attributes('disabled')).toBeDefined()
+    await w.get(prompt).setValue(true)
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(stored().level).toBe('low')
+    expect(stored().build_injection).toEqual({ system_prompt: true })
     await level(w, 'high')
     expect(promptOn()).toBe(true)
     expect(w.get('[data-testid="prompt-tools"]').text()).toContain('客户端 system 并入 CC 动态块，与 --append-system-prompt 相同')
-    expect(w.get('[data-testid="injection-tools"]').findAll('[data-testid^="injection-tools-"]').map(c => c.attributes('data-testid'))).toEqual(['Bash', 'Read', 'Edit', 'Write', 'Agent', 'WebSearch', 'NotebookEdit'].map(n => 'injection-tools-' + n))
+    expect(w.get('[data-testid="injection-tools"]').findAll('[data-testid^="injection-tools-"]').map(c => c.attributes('data-testid'))).toEqual(
+      ['Bash', 'Read', 'Edit', 'Write', 'Agent', 'ListAgents', 'ReportFindings', 'ScheduleWakeup', 'Skill', 'ToolSearch', 'Workflow', 'WebSearch', 'NotebookEdit'].map(n => 'injection-tools-' + n))
     for (const name of ['Bash', 'Read', 'Edit', 'Write']) expect(pressed(w, tool(name))).toBe(true)
-    for (const name of ['Agent', 'WebSearch', 'NotebookEdit']) expect(pressed(w, tool(name))).toBe(false)
+    for (const name of ['Agent', 'ListAgents', 'ReportFindings', 'ScheduleWakeup', 'Skill', 'ToolSearch', 'Workflow', 'WebSearch', 'NotebookEdit']) expect(pressed(w, tool(name))).toBe(false)
     const hints = w.get('[data-testid="tool-hints"]').findAll('li').map(li => li.text())
-    expect(hints).toEqual(['Agent：不补“可用代理类型”清单', 'WebSearch、NotebookEdit：没有 ToolSearch 时按完整定义发送'])
+    expect(hints).toEqual([
+      'Bash：后台运行的超时默认值按原生 -p 会话',
+      'Agent：不补“可用代理类型”清单',
+      'ListAgents：说明文字按工具池里有没有 SendMessage 生成',
+      'Skill：不补技能清单',
+      'ListAgents、ReportFindings、ScheduleWakeup、Skill、ToolSearch、Workflow：与官方 2.1.316 首轮一致，默认不选；只带定义，调用交回客户端。CLI 不支持（build_injection_tools_v2）的账号自动不带，其余照常',
+      'ToolSearch：选中时按官方带上延迟加载的占位工具，WebSearch、NotebookEdit 改为延迟加载、不发送',
+      'WebSearch、NotebookEdit：没有 ToolSearch 时按完整定义发送；选了 ToolSearch 时不发送，与官方首轮一致'
+    ])
     expect(w.get('[data-testid="tools-client-note"]').text()).toBe('工具调用都交回客户端执行，客户端必须能执行')
     await chip(w, env).trigger('click')
     await chip(w, tool('Agent')).trigger('click')
     await chip(w, tool('Bash')).trigger('click')
+    await chip(w, tool('Skill')).trigger('click')
     await w.get('form').trigger('submit'); await flushPromises()
     expect(stored().level).toBe('high')
-    expect(stored().build_injection).toEqual({ attachments: { environment: false }, tools: { Agent: true, Bash: false } })
+    expect(stored().build_injection).toEqual({ system_prompt: true, attachments: { environment: false }, tools: { Agent: true, Bash: false, Skill: true } })
     w.unmount()
     w = await render()
     expect(levelPicked(w)).toBe('high')
@@ -205,12 +227,15 @@ describe('CCGateway request levels', () => {
     expect(pressed(w, date)).toBe(true)
     expect(pressed(w, tool('Agent'))).toBe(true)
     expect(pressed(w, tool('Bash'))).toBe(false)
+    // One choice for both levels: turned off at high, it is off at low too.
     await w.get(prompt).setValue(false)
+    await level(w, 'low')
+    expect(promptOn()).toBe(false)
     await level(w, 'micro')
     expect(w.find(prompt).exists()).toBe(false)
     expect(w.find(env).exists()).toBe(false)
     await w.get('form').trigger('submit'); await flushPromises()
-    expect(stored()).toMatchObject({ level: 'micro', build_injection: { system_prompt: false, attachments: { environment: false }, tools: { Agent: true, Bash: false } } })
+    expect(stored()).toMatchObject({ level: 'micro', build_injection: { system_prompt: false, attachments: { environment: false }, tools: { Agent: true, Bash: false, Skill: true } } })
     w.unmount()
   })
   it('saves independent attachment sources in plugin settings and restores them after reload', async () => {

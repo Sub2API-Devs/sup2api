@@ -7,7 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { SChip, SDisclosure, SSegmented, SSelect, SSettingRow, SSettingsGroup } from '@sub2api/ui'
 import type { SelectOption } from '@sub2api/ui'
 import {
-  defaultRequestLevel, levelHasEnvironment, levelHasIdentity, levelHasPromptAndTools, levelOf, mergeFeaturePolicy, requestLevels,
+  defaultRequestLevel, levelHasEnvironment, levelHasIdentity, levelHasPrompt, levelOf, mergeFeaturePolicy, requestLevels,
   type FeatureOverrides, type RequestLevel, type RequestPolicy
 } from './requestPolicy'
 import { providePolicyLayers } from './usePolicyLayerContext'
@@ -42,7 +42,8 @@ const includedLayers = computed(() => [
   { key: 'billing', on: true },
   { key: 'identity', on: levelHasIdentity(level.value) },
   { key: 'environment', on: levelHasEnvironment(level.value) },
-  { key: 'prompt', on: levelHasPromptAndTools(level.value) }
+  // From low: the system prompt is a choice there, the tools are high's.
+  { key: 'prompt', on: levelHasPrompt(level.value) }
 ])
 // Saving writes the level only; relay_mode follows from it in the core.
 const setLevel = (value: unknown) => layers.edit(draft => { draft.level = value as RequestLevel; delete draft.relay_mode })

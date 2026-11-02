@@ -4180,11 +4180,11 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 
 核心发给 Worker 的请求策略（请求头 `X-CCGateway-Request-Policy`）有唯一的线形类型 `contracts/features.WorkerPolicy`（`wire.go`），核心的 `workerPolicy()` 构造它、Worker 的 `features.ParseWorkerPolicy` 读它；两边不再共用存储结构体。
 
-- **线上只有 7 个键**：`schema_version`（1）、`relay_mode`（build/direct，由等级推出）、`cli_version`、`build_billing_sources`、`build_billing_entrypoint`、`build_attachment_sources`、`build_injection`。来源为 `client` 的项、默认入口 `sdk-cli` 不下发；附件来源只在等级低及以上下发；`build_injection` 只含该等级加上的项（`LevelInjection`，只有 true）。`level` 本身不下发。
+- **线上只有 7 个键**：`schema_version`（1）、`relay_mode`（build/direct，由等级推出）、`cli_version`、`build_billing_sources`、`build_billing_entrypoint`、`build_attachment_sources`、`build_injection`。来源为 `client` 的项、默认入口 `sdk-cli` 不下发；附件来源只在等级低及以上下发；`build_injection` 只含该等级加上的项（`LevelInjection`，只有 true）。`level` 本身不下发。2026-11-02 起低注入也可下发 `system_prompt`，`tools` 可含 `InjectionToolsV2`，且只发给声明 `build_injection_tools_v2` 的 Worker/CLI（§53.22）。
 - **不再下发**：`build_identity_lines`、`request_identity_sources`（身份行由 CLI 按计费头入口自适应、身份固定映射，2026-10-21/23）以及 §53.11/§53.15/§53.16 的全部 native 设置。它们在 `RequestPolicy`（存储形）里标为"stored only"，旧配置照常解码，设置页不编辑。
 - **Worker 对未知键宽容**：发布顺序是先插件后核心，新 Worker 会先收到旧核心带多余键的策略，所以 `ParseWorkerPolicy` 忽略未知键，只严格校验认识的键；Worker 不再解析 `request_identity_sources`/`build_identity_lines`，也不再因它们返回 409。核心实际下发什么由夹具固定（下一条）。
 - **跨层夹具**：`contracts/testdata/core-worker-policies.json` 由核心测试（`server/internal/ccgateway/contract_fixture_test.go`，编辑器 16 例的线形）生成，`CCG_UPDATE_CONTRACT_FIXTURES=1` 重生成；engine 测试（`core_policy_fixture_test.go`）读同一份字节，要求每条都被 Worker 接受并原样成为 CLI 信封的 `requestPolicy`（`WorkerPolicy.CLI()`，contract 2，键：`contract_version`、`build_attachment_sources`、`build_billing_sources`、`build_billing_entrypoint`、`build_injection`）。Worker→CLI 夹具 `worker-cli-requests.json` 同时覆盖 replace/client/worker 三种身份模式（Claude 登录、API Key、无邮箱）。
-- 核心的能力预检（`requestPolicyCapabilities`）只看线形：`request_levels_v1` 总是要求；设了入口要求 `build_identity_line_v1`（direct 为 `direct_billing_v1`）；来源用 worker/erase 要求对应能力；有注入要求 `build_injection_v1`。
+- 核心的能力预检（`requestPolicyCapabilities`）只看线形：`request_levels_v1` 总是要求；设了入口要求 `build_identity_line_v1`（direct 为 `direct_billing_v1`）；来源用 worker/erase 要求对应能力；有注入要求 `build_injection_v1`。注入含 `InjectionToolsV2` 时还要求 `build_injection_tools_v2`，但核心在预检前已按 Worker 的能力去掉这些工具，所以这一项只会对绕过核心的策略生效（§53.22）。
 
 ### 53.19 已存策略对词表收窄的宽容（2026-10-23，审核 A3）
 
@@ -4229,6 +4229,48 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - **令牌被拒**：CLI 帧报告上游 HTTP 401 时，Worker 记下存储的访问令牌（`noteAuthenticationRefused`），用量查询据此报告该令牌不可用直到它改变。此前这只在 native 路径写入，请求模式自 2026-10-19 起一直缺失。
 - **Worker 配置**：`WORKER_PLUGIN_PATH`、`CCG_NATIVE_TOOLS`、`CACHE_DIR`、`MAX_CACHE_SIZE`、`HISTORY_RETENTION` 不再读取；`engine.Options` 去掉 `Plugin`、`CacheDir`、`CacheLimit`、`NativeTools`、`InternalBaseURL`。独立入口 `companions/main.go` 与根 Dockerfile 删除，账号部署只用 `worker/Dockerfile`。2026-10-24 起（审核 W12）`LOG_LEVEL`、`HEALTH_TIMEOUT` 也删除（以前读入后没有任何地方使用）。
 - **CLI v23**：请求命令用不到的 Mod 工具执行链（`kind: "native"` 工具注册、工具池合并、响应规范化与 `tool.call` 分发）从补丁里删除，`--ccgateway-info` 不再声明 `native_tools`、`mods_dispatch` 两项能力（核心与 Worker 从不检查它们）；`claude -p` 等普通 CLI 路径恢复官方行为。当前能力列表只在 `cli-mods/profiles/linux-x64-2.1.304.json`，含义见 `cli-mods/README.md` 与 BUILD-REQUEST-COMPONENTS-DESIGN §10（2026-10-24，审核 J1）。
+
+### 53.22 低注入可补内置提示词；高注入可选 2.1.316 首轮的其余工具（2026-11-02，用户要求）
+
+用户原话："低注入可以注入这两块固定提示词，改一改，高注入额外可选工具注入"；"工具注入不代表我们需要实现 只是带上定义而已"；"改动不要影响现在的服务"。对 (a)(b) 两种边界情况，用户的回复是"不管他"。
+
+**等级语义**（`contracts/features/levels.go`，前端 `requestPolicy.ts` 同一套）：
+
+| 等级 | 之前 | 之后 |
+|---|---|---|
+| none / micro | 不补提示词、不补工具 | 不变 |
+| low | 只补首轮附件；`system_prompt`、`tools` 一律不下发 | 首轮附件照旧；`system_prompt` 可选，**默认关**，显式 `true` 才下发；`tools` 仍不下发 |
+| high | `system_prompt` 默认开；工具默认 Bash/Read/Edit/Write | 不变；工具候选多 6 个，默认关 |
+
+- `LevelHasPromptAndTools` 拆成 `LevelHasPrompt`（低及以上）和 `LevelHasTools`（高）。`LevelInjection` 在 low 只认显式的 `system_prompt`；没有选择时，low 不补、high 补。存档里显式的值仍然优先：high 下显式 `false` 照旧压过默认值。
+- 迁移结果不变：`keepLegacyInjection` 只在 high 下把没补的提示词写成 `false`。升级前的策略迁到 low 时，从来不会带 `system_prompt: true`（带了就会迁到 high）。
+- Worker 和 CLI 不用为提示词改动：CLI 的 `injectLayers`（`cli-mods/request-build.js`）只看 `injectionChoices(...).systemPrompt`，不看等级（CLI 本来就收不到等级），所以 2.1.312 v41 也能在 low 补提示词。补提示词时，身份行按 CLI 原有规则走 `official_cli_sdk`（有追加提示词）。
+- **已接受的行为变化**：以下两种情况，存储值本身不变，但生效的注入会多出提示词。其余已存策略的下发内容不变（`server/internal/ccgateway/level_prompt_tools_test.go` 的 `TestPromptAtLowChangesOnlyAnExplicitTrueAtLow` 枚举了全局、分组、账号三层以及旧版全局策略）：
+  - (a) 在 high 下"自定义"过提示词与工具层（会写入 `system_prompt: true`），之后把等级降到 low：现在会补提示词。
+  - (b) 分组在 high 下写了 `system_prompt: true`，其下账号把等级降到 low：账号现在会补提示词。
+  - 生产核对（2026-11-02，主控）：账号覆盖只有 1 行，既没有 level，也没有 build_injection。全局和分组配置是加密存储，没有逐条核对。
+- 控制台：low 起"提示词与工具"卡片展开。系统提示词开关可编辑，说明写明补的是哪两块。说明还提示部分模型的提示词（"# Using your tools"）会提到 Read/Edit/Write 等工具，而低注入不补工具。工具行在 high 以下锁定，显示"提升到高注入后生效"。从 low 起，注入等级行的"提示词与工具"标为包含。分组或账号在 low 下"自定义"这一层时，`system_prompt` 写成 `false`（low 的默认值）。
+
+**工具候选**（`InjectionTools`，控制台顺序）：Bash、Read、Edit、Write、Agent，然后是 `InjectionToolsV2`（ListAgents、ReportFindings、ScheduleWakeup、Skill、ToolSearch、Workflow，即官方 2.1.316 首轮带完整定义发出的其余工具，按官方顺序），最后是 WebSearch、NotebookEdit。
+
+- `DefaultInjectionTools` 仍是 Bash/Read/Edit/Write。新增的 6 个默认关，所以没有任何已存的 high 策略会多发工具。
+- 注入只带定义：模型调用这些工具时，调用照常交回客户端执行。可用代理类型清单、技能清单、延迟工具清单这些会话状态不补。
+- 定义由 CLI 从原生工具池渲染，只发选中的工具（实测，cli-mods 负责）：
+  - 选了 ToolSearch 时，带上原生的延迟占位工具 `DeferredToolPlaceholder`；WebSearch、NotebookEdit 按原生规则改为延迟加载，不发送（官方首轮也不发）。所以这两个工具的勾选只在不选 ToolSearch 时生效。
+  - ListAgents 的说明文字取决于工具池里有没有 SendMessage。
+  - Bash 的后台超时默认值按原生 -p 会话。
+  - Agent 的说明里没有代理类型清单（与原来一致）。
+- `DeferredToolPlaceholder` 不是可选项：`Validate` 拒绝它。
+
+**混合 CLI 的账号**：旧账号一直跑 2.1.312 v41，这个 CLI 会拒绝它不认识的工具名。新能力 `build_injection_tools_v2`（`features.BuildInjectionToolsV2Capability`）由新 CLI 在 `--ccgateway-info` 里声明（cli-mods profile 负责），Worker 只在 CLI 声明时才在 `/healthz.capabilities` 里报（`engine/cli_pinned.go` `requestCapabilities`）。
+
+- 核心：`attachPolicy` 在能力预检时按 Worker 的能力处理策略（`withConfirmedTools`，`runtime_features.go`）。缺这项能力时，从注入里去掉 `InjectionToolsV2`，提示词、附件和其余工具不变，请求照常发出，**从不因此拒绝请求**。只有 `/v1/messages` 与 `/v1/ccgateway/probe` 会预检；其他路径一律去掉这些工具。
+- Worker（第二道防线）：`requestCapabilityGates` 中，build 策略带了 `InjectionToolsV2` 里任何一项为 true，而 CLI 没有这项能力时，回 409 `configuration_error`（`unsupportedContent`）。只有不经过核心的策略才会走到这里。
+- 测试：`TestNewInjectionToolsOnlyReachACLIThatHasThem`（核心：无能力的 Worker 收不到新工具、请求 200；有能力的照常收到）；`TestInjectionPolicyNeedsTheCapability`（engine：无能力 409；声明后原样进入 CLI 信封，且不在 `/healthz` 冒报）；`TestToolCandidatesCoverTheOfficialFirstTurn`、`TestWithoutToolsV2KeepsTheRest`（contracts）。
+- 回滚：2026-11-02 之前的核心在保存时会拒绝新工具名；读取时按 §53.19 丢弃并记告警，不会解码失败。
+
+**夹具**：`contracts/testdata/web-policy-payloads.json` 新增 `global-low-prompt`（low + 提示词）、`global-lowered-from-high`（情况 a）和 `global-high-v2-tools`（high + Skill/ToolSearch）。`group-level` 和 `account-prompt` 两个用例在"自定义"时会把新增的 6 个工具写成 `false`。`core-worker-policies.json` 只新增这三条线形，原有线形逐字不变；low 默认用例（`global-default`）仍然没有 `system_prompt`。
+
 
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 

@@ -9,11 +9,13 @@ import { computed, inject, provide, reactive, type InjectionKey } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SelectOption } from '@sub2api/ui'
 import {
-  customizeLayer, followLayer, injectionDefault, layerCustomized, levelHasEnvironment, levelHasIdentity, levelHasPromptAndTools, levelOf,
+  customizeLayer, followLayer, injectionDefault, layerCustomized, levelHasEnvironment, levelHasIdentity, levelHasPrompt, levelHasTools, levelOf,
   type FeatureLayer, type FeatureOverrides, type RequestLevel, type RequestPolicy
 } from './requestPolicy'
 
-type LockableLayer = 'identity' | 'environment' | 'prompt'
+// The prompt layer is two parts since 2026-11-02: its system prompt from low
+// ('prompt'), its tools from high ('tools', a row of the same card).
+type LockableLayer = 'identity' | 'environment' | 'prompt' | 'tools'
 /**
  * The layers whose level can lock them. `editable` is only asked about these
  * and `level`/`billing` (never `identity`, which RequestPolicySettings uses
@@ -35,7 +37,7 @@ export interface PolicyLayers {
   /** The form is disabled by its parent (read-only). */
   disabled: boolean
   modeOptions: SelectOption[]
-  has: { identity: boolean; environment: boolean; prompt: boolean }
+  has: { identity: boolean; environment: boolean; prompt: boolean; tools: boolean }
   locked: (layer: LockableLayer) => boolean
   lockedText: (layer: LockableLayer) => string
   modeOf: (layer: FeatureLayer) => 'follow' | 'custom'
@@ -50,6 +52,8 @@ export interface PolicyLayers {
   edit: (change: (draft: FeatureOverrides) => void) => void
   /** One build_injection switch (an omitted choice is its level's default). */
   injected: (part: InjectionPart, name: string) => boolean
+  /** The system prompt switch at the level shown (an omitted choice is on at high only). */
+  systemPrompt: boolean
   setInjection: (part: InjectionPart, name: string, on: boolean) => void
 }
 
@@ -84,11 +88,10 @@ export function providePolicyLayers(input: PolicyLayersInput): PolicyLayers {
   const view = computed<RequestPolicy>(() => (showEffective.value ? input.effective!()! : input.draft()))
   const level = computed(() => levelOf(view.value))
   const levelName = (l: RequestLevel) => t('ccgateway.levels.names.' + l)
-  const has = computed(() => ({ identity: levelHasIdentity(level.value), environment: levelHasEnvironment(level.value), prompt: levelHasPromptAndTools(level.value) }))
-  const locked = (layer: LockableLayer) =>
-    (layer === 'identity' && !has.value.identity) || (layer === 'environment' && !has.value.environment) || (layer === 'prompt' && !has.value.prompt)
+  const has = computed(() => ({ identity: levelHasIdentity(level.value), environment: levelHasEnvironment(level.value), prompt: levelHasPrompt(level.value), tools: levelHasTools(level.value) }))
+  const locked = (layer: LockableLayer) => !has.value[layer]
   const lockedText = (layer: LockableLayer) =>
-    t(layer === 'identity' ? 'ccgateway.levels.lockedPlain' : 'ccgateway.levels.locked', { level: levelName(({ identity: 'micro', environment: 'low', prompt: 'high' } as const)[layer]) })
+    t(layer === 'identity' ? 'ccgateway.levels.lockedPlain' : 'ccgateway.levels.locked', { level: levelName(({ identity: 'micro', environment: 'low', prompt: 'low', tools: 'high' } as const)[layer]) })
   const modeOptions = computed<SelectOption[]>(() => [{ value: 'follow', label: t('ccgateway.layers.followParent') }, { value: 'custom', label: t('ccgateway.layers.custom') }])
   const modeOf = (layer: FeatureLayer): 'follow' | 'custom' => (layerCustomized(input.overrides(), layer) ? 'custom' : 'follow')
   const modeLabel = (layer: FeatureLayer) => t('ccgateway.layers.layerMode', { layer: layer === 'level' ? t('ccgateway.levels.title') : t('ccgateway.levels.layerNames.' + layer) })
@@ -120,7 +123,8 @@ export function providePolicyLayers(input: PolicyLayersInput): PolicyLayers {
   }
   // Shared by the environment (attachments) and prompt (tools) cards.
   const injected = (part: InjectionPart, name: string) =>
-    ((view.value.build_injection?.[part] as Record<string, boolean> | undefined)?.[name]) ?? injectionDefault(part, name)
+    ((view.value.build_injection?.[part] as Record<string, boolean> | undefined)?.[name]) ?? injectionDefault(level.value, part, name)
+  const systemPrompt = computed(() => view.value.build_injection?.system_prompt ?? injectionDefault(level.value, 'system_prompt'))
   const setInjection = (part: InjectionPart, name: string, on: boolean) => edit(draft => {
     const injection = { ...draft.build_injection }
     injection[part] = { ...injection[part], [name]: on }
@@ -128,7 +132,7 @@ export function providePolicyLayers(input: PolicyLayersInput): PolicyLayers {
   })
   const ctx: PolicyLayers = reactive({
     view, toggles: computed(() => layered.value && !showEffective.value), disabled: computed(() => !!input.disabled?.()), modeOptions, has, locked, lockedText,
-    modeOf, modeLabel, setMode, editable, layerOrigin, fieldOrigin, edit, injected, setInjection
+    modeOf, modeLabel, setMode, editable, layerOrigin, fieldOrigin, edit, injected, systemPrompt, setInjection
   })
   provide(KEY, ctx)
   return ctx

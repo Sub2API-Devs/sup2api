@@ -40,6 +40,7 @@ func RequestRuntimeCatalog(capabilities []string) Document {
 		{"F-BUILD-BILLING", "build 计费归属来源", BuildBillingCapability},
 		{"F-BUILD-IDENTITY-LINE", "build 计费头入口与身份行", BuildIdentityCapability},
 		{"F-BUILD-INJECTION", "build 给非 CC 请求补提示词、附件与工具", BuildInjectionCapability},
+		{"F-BUILD-INJECTION-TOOLS-V2", "build 补 2.1.316 首轮的其余工具定义", BuildInjectionToolsV2Capability},
 		{"F-REQUEST-LEVELS", "注入等级：0 / 微 / 低 / 高", RequestLevelsCapability},
 		{"F-DIRECT-BILLING", "direct 补计费头", DirectBillingCapability},
 		{"F-REQUEST-AGENT-CONTEXT", "按客户端还原主代理/子代理请求", RequestAgentContextCapability},

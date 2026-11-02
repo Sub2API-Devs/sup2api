@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { attachmentAction, attachmentGroups, setAttachmentAction, customizeLayer, defaultRequestPolicy, featureDifferenceCount, featureLayers, followLayer, injectionTools, layerCustomized, legacyLevel, levelHasEnvironment, levelHasIdentity, levelHasPromptAndTools, levelInjection, levelOf, mergeFeaturePolicy, normalizeRequestPolicy, relayModeForLevel, savedOverrides, validRequestPolicy, type BuildInjection, type FeatureOverrides, type RequestPolicy } from './requestPolicy'
+import { attachmentAction, attachmentGroups, setAttachmentAction, customizeLayer, defaultRequestPolicy, featureDifferenceCount, featureLayers, followLayer, injectionTools, layerCustomized, legacyLevel, levelHasEnvironment, levelHasIdentity, levelHasPrompt, levelHasTools, levelInjection, levelOf, mergeFeaturePolicy, normalizeRequestPolicy, relayModeForLevel, savedOverrides, validRequestPolicy, type BuildInjection, type FeatureOverrides, type RequestPolicy } from './requestPolicy'
 
 describe('CCGateway request policy', () => {
   it.each(Object.keys(attachmentGroups) as Array<keyof typeof attachmentGroups>)('customizes %s children without changing siblings or other groups', group => {
@@ -157,19 +157,23 @@ describe('CCGateway request policy', () => {
 // The same cases as contracts features/levels_test.go and identity_line.go.
 describe('CCGateway request levels mirror the contracts', () => {
   it.each([
-    ['none', 'direct', false, false, false],
-    ['micro', 'build', true, false, false],
-    ['low', 'build', true, true, false],
-    ['high', 'build', true, true, true],
-    ['', 'build', true, true, false]
-  ] as const)('level %s includes the layers below it', (level, relay, identity, environment, high) => {
-    expect([relayModeForLevel(level), levelHasIdentity(level), levelHasEnvironment(level), levelHasPromptAndTools(level)]).toEqual([relay, identity, environment, high])
+    ['none', 'direct', false, false, false, false],
+    ['micro', 'build', true, false, false, false],
+    ['low', 'build', true, true, true, false],
+    ['high', 'build', true, true, true, true],
+    ['', 'build', true, true, true, false]
+  ] as const)('level %s includes the layers below it', (level, relay, identity, environment, prompt, tools) => {
+    expect([relayModeForLevel(level), levelHasIdentity(level), levelHasEnvironment(level), levelHasPrompt(level), levelHasTools(level)]).toEqual([relay, identity, environment, prompt, tools])
   })
+  // The system prompt is a choice from low (2026-11-02), off there without one.
   it('adds a level\x27s layers at their defaults and nothing outside the level', () => {
     expect(levelInjection('micro', { system_prompt: true })).toBeUndefined()
     expect(levelInjection('none')).toBeUndefined()
-    expect(levelInjection('low', { attachments: { date: false }, system_prompt: true, tools: { Read: true } })).toEqual({ attachments: { environment: true, model: true, total_tokens: true } })
+    expect(levelInjection('low')).toEqual({ attachments: { environment: true, model: true, total_tokens: true, date: true } })
+    expect(levelInjection('low', { attachments: { date: false }, system_prompt: true, tools: { Read: true } })).toEqual({ system_prompt: true, attachments: { environment: true, model: true, total_tokens: true } })
+    expect(levelInjection('low', { system_prompt: false })).toEqual({ attachments: { environment: true, model: true, total_tokens: true, date: true } })
     expect(levelInjection('high', { tools: { Bash: false, Agent: true } })).toEqual({ system_prompt: true, attachments: { environment: true, model: true, total_tokens: true, date: true }, tools: { Agent: true, Edit: true, Read: true, Write: true } })
+    expect(levelInjection('high', { system_prompt: false, tools: { Skill: true } })).toEqual({ attachments: { environment: true, model: true, total_tokens: true, date: true }, tools: { Bash: true, Edit: true, Read: true, Write: true, Skill: true } })
     expect(levelInjection('low', { attachments: { environment: false, model: false, total_tokens: false, date: false } })).toBeUndefined()
   })
   it.each([
@@ -184,9 +188,10 @@ describe('CCGateway request levels mirror the contracts', () => {
   ] as const)('maps legacy %s %j %j to %s', (relay, attachments, injection, want) => {
     expect(legacyLevel(relay, attachments, injection as BuildInjection | undefined)).toBe(want)
   })
-  it('offers the seven tool candidates and drops the retired identity lines', () => {
-    expect(injectionTools).toEqual(['Bash', 'Read', 'Edit', 'Write', 'Agent', 'WebSearch', 'NotebookEdit'])
-    expect(validRequestPolicy({ ...defaultRequestPolicy(), build_injection: { tools: { ToolSearch: true } } } as unknown as RequestPolicy)).toBe(false)
+  it('offers the thirteen tool candidates and drops the retired identity lines', () => {
+    expect(injectionTools).toEqual(['Bash', 'Read', 'Edit', 'Write', 'Agent', 'ListAgents', 'ReportFindings', 'ScheduleWakeup', 'Skill', 'ToolSearch', 'Workflow', 'WebSearch', 'NotebookEdit'])
+    expect(validRequestPolicy({ ...defaultRequestPolicy(), build_injection: { tools: { ToolSearch: true }, system_prompt: true } })).toBe(true)
+    expect(validRequestPolicy({ ...defaultRequestPolicy(), build_injection: { tools: { DeferredToolPlaceholder: true } } } as unknown as RequestPolicy)).toBe(false)
     // The identity line is no longer configured: a saved value is not kept.
     expect(defaultRequestPolicy()).not.toHaveProperty('build_identity_lines')
     expect(normalizeRequestPolicy({ ...defaultRequestPolicy(), build_identity_lines: { cli: 'none' } } as never)).not.toHaveProperty('build_identity_lines')
@@ -206,7 +211,11 @@ describe('CCGateway request levels mirror the contracts', () => {
     expect(env.build_attachment_sources).toEqual({ platform_name: 'worker', os_version: 'client', shell: 'erase', primary_directory: 'client', additional_directories: 'client', git_repository: 'client', worktree: 'client', scratchpad_directory: 'client', github_cli: 'client', agent_proxy: 'client' })
     expect(env.build_injection).toEqual({ attachments: { environment: true, model: true, total_tokens: true, date: false } })
     const all = customizeLayer(env, parent, 'prompt')
-    expect(all.build_injection).toEqual({ attachments: { environment: true, model: true, total_tokens: true, date: false }, system_prompt: true, tools: { Bash: true, Read: true, Edit: true, Write: true, Agent: true, WebSearch: false, NotebookEdit: false } })
+    expect(all.build_injection).toEqual({ attachments: { environment: true, model: true, total_tokens: true, date: false }, system_prompt: true, tools: { Bash: true, Read: true, Edit: true, Write: true, Agent: true, ListAgents: false, ReportFindings: false, ScheduleWakeup: false, Skill: false, ToolSearch: false, Workflow: false, WebSearch: false, NotebookEdit: false } })
+    // At low the inherited system prompt is off without a choice: customizing writes it off.
+    expect(customizeLayer(base, { ...parent, level: 'low' }, 'prompt').build_injection).toHaveProperty('system_prompt', false)
+    expect(featureDifferenceCount({ ...parent, level: 'low', build_injection: {} }, { build_injection: { system_prompt: false } })).toBe(0)
+    expect(featureDifferenceCount({ ...parent, level: 'low', build_injection: {} }, { build_injection: { system_prompt: true } })).toBe(1)
     for (const layer of ['environment', 'prompt'] as const) expect(layerCustomized(all, layer)).toBe(true)
     // Customizing changes nothing that applies; it only stops inheriting.
     const merged = mergeFeaturePolicy(parent, all)
@@ -224,7 +233,7 @@ describe('CCGateway request levels mirror the contracts', () => {
   // A legacy build adding the prompt or a tool becomes high; the level's other
   // defaults are written off so it adds exactly what it did before.
   it('migrates a legacy high policy without adding anything it did not add', () => {
-    const policy = normalizeRequestPolicy({ relay_mode: 'build', build_injection: { tools: { Read: true, ToolSearch: true } as Record<string, boolean>, attachments: { date: true } } })
+    const policy = normalizeRequestPolicy({ relay_mode: 'build', build_injection: { tools: { Read: true, Glob: true } as Record<string, boolean>, attachments: { date: true } } })
     expect(policy.level).toBe('high')
     expect(policy).not.toHaveProperty('relay_mode')
     expect(policy.build_injection).toEqual({ system_prompt: false, attachments: { environment: false, model: false, total_tokens: false, date: true }, tools: { Bash: false, Read: true, Edit: false, Write: false } })

@@ -14,8 +14,8 @@
 |---|---|---|
 | 0 注入 | 计费头 | direct：只处理开头的计费头，其余逐字节不动 |
 | 微注入 | 计费头、身份行 | build |
-| 低注入 | 微注入 + 环境（附件转换，缺的首轮附件补上） | build |
-| 高注入 | 低注入 + 内置系统提示词 + CC 常用工具（管理员选） | build |
+| 低注入 | 微注入 + 环境（附件转换，缺的首轮附件补上）+ 可选内置系统提示词（默认不补，2026-11-02 起） | build |
+| 高注入 | 低注入 + 内置系统提示词（默认补）+ CC 工具（管理员选） | build |
 
 - 每一层：**客户端带了就保留**（按配置转换字段），**没带就按规则注入**。
 - 等级就是模板：选等级决定哪些层生效，每层的细节单独配置。前端直接配置“补不补”和“用客户端还是服务端的值”。
@@ -66,7 +66,8 @@
 |---|---|---|
 | 默认勾选 | Bash、Read、Edit、Write | 内置提示词无条件点名 Read、Edit、Write，有 Bash 时点名 Bash；提示词和工具同在高注入，两者一致 |
 | 可选 | Agent、WebSearch、NotebookEdit | Agent 需要“可用代理类型”附件，现在不补，两者会不一致；WebSearch、NotebookEdit 原生标了延迟加载，但没有 ToolSearch 时按完整定义发送（docker 实测） |
-| 不列入候选 | ToolSearch、Skill、SendMessage、ListAgents、Workflow、Cron×3、ScheduleWakeup、TaskStop、Enter/ExitWorktree、ReportFindings | 依赖会话状态或对应的清单附件（`deferred_tools_delta`、`skill_listing`），补了内容就不对 |
+| 可选（2026-11-02 起，默认不选） | Skill、ToolSearch、ListAgents、ReportFindings、ScheduleWakeup、Workflow | 官方 2.1.316 首轮直接带完整定义的其余工具；只带定义，调用交回客户端（用户决定）。需要 CLI 能力 `build_injection_tools_v2`，没有的账号由核心去掉（CONTRACTS §53.22） |
+| 不列入候选 | SendMessage、Cron×3、TaskStop、Enter/ExitWorktree | 依赖会话状态或对应的清单附件，补了内容就不对 |
 
 所有注入工具的调用都交回客户端，客户端必须能执行。界面写明这一点。
 
@@ -88,7 +89,7 @@
 
 - 实现上沿用现有的键（`build_billing_*`、`build_identity_lines`、`build_attachment_sources`、`build_injection`），只新增 `level`；上面是概念形状。
 - `level` 只决定哪几层生效。超出等级的层保留配置但不下发，切换等级不会丢配置。
-- 等级内没选的项用默认值（`contracts/features/levels.go` 的 `LevelInjection`）：低注入四种首轮附件都补；高注入再补提示词，以及 Bash、Read、Edit、Write。
+- 等级内没选的项用默认值（`contracts/features/levels.go` 的 `LevelInjection`）：低注入四种首轮附件都补，提示词可选、默认不补；高注入提示词默认补，再补 Bash、Read、Edit、Write（2026-11-02 起，CONTRACTS §53.22）。
 - 工具候选只有 7 个（第 4 节），`InjectionTools` 同步收窄。
 - **迁移**：读取时转换，写回时用新形状（`features.LegacyLevel`，核心和前端同一套）。
   - 等级怎么定：

@@ -163,8 +163,8 @@ describe('account field payload matrix', () => {
     await layerMode(w, 'billing', 'custom'); await settlePreview()
     expect((await submit(w)).cc_feature_policy.overrides).toEqual({ build_attachment_sources: allWorker().build_attachment_sources,
       build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'client', cc_entrypoint: 'client' } })
-    // The prompt layer waits for the level (low here).
-    expect(w.get('[data-testid="layer-mode-prompt"] input').attributes('disabled')).toBeDefined()
+    // The prompt layer starts at low (its system prompt); its tools wait for high.
+    expect(w.get('[data-testid="layer-mode-prompt"] input').attributes('disabled')).toBeUndefined()
   })
 
   // Level 0 keeps the billing header's two rows; the environment is locked

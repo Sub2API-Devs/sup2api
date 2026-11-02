@@ -1,16 +1,19 @@
 <script setup lang="ts">
-// Prompt-and-tools layer of the request policy (CONTRACTS §53): what a request
-// without a billing header is given at the high level — Claude Code's system
-// prompt and its tools — each choice optional and defaulted by the level.
+// Prompt-and-tools layer of the request policy (CONTRACTS §53.22): what a
+// request without a billing header is given of Claude Code's own — its system
+// prompt, a choice from low (off unless chosen there, on at high unless
+// turned off), and its tools, from high — each choice optional and defaulted
+// by the level.
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SChip, SSegmented, SSettingRow, SSettingsGroup, SSwitch } from '@sub2api/ui'
-import { injectionDefault, injectionTools } from '../requestPolicy'
+import { injectionTools, injectionToolsV2 } from '../requestPolicy'
 import { usePolicyLayers } from '../usePolicyLayerContext'
 
 const { t } = useI18n()
 const layers = usePolicyLayers()
-const systemPrompt = computed(() => layers.view.build_injection?.system_prompt ?? injectionDefault('system_prompt'))
+/** The tools row has its own lock: below high the chips keep their saved choices but do not apply. */
+const toolsEditable = computed(() => layers.editable('prompt') && !layers.locked('tools'))
 function setSystemPrompt(on: boolean) {
   layers.edit(draft => {
     draft.build_injection = { ...draft.build_injection, system_prompt: on }
@@ -18,9 +21,17 @@ function setSystemPrompt(on: boolean) {
 }
 /** Tools use the context's shared build_injection switch (same as the environment card). */
 const setTool = (name: string, on: boolean) => layers.setInjection('tools', name, on)
+const list = (names: readonly string[]) => names.join(t('ccgateway.levels.convertSummary.list'))
+// Only the definitions are carried (2026-11-02): what each one leaves out,
+// and how ToolSearch decides whether WebSearch and NotebookEdit are sent.
 const toolHints = computed(() => [
+  { tools: 'Bash', text: t('ccgateway.levels.toolHints.Bash') },
   { tools: 'Agent', text: t('ccgateway.levels.toolHints.Agent') },
-  { tools: ['WebSearch', 'NotebookEdit'].join(t('ccgateway.levels.convertSummary.list')), text: t('ccgateway.levels.toolHints.deferred') }
+  { tools: 'ListAgents', text: t('ccgateway.levels.toolHints.ListAgents') },
+  { tools: 'Skill', text: t('ccgateway.levels.toolHints.Skill') },
+  { tools: list(injectionToolsV2), text: t('ccgateway.levels.toolHints.v2') },
+  { tools: 'ToolSearch', text: t('ccgateway.levels.toolHints.ToolSearch') },
+  { tools: list(['WebSearch', 'NotebookEdit']), text: t('ccgateway.levels.toolHints.deferred') }
 ])
 </script>
 
@@ -61,11 +72,12 @@ const toolHints = computed(() => [
     </template>
     <SSettingRow
       :label="t('ccgateway.levels.systemPrompt')"
-      :description="t('ccgateway.levels.systemPromptHint')"
+      :description="t(layers.has.tools ? 'ccgateway.levels.systemPromptHint' : 'ccgateway.levels.systemPromptHintLow')"
       size="sm"
+      data-testid="system-prompt-row"
     >
       <SSwitch
-        :model-value="systemPrompt"
+        :model-value="layers.systemPrompt"
         :disabled="!layers.editable('prompt')"
         data-testid="injection-system_prompt"
         @update:model-value="setSystemPrompt"
@@ -76,9 +88,17 @@ const toolHints = computed(() => [
       stacked
       size="sm"
       data-testid="injection-tools"
+      :data-locked="layers.locked('tools') || undefined"
     >
       <template #description>
-        <span data-testid="tools-client-note">{{ t('ccgateway.levels.toolsHint') }}</span>
+        <span
+          v-if="layers.locked('tools')"
+          data-testid="tools-locked"
+        >{{ layers.lockedText('tools') }}</span>
+        <span
+          v-else
+          data-testid="tools-client-note"
+        >{{ t('ccgateway.levels.toolsHint') }}</span>
       </template>
       <div class="w-full space-y-1.5">
         <div
@@ -91,7 +111,7 @@ const toolHints = computed(() => [
             :key="name"
             :pressed="layers.injected('tools', name)"
             :icon="layers.injected('tools', name) ? 'check' : undefined"
-            :disabled="!layers.editable('prompt')"
+            :disabled="!toolsEditable"
             :data-testid="'injection-tools-' + name"
             @update:pressed="setTool(name, $event)"
           >

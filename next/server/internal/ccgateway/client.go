@@ -334,9 +334,11 @@ func (a *attempt) attachPolicy(clone *http.Request, path string) *outcome {
 	}
 	// Every policy carries a request level (request_levels_v1), so each model
 	// request and probe confirms the Worker/CLI first, whatever the global,
-	// group or account settings resolved to.
-	if path == "/v1/messages" || path == "/v1/ccgateway/probe" {
-		if err := a.t.s.requireRequestPolicyCapabilities(a.ctx, a.client, a.base, a.modelKey, a.route, policy); err != nil {
+	// group or account settings resolved to. A path not confirmed never
+	// carries a tool its CLI may not render.
+	switch path {
+	case "/v1/messages", "/v1/ccgateway/probe":
+		if policy, err = a.t.s.requireRequestPolicyCapabilities(a.ctx, a.client, a.base, a.modelKey, a.route, policy); err != nil {
 			if a.cfg.AccountRuntimes && errors.Is(err, errAccountNotSynchronized) {
 				// Refused like the model request would be: read the account
 				// again (the context stays for the retry).
@@ -345,6 +347,8 @@ func (a *attempt) attachPolicy(clone *http.Request, path string) *outcome {
 			}
 			return a.refuse("configuration_error", core.AsError(err).Message)
 		}
+	default:
+		policy = withConfirmedTools(policy, nil)
 	}
 	policyJSON, _ := json.Marshal(policy)
 	clone.Header.Set("X-CCGateway-Request-Policy", string(policyJSON))

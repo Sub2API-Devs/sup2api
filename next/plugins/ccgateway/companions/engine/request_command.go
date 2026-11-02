@@ -238,6 +238,10 @@ var requestCapabilityGates = []capabilityGate{
 	// The identity line follows the entrypoint in the CLI.
 	{func(_ *Gateway, p *requestPlan) bool { return building(p) && p.cli.BuildBillingEntrypoint != "" }, features.BuildIdentityCapability, unsupportedContent},
 	{func(_ *Gateway, p *requestPlan) bool { return building(p) && p.cli.BuildInjection != nil }, features.BuildInjectionCapability, unsupportedContent},
+	// The tools added on 2026-11-02 (features.InjectionToolsV2): the core
+	// drops them for a CLI without the capability, so this only refuses a
+	// policy that did not come through that core.
+	{func(_ *Gateway, p *requestPlan) bool { return building(p) && p.cli.BuildInjection.UsesToolsV2() }, features.BuildInjectionToolsV2Capability, unsupportedContent},
 	// Direct is the billing header alone (request levels): the CLI fills it
 	// for the entrypoint and converts its fields by their sources only with
 	// the Worker's direct context.

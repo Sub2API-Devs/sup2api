@@ -33,6 +33,8 @@ cc_prompt_id=8e41506e-3c26-496b-9d05-672bed941943; cc_turn_origin=sdk; cc_prompt
 
 官方字段顺序（`chunk-pdqv9ngw.js` 的 `f3o`）：`cc_version; cc_entrypoint; [cch]; [cc_workload]; [cc_is_subagent=true]; [cc_prev_req]; [cc_prompt_id]; [cc_turn_origin]; [cc_prompt_index; cc_turn_index]; [cc_gateway]; [cc_project…]`。`cch`、`cc_prev_req`、`cc_prompt_id`、turn 字段都只在 firstParty 且 `Pi()`（官方地址形状）时写。
 
+2.1.316 起末尾还可能有 `cc_prev_msg=<msg_…>; cc_prev_prompt_index; cc_prev_turn_index`（原生 `Dns`）：CC 自己做完上下文压缩（`/compact`、自动、reactive）后，主线程请求带上压缩前最后一次主应答里最后一条 assistant 的 `message.id` 与那次的 turn 位置，直到压缩后第一次完整成功的主应答为止；压缩后的第一条请求同时带 `*-context-compacted` 请求头。条件与 `cc_prev_req` 相同（官方地址形状），子代理不带，状态只在进程内存。**客户端自带的原样保留；我们写的头不补**（第 5.2 节）。
+
 ### 1.2 同一差异也体现在 system 的分块上
 
 | | 自定义 URL | 官方地址 |
@@ -92,15 +94,15 @@ cc_version=2.1.312.<指纹>; cc_entrypoint=sdk-cli; cch=00000; [cc_prev_req=req_
 
 ### 3.1 等级 → 策略（核心）
 
-`features.LevelInjection(level, configured)`（`companions/contracts/features/levels.go:77`），默认等级 `low`：
+`features.LevelInjection(level, configured)`（`companions/contracts/features/levels.go`），默认等级 `low`。2026-11-02 起（用户要求"低注入可以注入这两块固定提示词，改一改，高注入额外可选工具注入"，CONTRACTS §53.22）：
 
 | 等级 | 注入内容 |
 |---|---|
 | none / micro | 无（none 还是 direct） |
-| low | 首轮附件：environment、model、total_tokens、date |
-| high | 再加 `system_prompt: true` 与默认工具 Bash / Read / Edit / Write |
+| low | 首轮附件：environment、model、total_tokens、date；`system_prompt` 可选，**默认关**，显式 `true` 才补（静态块 + 动态块）；不补工具 |
+| high | 首轮附件；`system_prompt` 默认 `true`；默认工具 Bash / Read / Edit / Write；另可选 Agent、ListAgents、ReportFindings、ScheduleWakeup、Skill、ToolSearch、Workflow、WebSearch、NotebookEdit（默认关，只带定义） |
 
-存档策略里显式写的值优先——**显式 `system_prompt: false` 会压过等级**，之后把等级调到 high 也不会恢复。
+存档策略里显式写的值优先——**显式 `system_prompt: false` 会压过等级**，之后把等级调到 high 也不会恢复。反过来，显式 `system_prompt: true` 从 low 起生效：在 high 下自定义过这一层、之后降到 low 的策略，以及在 high 分组下把等级降到 low 的账号，都会补提示词（已接受，§53.22 的 (a)(b)）。ListAgents 到 Workflow 这 6 个工具只发给声明 `build_injection_tools_v2` 的 CLI，核心对旧 CLI 会去掉它们，其余照发。
 
 ### 3.2 CLI 侧四层判断
 
@@ -128,9 +130,10 @@ cc_version=2.1.312.<指纹>; cc_entrypoint=sdk-cli; cch=00000; [cc_prev_req=req_
 | 请求 | 会补提示词吗 |
 |---|---|
 | 自带计费头（任何真实 CC 客户端） | **永不** |
-| 无计费头 + high + system 不含完整安全段原文 | 会 |
+| 无计费头 + high（未关）+ system 不含完整安全段原文 | 会 |
+| 无计费头 + low + 显式 `system_prompt:true` + system 不含完整安全段原文 | 会（2026-11-02 起；不补工具） |
 | 无计费头 + system 含完整安全段原文 | 不补提示词（工具/附件照补） |
-| low 等级 / 显式 `system_prompt:false` | 不补 |
+| low 等级未选 / 显式 `system_prompt:false` / none、micro | 不补 |
 
 ### 3.4 实测矩阵（补丁 CLI 2.1.310 / v36，`request --build`）
 
@@ -196,6 +199,7 @@ Worker 连的是官方 API，应当对齐"真实 CC 直连官方地址"的形状
 | 带子代理头但没有计费头的请求 | 否 | v28 起这类请求一律按主线程构建，Worker 查的是子代理线程，线程不一致，CLI 不用、Worker 不存 |
 | 子代理请求没有 agent ID（`X-Claude-Code-Request-Class: subagent`/`workflow`，Worker 的 `sessionThread` 判定）、同一线程（主线程或子代理）并发、fork/compact | 否 | 无法确定是哪个线程的哪一次请求 |
 | 控制台账号测试（probe） | 否 | 网关自己的请求，不属于对话 |
+| 压缩后的 `cc_prev_msg`/`cc_prev_prompt_index`/`cc_prev_turn_index`（2.1.316 起的原生字段） | 不补 | Worker 只看得到"同一会话、历史对不上"，分不清压缩与编辑重发、分叉、截断；官方总把它与 `*-context-compacted` 头成对发出，而非 CC 请求的这组头一律丢弃（v28），单独补会造出官方没有的形状。历史对不上时本来就不带 `cc_prev_req`，与官方压缩后的表现一致。我们的 CLI 进程里不会发生压缩，原生也就不会写这三个字段 |
 
 所以在当前规则下，子代理线程的记忆实际不会被写入：没有计费头的请求总是主线程。键与线程校验仍按（会话，线程）实现并有单测覆盖。CLI `request-session.js` 里 `continueSession`/`continueDirectSession` 的子代理分支因此不可达；这段代码在 CLI（ELF）里，不为删它重编，测试照旧。
 
@@ -226,7 +230,7 @@ ssh ovh 'docker run --rm -v /home/debian/cc312:/t -w /t --entrypoint bash ccgate
 
 | 位置 | 内容 |
 |---|---|
-| `companions/contracts/features/levels.go:77` | `LevelInjection`：等级 → 注入项 |
+| `companions/contracts/features/levels.go:82` | `LevelInjection`：等级 → 注入项 |
 | `companions/cli-mods/request-build.js:238` | 计费头闸门（`hasBilling ? null`） |
 | `companions/cli-mods/request-build.js:60` | 提示词"已带"判据（安全段子串） |
 | `companions/cli-mods/request-build.js:165` | `identityRequest`（own → 不加身份行） |

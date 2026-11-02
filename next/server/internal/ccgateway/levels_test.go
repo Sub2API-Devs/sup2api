@@ -134,8 +134,8 @@ func TestLegacyOverrideRelayModeMapsToALevel(t *testing.T) {
 }
 
 // What reaches the Worker per level: none is the billing header (entrypoint
-// and sources), micro adds the identity lines, low the environment, high the
-// prompt and the tools. The level itself is never sent.
+// and sources), micro adds the identity lines, low the environment (and the
+// prompt when chosen), high the tools. The level itself is never sent.
 func TestWirePolicyCarriesOnlyTheLayersOfItsLevel(t *testing.T) {
 	full := defaultRequestPolicy()
 	full.BuildBillingEntrypoint = "claude-vscode"
@@ -143,7 +143,8 @@ func TestWirePolicyCarriesOnlyTheLayersOfItsLevel(t *testing.T) {
 	full.BuildIdentityLines = features.BuildIdentityLines{"claude-vscode": "official_cli", "cli": "official_cli"}
 	full.BuildAttachmentSources = features.BuildAttachmentSources{"os_version": "worker", "shell": "client", "platform_name": "erase"}
 	full.BuildInjection = levelInjection(t, `{"system_prompt":true,"attachments":{"model":false},"tools":{"Agent":true,"Write":false}}`)
-	low := `{"attachments":{"environment":true,"total_tokens":true,"date":true}}`
+	// The prompt is a choice from low (2026-11-02): this policy chose it.
+	low := `{"system_prompt":true,"attachments":{"environment":true,"total_tokens":true,"date":true}}`
 	high := `{"system_prompt":true,"attachments":{"environment":true,"total_tokens":true,"date":true},"tools":{"Bash":true,"Read":true,"Edit":true,"Agent":true}}`
 	for _, c := range []struct {
 		level, relay           string

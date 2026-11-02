@@ -25,6 +25,18 @@
       "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"build_injection\":{\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true},\"tools\":{\"Agent\":true,\"Edit\":true,\"Read\":true,\"Write\":true}}}"
     },
     {
+      "name": "global/global-low-prompt",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"build_injection\":{\"system_prompt\":true,\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true}}}"
+    },
+    {
+      "name": "global/global-lowered-from-high",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"build_injection\":{\"system_prompt\":true,\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true}}}"
+    },
+    {
+      "name": "global/global-high-v2-tools",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"build_injection\":{\"system_prompt\":true,\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true},\"tools\":{\"Bash\":true,\"Edit\":true,\"Read\":true,\"Skill\":true,\"ToolSearch\":true,\"Write\":true}}}"
+    },
+    {
       "name": "global/global-identity-lines-dropped",
       "wire": "{\"schema_version\":1,\"relay_mode\":\"build\"}"
     },

@@ -18,8 +18,9 @@ const RequestLevelsCapability = "request_levels_v1"
 //	none  - the billing header only, in direct (the body otherwise byte for byte)
 //	micro - build, plus the identity line
 //	low   - plus the environment: attachment fields converted, missing
-//	        first-turn attachments added
-//	high  - plus Claude Code's system prompt and the chosen tools
+//	        first-turn attachments added; Claude Code's system prompt when
+//	        chosen (not without a choice, 2026-11-02)
+//	high  - plus the chosen tools, and the system prompt without a choice
 const (
 	LevelNone  = "none"
 	LevelMicro = "micro"
@@ -58,11 +59,14 @@ func RelayModeForLevel(level string) string {
 	return "build"
 }
 
-// LevelHasIdentity, LevelHasEnvironment and LevelHasPromptAndTools say which
-// layers a level includes; the billing header is in every one.
-func LevelHasIdentity(level string) bool       { return levelRank(level) >= 1 }
-func LevelHasEnvironment(level string) bool    { return levelRank(level) >= 2 }
-func LevelHasPromptAndTools(level string) bool { return levelRank(level) >= 3 }
+// LevelHasIdentity, LevelHasEnvironment, LevelHasPrompt and LevelHasTools say
+// which layers a level includes; the billing header is in every one. Claude
+// Code's system prompt is a choice from low (2026-11-02 user: low may add its
+// two prompt blocks), its tools only at high.
+func LevelHasIdentity(level string) bool    { return levelRank(level) >= 1 }
+func LevelHasEnvironment(level string) bool { return levelRank(level) >= 2 }
+func LevelHasPrompt(level string) bool      { return levelRank(level) >= 2 }
+func LevelHasTools(level string) bool       { return levelRank(level) >= 3 }
 
 // DefaultInjectionTools are the tools high adds without a choice: the ones
 // Claude Code's system prompt names (2.1.304 "# Using your tools" names Read,
@@ -71,9 +75,10 @@ var DefaultInjectionTools = []string{"Bash", "Read", "Edit", "Write"}
 
 // LevelInjection is what a level adds to a request without a billing header:
 // the configured choices within the level, each omitted one at the level's
-// default (every first-turn attachment from low, the system prompt and the
-// default tools at high). Nothing outside the level is kept; nil when nothing
-// is added.
+// default (every first-turn attachment from low; the system prompt from low,
+// added without a choice only at high, so a policy that never chose it adds
+// at low what it added before 2026-11-02; the default tools at high).
+// Nothing outside the level is kept; nil when nothing is added.
 func LevelInjection(level string, configured *BuildInjection) *BuildInjection {
 	if !LevelHasEnvironment(level) {
 		return nil
@@ -82,9 +87,11 @@ func LevelInjection(level string, configured *BuildInjection) *BuildInjection {
 	for _, name := range InjectionAttachments {
 		out.Attachments[name] = true
 	}
-	if LevelHasPromptAndTools(level) {
-		on := true
+	if LevelHasPrompt(level) {
+		on := LevelHasTools(level)
 		out.SystemPrompt = &on
+	}
+	if LevelHasTools(level) {
 		out.Tools = map[string]bool{}
 		for _, name := range DefaultInjectionTools {
 			out.Tools[name] = true
@@ -94,11 +101,13 @@ func LevelInjection(level string, configured *BuildInjection) *BuildInjection {
 		for name, on := range configured.Attachments {
 			out.Attachments[name] = on
 		}
-		if LevelHasPromptAndTools(level) {
-			if configured.SystemPrompt != nil {
-				value := *configured.SystemPrompt
-				out.SystemPrompt = &value
-			}
+		// An explicit choice wins from low (2026-11-02 user, "不管他": a
+		// system_prompt true stored for high also applies at low).
+		if LevelHasPrompt(level) && configured.SystemPrompt != nil {
+			value := *configured.SystemPrompt
+			out.SystemPrompt = &value
+		}
+		if LevelHasTools(level) {
 			for name, on := range configured.Tools {
 				out.Tools[name] = on
 			}

@@ -159,6 +159,36 @@ describe('editor payloads for the core contract', () => {
       expect: { level: 'high', relay_mode: 'build', 'build_injection.system_prompt': 'false', 'build_injection.tools.Agent': 'true', 'build_injection.tools.Bash': 'false' } })
     w.unmount()
 
+    // Global at low with Claude Code's system prompt chosen (2026-11-02): the
+    // core sends the prompt, no tool.
+    saved = savedConfig({})
+    w = await remote('global')
+    await w.get('[data-testid="injection-system_prompt"]').setValue(true)
+    cases.push({ name: 'global-low-prompt', layer: 'global', group_id: 0, saved: jsonCopy(saved), body: await submit(w),
+      expect: { level: 'low', relay_mode: 'build', 'build_injection.system_prompt': 'true' } })
+    w.unmount()
+
+    // Global lowered from high, where the prompt layer was customized
+    // (system_prompt true written): the choice applies at low too since
+    // 2026-11-02 (CONTRACTS §53.22, accepted), so the prompt is sent.
+    saved = savedConfig({}, { ...defaultRequestPolicy(), level: 'high', build_injection: { system_prompt: true, tools: { Bash: true, Read: true, Edit: true, Write: true } } })
+    w = await remote('global')
+    await level(w, 'low')
+    cases.push({ name: 'global-lowered-from-high', layer: 'global', group_id: 0, saved: jsonCopy(saved), body: await submit(w),
+      expect: { level: 'low', relay_mode: 'build', 'build_injection.system_prompt': 'true', 'build_injection.tools.Bash': 'true' } })
+    w.unmount()
+
+    // Global at high with tools official 2.1.316 sends on the first turn
+    // (2026-11-02): only a CLI with build_injection_tools_v2 gets them.
+    saved = savedConfig({})
+    w = await remote('global')
+    await level(w, 'high')
+    await toggle(w, 'injection-tools-Skill')
+    await toggle(w, 'injection-tools-ToolSearch')
+    cases.push({ name: 'global-high-v2-tools', layer: 'global', group_id: 0, saved: jsonCopy(saved), body: await submit(w),
+      expect: { level: 'high', relay_mode: 'build', 'build_injection.system_prompt': 'false', 'build_injection.tools.Skill': 'true', 'build_injection.tools.ToolSearch': 'true', 'build_injection.tools.Bash': 'false' } })
+    w.unmount()
+
     // Saved with identity lines (retired 2026-10-23): the editor sends the policy without them.
     saved = savedConfig({}, { ...defaultRequestPolicy(), level: 'micro', build_identity_lines: { cli: 'none', 'claude-vscode': 'official_cli' } } as Partial<RequestPolicy>)
     w = await remote('global')
@@ -211,7 +241,7 @@ describe('editor payloads for the core contract', () => {
     await layerMode(w, 'prompt', 'custom')
     await toggle(w, 'injection-tools-Agent')
     body = await submit(w)
-    expect(body.cc_feature_groups[3].overrides).toEqual({ level: 'high', build_injection: { system_prompt: true, tools: { Bash: true, Read: true, Edit: true, Write: true, Agent: true, WebSearch: false, NotebookEdit: false } } })
+    expect(body.cc_feature_groups[3].overrides).toEqual({ level: 'high', build_injection: { system_prompt: true, tools: { Bash: true, Read: true, Edit: true, Write: true, Agent: true, ListAgents: false, ReportFindings: false, ScheduleWakeup: false, Skill: false, ToolSearch: false, Workflow: false, WebSearch: false, NotebookEdit: false } } })
     cases.push({ name: 'group-level', layer: 'group', group_id: 3, saved: jsonCopy(saved), body,
       expect: { level: 'high', relay_mode: 'build', 'build_injection.system_prompt': 'true', 'build_injection.tools.Agent': 'true', 'build_injection.tools.Bash': 'true', 'build_injection.tools.WebSearch': 'false' } })
     w.unmount()
@@ -270,7 +300,7 @@ describe('editor payloads for the core contract', () => {
     await layerMode(editor, 'prompt', 'custom'); await settle()
     await toggle(editor, 'injection-tools-Bash'); await settle()
     body = await submit(editor)
-    expect(body.cc_feature_policy.overrides).toEqual({ build_injection: { system_prompt: true, tools: { Bash: false, Read: true, Edit: true, Write: true, Agent: false, WebSearch: false, NotebookEdit: false } } })
+    expect(body.cc_feature_policy.overrides).toEqual({ build_injection: { system_prompt: true, tools: { Bash: false, Read: true, Edit: true, Write: true, Agent: false, ListAgents: false, ReportFindings: false, ScheduleWakeup: false, Skill: false, ToolSearch: false, Workflow: false, WebSearch: false, NotebookEdit: false } } })
     cases.push({ name: 'account-prompt', layer: 'account', group_id: 3, saved: jsonCopy(saved), body: body.cc_feature_policy,
       expect: { level: 'high', 'build_injection.system_prompt': 'true', 'build_injection.tools.Bash': 'false', 'build_injection.tools.Read': 'true' } })
 

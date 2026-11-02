@@ -21,8 +21,9 @@ const retiredOverrideKeys = ['build_identity_lines'] as const
 // Request levels (contracts features/levels.go, 2026-10-23), from the least
 // to the most of Claude Code a request is given; each includes the ones
 // before it: none is the billing header alone (direct); micro adds the
-// identity line (build); low the environment; high CC's system prompt and
-// tools. The level decides which layers apply; each layer's choices are kept
+// identity line (build); low the environment, and CC's system prompt when
+// chosen (2026-11-02); high CC's tools, and the system prompt unless turned
+// off. The level decides which layers apply; each layer's choices are kept
 // when the level is lower and apply again when it is raised.
 export const requestLevels = ['none', 'micro', 'low', 'high'] as const
 export type RequestLevel = (typeof requestLevels)[number]
@@ -35,27 +36,40 @@ const levelRank = (level?: RequestLevel | '') => requestLevels.indexOf(level || 
 export const relayModeForLevel = (level?: RequestLevel | ''): 'direct' | 'build' => levelRank(level) === 0 ? 'direct' : 'build'
 export const levelHasIdentity = (level?: RequestLevel | '') => levelRank(level) >= 1
 export const levelHasEnvironment = (level?: RequestLevel | '') => levelRank(level) >= 2
-export const levelHasPromptAndTools = (level?: RequestLevel | '') => levelRank(level) >= 3
+// CC's system prompt is a choice from low (2026-11-02 user: low may add the
+// prompt's two blocks), its tools only at high.
+export const levelHasPrompt = (level?: RequestLevel | '') => levelRank(level) >= 2
+export const levelHasTools = (level?: RequestLevel | '') => levelRank(level) >= 3
 // What a level adds to a request without a billing header (one that is not
 // Claude Code's), each choice optional and inherited on its own (contracts
 // features/injection.go): CC's first-turn attachments in CC's order (from
-// low), its system prompt and its own tools (high). The CLI renders all of it.
+// low), its system prompt (a choice from low) and its own tools (high). The
+// CLI renders all of it.
 export const injectionAttachments = ['environment', 'model', 'total_tokens', 'date'] as const
 export type InjectionAttachment = (typeof injectionAttachments)[number]
 // The tools CC's system prompt names, added at high without a choice, then
-// the optional ones (contracts InjectionTools, console order).
+// the optional ones (contracts InjectionTools, console order): Agent and the
+// rest of what official 2.1.316 sends on a session's first turn
+// (injectionToolsV2, 2026-11-02; only a CLI with build_injection_tools_v2
+// gets them, the core drops them for an older one), then WebSearch and
+// NotebookEdit. Only the definitions are carried: every call goes back to
+// the client.
 export const defaultInjectionTools = ['Bash', 'Read', 'Edit', 'Write'] as const
-export const injectionTools = [...defaultInjectionTools, 'Agent', 'WebSearch', 'NotebookEdit'] as const
+export const injectionToolsV2 = ['ListAgents', 'ReportFindings', 'ScheduleWakeup', 'Skill', 'ToolSearch', 'Workflow'] as const
+export const injectionTools = [...defaultInjectionTools, 'Agent', ...injectionToolsV2, 'WebSearch', 'NotebookEdit'] as const
 export type InjectionTool = (typeof injectionTools)[number]
 export interface BuildInjection {
   system_prompt?: boolean
   attachments?: Partial<Record<InjectionAttachment, boolean>>
   tools?: Partial<Record<InjectionTool, boolean>>
 }
-// A choice's value when no layer makes it (LevelInjection): every attachment,
-// the system prompt and the default tools are added within their level.
-export function injectionDefault(part: 'system_prompt' | 'attachments' | 'tools', name?: string): boolean {
-  return part !== 'tools' || (defaultInjectionTools as readonly string[]).includes(name ?? '')
+// A choice's value at a level when no layer makes it (LevelInjection): every
+// attachment and the default tools are added within their level, the system
+// prompt without a choice only at high (2026-11-02: a choice from low, off
+// there, so a policy that never chose it adds what it did).
+export function injectionDefault(level: RequestLevel | '' | undefined, part: 'system_prompt' | 'attachments' | 'tools', name?: string): boolean {
+  if (part === 'system_prompt') return levelHasTools(level)
+  return part === 'attachments' || (defaultInjectionTools as readonly string[]).includes(name ?? '')
 }
 // Only what is added; undefined when nothing is (BuildInjection.Effective).
 function effectiveInjection(p?: BuildInjection): BuildInjection | undefined {
@@ -73,10 +87,10 @@ function effectiveInjection(p?: BuildInjection): BuildInjection | undefined {
 export function levelInjection(level: RequestLevel | '' | undefined, configured?: BuildInjection): BuildInjection | undefined {
   if (!levelHasEnvironment(level)) return undefined
   const out: BuildInjection = { attachments: Object.fromEntries(injectionAttachments.map(name => [name, true])) }
-  if (levelHasPromptAndTools(level)) {
+  if (levelHasTools(level)) {
     out.system_prompt = configured?.system_prompt ?? true
     out.tools = { ...Object.fromEntries(defaultInjectionTools.map(name => [name, true])), ...configured?.tools }
-  }
+  } else if (levelHasPrompt(level)) out.system_prompt = configured?.system_prompt ?? false
   out.attachments = { ...out.attachments, ...configured?.attachments }
   return effectiveInjection(out)
 }
@@ -99,7 +113,7 @@ function legacyInjection(level: RequestLevel, injection?: BuildInjection): Build
   if (!levelHasEnvironment(level)) return injection
   const out = mergeInjection(injection) ?? {}
   out.attachments = { ...Object.fromEntries(injectionAttachments.map(name => [name, false])), ...out.attachments }
-  if (levelHasPromptAndTools(level)) {
+  if (levelHasTools(level)) {
     out.system_prompt ??= false
     out.tools = { ...Object.fromEntries(defaultInjectionTools.map(name => [name, false])), ...out.tools }
   }
@@ -367,10 +381,12 @@ export function featureDifferenceCount(parent: RequestPolicy, overrides: Feature
       }
     } else if (key === 'build_injection') {
       const own = value as BuildInjection
-      if (own.system_prompt !== undefined && (parent.build_injection?.system_prompt ?? injectionDefault('system_prompt')) !== own.system_prompt) count++
+      // An unset choice is its default at the level the overrides apply.
+      const level = mergeFeaturePolicy(parent, overrides).level
+      if (own.system_prompt !== undefined && (parent.build_injection?.system_prompt ?? injectionDefault(level, 'system_prompt')) !== own.system_prompt) count++
       for (const field of ['attachments', 'tools'] as const) {
         for (const [name, on] of Object.entries(own[field] ?? {})) {
-          if (((parent.build_injection?.[field] as Record<string, boolean> | undefined)?.[name] ?? injectionDefault(field, name)) !== on) count++
+          if (((parent.build_injection?.[field] as Record<string, boolean> | undefined)?.[name] ?? injectionDefault(level, field, name)) !== on) count++
         }
       }
     } else if (key === 'build_billing_entrypoint') {
@@ -432,12 +448,14 @@ export function followLayer(overrides: FeatureOverrides, layer: FeatureLayer): F
   return next
 }
 // Customize: every field of the layer written with the value it inherits,
-// the level's defaults made explicit.
+// the defaults of the level that applies made explicit (the system prompt is
+// off at low, on at high).
 export function customizeLayer(overrides: FeatureOverrides, inherited: RequestPolicy, layer: FeatureLayer): FeatureOverrides {
   const next = followLayer(overrides, layer)
   const from = inherited.build_injection
+  const level = mergeFeaturePolicy(inherited, next).level
   const choices = <T extends string>(part: 'attachments' | 'tools', names: readonly T[]) =>
-    Object.fromEntries(names.map(name => [name, (from?.[part] as Record<string, boolean> | undefined)?.[name] ?? injectionDefault(part, name)])) as Record<T, boolean>
+    Object.fromEntries(names.map(name => [name, (from?.[part] as Record<string, boolean> | undefined)?.[name] ?? injectionDefault(level, part, name)])) as Record<T, boolean>
   if (layer === 'level') next.level = levelOf(inherited)
   if (layer === 'billing') {
     next.build_billing_entrypoint = inherited.build_billing_entrypoint ?? defaultBillingEntrypoint
@@ -448,7 +466,7 @@ export function customizeLayer(overrides: FeatureOverrides, inherited: RequestPo
     next.build_injection = { ...next.build_injection, attachments: choices('attachments', injectionAttachments) }
   }
   if (layer === 'prompt') {
-    next.build_injection = { ...next.build_injection, system_prompt: from?.system_prompt ?? injectionDefault('system_prompt'), tools: choices('tools', injectionTools) }
+    next.build_injection = { ...next.build_injection, system_prompt: from?.system_prompt ?? injectionDefault(level, 'system_prompt'), tools: choices('tools', injectionTools) }
   }
   return next
 }

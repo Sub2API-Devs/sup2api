@@ -247,5 +247,5 @@ communication（无标题，`Write code that reads like the surrounding code…`
 
 ### 12.6 与 ccgateway 的补充
 
-请求等级 `low`（默认）只注入环境附件、不注入这段提示词，所以客户端自己没有 system 时，build 出来的请求 system 就只有计费头 + 身份行两块——不是丢段。`high` 才会把上面这份（lean 或全量）注入进去（`next/plugins/ccgateway/companions/contracts/features/levels.go` 的 `LevelInjection`）。
+请求等级 `low`（默认）只注入环境附件，这段提示词默认不注入（2026-11-02 起可在 low 选择注入，CONTRACTS §53.22），所以客户端自己没有 system 时，build 出来的请求 system 就只有计费头 + 身份行两块——不是丢段。`high` 默认把上面这份（lean 或全量）注入进去（`next/plugins/ccgateway/companions/contracts/features/levels.go` 的 `LevelInjection`）。
 
