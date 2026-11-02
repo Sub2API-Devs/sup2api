@@ -1,7 +1,8 @@
 // 对拍：对两棵树跑同一组场景，归一化后比较 stdout / stderr / 退出码 / 假上游收到的请求 / 工作目录文件 / MCP 日志。
 //
 // 用法：
-//   node tools/verify/compare.mjs <baseline-tree> <candidate-tree> [--name N] [--only a,b] [--jobs 3]
+//   node tools/verify/compare.mjs <baseline-tree> <candidate-tree> [--name N] [--only a,b] [--jobs 3] [--retry 1]
+//   --retry N：不一致或预期不满足的场景最多重跑 N 轮（默认 1）；重跑后一致的标为 flaky（OK*），第一次的差异留在 attempts 里
 //   例：node tools/verify/compare.mjs original original          # 稳定性自检
 //       node tools/verify/compare.mjs original runnable
 // 输出：
@@ -26,6 +27,7 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function pathVariants(p) {
   const v = new Set([p, p.replace(/\\/g, '/'), p.replace(/\\/g, '\\\\'), p.replace(/\\/g, '\\\\\\\\')]);
   v.add(p.replace(/[^a-zA-Z0-9]/g, '-')); // ~/.claude/projects/<把非字母数字换成 - 的 cwd>
+  v.add(p.replace(/\\/g, '?')); // 交互界面的警告里，路径分隔符被显示成 ?（例如 'D:?.cc-verify?run-xxx?tmp'）
   return [...v].sort((a, b) => b.length - a.length);
 }
 
@@ -51,6 +53,9 @@ export const RULES_DOC = [
   ['cost', 'total_cost_usd / costUSD 数值不归一（假上游 usage 固定，成本应稳定）'],
   ['header:content-length', '请求头 Content-Length → <LEN>（body 本身逐字段比较）'],
   ['request:t', '请求到达时间 t、seq 不参与比较'],
+  ['path:?', '路径分隔符显示成 ? 的形式（交互界面里的跨会话消息警告）也按沙箱路径归一'],
+  ['tty-turn-line', '交互界面回合结束行 "✻ <随机动词> for <耗时> · done <钟点>" → "✻ <VERB> for <DUR> · done <CLOCK>"'],
+  ['tty-stream', '伪终端场景不比较原始字节流（Ink 增量重绘的帧切分随时间变），改为比较 vt-screen.mjs 还原的最终屏幕和各步快照'],
   ['parallel-tool-results', '同一条 user 消息里连续的 tool_result 块（以及 stream-json 里连续的 tool_result user 事件行）按 tool_use_id 排序：并行工具按完成先后回传，顺序不确定'],
 ];
 
@@ -88,6 +93,9 @@ export function makeNormalizer(raw) {
     ['tmp-file', /\.tmp\.\d+\.[0-9a-f]{12}\b/g, '.tmp.<PID>.<HEX>'],
     ['date', /(Today's date is |"currentDate"\s*:\s*"|currentDate: )\d{4}-\d{2}-\d{2}/g, '$1<DATE>'],
     ['duration', /("[A-Za-z_]*(?:duration|Duration|_ms|Ms|ttft)[A-Za-z_]*"\s*:\s*)-?\d+(?:\.\d+)?/g, '$1"<N>"'],
+    // 交互界面回合结束行："✻ Cooked for 0s · done 5:21"：动词随机、耗时与钟点随时间变
+    ['tty-turn-line', /([✻✽✶✳✢·*]\s+)\S+( for )\d+(?:\.\d+)?(?:ms|s|m)(?: \d+s)?( · done )\d{1,2}:\d{2}(?:\s?[AaPp][Mm])?/g, '$1<VERB>$2<DUR>$3<CLOCK>'],
+    ['tty-turn-line', /([✻✽✶✳✢·*]\s+)\S+( for )\d+(?:\.\d+)?(?:ms|s|m)(?: \d+s)?/g, '$1<VERB>$2<DUR>'],
   ];
   const str = (s) => {
     if (typeof s !== 'string') return s;
@@ -163,9 +171,13 @@ export function normalizeResult(raw0) {
     body: n.deep(q.body),
     response: q.response && { status: q.response.status, step: q.response.step },
   });
+  const tty = raw.screen !== undefined;
   const out = {
     exitCode: raw.exitCode, signal: raw.signal, timedOut: raw.timedOut,
-    stdout: n.str(raw.stdout), stderr: n.str(raw.stderr),
+    // 伪终端场景：原始字节流含 Ink 的增量重绘，帧的切分随时间变化，不直接比较；比较 vt-screen 还原的屏幕
+    stdout: tty ? "<tty stream, not compared>" : n.str(raw.stdout), stderr: n.str(raw.stderr),
+    ...(tty && { screen: raw.screen.map(n.str), snapshots: (raw.snapshots || []).map((x) => x.map(n.str)),
+      pty: { exit: raw.pty?.ptyExit, killed: raw.pty?.killed, matched: (raw.pty?.steps || []).map((x) => x.matched) } }),
     steps: raw.steps?.map((s) => ({ args: n.deep(s.args), exitCode: s.exitCode, timedOut: s.timedOut, stdout: n.str(s.stdout), stderr: n.str(s.stderr) })),
     requests: raw.requests.map(req),
     files: n.deep(raw.files),
@@ -224,18 +236,29 @@ function shapeOf(norm) {
 
 function check(s, raw) { try { return s.expect ? s.expect(raw) : []; } catch (e) { return [`expect threw: ${e.message}`]; } }
 
-export async function compareTrees(baseline, candidate, { only, jobs = 3, name } = {}) {
+// retry：某场景不一致或预期不满足时，两棵树各重跑一次（最多 retry 轮）。重跑后一致的记为 flaky（报告里标出第一次的差异），
+// 用来区分"环境抖动"与"真实差异"；真实差异重跑后仍然存在。
+export async function compareTrees(baseline, candidate, { only, jobs = 3, name, retry = 1 } = {}) {
   const list = byName(only);
   const rows = [];
   const started = Date.now();
   await pool(list, jobs, async (s) => {
-    const [ra, rb] = await Promise.all([runScenario(baseline, s), runScenario(candidate, s)]);
-    const na = normalizeResult(ra), nb = normalizeResult(rb);
-    const diffs = diff(na.norm, nb.norm);
+    const attempts = [];
+    let ra, rb, na, nb, diffs;
+    for (let k = 0; k <= retry; k++) {
+      [ra, rb] = await Promise.all([runScenario(baseline, s), runScenario(candidate, s)]);
+      na = normalizeResult(ra); nb = normalizeResult(rb);
+      diffs = diff(na.norm, nb.norm);
+      const pa = check(s, ra), pb = check(s, rb);
+      attempts.push({ equal: diffs.length === 0, diffs: diffs.slice(0, 10), baselineProblems: pa, candidateProblems: pb });
+      if (!diffs.length && !pa.length && !pb.length) break;
+    }
     const rawDiffCount = diff(rawView(ra), rawView(rb), '$', [], 1000).length;
     const row = {
       name: s.name, desc: s.desc,
       equal: diffs.length === 0,
+      flaky: attempts.length > 1 && attempts.at(-1).equal && !attempts.at(-1).baselineProblems.length && !attempts.at(-1).candidateProblems.length,
+      attempts: attempts.length > 1 ? attempts : undefined,
       baseline: summary(ra, check(s, ra)), candidate: summary(rb, check(s, rb)),
       diffs, rawDiffCount, normalizationHits: na.hits,
       shape: shapeOf(na.norm),
@@ -245,7 +268,7 @@ export async function compareTrees(baseline, candidate, { only, jobs = 3, name }
     };
     rows.push(row);
     const ok = row.equal && !row.baseline.problems.length && !row.candidate.problems.length;
-    console.error(`${ok ? 'OK  ' : 'DIFF'} ${s.name} (${row.baseline.durationMs}/${row.candidate.durationMs} ms)` +
+    console.error(`${ok ? (row.flaky ? 'OK* ' : 'OK  ') : 'DIFF'} ${s.name} (${row.baseline.durationMs}/${row.candidate.durationMs} ms)` + (row.flaky ? ` [第 1 次不一致，重跑后一致]` : '') +
       (row.equal ? '' : ` ${diffs.length} diffs, first ${diffs[0].path}`) +
       (row.baseline.problems.length ? ` | baseline expect: ${row.baseline.problems.join('; ')}` : '') +
       (row.candidate.problems.length ? ` | candidate expect: ${row.candidate.problems.join('; ')}` : ''));
@@ -256,7 +279,7 @@ export async function compareTrees(baseline, candidate, { only, jobs = 3, name }
     bun: bunVersion(), node: process.version, platform: `${process.platform}-${process.arch}`,
     rules: RULES_DOC.map(([k, d]) => ({ rule: k, desc: d })),
     totals: {
-      scenarios: rows.length, equal: rows.filter((r) => r.equal).length,
+      scenarios: rows.length, equal: rows.filter((r) => r.equal).length, flaky: rows.filter((r) => r.flaky).map((r) => r.name),
       baselinePass: rows.filter((r) => !r.baseline.problems.length).length,
       candidatePass: rows.filter((r) => !r.candidate.problems.length).length,
       ruleHits: rows.reduce((acc, r) => { for (const [k, v] of Object.entries(r.normalizationHits)) acc[k] = (acc[k] || 0) + v; return acc; }, {}),
@@ -268,7 +291,7 @@ export async function compareTrees(baseline, candidate, { only, jobs = 3, name }
 
 // 未归一化的视图，用来证明哪些场景"不归一化就不一致"
 function rawView(r) {
-  return { exitCode: r.exitCode, stdout: r.stdout, stderr: r.stderr, steps: r.steps?.map((s) => [s.exitCode, s.stdout, s.stderr]),
+  return { exitCode: r.exitCode, stdout: r.screen !== undefined ? r.screen.concat(...(r.snapshots || [])) : r.stdout, stderr: r.stderr, steps: r.steps?.map((s) => [s.exitCode, s.stdout, s.stderr]),
     requests: r.requests.map((q) => [q.method, q.url, q.rawHeaders, q.body]), files: r.files, collected: r.collected };
 }
 
@@ -284,11 +307,12 @@ export function renderMarkdown(rep) {
   L.push(`- 时间：${rep.date}，耗时 ${(rep.wallMs / 1000).toFixed(0)} s`);
   L.push(`- 运行时：bun ${rep.bun}，node ${rep.node}，${rep.platform}`);
   L.push(`- 场景：${rep.totals.scenarios}；归一化后一致：${rep.totals.equal}；预期满足：基线 ${rep.totals.baselinePass}，候选 ${rep.totals.candidatePass}`);
+  L.push(`- 重跑后才一致（不稳定）的场景：${rep.totals.flaky.length ? rep.totals.flaky.join(', ') : '无'}`);
   L.push(`- 不归一化就会不一致的场景：${rep.totals.scenariosNeedingNormalization.length}（${rep.totals.scenariosNeedingNormalization.join(', ') || '无'}）`);
   L.push(`- 归一化规则命中次数：${Object.entries(rep.totals.ruleHits).map(([k, v]) => `${k}=${v}`).join('，') || '无'}`, '');
   L.push('| 场景 | 一致 | 基线预期 | 候选预期 | 退出码 | API 请求 | 外网请求 | 耗时 ms |', '|---|---|---|---|---|---|---|---|');
   for (const r of rep.scenarios) {
-    L.push(`| ${r.name} | ${r.equal ? '是' : `**否**（${r.diffs.length}）`} | ${r.baseline.problems.length ? '**' + r.baseline.problems.join('; ').replace(/\|/g, '\\|') + '**' : '满足'} | ${r.candidate.problems.length ? '**' + r.candidate.problems.join('; ').replace(/\|/g, '\\|') + '**' : '满足'} | ${r.baseline.exitCode}/${r.candidate.exitCode} | ${r.baseline.apiRequests}/${r.candidate.apiRequests} | ${r.baseline.externalRequests.length}/${r.candidate.externalRequests.length} | ${r.baseline.durationMs}/${r.candidate.durationMs} |`);
+    L.push(`| ${r.name} | ${r.equal ? (r.flaky ? '是（重跑后）' : '是') : `**否**（${r.diffs.length}）`} | ${r.baseline.problems.length ? '**' + r.baseline.problems.join('; ').replace(/\|/g, '\\|') + '**' : '满足'} | ${r.candidate.problems.length ? '**' + r.candidate.problems.join('; ').replace(/\|/g, '\\|') + '**' : '满足'} | ${r.baseline.exitCode}/${r.candidate.exitCode} | ${r.baseline.apiRequests}/${r.candidate.apiRequests} | ${r.baseline.externalRequests.length}/${r.candidate.externalRequests.length} | ${r.baseline.durationMs}/${r.candidate.durationMs} |`);
   }
   const bad = rep.scenarios.filter((r) => !r.equal);
   if (bad.length) {
@@ -308,11 +332,11 @@ export function renderMarkdown(rep) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const argv = process.argv.slice(2);
   const opt = (k) => (argv.includes(k) ? argv[argv.indexOf(k) + 1] : undefined);
-  const pos = argv.filter((a, i) => !a.startsWith('--') && !['--only', '--jobs', '--name'].includes(argv[i - 1]));
+  const pos = argv.filter((a, i) => !a.startsWith('--') && !['--only', '--jobs', '--name', '--retry'].includes(argv[i - 1]));
   if (pos.length < 2) { console.error('用法: node tools/verify/compare.mjs <baseline-tree> <candidate-tree> [--name N] [--only a,b] [--jobs 3]'); process.exit(2); }
   const [baseline, candidate] = pos;
   const name = opt('--name') || `${baseline}-vs-${candidate}`.replace(/[\\/:]+/g, '_');
-  const rep = await compareTrees(baseline, candidate, { only: opt('--only')?.split(','), jobs: Number(opt('--jobs') || 3), name });
+  const rep = await compareTrees(baseline, candidate, { only: opt('--only')?.split(','), jobs: Number(opt('--jobs') || 3), name, retry: Number(opt('--retry') ?? 1) });
   const dir = path.join(projectRoot, 'analysis', 'verify');
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, `${name}.json`), JSON.stringify(rep, null, 2) + '\n');

@@ -19,6 +19,7 @@
 //   expect(r)   返回不满足的预期列表（字符串数组），空数组 = 通过
 import fs from 'node:fs';
 import path from 'node:path';
+import { FAKE_API_KEY } from './run.mjs';
 
 const VERSION_LINE = '2.1.316 (Claude Code)';
 const P = (c, f) => path.join(c.cwd, f);
@@ -64,6 +65,19 @@ const TOOL_SCRIPT = {
 };
 const TOOLS_ALLOWED = ['--allowedTools', 'Bash,Read,Write,Edit'];
 
+const BASH_STDOUT_SCRIPT = { steps: [{ tools: [{ name: 'Bash', input: { command: 'echo hi; echo err >&2; printf "%s\\n" "$((6*7))"', description: 'Print to stdout and stderr' } }] }], final: 'Bash done.' };
+
+// 交互模式需要的预置配置：已完成引导、已批准假 API key（CLI 按 key 末 20 位记录）、已信任工作目录
+function seedInteractiveConfig(c) {
+  const dir = path.join(c.home, '.claude');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({
+    hasCompletedOnboarding: true, lastOnboardingVersion: '2.1.316', theme: 'dark',
+    customApiKeyResponses: { approved: [FAKE_API_KEY.trim().slice(-20)], rejected: [] },
+    projects: { [c.cwd]: { hasTrustDialogAccepted: true } },
+  }, null, 2));
+}
+
 export const scenarios = [
   // ---------- 离线、无请求 ----------
   { name: 'version', desc: '--version 走 cli.js 快速路径：打印 "2.1.316 (Claude Code)"，退出 0，无网络请求。',
@@ -87,8 +101,8 @@ export const scenarios = [
     args: ['plugin', 'list', '--json'], expect: (r) => check(r, { stdoutIs: '[]\n', requests: 0 }) },
   { name: 'agents-json', desc: 'agents --json：没有后台会话，打印 []，退出 0。',
     args: ['agents', '--json'], expect: (r) => check(r, { stdoutIs: '[]\n', requests: 0 }) },
-  { name: 'update-offline', desc: 'update：查询 npm registry 被黑洞代理拒绝（2 次 CONNECT registry.npmjs.org:443），打印失败说明，退出 1。',
-    args: ['update'], expect: (r) => check(r, { exit: 1, stderrHas: ['Failed to check for updates'], external: 2 }) },
+  { name: 'update-offline', desc: 'update：CLI 调 npm view @anthropic-ai/claude-code@latest version --prefer-online 查最新版本；沙箱里的 npm 是立即失败的假 npm（run.mjs fakeNpm），打印 "Failed to check for updates / Unable to fetch latest version from npm registry"，退出 1，无网络请求。（旧版用真实 npm 时不稳定，见 verify.md 第 14 节。）',
+    args: ['update'], expect: (r) => check(r, { exit: 1, stderrHas: ['Failed to check for updates', 'Unable to fetch latest version from npm registry'], requests: 0 }) },
   { name: 'mcp-add', desc: 'mcp add 系列（不走 Ink，可在公版 Bun 上跑）：add stdio（local 作用域，写 ~/.claude.json）→ 同名再 add 报已存在（退出 1）→ add --transport http → add -s project（写 ./.mcp.json）→ remove 不存在的名字（退出 1，列出已配置的 demo, proj, web）。mcp remove 成功路径要 Ink，不在此列。',
     sequence: [
       { args: ['mcp', 'add', 'demo', '--', 'node', 'server.js', '--flag'] },
@@ -220,6 +234,101 @@ export const scenarios = [
       if (!JSON.stringify(tr.at(-1) || '').includes('echo: ping')) bad.push('mcp tool_result missing');
       return bad;
     } },
+  // ---------- 验证环境补丁：bun-ant-shim.js（Ink 渲染）、win-append-shim.js（Bash 输出） ----------
+  // 这些场景带 shimAnt / shimWinAppend：结果反映的是"316 的 JS + 我们的垫片"，不是官方二进制本身（见 verify.md 第 12、13 节）。
+  { name: 'ink-mcp-list-empty', shimAnt: true, desc: '[垫片] mcp list（Ink 渲染）：空配置打印 "No MCP servers configured. Use `claude mcp add` to add a server."，退出 0。',
+    args: ['mcp', 'list'], expect: (r) => check(r, { stdoutIs: 'No MCP servers configured. Use `claude mcp add` to add a server.\n', requests: 0 }) },
+  { name: 'ink-mcp-lifecycle', shimAnt: true, timeoutMs: 60000,
+    desc: '[垫片] MCP 全流程（Ink）：add-json 非法配置报错（退出 1）→ add-json 本地 stdio 服务器（fake-mcp-server.mjs）→ mcp list 做健康检查显示 "√ Connected" → mcp get 显示作用域/状态/命令 → mcp remove 成功 → mcp list 回到空。',
+    sequence: [
+      { args: ['mcp', 'add-json', 'verify', '{}'] },
+      { args: (c) => ['mcp', 'add-json', 'verify', JSON.stringify({ type: 'stdio', command: 'node', args: [path.join(c.projectRoot, 'tools', 'verify', 'fake-mcp-server.mjs')] })] },
+      { args: ['mcp', 'list'] },
+      { args: ['mcp', 'get', 'verify'] },
+      { args: ['mcp', 'remove', 'verify'] },
+      { args: ['mcp', 'list'] },
+    ],
+    expect: (r) => {
+      const s = r.steps, bad = [];
+      const want = (i, exit, text) => { if (s[i].exitCode !== exit || !(s[i].stdout + s[i].stderr).includes(text)) bad.push(`step ${i}: exit ${s[i].exitCode} ${JSON.stringify((s[i].stdout + s[i].stderr).slice(0, 160))}`); };
+      want(0, 1, 'Invalid configuration');
+      want(1, 0, 'Added stdio MCP server verify to local config');
+      want(2, 0, 'Connected');
+      want(3, 0, 'Scope: Local config');
+      want(4, 0, 'Removed MCP server "verify" from local config');
+      want(5, 0, 'No MCP servers configured');
+      if (r.requests.length) bad.push(`requests ${r.requests.length}`);
+      return bad;
+    } },
+  { name: 'ink-plugin-list', shimAnt: true, desc: '[垫片] plugin list（Ink）："No plugins installed. …"，退出 0。',
+    args: ['plugin', 'list'], expect: (r) => check(r, { stdoutHas: ['No plugins installed.'], requests: 0 }) },
+  { name: 'ink-plugin-marketplace-list', shimAnt: true, desc: '[垫片] plugin marketplace list（Ink）：只有内置的 anthropic-plugin-directory。',
+    args: ['plugin', 'marketplace', 'list'], expect: (r) => check(r, { stdoutHas: ['Configured marketplaces:', 'anthropic-plugin-directory'], requests: 0 }) },
+  { name: 'ink-auth-status', shimAnt: true, desc: '[垫片] auth status（Ink，默认 JSON）：loggedIn=true、authMethod=api_key、apiKeySource=ANTHROPIC_API_KEY；目录指向沙箱。',
+    args: ['auth', 'status'], expect: (r) => {
+      const bad = check(r, { requests: 0 });
+      try { const j = JSON.parse(r.stdout); if (j.loggedIn !== true || j.authMethod !== 'api_key' || j.apiKeySource !== 'ANTHROPIC_API_KEY') bad.push(`auth: ${r.stdout.slice(0, 200)}`); } catch { bad.push('stdout not JSON'); }
+      return bad;
+    } },
+  { name: 'ink-auth-status-text', shimAnt: true, desc: '[垫片] auth status --text：API key 来源、自定义 base URL、代理三行。',
+    args: ['auth', 'status', '--text'], expect: (r) => check(r, { stdoutHas: ['API key: ANTHROPIC_API_KEY', 'Anthropic base URL: http://127.0.0.1:'], requests: 0 }) },
+  { name: 'ink-auto-mode-defaults', shimAnt: true, desc: '[垫片] auto-mode defaults（Ink）：打印默认 allow / soft_deny 等规则 JSON。',
+    args: ['auto-mode', 'defaults'], expect: (r) => {
+      const bad = check(r, { requests: 0 });
+      try { const j = JSON.parse(r.stdout); for (const k of ['allow', 'soft_deny']) if (!Array.isArray(j[k]) || !j[k].length) bad.push(`no ${k}`); } catch { bad.push('stdout not JSON'); }
+      return bad;
+    } },
+  { name: 'ink-auto-mode-config', shimAnt: true, desc: '[垫片] auto-mode config（Ink）：没有用户设置时等于默认规则的 JSON。',
+    args: ['auto-mode', 'config'], expect: (r) => { const bad = check(r, { requests: 0 }); try { JSON.parse(r.stdout); } catch { bad.push('stdout not JSON'); } return bad; } },
+
+  // ---------- 伪终端（ConPTY）里的交互界面 ----------
+  { name: 'tty-first-run', shimAnt: true, timeoutMs: 60000, env: { TERM: 'xterm-256color' },
+    desc: '[垫片+伪终端] 全新配置、交互模式启动：欢迎画面（"Welcome to Claude Code v2.1.316" + 字符画）后做首次联网检查，直连 api.anthropic.com / platform.claude.com 被黑洞代理拒绝，显示 "Unable to connect to Anthropic services … ERR_PROXY_TUNNEL"，退出 1。比较的是 vt-screen.mjs 还原的最终屏幕。',
+    args: [], tty: { cols: 100, rows: 30, idleMs: 2500, expectExit: true, steps: [] },
+    expect: (r) => {
+      const bad = check(r, { exit: 1, apiRequests: 0, external: null });
+      const scr = (r.screen || []).join('\n');
+      for (const t of ['Welcome to Claude Code v2.1.316', 'Unable to connect to Anthropic services']) if (!scr.includes(t)) bad.push(`screen lacks ${JSON.stringify(t)}`);
+      return bad;
+    } },
+  { name: 'tty-session', shimAnt: true, timeoutMs: 90000, env: { TERM: 'xterm-256color' },
+    desc: '[垫片+伪终端] 预置"已完成引导、已批准假 key、已信任工作目录"的配置，交互模式：等到输入框 → 输入 hi 回车 → 假上游回答含中文、emoji、全角字符的文本 → 屏幕上出现回答 → 输入 /exit 回车，打印 "Resume this session with: claude --resume <id>"，退出 0。比较两个时刻的屏幕快照（空闲输入框、回答之后）、最终屏幕和请求体。',
+    setup: seedInteractiveConfig,
+    script: { final: 'Hello from the fake upstream. 你好，世界！宽字符测试：ＡＢＣ 😀👍 done.' },
+    args: [],
+    tty: { cols: 100, rows: 30, idleMs: 1500, expectExit: true, steps: [
+      { waitFor: 'auto mode on', idleMs: 1500, snapshot: true, send: 'hi' },
+      { idleMs: 500, send: '\r' },
+      { waitFor: 'Hello from the fake upstream', idleMs: 1500, snapshot: true, send: '/exit' },
+      { idleMs: 800, send: '\r' },
+    ] },
+    expect: (r) => {
+      const bad = check(r, { exit: 0, apiRequests: 1, external: 0 });
+      if ((r.pty?.steps || []).some((s) => !s.matched)) bad.push(`pty steps: ${JSON.stringify(r.pty?.steps)}`);
+      const after = (r.snapshots?.[1] || []).join('\n');
+      if (!after.includes('你好，世界！宽字符测试：ＡＢＣ 😀👍 done.')) bad.push('reply with wide chars not on screen');
+      if (!(r.screen || []).join('\n').includes('claude --resume')) bad.push('no resume hint after /exit');
+      return bad;
+    } },
+
+  { name: 'print-bash-stdout', shimWinAppend: true,
+    desc: '[垫片] Bash 工具直接输出到 stdout/stderr（echo hi; echo err >&2; $((6*7))）：tool_result = "hi\\nerr\\n42\\nShell cwd was reset to <CWD>"。不加 win-append-shim 时在 Windows 上是 "Exit code 1"（原因见 verify.md 第 13 节）。',
+    args: ['-p', 'run bash', '--allowedTools', 'Bash'], script: BASH_STDOUT_SCRIPT,
+    expect: (r) => {
+      const bad = check(r, { stdoutIs: 'Bash done.\n', apiRequests: 2, external: 0 });
+      const tr = toolResults(r)[0];
+      if (!tr || tr.is_error || !String(tr.content).startsWith('hi\nerr\n42\n')) bad.push(`tool_result: ${JSON.stringify(tr).slice(0, 200)}`);
+      return bad;
+    } },
+  { name: 'print-bash-stdout-unshimmed', desc: '对照：同一 Bash 命令不加垫片，tool_result 为 "Exit code 1"（is_error）。确认两棵树的失败方式相同；哪天变成成功，说明运行环境或 CLI 行为变了。',
+    args: ['-p', 'run bash', '--allowedTools', 'Bash'], script: BASH_STDOUT_SCRIPT,
+    expect: (r) => {
+      const bad = check(r, { stdoutIs: 'Bash done.\n', apiRequests: 2, external: 0 });
+      const tr = toolResults(r)[0];
+      if (!tr?.is_error || tr.content !== 'Exit code 1') bad.push(`tool_result: ${JSON.stringify(tr).slice(0, 200)}`);
+      return bad;
+    } },
+
 ];
 
 export function byName(names) {

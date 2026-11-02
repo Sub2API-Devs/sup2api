@@ -7,7 +7,9 @@
 //     --no-upstream      不启动假上游（也不设 ANTHROPIC_BASE_URL / 代理）
 //     --keep             保留沙箱目录（默认跑完删除）
 //     --trace            预加载 trace-preload.js，打印 process.exit 调用栈与未捕获异常（诊断用）
+//     --spawn-trace      预加载 spawn-trace-preload.js，记录 CLI 启动的子进程与 stdio（结果在 spawns）
 //     --shim-ant         预加载 bun-ant-shim.js（验证环境补丁：用公开 API 实现 Bun.ant.CellSegmenter，让 Ink 命令能在公版 Bun 上渲染）
+//     --shim-win-append  预加载 win-append-shim.js（验证环境补丁：Windows 上新建独占文件去掉 O_APPEND，让 Bash 工具能写 stdout）
 //     --env-trace        预加载 env-trace-preload.js，记录 CLI 读取过的环境变量名（结果在 envReads，非 --json 时打印）
 //     --json             输出完整结果 JSON（含假上游收到的请求）
 //     --timeout <ms>     超时，默认 60000
@@ -17,11 +19,14 @@
 //
 // 用法（库）：import { runCli, runScenario, pool } from './run.mjs'
 //   const r = await runCli({ tree, args | sequence: [{args, stdin}], script, firstParty, upstream, setup, collect,
-//                            timeoutMs, stdin, env, keep, trace, envTrace, shimAnt, tty })
-//   r = { exitCode, signal, timedOut, stdout, stderr, durationMs, steps?, requests, files, collected, envReads?,
-//         sandbox: {root, home, work, tmp, …}, leaks, hostWarnings }
+//                            timeoutMs, stdin, env, keep, trace, envTrace, spawnTrace, shimAnt, shimWinAppend, tty })
+//   r = { exitCode, signal, timedOut, stdout, stderr, durationMs, steps?, requests, files, collected, envReads?, spawns?,
+//         screen?, snapshots?, pty?, sandbox: {root, home, work, tmp, …}, leaks, hostWarnings }
+//   tty: { cols, rows, idleMs, expectExit, steps: [{ waitFor, idleMs, snapshot, send }] } 时经 pty-driver.js 在伪终端
+//     （ConPTY）里运行，screen/snapshots 是 vt-screen.mjs 还原的屏幕文字。
 //   runScenario(tree, scenario) 按 scenarios.mjs 的场景对象调用 runCli；pool(items, n, fn) 并发 n 路。
 //   Windows 上 libuv 会给子进程补 HOMEDRIVE/HOMEPATH/USERDOMAIN/LOGONSERVER 的真实值，这里显式覆盖。
+//   PATH 最前面放沙箱里的假 npm（立即失败），不运行本机真实 npm（fakeNpm，见 verify.md 第 14 节）。
 //
 // 隔离（详见 docs/process/verify.md）：
 //   - 环境变量从白名单重建（PATH、SystemRoot 等系统必需项），父进程里的 ANTHROPIC_* / CLAUDE_* / OTEL_* /
@@ -90,6 +95,7 @@ export function removeSandbox(sb) {
   for (let i = 0; i < 10; i++) {
     try { fs.rmSync(sb.root, { recursive: true, force: true }); break; } catch { spawnSync(process.execPath, ['-e', 'setTimeout(()=>{},300)']); }
   }
+  if (fs.existsSync(sb.root)) process.stderr.write(`[verify] 警告：沙箱没删干净（可能有子进程仍在写）：${sb.root}\n`);
   try { fs.rmdirSync(sandboxRoot()); } catch { /* 还有其他运行在用，或非空 */ }
 }
 
@@ -98,7 +104,7 @@ const INHERIT = ['PATH', 'Path', 'PATHEXT', 'SystemRoot', 'SYSTEMROOT', 'windir'
   'SystemDrive', 'SYSTEMDRIVE', 'NUMBER_OF_PROCESSORS', 'PROCESSOR_ARCHITECTURE', 'PROCESSOR_IDENTIFIER', 'OS',
   'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'CommonProgramFiles', 'ProgramData', 'LANG', 'TZ'];
 
-export function isolatedEnv(sb, { upstreamUrl, firstParty = false, extra = {} } = {}) {
+export function isolatedEnv(sb, { upstreamUrl, firstParty = false, extra = {}, fakeNpm = true } = {}) {
   const env = {};
   for (const k of INHERIT) if (process.env[k] !== undefined) env[k] = process.env[k];
   const h = sb.home;
@@ -123,12 +129,37 @@ export function isolatedEnv(sb, { upstreamUrl, firstParty = false, extra = {} } 
     NO_COLOR: '1', FORCE_COLOR: '0', TERM: 'dumb', COLUMNS: '80', LINES: '40',
     // Bun 转译缓存默认写到 XDG_CACHE_HOME（每次约 32 MB），关掉；实测对启动时间无明显影响
     BUN_RUNTIME_TRANSPILER_CACHE_PATH: '0',
+    // 子进程里的 node（假 MCP 服务器等）不往沙箱 TMP 写编译缓存（曾在删除沙箱时并发写入，留下残留目录）
+    NODE_DISABLE_COMPILE_CACHE: '1',
   });
   for (const k of Object.keys(env)) if (k.startsWith('XDG_')) fs.mkdirSync(env[k], { recursive: true });
   fs.mkdirSync(env.APPDATA, { recursive: true });
   fs.mkdirSync(env.LOCALAPPDATA, { recursive: true });
   const bash = gitBashPath();
   if (bash) env.CLAUDE_CODE_GIT_BASH_PATH = bash;
+  // 假 npm：CLI 的 update/doctor 会跑 npm（npm config get prefix、npm view … --prefer-online，后者带 5 秒超时）。
+  // 用真实 npm 既不隔离（读本机全局 npmrc）也不稳定（机器忙时 npm 启动超过 5 秒就被中止、一个请求都发不出），
+  // 所以在 PATH 最前面放一个立即失败的 npm（见 docs/process/verify.md 第 14 节）。
+  if (fakeNpm) {
+    const bin = path.join(sb.root, 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    fs.writeFileSync(path.join(bin, 'npm.cmd'), [
+      '@echo off',
+      'if "%~1"=="-g" shift',
+      'if "%~1"=="config" (',
+      '  echo(%VERIFY_NPM_PREFIX%',
+      '  exit /b 0',
+      ')',
+      'echo npm error code EVERIFYOFFLINE 1>&2',
+      'echo npm error verify sandbox: the npm registry is not reachable 1>&2',
+      'exit /b 1', ''].join(String.fromCharCode(13, 10)));
+    fs.writeFileSync(path.join(bin, 'npm'), ['#!/bin/sh', '[ "$1" = "-g" ] && shift',
+      'if [ "$1" = "config" ]; then echo "$VERIFY_NPM_PREFIX"; exit 0; fi',
+      'echo "npm error code EVERIFYOFFLINE" >&2', 'echo "npm error verify sandbox: the npm registry is not reachable" >&2', 'exit 1', ''].join(String.fromCharCode(10)));
+    try { fs.chmodSync(path.join(bin, 'npm'), 0o755); } catch {}
+    env.VERIFY_NPM_PREFIX = path.join(h, 'npm-global');
+    for (const k of Object.keys(env).filter((k) => k.toUpperCase() === 'PATH')) env[k] = bin + path.delimiter + env[k];
+  }
   if (upstreamUrl) {
     Object.assign(env, {
       ANTHROPIC_API_KEY: FAKE_API_KEY, ANTHROPIC_BASE_URL: upstreamUrl,
@@ -155,7 +186,7 @@ function killTree(child) {
 export async function runScenario(tree, s) {
   return runCli({ tree, args: s.args, sequence: s.sequence, script: s.script, upstream: s.upstream !== false,
     firstParty: !!s.firstParty, setup: s.setup, collect: s.collect, stdin: s.stdin, env: s.env, timeoutMs: s.timeoutMs || 60000,
-    shimAnt: !!s.shimAnt, tty: s.tty });
+    shimAnt: !!s.shimAnt, shimWinAppend: !!s.shimWinAppend, tty: s.tty });
 }
 
 export async function pool(items, n, fn) {
@@ -166,12 +197,14 @@ export async function pool(items, n, fn) {
 }
 
 // 一次 CLI 调用：spawn bun，收集输出，超时按 PID 杀进程树
-async function spawnOnce({ entry, args, sb, env, stdin, timeoutMs, trace, envTrace, shimAnt, tty }) {
+async function spawnOnce({ entry, args, sb, env, stdin, timeoutMs, trace, envTrace, spawnTrace, shimAnt, shimWinAppend, tty }) {
   const t0 = Date.now();
   const pre = [];
   if (trace) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'trace-preload.js'));
   if (envTrace) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'env-trace-preload.js'));
+  if (spawnTrace) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'spawn-trace-preload.js'));
   if (shimAnt) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'bun-ant-shim.js'));
+  if (shimWinAppend) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'win-append-shim.js'));
   const cliArgv = ['--no-install', ...pre, entry, ...args];
   // tty：经 pty-driver.js 在伪终端（Windows 上是 ConPTY）里运行，stdout 收到的是终端字节流
   let cmdArgv = cliArgv, cmdEnv = env;
@@ -214,7 +247,7 @@ async function spawnOnce({ entry, args, sb, env, stdin, timeoutMs, trace, envTra
 // 结果的 exitCode/stdout/stderr 取自最后一步，每一步的完整结果在 steps 里。
 // collect(ctx) 在删除沙箱前调用，返回值放进 result.collected（例如读取 MCP 服务器日志）。
 export async function runCli({ tree, args = [], sequence, script, upstream = true, firstParty = false, setup, collect,
-  timeoutMs = 60000, stdin, env: extraEnv = {}, keep = false, trace = false, envTrace = false, shimAnt = false, tty } = {}) {
+  timeoutMs = 60000, stdin, env: extraEnv = {}, keep = false, trace = false, envTrace = false, spawnTrace = false, shimAnt = false, shimWinAppend = false, tty } = {}) {
   const treeDir = path.resolve(projectRoot, tree);
   const entry = path.join(treeDir, 'cli.js');
   if (!fs.existsSync(entry)) throw new Error(`找不到 ${entry}`);
@@ -226,11 +259,12 @@ export async function runCli({ tree, args = [], sequence, script, upstream = tru
     if (upstream) up = await startFakeUpstream({ script: script || {}, ctx });
     const env = isolatedEnv(sb, { upstreamUrl: up?.url, firstParty, extra: extraEnv });
     if (envTrace) env.VERIFY_ENV_TRACE_OUT = path.join(sb.tmp, 'env-trace.txt');
+    if (spawnTrace) env.VERIFY_SPAWN_TRACE_OUT = path.join(sb.tmp, 'spawn-trace.jsonl');
     const plan = sequence || [{ args, stdin }];
     const steps = [];
     for (const st of plan) {
       const a = typeof st.args === 'function' ? st.args(ctx) : st.args;
-      steps.push(await spawnOnce({ entry, args: a, sb, env, stdin: st.stdin, timeoutMs, trace, envTrace, shimAnt, tty: st.tty ?? tty }));
+      steps.push(await spawnOnce({ entry, args: a, sb, env, stdin: st.stdin, timeoutMs, trace, envTrace, spawnTrace, shimAnt, shimWinAppend, tty: st.tty ?? tty }));
     }
     const last = steps.at(-1);
     const result = {
@@ -243,6 +277,7 @@ export async function runCli({ tree, args = [], sequence, script, upstream = tru
       files: snapshotFiles(sb.work),
       collected: collect ? await collect(ctx) : undefined,
       envReads: envTrace ? readEnvTrace(env.VERIFY_ENV_TRACE_OUT) : undefined,
+      spawns: spawnTrace ? readJsonLines(env.VERIFY_SPAWN_TRACE_OUT) : undefined,
       hostWarnings: hostWarnings(sb),
     };
     result.leaks = auditLeaks(result);
@@ -251,6 +286,10 @@ export async function runCli({ tree, args = [], sequence, script, upstream = tru
     if (up) await up.close();
     if (!keep) removeSandbox(sb);
   }
+}
+
+function readJsonLines(p) {
+  try { return fs.readFileSync(p, 'utf8').split(String.fromCharCode(10)).filter((l) => l.trim()).map((l) => JSON.parse(l)); } catch { return []; }
 }
 
 function readEnvTrace(p) {
@@ -313,7 +352,7 @@ if (isMain) {
   const env = {};
   own.forEach((a, i) => { if (a === '--env') { const [k, ...v] = own[i + 1].split('='); env[k] = v.length ? v.join('=') : undefined; } });
   const r = await runCli({ tree, args: cliArgs, firstParty: flag('--first-party'), upstream: !flag('--no-upstream'),
-    keep: flag('--keep'), trace: flag('--trace'), envTrace: flag('--env-trace'), shimAnt: flag('--shim-ant'), env, timeoutMs: timeoutIdx >= 0 ? Number(own[timeoutIdx + 1]) : 60000 });
+    keep: flag('--keep'), trace: flag('--trace'), envTrace: flag('--env-trace'), spawnTrace: flag('--spawn-trace'), shimAnt: flag('--shim-ant'), shimWinAppend: flag('--shim-win-append'), env, timeoutMs: timeoutIdx >= 0 ? Number(own[timeoutIdx + 1]) : 60000 });
   if (flag('--json')) {
     console.log(JSON.stringify(r, null, 2));
   } else {

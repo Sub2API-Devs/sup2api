@@ -5,9 +5,14 @@
 ## 1. 结论先行
 
 - 用 npm 包 `bun@1.4.4` 在完全隔离的沙箱里运行任意一棵树的 `cli.js`，挂本地假 Anthropic API，不碰真实账号、真实 key、真实网络。
-- 42 个场景（版本、帮助 20 个、非 Ink 子命令、`-p` 各种输出格式、工具往返、MCP、错误处理、第一方形状），`original` 对 `original` 连跑两轮，**归一化后 42/42 完全一致，预期 42/42 满足**；其中 16 个场景不归一化就不一致（UUID、端口、沙箱路径、时间等）。
-- 负对照：把一个 chunk 里 Edit 工具描述的句号改成感叹号，`print-hi` 立刻报出唯一差异 `$.requests[0].body.tools[2].description`。
-- 顺带对拍了 rename 成员的测试输出 `.rn-tmp/out-full`（674,463 个绑定全改名、27,119 个导出改名）和 `.rn-tmp/out-final`（136,500 个绑定改名）：都 42/42 一致。`runnable/` 尚未生成。
+- 54 个场景（版本、帮助 20 个、非 Ink 子命令、`-p` 各种输出格式、工具往返、MCP、错误处理、第一方形状，以及第二轮加的 Ink 子命令 8 个、伪终端交互 2 个、Bash 直接输出 2 个），`original` 对 `original` 连跑两轮（3 路、4 路并发），**归一化后 54/54 一致，预期 54/54 满足，没有需要重跑的场景**；其中 22 个场景不归一化就不一致。
+- `original` 对 `runnable`（lead 生成的改名树）：54/54 一致（`analysis/verify/original-vs-runnable.*`）。
+- 负对照：Edit 工具描述里句号改成感叹号 → `print-hi` 只报这一处差异；欢迎语改一个字母 → `tty-first-run` 只报 `$.screen[0]`。
+- 第二轮（第 12–14 节）：
+  - Ink 界面跑不起来的唯一原因是 `Bun.ant.CellSegmenter`（Anthropic 内部 Bun 的原生扩展）。`tools/verify/bun-ant-shim.js` 用 `Intl.Segmenter` + `Bun.stringWidth` 在 JS 里实现了它（**验证环境补丁，不是 316 源码**），`mcp list/get/remove`、`plugin list`、`auth status`、`auto-mode defaults/config` 和**伪终端里的交互会话**都能渲染并对拍。
+  - Bash 工具 "Bad file descriptor" 的原因：linux 构建把平台固化成 `linux`，在 Windows 上走 POSIX 分支，用 `O_APPEND` 打开输出文件再交给 bash 当 stdout；Windows 上 `O_APPEND` 句柄没有 `FILE_WRITE_DATA`，Git Bash 写不进去。**是 CLI（linux 构建）在 Windows 上走了 linux 路径，不是公版 Bun 的问题**（Node 24 一样复现）。`win-append-shim.js` 绕开，`print-bash-stdout` 覆盖。
+  - `update-offline` 偶发 0 个外网请求：请求其实是 CLI 调起的**本机真实 npm** 发的，CLI 给 `npm view` 只留 5 秒，机器忙时 npm 还没联网就被中止。改为沙箱里放立即失败的假 npm，场景不再依赖网络时机；`compare.mjs` 也加了"不一致时重跑一次、重跑后一致记为 flaky"。
+- 顺带对拍了 rename 成员的测试输出 `.rn-tmp/out-full`、`.rn-tmp/out-final`（第一轮 42 个场景）：都一致。
 
 ## 2. 环境
 
@@ -24,13 +29,19 @@
 
 | 文件 | 作用 |
 |---|---|
-| `tools/verify/run.mjs` | 隔离运行。命令行：`node tools/verify/run.mjs <tree> [--first-party] [--no-upstream] [--keep] [--json] [--trace] [--env-trace] [--env K=V] [--timeout ms] -- <cli 参数>`；库：`runCli()`、`runScenario()`、`pool()` |
+| `tools/verify/run.mjs` | 隔离运行。命令行：`node tools/verify/run.mjs <tree> [--first-party] [--no-upstream] [--keep] [--json] [--trace] [--env-trace] [--spawn-trace] [--shim-ant] [--shim-win-append] [--env K=V] [--timeout ms] -- <cli 参数>`；库：`runCli()`（含 `tty` 伪终端模式）、`runScenario()`、`pool()` |
 | `tools/verify/fake-upstream.mjs` | 本地假 Messages API（SSE / JSON）+ 黑洞代理；可独立运行 `node tools/verify/fake-upstream.mjs --port 8787` |
 | `tools/verify/fake-mcp-server.mjs` | 最小 stdio MCP 服务器（echo / add 两个工具），记录收到的每条 JSON-RPC |
 | `tools/verify/scenarios.mjs` | 场景表；`node tools/verify/scenarios.mjs <tree> [--only a,b] [--jobs 3] [--list]` 对一棵树跑一遍并检查预期 |
-| `tools/verify/compare.mjs` | 对拍：`node tools/verify/compare.mjs <baseline> <candidate> [--name N] [--only a,b] [--jobs 3]`，写 `analysis/verify/<name>.json` 与 `.md` |
+| `tools/verify/compare.mjs` | 对拍：`node tools/verify/compare.mjs <baseline> <candidate> [--name N] [--only a,b] [--jobs 3] [--retry 1]`，写 `analysis/verify/<name>.json` 与 `.md` |
+| `tools/verify/bun-ant-shim.js` | **验证环境补丁**：`Bun.ant.CellSegmenter` 的 JS 实现（第 12 节），场景字段 `shimAnt: true` |
+| `tools/verify/bun-ant-shim-selftest.js` | 垫片自检：`node_modules/bun/bin/bun.exe tools/verify/bun-ant-shim-selftest.js` |
+| `tools/verify/win-append-shim.js` | **验证环境补丁**：Windows 上新建独占文件去掉 `O_APPEND`（第 13 节），场景字段 `shimWinAppend: true` |
+| `tools/verify/pty-driver.js` | 用 Bun 运行的伪终端驱动（`Bun.Terminal`，Windows 上是 ConPTY）：按步骤等文字、按键、拍屏幕快照 |
+| `tools/verify/vt-screen.mjs` | 极简 VT 屏幕模拟：终端字节流 → 屏幕文字（光标移动、擦除、滚动、宽字符） |
 | `tools/verify/trace-preload.js` | 诊断：`--trace` 时 `bun --preload`，打印 `process.exit` 调用栈和未捕获异常 |
 | `tools/verify/env-trace-preload.js` | 诊断：`--env-trace` 时把 `process.env` 换成 Proxy，记录读取过的环境变量 |
+| `tools/verify/spawn-trace-preload.js` | 诊断：`--spawn-trace` 时记录 CLI 启动的每个子进程（命令、cwd、stdio、fd 是否有效；`VERIFY_SPAWN_TRACE_ENV=1` 时连同环境） |
 
 npm 脚本：
 
@@ -42,7 +53,7 @@ npm run -s verify:run -- original -- --version --verbose
 npm run verify:upstream            # 手工调试用的假上游
 ```
 
-全套 42 个场景、两棵树、3 路并发约 75–130 秒。
+全套 54 个场景、两棵树、3 路并发约 85 秒。
 
 ## 4. 隔离方式
 
@@ -57,6 +68,8 @@ npm run verify:upstream            # 手工调试用的假上游
 6. **输出稳定**：`NO_COLOR=1`、`FORCE_COLOR=0`、`TERM=dumb`、`COLUMNS=80`、`LINES=40`。
 7. **Bun**：`bun --no-install <tree>/cli.js`（禁止自动装包）；`BUN_RUNTIME_TRANSPILER_CACHE_PATH=0`（否则每次往沙箱写约 32 MB 转译缓存；实测关掉对启动时间无明显影响）。
 8. **Git Bash**：`CLAUDE_CODE_GIT_BASH_PATH` 指向 `where git` 找到的 `<Git>\bin\bash.exe`（Bash 工具需要）。
+8a. **假 npm**（第二轮加）：沙箱 `bin/` 里放 `npm.cmd` / `npm`，排在 PATH 最前：`npm config get prefix` 回沙箱路径，其余子命令立即报 `EVERIFYOFFLINE` 退出 1。CLI 的 `update`、`doctor` 都会调 npm；真实 npm 会读本机全局 npmrc、真的去连 registry，且受机器负载影响（第 14 节）。
+8b. **子进程 node 不写编译缓存**：`NODE_DISABLE_COMPILE_CACHE=1`（假 MCP 服务器等 node 子进程曾在删除沙箱时并发往 `tmp/node-compile-cache` 写，留下残留目录）。
 9. **进程**：每步有超时（默认 60 s），超时和结束后都用 `taskkill /PID <pid> /T /F` 按 PID 杀进程树（收掉 bash、MCP 服务器等孙进程）。**不按名字杀**。
 10. **泄漏审计**（每次运行的 `leaks`）：输出和请求里出现真实 HOME（含去掉盘符的形式）、项目根（被测树、bun 目录、tools/verify 除外）、任何外网请求，都会列出。全部 42 个场景的 `leaks` 都为空（第一方形状场景的外网 CONNECT 是预期内的）。
 11. **宿主警告**（`hostWarnings`）：linux 构建在 Windows 上把托管设置目录解析成 `<cwd 盘>:\etc\claude-code`（`/etc/claude-code` 去掉了盘符），那里有文件就会被当成托管设置读入，破坏隔离；运行时检查它是否存在。
@@ -81,7 +94,7 @@ npm run verify:upstream            # 手工调试用的假上游
 | doctor | 非交互诊断文本；自定义 base URL 下不取远程设置 | 0 | 0 | 0 |
 | plugin-list-json | `[]` | 0 | 0 | 0 |
 | agents-json | `[]` | 0 | 0 | 0 |
-| update-offline | 查 npm registry 被黑洞代理拒绝（2 次 `CONNECT registry.npmjs.org:443`），打印失败说明 | 1 | 0 | 2 |
+| update-offline | `npm view …@latest version --prefer-online` 由假 npm 立即失败，打印 "Failed to check for updates / Unable to fetch latest version from npm registry"（第 14 节） | 1 | 0 | 0 |
 | mcp-add | add stdio → 重复 add 报已存在 → add http → add -s project（写 `./.mcp.json`）→ remove 不存在的名字 | 最后一步 1 | 0 | 0 |
 | mcp-list-ink-limit | 已知限制：`mcp list` 用 Ink，公版 Bun 上静默退出 1；确认两棵树失败方式相同 | 1 | 0 | 0 |
 | print-hi | `-p hi`，第三方形状 | 0 | 1 | 0 |
@@ -99,6 +112,16 @@ npm run verify:upstream            # 手工调试用的假上游
 | print-max-turns | `--max-turns 1` + 工具调用 → `error_max_turns` | 1 | 1 | 0 |
 | print-permission-denied | 不给 `--allowedTools`，`-p` 下 Write 被拒（不弹框），文件不存在 | 0 | 2 | 0 |
 | print-mcp | 本地 stdio MCP 服务器 + ToolSearch + `mcp__verify__echo` 往返（见 7.5） | 0 | 3 | 0 |
+| ink-mcp-list-empty | [垫片] `mcp list`：No MCP servers configured… | 0 | 0 | 0 |
+| ink-mcp-lifecycle | [垫片] add-json 非法 → add-json 本地服务器 → list 健康检查 "√ Connected" → get → remove → list 空 | 0 | 0 | 0 |
+| ink-plugin-list | [垫片] `plugin list`：No plugins installed | 0 | 0 | 0 |
+| ink-plugin-marketplace-list | [垫片] 只有内置 anthropic-plugin-directory | 0 | 0 | 0 |
+| ink-auth-status / -text | [垫片] JSON：loggedIn、api_key、ANTHROPIC_API_KEY；`--text`：key 来源、base URL、代理 | 0 | 0 | 0 |
+| ink-auto-mode-defaults / -config | [垫片] 默认规则 JSON | 0 | 0 | 0 |
+| tty-first-run | [垫片+伪终端] 全新配置：欢迎画面 → 首次联网检查直连 api.anthropic.com / platform.claude.com 被拒 → "Unable to connect to Anthropic services" | 1 | 0 | 2 |
+| tty-session | [垫片+伪终端] 预置配置，输入 hi → 回答（含中文、emoji、全角）上屏 → `/exit` → "Resume this session with: claude --resume <id>" | 0 | 1 | 0 |
+| print-bash-stdout | [垫片] Bash `echo hi; echo err >&2; $((6*7))` → tool_result "hi\nerr\n42\n…" | 0 | 2 | 0 |
+| print-bash-stdout-unshimmed | 对照：同一命令不加垫片 → "Exit code 1" | 0 | 2 | 0 |
 
 `analysis/verify/` 里：
 
@@ -174,9 +197,9 @@ JSON 里每个场景有：预期检查结果、`equal`、差异列表（JSON 路
 
 ## 8. 已知限制（Windows + 公版 Bun）
 
-1. **Ink 界面需要 `Bun.ant.CellSegmenter`**：316 的终端渲染要求 Anthropic 内部 Bun 的 `Bun.ant.*` 扩展（还有 `windowsProcessList`、`loginTty`、`ttyName`、`getPeerPid` 等），公版 1.4.4 没有，渲染时抛 "This runtime has no Bun.ant.CellSegmenter"。凡是用 Ink 输出的命令都跑不了：交互模式、`mcp list`（静默退出 1）、`mcp get`、`mcp remove` 成功路径、`mcp add-json`、`plugin list`（非 `--json`）、`plugin marketplace list`、`auth status`、`auto-mode defaults/config`、`setup-token`（后几个卡到超时）。场景只选不走 Ink 的路径，`mcp-list-ink-limit` 用来确认两棵树失败方式相同。
+1. **Ink 界面需要 `Bun.ant.CellSegmenter`**：316 的终端渲染要求 Anthropic 内部 Bun 的 `Bun.ant.CellSegmenter`，公版 1.4.4 没有，渲染时抛 "This runtime has no Bun.ant.CellSegmenter"。不加垫片时凡是用 Ink 输出的命令都跑不了：交互模式、`mcp list`（静默退出 1）、`mcp get`、`mcp remove` 成功路径、`mcp add-json`、`plugin list`（非 `--json`）、`plugin marketplace list`、`auth status`、`auto-mode defaults/config`、`setup-token`（后几个卡到超时）。**第二轮已用 `bun-ant-shim.js` 绕开（第 12 节）**；`mcp-list-ink-limit` 保留，确认不加垫片时两棵树失败方式相同。
 2. **linux `.node` 原生模块**（`audio-capture.node`、`clipboard-napi.node` 等）在 Windows 上加载不了，涉及的功能（语音、剪贴板）不测。
-3. **Bash 工具的标准输出**：在这套组合上 Bash 工具执行 `echo hi` 时 bash 报 `echo: write error: Bad file descriptor`，tool_result 为 "Exit code 1"；重定向到文件可以（`echo hi > bash-out.txt` 成功，tool_result 是 "Shell cwd was reset to <CWD>"）。所以场景里的 Bash 命令都写文件，再用 Read 读回。原因未深究（推测与 linux 构建在 Windows 上的输出管道/fd 处理有关）。
+3. **Bash 工具的标准输出**：不加垫片时 Bash 工具执行 `echo hi` 报 `echo: write error: Bad file descriptor`，tool_result 为 "Exit code 1"；重定向到文件可以。**原因已查清（第 13 节）：linux 构建在 Windows 上走 POSIX 分支、用 `O_APPEND` 打开输出文件**；`win-append-shim.js` 绕开，`print-bash-stdout` 覆盖，`print-tools` 仍保持"写文件再 Read"的做法不依赖垫片。
 4. **ripgrep**：调试日志报 `countFilesRoundedRg failed: ripgrep not found on PATH`（linux 构建在原生二进制里内嵌 rg，这里没有）。不影响现有场景。
 5. **路径**：linux 构建在 Windows 上读 `\etc\claude-code\managed-settings.json`（解析到 cwd 所在盘根），读 `/proc/version` 失败（只是调试日志）；Unix socket 目录权限检查失败，跨会话消息功能关闭。
 6. **cch**：公版 Bun 不计算 `cch`，恒为 `00000`；与官方二进制的请求体对拍要在 linux 上用官方 ELF 做（本机做不了）。
@@ -203,10 +226,15 @@ JSON 里每个场景有：预期检查结果、`equal`、差异列表（JSON 路
 | duration | 名字含 `duration` / `_ms` / `Ms` / `ttft` 的数值 → `"<N>"` | `duration_ms`、`duration_api_ms`、`ttft_ms` |
 | header:content-length | `Content-Length` → `<LEN>` | 端口位数等会改变长度；body 本身逐字段比较 |
 | request:t | 请求到达时间 `t`、`seq` 不参与比较 | 时间 |
+| path:? | 路径分隔符显示成 `?` 的形式（`D:?.cc-verify?run-xxx?tmp`）也按沙箱路径归一 | 交互界面里跨会话消息警告的路径 |
+| tty-turn-line | `✻ <动词> for <耗时> · done <钟点>` → `✻ <VERB> for <DUR> · done <CLOCK>` | 交互界面回合结束行：动词随机、钟点是本地时间 |
+| tty-stream | 伪终端场景不比较原始字节流，只比较 vt-screen 还原的最终屏幕、各步快照和 pty 摘要（退出码、是否被结束、每步是否等到文字） | Ink 增量重绘的帧切分随时间变；屏幕内容稳定 |
 
 **不归一化**的（要求逐字一致）：退出码、stdout/stderr 其余文本、请求头的顺序和大小写、body 键顺序、`cc_version` 后缀、模型 id、beta 列表、成本（`total_cost_usd`）、工作目录文件内容、MCP 服务器收到的消息。
 
-两轮全量里，命中次数为 path:cwd 136、uuid 117、duration 58、path:home 36、port 33、hex64 33、Content-Length 33、date 32、iso-ts 16、path:tree 7、cch 1、path:bun 1；16 个场景（全部 `-p` 场景和 `mcp-add`）不归一化就不一致，帮助/版本/doctor 等 26 个场景原文就一致。对拍 rename 输出时 `doctor` 也需要归一化（被测树路径不同）。
+第一轮两轮全量（42 个场景）里，命中次数为 path:cwd 136、uuid 117、duration 58、path:home 36、port 33、hex64 33、Content-Length 33、date 32、iso-ts 16、path:tree 7、cch 1、path:bun 1；16 个场景（全部 `-p` 场景和 `mcp-add`）不归一化就不一致。第二轮（54 个场景）：path:cwd 164、uuid 128、duration 67、path:home 46、port 40、hex64 38、Content-Length 38、date 37、iso-ts 16、path:tree 7、path:project 3、parallel-tool-results 2、path:tmp 2、tty-turn-line 1、cch 1、path:bun 1；22 个场景不归一化就不一致。对拍别的树时 `doctor` 也需要归一化（被测树路径不同）。
+
+**重跑（`--retry`，默认 1）**：某场景不一致或预期不满足时，两棵树各重跑一次；重跑后一致的在摘要里标为"是（重跑后）"、终端打印 `OK*`，第一次的差异保留在 JSON 的 `attempts` 里；真实差异重跑后仍然存在。第二轮三次全量都没有触发重跑。
 
 ## 10. 过程与坑
 
@@ -221,6 +249,94 @@ JSON 里每个场景有：预期检查结果、`equal`、差异列表（JSON 路
 
 ## 11. 未完成 / 后续
 
-- `runnable/` 生成后跑 `npm run verify:runnable`。
+- ~~`runnable/` 生成后跑 `npm run verify:runnable`~~：第二轮已跑，54/54 一致。
 - 与官方 ELF 对拍（cch、TLS、原生模块、Ink）需要在 linux 上做：`run.mjs` 的隔离和假上游可直接复用，只要把 spawn 的程序换成官方二进制。
-- Ink 相关命令（交互模式、`mcp list` 等）在公版 Bun 上无法验证，除非给 `Bun.ant.CellSegmenter` 写 polyfill（会改变被测行为，暂不做）。
+- ~~Ink 相关命令在公版 Bun 上无法验证~~：第二轮写了垫片（第 12 节）。垫片与官方原生实现是否逐格一致无法在本机证明，要在 linux 上用官方 ELF 跑同样的伪终端场景、比较屏幕。
+- 交互模式只覆盖了"输入 → 回答 → /exit"；权限确认框、工具调用的展示、斜杠命令菜单等还没有场景。
+
+## 12. `Bun.ant.*` 与其它私有 API；Ink 垫片
+
+### 12.1 清单
+
+在 original 里搜 `Bun.<名字>`（33 种）后逐个在公版 bun 1.4.4 里检查：**只有 `Bun.ant` 不存在**，其余（`Bun.stringWidth`、`Bun.sliceAnsi`、`Bun.wrapAnsi`、`Bun.Terminal`、`Bun.WebView`、`Bun.Image`、`Bun.FetchSession`、`Bun.YAML`、`Bun.TOML`、`Bun.JSONL`、`Bun.zstdDecompress*` 等）公版都有。没有 `process.binding` / `_linkedBinding`，`bun:jsc` 是公开模块。`Bun.ant` 下用到 12 个成员：
+
+| API | 所在 chunk | 调用与返回值的用法 | 只在哪个平台 | 不存在时 |
+|---|---|---|---|---|
+| `CellSegmenter`（类） | `chunk-m4dvt8pp.js` 的 `$7n(substitute, screen)`；使用方 `chunk-bzr73sfg.js`（`ps()`、`class pf`、`T1` 的 `setCell`、`xg` 的 `paint`）、`chunk-e6aww6q8.js`（`jUt`，把技能名按字素清洗） | `new CellSegmenter({ambiguousIsNarrow:true, substitute, screen})`；`segment(text, cells, runs, reorder)`、`paint(...)`、`setCell(...)`、驻留表 `graphemes/sgrKeys/sgrCloseKeys/uris`（接口细节见 `bun-ant-shim.js` 文件头） | 全平台 | **无回退**：直接抛 "This runtime has no Bun.ant.CellSegmenter. Run Claude Code on the @anthropic-ai/bun-internal version pinned in package.json."，Ink 整个渲染不了 |
+| `windowsProcessList()` | `chunk-aepeg2w5.js`（`Nf`、`$wi`） | 返回 `[{pid, ppid, name}]` 或 `null`；用于找子进程树（杀 Bash 工具的进程树） | Windows | 先判断 `typeof Bun.ant?.windowsProcessList !== "function"`，返回 `undefined` 走别的方法（PowerShell 查询） |
+| `windowsProcessCreationTime(pid)` | `chunk-qg0af0yq.js`（`hds`） | 返回进程创建时间或 `null`；用来排除 pid 复用 | Windows | `try/catch` 返回 `undefined` |
+| `windowsFolderSecurity` | `chunk-fq0cr76a.js`（`CM()`） | 对象：`open(path, write)` 返回 `{handle, finalPath}` 等，读改文件夹 ACL（Windows 沙箱） | Windows | 记日志 "this runtime has no Bun.ant.windowsFolderSecurity…"，返回 `null`，沙箱 ACL 功能关闭 |
+| `windowsSandboxDeniesArg()` | `chunk-fq0cr76a.js`（`YM()`） | 返回给沙箱子命令的参数字符串 | Windows | 可选链，不是字符串就不启用 |
+| `loginTty(fd)` | `chunk-e6aww6q8.js`（`R5s`） | 返回布尔；后台会话取得控制终端 | 非 Windows | `try/catch` → `"ffi_unavailable"` |
+| `ttyName(fd)` | `chunk-7t3j7ybe.js`（`Y`） | 返回终端设备名或 `null` | 非 Windows | `try/catch` → `undefined` |
+| `setDumpable(bool)` | `chunk-0f5bp6p7.js`（`RV`） | 返回是否成功（`prctl(PR_SET_DUMPABLE,0)`） | linux | `try/catch`，记 "prctl unavailable" |
+| `memoryPressureLevel()` | `chunk-22p96rmv.js` | 返回 `"normal"`/`"warning"`/`"critical"`/`null` | macOS | `try/catch` → `undefined`（低内存判断退回 `os.freemem()`） |
+| `getPeerUid(fd)` / `getPeerPid(fd)` | `chunk-66jn0ssz.js`、`chunk-aepeg2w5.js`（`OY()`） | Unix socket 对端 uid/pid（后台守护进程鉴权） | 非 Windows | `try/catch` → `null`；`OY()` 先判断 `typeof` |
+| `posixFsAt` | `chunk-p5msxby3.js`、`chunk-kxdxf2f6.js` | 对象：`openat/mkdirat/lstatat/readdirat…`（目录 fd 相对操作） | macOS / linux | 可选链判断，缺了走路径版或记 "this runtime has no Bun.ant.posixFsAt" |
+
+结论：**只有 `CellSegmenter` 没有回退**；其余 11 个缺了只是功能降级，多数只在 Windows 构建或 macOS 上才会被调用。注意 316 的 linux 构建把平台固化成 `linux`（第 13 节），在 Windows 上跑时 Windows 专属的那几个根本不会被调用，linux 专属的（`setDumpable`）会被调用然后走 `catch`。垫片只补 `CellSegmenter`；装上垫片后 `Bun.ant` 是一个只有 `CellSegmenter` 的对象，其它调用仍然过不了 `typeof` 判断或在 `try` 里抛 TypeError，行为与没有 `Bun.ant` 时相同。
+
+### 12.2 垫片 `tools/verify/bun-ant-shim.js`
+
+**这是验证环境的补丁，不是 316 源码的一部分**：不写进 `runnable/`、`src/`，只在 `--shim-ant` / `shimAnt: true` 时用 `bun --preload` 注入；带垫片的场景描述都以 `[垫片]` 开头，它们的结果反映的是"316 的 JS + 我们的垫片"。
+
+接口从调用方反推（`class pf` 的 `segment/width/keepColumns/paint`、`T1` 的 `setCell`、屏幕格是 `Int32` 两个一组 `[charPool 下标, styleId<<17 | hyperlink<<2 | 宽度种类]`、打包返回值 `结束列 + 改动起始列·2^20 + 改动结束列·2^36`），实现用：
+
+- `Intl.Segmenter('grapheme')` 切字素，宽度用 `Bun.stringWidth(…, {ambiguousIsNarrow})`；
+- SGR 与 OSC 8 链接的解析、活动样式集合的更新规则照抄 316 自带的 ansi-tokenize（同一 chunk 里的 `x()` / `A()`）；
+- 写屏规则照 2.1.88 的 JS 版 `setCellAt` / `writeLineToScreen`（宽字符右边放 spacerTail、覆盖宽字符时清孤儿格、行尾放不下的宽字符写 spacerHead、制表符补到制表位）。
+
+`bun-ant-shim-selftest.js` 检查了宽度（ASCII、CJK、全角、emoji、肤色修饰、组合字符、国旗、零宽空格）、样式段、链接段、跳过非 SGR 转义、substitute 码点、制表符、缓冲不足返回负数、打包返回值，21 项全过。
+
+**与官方原生实现可能的差异**（无法对照原生代码，只能按调用方约定推断）：
+
+1. 不做双向文本重排：`reorder=true`（只在 `WT_SESSION` 或 `TERM_PROGRAM=vscode` 时）也按逻辑顺序输出；
+2. 宽度来自 `Bun.stringWidth`，不是原生的宽度表；宽度 0 的字素丢弃，大于 2 按 2；
+3. 制表符展开的空格用空样式，原生可能沿用所在样式段；
+4. 不认识的转义序列按 2.1.88 的规则跳过，C0/C1 控制字符（`\t` 除外）丢弃；
+5. 行尾放不下的宽字符写 spacerHead 并丢弃该字符（2.1.88 的行为）；
+6. 纯 JS，每帧重新切分，比原生慢；场景里感觉不到。
+
+两棵树用同一个垫片，所以"两棵树一致"证明的是改名没改坏 Ink 相关代码；垫片本身是否与官方逐格一致，要在 linux 上用官方 ELF 跑同样的伪终端场景、比较屏幕。
+
+### 12.3 伪终端验证
+
+`pty-driver.js`（用 Bun 运行，`Bun.spawn({terminal:{cols,rows,data}})`，Windows 上走 ConPTY，实测可用）启动 CLI，按步骤 `waitFor`（在 `vt-screen.mjs` 还原的屏幕文字里找）→ 等输出静止 → 可选拍快照 → 发送按键。`vt-screen.mjs` 是只为对拍写的极简 VT 模拟（光标移动、擦除、插入删除、滚动、宽字符），不追求与真实终端逐像素相同。
+
+- `tty-first-run`：全新配置时交互模式先显示欢迎画面（字符画），然后做首次联网检查，直连 `api.anthropic.com` 和 `platform.claude.com`（被拦，`ERR_PROXY_TUNNEL`），提示 "Unable to connect to Anthropic services"，退出 1。
+- `tty-session`：要预置配置跳过引导：`hasCompletedOnboarding: true`；`customApiKeyResponses.approved` 里放假 key 的**末 20 位**（CLI 的 `nge()` 是 `key.trim().slice(-20)`）；`projects[cwd].hasTrustDialogAccepted: true`。之后屏幕依次是：
+  - 标题框（Claude Code v2.1.316 / Opus 5.5 · API Usage Billing / 工作目录）；
+  - 跨会话消息关闭的警告（Unix socket 目录权限检查在 Windows 上失败）；
+  - "Auto mode is now Claude Code's default permission mode" 提示；
+  - 输入框和状态行 "⏵⏵ auto mode on (shift+tab to cycle) · ← for agents"。
+  输入 `hi` 回车后出现 "● <回答>" 和 "✻ <动词> for 0s · done <钟点>"；`/exit` 后屏幕只剩 "Resume this session with: claude --resume <uuid>"。交互模式下请求的工具表有 13 个（`-p` 是 12 个）。
+- 两次运行的**原始字节流长度不同**（Ink 增量重绘的帧切分随时间变），还原出的屏幕相同，所以只比较屏幕（归一化规则 `tty-stream`）。
+
+## 13. Bash 工具 "Bad file descriptor" 的原因
+
+现象：不加垫片时，Bash 工具执行任何写 stdout/stderr 的命令都失败（`echo: write error: Bad file descriptor`，tool_result "Exit code 1"），重定向到文件可以。
+
+排查（`spawn-trace-preload.js` 记录 spawn 参数；`CLAUDE_CODE_SHELL_PREFIX` 包一层脚本看子进程里的 fd；在 CLI 进程里注入探针对比）：
+
+1. Bash 工具用 `child_process.spawn(bash, ["-c", <包装后的命令>], {stdio: ["pipe", fd, fd], detached: true})`，`fd` 是任务输出文件（`<TMP>/claude-0/<项目>/<会话>/tasks/<id>.output`）的文件描述符；子进程里 fd 1/2 确实指向这个文件，但一写就 EBADF。
+2. 在 CLI 进程里用同一个 bash，拿自己 `fs.openSync(…, "w")` 的 fd 当 stdout 就能写；用 CLI 的那个 fd 不行 → 问题在**文件是怎么打开的**。
+3. 拦截 `fs/promises.open` 看到 CLI 打开输出文件的 flags 是 `0x80509` = `O_WRONLY | O_APPEND | O_CREAT | O_EXCL`（Windows 常量 1/8/256/1024，外加一个 Windows 上无意义的高位），出自 `chunk-1dp9p908.js` 里 `x()` 的 POSIX 分支。
+4. 最小复现（与 CLI 无关）：Node 24 和公版 Bun 1.4.4 都一样——`fs.promises.open(f, "a")`（或 `"a+"`）得到的 fd 交给 Git Bash 当 stdout，`echo` 失败、退出 1；`"w"`、`"w+"`、`"r+"` 都正常。原因是 Windows 上 libuv 对 `O_APPEND` 只申请 `FILE_APPEND_DATA`、去掉 `FILE_WRITE_DATA`，MSYS2 的 bash 往这种句柄写会报 EBADF。
+5. 为什么 CLI 会在 Windows 上走 POSIX 分支：**316 的 linux 构建把平台固化成 `linux`**。`chunk-znrryf4y.js` 里平台探测对象是 `new u({platform:"linux", env:process.env, …})`（打包时 `process.platform` 被内联成常量，全部 chunk 只剩 2 处 `globalThis.process.platform`），所以 `I()` 在 Windows 上也返回 `"linux"`。`x()` 本来有 Windows 分支：`if (I()==="windows") return … open(path, n.windowsFlags)`，而 Bash 工具的调用是 `P4t(path, "w")`，也就是 Windows 构建会用 `"w"` 打开，不会出问题。这也解释了第 7.6 节里系统提示词写 "Platform: linux"、`doctor` 写 "Platform: linux-x64"。
+
+结论：**是 CLI（linux 构建）在 Windows 上走了 linux 专属路径**，碰上 Windows 的 `O_APPEND` 语义，不是公版 Bun 的问题。官方 linux 二进制在 linux 上、官方 Windows 二进制在 Windows 上都不会遇到。
+
+绕开：`win-append-shim.js`（验证环境补丁）只在 win32 上、只对同时带 `O_APPEND | O_CREAT | O_EXCL` 的数字 flags（也就是新建独占文件）去掉 `O_APPEND`：新建的空文件从偏移 0 写与追加写结果相同；已存在的文件不动，避免覆盖。场景 `print-bash-stdout`（加垫片，tool_result = `hi\nerr\n42\nShell cwd was reset to <CWD>`）和 `print-bash-stdout-unshimmed`（不加垫片，确认仍是 "Exit code 1"）一起跑。
+
+## 14. `update-offline` 不稳定的原因
+
+lead 在全量对拍 original 对 runnable 时看到基线一侧 0 个外网请求（期望 2），单独重跑又是 2。
+
+用 `--spawn-trace` 看 `update` 的子进程：CLI 依次运行 `npm config get prefix`、`cmd.exe /d /s /c "npm config get prefix"`、`npm -g config get prefix`，再运行两次 `npm view @anthropic-ai/claude-code@latest version --prefer-online`。**那 2 个 `CONNECT registry.npmjs.org:443` 是本机真实 npm 发的，不是 CLI 本身**（npm 继承了沙箱的 `HTTPS_PROXY`）。`npm view` 的调用带 `abortSignal: AbortSignal.timeout(5000)`（`chunk-6zvphrsz.js`）：npm 是 `npm.cmd` → node 启动，机器忙时（两棵树 × 3 路并发）启动超过 5 秒就被中止，一个请求都没发出，所以外网请求数取决于机器负载。12 次 6 路并发的压力测试里每次都是 2，但时间余量只有一两秒。
+
+另外，用真实 npm 本身也不够隔离：它会读本机全局 npmrc（registry 镜像、代理、token）。
+
+处理：
+
+1. 沙箱 PATH 最前面放假 npm（第 4 节 8a），`npm view` 立即失败；`update-offline` 的预期改为"退出 1、stderr 有两句失败说明、0 个请求"，6 路并发 6 次输出逐字节相同。`doctor` 也会调 npm（`npm config get prefix`、`npm -g config get prefix`），同样不再碰真实 npm。
+2. `compare.mjs` 加 `--retry`（默认 1）：不一致或预期不满足的场景两棵树各重跑一次，重跑后一致的标为 flaky（终端打印 `OK*`、摘要里写"是（重跑后）"、JSON 里保留第一次的差异），用来区分环境抖动和真实差异。修复后三次全量（3 路、4 路、对 runnable）都没有触发重跑。

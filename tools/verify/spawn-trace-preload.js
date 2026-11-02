@@ -2,6 +2,7 @@
 // （命令、参数、cwd、stdio 每一项的类型与值、detached、环境变量名），追加写到 VERIFY_SPAWN_TRACE_OUT（JSON Lines）。
 // 对数字 fd 还会用 fs.fstatSync 检查它在父进程里是否有效。
 // 只在 run.mjs --spawn-trace（库：runCli({ spawnTrace: true })）时注入，不影响对拍。
+// 另设 VERIFY_SPAWN_TRACE_ENV=1 时连同传给子进程的完整环境一起记录（会含假 API key，只用于本地诊断）。
 const fs = require('fs');
 const cp = require('child_process');
 const out = process.env.VERIFY_SPAWN_TRACE_OUT;
@@ -21,7 +22,7 @@ for (const name of ['spawn', 'spawnSync', 'execFile', 'execFileSync']) {
     const o = Array.isArray(args) ? opts : args;
     log({ api: `child_process.${name}`, file, args: Array.isArray(args) ? args : undefined, cwd: o?.cwd,
       stdio: o?.stdio === undefined ? undefined : describeStdio(o.stdio), detached: o?.detached, shell: o?.shell,
-      envKeys: o?.env ? Object.keys(o.env).length : undefined });
+      envKeys: o?.env ? Object.keys(o.env).length : undefined, env: process.env.VERIFY_SPAWN_TRACE_ENV ? o?.env : undefined });
     return orig.apply(this, arguments);
   };
 }
