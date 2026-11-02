@@ -207,3 +207,32 @@ func TestTruncClientRequestID(t *testing.T) {
 		t.Fatal("short")
 	}
 }
+
+// The CCGateway request log of a row stays reachable for an operator with
+// settings:read but without account:read: request_log_account_id carries the
+// account the log is filed under while account_id stays hidden.
+func TestRequestLogAccountWithoutAccountRead(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	var accountID int64
+	require.NoError(t, f.db.Pool.QueryRow(ctx, `INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES('CCG Account','ccgateway','oauth','') RETURNING id`).Scan(&accountID))
+	rec := f.record("ccg-log", false)
+	rec.PluginKey, rec.AccountID = "ccgateway", &accountID
+	f.svc.process(ctx, []*core.UsageRecord{rec})
+	path := "/usage/" + f.scalar(`SELECT id::text FROM usage_logs WHERE request_id = 'ccg-log'`)
+
+	d := f.get(f.user, path, 200)["data"].(map[string]any)
+	require.Equal(t, float64(accountID), d["account_id"])
+	require.Equal(t, float64(accountID), d["request_log_account_id"])
+
+	f.svc.Authz = denyPerms{keys: []string{"account:read"}}
+	d = f.get(f.user, path, 200)["data"].(map[string]any)
+	require.Nil(t, d["account_id"])
+	require.NotContains(t, d, "account_name")
+	require.Equal(t, float64(accountID), d["request_log_account_id"])
+
+	f.svc.Authz = denyPerms{keys: []string{"account:read", "settings:read"}}
+	d = f.get(f.user, path, 200)["data"].(map[string]any)
+	require.Nil(t, d["account_id"])
+	require.NotContains(t, d, "request_log_account_id")
+}

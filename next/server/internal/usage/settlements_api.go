@@ -114,6 +114,9 @@ func (s *Service) retryReconcile(c *gin.Context) {
 			return err
 		}
 		out, err = s.loadSettlement(ctx, tx, id)
+		if err == nil && !s.seesAccounts(ctx, nil) {
+			out.AccountID = nil // like the usage detail (seesAccounts)
+		}
 		if err == nil {
 			_, err = tx.Exec(ctx, `UPDATE async_tasks SET observation_status='pending',claim_token='',lease_until=NULL,
 			attempts=0,poll_failures=0,failure_code='',next_check_at=$2,deadline_at=$3,last_error='' WHERE usage_log_id=$1`, id, now, now.Add(cfg.maxAge))

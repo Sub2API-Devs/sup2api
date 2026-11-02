@@ -99,9 +99,14 @@ type Detail struct {
 	// whose usage was final when its response ended. Hidden from
 	// self-service views like the rest of the upstream side.
 	Settlement *Settlement `json:"settlement,omitempty"`
-	LedgerID   *int64      `json:"ledger_id"`
-	UserAgent  string      `json:"user_agent"`
-	NodeID     string      `json:"node_id"`
+	// RequestLogAccountID opens the CCGateway request log of this request
+	// (GET /system/ccgateway/accounts/:id/request-logs, settings:read or
+	// account:read): set for a ccgateway row when the caller may read that
+	// log, also when account_id is hidden from a caller without account:read.
+	RequestLogAccountID *int64 `json:"request_log_account_id,omitempty"`
+	LedgerID            *int64 `json:"ledger_id"`
+	UserAgent           string `json:"user_agent"`
+	NodeID              string `json:"node_id"`
 }
 
 // RegisterRoutes mounts the usage console API.
@@ -168,12 +173,17 @@ func (r *Record) hideAccount() { r.AccountID, r.AccountName = nil, "" }
 // record: operator views only, and only with account:read (CONTRACTS §66.5),
 // like the accounts section of the overview.
 func (s *Service) seesAccounts(ctx context.Context, self *int64) bool {
-	if self != nil {
-		return false
-	}
-	uid, _ := core.UserID(ctx)
-	return s.can(ctx, uid, "account:read")
+	return self == nil && s.can(ctx, uidOf(ctx), "account:read")
 }
+
+func uidOf(ctx context.Context) int64 {
+	uid, _ := core.UserID(ctx)
+	return uid
+}
+
+// requestLogPlugin is the plugin whose rows have a request log in the core
+// (internal/ccgateway's request log viewer).
+const requestLogPlugin = "ccgateway"
 
 // parseFilter reads the common query parameters. self restricts to userID;
 // accounts allows the account filters (seesAccounts).
@@ -449,11 +459,18 @@ func (s *Service) detail(c *gin.Context, self *int64) {
 		d.PluginDetail = nil
 		d.Anomalies = nil
 	} else {
-		if !s.seesAccounts(ctx, self) {
-			d.hideAccount()
+		accounts := s.seesAccounts(ctx, self)
+		if d.PluginKey == requestLogPlugin && d.AccountID != nil && (accounts || s.can(ctx, uidOf(ctx), "settings:read")) {
+			d.RequestLogAccountID = d.AccountID
 		}
 		if e, err := s.loadSettlement(ctx, s.db.Pool, d.ID); err == nil {
 			d.Settlement = e
+		}
+		if !accounts {
+			d.hideAccount()
+			if d.Settlement != nil {
+				d.Settlement.AccountID = nil
+			}
 		}
 	}
 	httpapi.OK(c, d)

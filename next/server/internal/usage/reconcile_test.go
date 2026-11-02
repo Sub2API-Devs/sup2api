@@ -15,6 +15,7 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/shopspring/decimal"
+	"github.com/stretchr/testify/require"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
@@ -1044,4 +1045,32 @@ func (p *recPlugin) BuildRefreshRequest(context.Context, *pluginv1.BuildRefreshR
 
 func (p *recPlugin) ParseRefreshResponse(context.Context, *pluginv1.ParseRefreshResponseRequest) (*pluginv1.RefreshResult, error) {
 	return nil, nil
+}
+
+// An operator without account:read gets the account of a pre-charged row
+// neither from the row nor from its settlement entry, in the detail or in
+// the answer of a manual reconcile.
+func TestSettlementHidesAccountWithoutAccountRead(t *testing.T) {
+	rf := reconcileFixture(t)
+	ctx := context.Background()
+	rf.svc.process(ctx, []*core.UsageRecord{rf.reserved("req-acc", "task-acc", core.UsageTokens{Input: 10, Output: 1})})
+	id := rf.scalar(`SELECT id::text FROM usage_logs WHERE request_id = 'req-acc'`)
+	d := rf.get(rf.user, "/usage/"+id, 200)["data"].(map[string]any)
+	require.Equal(t, float64(7), d["account_id"])
+	require.Equal(t, float64(7), d["settlement"].(map[string]any)["account_id"])
+
+	rf.svc.Authz = denyPerms{keys: []string{"account:read"}}
+	d = rf.get(rf.user, "/usage/"+id, 200)["data"].(map[string]any)
+	require.Nil(t, d["account_id"])
+	require.Nil(t, d["settlement"].(map[string]any)["account_id"])
+	require.NotContains(t, d, "request_log_account_id") // not a ccgateway row
+
+	if _, err := rf.db.Pool.Exec(ctx, `UPDATE pending_settlements SET deadline_at = now() - interval '1 minute'`); err != nil {
+		t.Fatal(err)
+	}
+	rf.due()
+	rf.svc.ReconcileDue(ctx)
+	rf.svc.opts.Environment = fakeEnvironment{}
+	out := rf.post(rf.user, "/usage/"+id+"/reconcile", 200)["data"].(map[string]any)
+	require.Nil(t, out["account_id"])
 }

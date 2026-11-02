@@ -6,6 +6,8 @@ export type UsageRow = UsageLog & {
   user_name?: string
   price?: { id: number; model: string; source: string } | null
   metrics?: Record<string, unknown> | null
+  /** Detail only: the account a CCGateway request log is filed under, sent to callers who may read that log (also without account:read). */
+  request_log_account_id?: number
 }
 
 export type UsageTokenFacts = Partial<Pick<UsageRow, 'input_tokens' | 'output_tokens' | 'cache_read_tokens' | 'cache_creation_tokens' | 'cache_creation_1h_tokens'>>
