@@ -1,7 +1,7 @@
 {
   "binarySHA256": "4f4178ce41d83e23341ebfbaecdbcf8ea6bf7baea0690025abe49eeec3a5d01d",
   "version": "2.1.312",
-  "extension": "ccgateway-v44-runtime-version",
+  "extension": "ccgateway-v47-stored-login",
   "bunVersion": "1.4.4",
   "runtimeVersion": "v26.12.1",
   "capabilities": [

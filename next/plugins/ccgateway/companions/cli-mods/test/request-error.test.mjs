@@ -148,3 +148,44 @@ test('login errors become authentication errors with the native message', () => 
   const lock = Object.assign(new Error('OAuth access token could not be refreshed: another Claude Code process is holding the refresh lock'), { name: 'OAuthRefreshLockTimeoutError' });
   assert.equal(localErrorFrame(lock, { phase: 'transport' }).status, 502);
 });
+
+// StoredLoginHeldBackError (2.1.316, chunk-7c9mpntp.js) in its official shape:
+// a TelemetrySafeError with message, telemetryMessage and errorClass, and no
+// .code. Its reason is read from errorClass, the class found by name.
+class TelemetrySafe extends Error {
+  constructor(message, telemetryMessage, errorClass) { super(message); this.name = 'TelemetrySafeError'; this.telemetryMessage = telemetryMessage ?? message; this.errorClass = errorClass; }
+}
+const storedLoginMessages = {
+  admin: "Your organization's settings need an update. Ask your administrator to fix the API key helper configuration.",
+  settings_unloaded: "Couldn't load your organization's settings. Check your connection, then restart Claude Code.",
+  restart_needed: 'Restart Claude Code to finish signing in.',
+};
+class StoredLoginHeldBack extends TelemetrySafe {
+  constructor(reason) { super(storedLoginMessages[reason], 'Stored login held back', `stored_login_refused_${reason}`); this.name = 'StoredLoginHeldBackError'; }
+}
+
+test('a stored login CC holds back answers by its errorClass with the native message', () => {
+  const expected = {
+    admin: [403, 'permission_error', 'stored_login_refused_admin'],
+    restart_needed: [401, 'authentication_error', 'stored_login_refused_restart_needed'],
+    settings_unloaded: [502, 'api_error', 'stored_login_refused_settings_unloaded'],
+  };
+  for (const [reason, [status, type, code]] of Object.entries(expected)) {
+    const error = new StoredLoginHeldBack(reason);
+    assert.equal(error.code, undefined);
+    for (const phase of ['transport', 'build', 'input', undefined]) {
+      const frame = localErrorFrame(error, { phase });
+      assert.deepEqual([frame.status, frame.error.type, frame.error.code, frame.error.message], [status, type, code, storedLoginMessages[reason]], `${reason} ${phase}`);
+      // The transient reason stays a retryable transport failure in every phase.
+      assert.equal(frame.source, status < 500 && (phase === 'build' || phase === 'input') ? 'input' : 'transport');
+    }
+    // Found in the causes too, with its own message.
+    const wrapped = localErrorFrame(new Error('request failed', { cause: error }), { phase: 'transport' });
+    assert.deepEqual([wrapped.status, wrapped.error.code, wrapped.error.message], [status, code, storedLoginMessages[reason]]);
+  }
+  // An unknown reason, or the errorClass on another class, keeps the transport mapping.
+  const unknown = localErrorFrame(new StoredLoginHeldBack('future'), { phase: 'transport' });
+  assert.deepEqual([unknown.status, unknown.error.code], [502, 'cli_transport_error']);
+  const other = localErrorFrame(new TelemetrySafe('x', 'x', 'stored_login_refused_admin'), { phase: 'transport' });
+  assert.deepEqual([other.status, other.error.code], [502, 'cli_transport_error']);
+});

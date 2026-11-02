@@ -1,4 +1,4 @@
-# Claude Code 2.1.312 → 2.1.316 迁移记录（CLI v41 → v43）
+# Claude Code 2.1.312 → 2.1.316 迁移记录（CLI v41 → v43，后续 v44）
 
 2026-11-02。把账号 Worker 里的定制 CLI 从官方 2.1.312（`ccgateway-v41-login-401`）移到官方 2.1.316，要求 `claude request --build|--direct` 与 `claude ccgateway-mgmt` 的逻辑与 v41 一样，只允许出现官方自己的变化。做法按 [CLI-UPGRADE-RUNBOOK](CLI-UPGRADE-RUNBOOK.md) 第 1–5 节，上一次迁移见 [CLAUDE-CODE-2.1.312-MIGRATION](CLAUDE-CODE-2.1.312-MIGRATION.md)，计费头规则见 [CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION](CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION.md)。
 
@@ -9,8 +9,8 @@
 | 内嵌 Bun | 1.4.4（修订 `0ae49f8b6`） | 1.4.4（修订 `71c9bf0ca`），profile `bunVersion` 仍为 1.4.4 |
 | Bun 报告的 Node.js 版本 | 官方 `v26.12.1`；v41 发 `v26.3.0` | 官方 `v26.12.1`；v43 起 profile `runtimeVersion` `v26.12.1`，CLI 报告它（第 4、5 节） |
 | 还原 | 2813 模块 / 2581 JS | 2880 模块 / 2648 JS，`unresolved` 为空，入口 `cli.js` |
-| 补丁标签 | `ccgateway-v41-login-401` | `ccgateway-v43-cc-2-1-316`（v42 `ccgateway-v42-cc-2-1-316` 编译验证过、未发布） |
-| 定制 ELF SHA-256 | `2c80da64281533d32faecbb3816a1f6a8c8070037dd49d035ef2c7387b1af211`（线上 v41） | `f8f9afa447be6ef132f87c6af7d1880fc822e68f4cf9249f2143a59fdfa163a0`（v43，325183664 字节；v42 是 `3a1ca882…78a4`），第 6 节 |
+| 补丁标签 | `ccgateway-v41-login-401` | `ccgateway-v43-cc-2-1-316`（插件 0.1.122 起新账号使用；v42 `ccgateway-v42-cc-2-1-316` 编译验证过、未发布）；候选 `ccgateway-v44-stored-login`（第 10 节） |
+| 定制 ELF SHA-256 | `2c80da64281533d32faecbb3816a1f6a8c8070037dd49d035ef2c7387b1af211`（线上 v41） | `f8f9afa447be6ef132f87c6af7d1880fc822e68f4cf9249f2143a59fdfa163a0`（v43，325183664 字节；v42 是 `3a1ca882…78a4`）；v44 `76b11ddd052bd92506a10cc6ddcb7b81da12ddc5f19aee91c048a9739172f99b`（325183664 字节），第 6 节 |
 | 能力 | 20 项 | 21 项：v41 的 20 项加 `build_injection_tools_v2`（第 5 节） |
 
 分析中间产物在 `artifacts/claude-2.1.316/`（不进 Git）：`official-manifest.json`、`claude-linux-x64`、`linux-restored/`、`seeds.json`、`equiv-312-316.json`、`equiv-index-82961a4ddc91.json`（旧树）、`equiv-index-d8c229e5ecfa.json`（新树）、`equiv.out`、`carry.json`、`diffs/g1…g4/`（unitdiff）、`review/`（四组审查报告 `g1-query.md`、`g2-core.md`、`g3-transport.md`、`g4-entry.md` 与脚本）、`captures/`（官方抓包，2.1.312 重抓与 2.1.316）、`patched-v42/`、`patched-v43/`、`release-v42/`、`release-v43/`、`runtime/`（运行时探针）、`inject/`（注入工具探针）、`verify/`（v42 的 `RESULTS.md`、v43 的 `RESULTS-v43.md` 与日志）、`port/`（本次移植用的一次性脚本：生成 profile、作用域自由名对照、测试移植、产物断言）。
@@ -136,45 +136,45 @@ v42 只做版本迁移；v42 编译验证后、发布前（2026-11-02）加了�
 
 都在 ovh 一次性容器里：本机补丁 → tar 传过去 → `oven/bun:1.4.4`（`--network none`）里跑去 CR 的 `build.sh`（两个入口，`--compile --bytecode --format=esm`）→ `node:22-bookworm-slim` 里从完整的 cli-mods 副本跑 `package-release.cjs`。
 
-| 项 | v42（未发布） | v43 |
-|---|---|---|
-| 补丁树 | `artifacts/claude-2.1.316/patched-v42`：改写 7 个模块、34 个支持文件 | `artifacts/claude-2.1.316/patched-v43`：改写 8 个模块（多 hooks worker 入口）、35 个支持文件（多 `ccgateway-runtime-version.js`）；`ccgateway-patch.json` 带 `runtimeVersion: "v26.12.1"` |
-| 打包模块数 | 2905 | 2906 |
-| 定制 ELF SHA-256 | `3a1ca8822259d45007b2849da61f7dc262630227dc01eff19d8fcf79d8bc78a4`（325179568 字节） | `f8f9afa447be6ef132f87c6af7d1880fc822e68f4cf9249f2143a59fdfa163a0`（325183664 字节），ELF 里 `Bun v1.4.4 (38afee6c8)` |
-| `package-release.cjs` 的运行时检查 | （当时没有；事后对 v42 跑 `runtime-check.cjs`：拒绝，`reports Node.js v26.3.0`） | 通过：`{"version":"v26.12.1","node":"26.12.1","versionLine":"2.1.316 (Claude Code)"}` |
-| `--ccgateway-info` | `{"version":"2.1.316","patch":"ccgateway-v42-cc-2-1-316", capabilities: 20 项}` | `{"version":"2.1.316","patch":"ccgateway-v43-cc-2-1-316", capabilities: 21 项}`（v42 的 20 项加 `build_injection_tools_v2`） |
-| `--version` | `2.1.316 (Claude Code)` | 同 |
-| release | `artifacts/claude-2.1.316/release-v42/` | `artifacts/claude-2.1.316/release-v43/`（`manifest.json`：`2.1.316` → `2.1.316/claude`，补丁 `ccgateway-v43-cc-2-1-316`，modes `build`/`direct`；ovh 上保留 `/tmp/ccg316-rt/build/release-v43`）；日志 `artifacts/claude-2.1.316/build/build-v43.log`，脚本 `verify/scripts-v43/ovh-build-v43.sh` |
+| 项 | v42（未发布） | v43 | v44（候选） |
+|---|---|---|---|
+| 补丁树 | `artifacts/claude-2.1.316/patched-v42`：改写 7 个模块、34 个支持文件 | `artifacts/claude-2.1.316/patched-v43`：改写 8 个模块（多 hooks worker 入口）、35 个支持文件（多 `ccgateway-runtime-version.js`）；`ccgateway-patch.json` 带 `runtimeVersion: "v26.12.1"` | `artifacts/claude-2.1.316/patched-v44`：与 `patched-v43` 只差 `ccgateway-request-error.js`、`cli.js`（`--ccgateway-info` 里的补丁标签）与 `ccgateway-patch.json`（日志 `build/patch-v44.log`） |
+| 打包模块数 | 2905 | 2906 | 2906 |
+| 定制 ELF SHA-256 | `3a1ca8822259d45007b2849da61f7dc262630227dc01eff19d8fcf79d8bc78a4`（325179568 字节） | `f8f9afa447be6ef132f87c6af7d1880fc822e68f4cf9249f2143a59fdfa163a0`（325183664 字节），ELF 里 `Bun v1.4.4 (38afee6c8)` | `76b11ddd052bd92506a10cc6ddcb7b81da12ddc5f19aee91c048a9739172f99b`（325183664 字节），`Bun v1.4.4 (38afee6c8)` |
+| `package-release.cjs` 的运行时检查 | （当时没有；事后对 v42 跑 `runtime-check.cjs`：拒绝，`reports Node.js v26.3.0`） | 通过：`{"version":"v26.12.1","node":"26.12.1","versionLine":"2.1.316 (Claude Code)"}` | 通过，值相同 |
+| `--ccgateway-info` | `{"version":"2.1.316","patch":"ccgateway-v42-cc-2-1-316", capabilities: 20 项}` | `{"version":"2.1.316","patch":"ccgateway-v43-cc-2-1-316", capabilities: 21 项}`（v42 的 20 项加 `build_injection_tools_v2`） | `{"version":"2.1.316","patch":"ccgateway-v44-stored-login", capabilities: 21 项}`（与 v43 相同，含 `build_injection_tools_v2`） |
+| `--version` | `2.1.316 (Claude Code)` | 同 | 同 |
+| release | `artifacts/claude-2.1.316/release-v42/` | `artifacts/claude-2.1.316/release-v43/`（`manifest.json`：`2.1.316` → `2.1.316/claude`，补丁 `ccgateway-v43-cc-2-1-316`，modes `build`/`direct`；ovh 上保留 `/tmp/ccg316-rt/build/release-v43`）；日志 `artifacts/claude-2.1.316/build/build-v43.log`，脚本 `verify/scripts-v43/ovh-build-v43.sh` | `artifacts/claude-2.1.316/release-v44/`（补丁 `ccgateway-v44-stored-login`，modes `build`/`direct`）；ovh 上 `~/sup2api/checks/cli-releases/release-v44-2.1.316`（v43 的目录未动）；日志 `build/build-v44.log`，脚本 `verify/scripts-v44/ovh-build-v44.sh`（与 v43 的相同，只换目录与标签） |
 
-2.1.312/2.1.310/2.1.304 的补丁产物也变了（入口导入、注入工具渲染），标签升为 v44/v45/v46，补丁成功，但都不编译、不发布；线上旧账号继续用 v41。
+2.1.312/2.1.310/2.1.304 的补丁产物也变了（入口导入、注入工具渲染），标签升为 v44/v45/v46，补丁成功，但都不编译、不发布；线上旧账号继续用 v41。v44 改了共用的 `request-error.js`，三者再升为 `ccgateway-v47-stored-login`/`v48-stored-login`/`v49-stored-login`，同样不编译、不发布。
 
 ## 7. 验证
 
-v42 由独立验证者在 ovh 一次性容器里按 2.1.312 迁移记录的矩阵跑完（`artifacts/claude-2.1.316/verify/RESULTS.md`）；v43 的改动可能影响的部分在同样的容器里复验（`verify/RESULTS-v43.md`，脚本 `verify/scripts-v43/`）。Worker 一律是 `ccgateway-app:0.1.121` 自带的（`40111c23…78e0`，两次都没有改 engine）。
+v42 由独立验证者在 ovh 一次性容器里按 2.1.312 迁移记录的矩阵跑完（`artifacts/claude-2.1.316/verify/RESULTS.md`）；v43 的改动可能影响的部分在同样的容器里复验（`verify/RESULTS-v43.md`，脚本 `verify/scripts-v43/`）；v44 同样（ovh `/tmp/ccg316-v44`，用完已删；脚本 `verify/scripts-v44/`，日志 `verify/v44/`、`verify/npm-v44-local/`，Worker 是 `ccgateway-app:0.1.122` 自带的 `14e165ed…33dd`）。Worker 一律是 `ccgateway-app:0.1.121` 自带的（`40111c23…78e0`，两次都没有改 engine）。
 
-| 层 | 内容 | v42 | v43 |
-|---|---|---|---|
-| 单测 + 原生对账 | `CCG_CLI_VERSION=<v> CCG_REQUIRE_ARTIFACTS=1 npm test` | Linux（`node:22-bookworm-slim`，`--network none`）2.1.316 与 2.1.312 各 32 个文件 212/212；本机 Windows 四版 212/212 | Linux 四版：2.1.316 34 个文件 **226/226**，2.1.312/2.1.310/2.1.304 各 33 个文件 **222/222**；本机 Windows 四版 225/226、221/222（各 1 条只在 Linux 上跑的用例跳过）；0 失败，无 `CCG_NATIVE_TEST_SKIPPED` |
-| 补丁器 | `patch-cli.cjs`、`anchor-hazards` | 27 处替换、无 hazard；重新补丁与 `patched-v42` 逐文件相同 | 同（27/27）；`patched-v43` 与 v42 只差第 6 节列的文件；2.1.312/2.1.310/2.1.304 也补丁成功 |
-| 运行时版本 | 编好的 CLI 报告的 `process.version`（`runtime-check.cjs`） | `v26.3.0`（被新检查拒绝） | **`v26.12.1`**，打包时通过 |
-| 请求头 | `tls-fingerprint.sh` 记录的请求头，对官方 2.1.316 | `x-stainless-runtime-version` `v26.3.0`（其余相同） | **`x-stainless-*` 逐项相同**（`runtime-version v26.12.1`），头名与顺序相同（只少请求本身不带的 prompt-id / beta） |
-| TLS 指纹 | 同一次运行 | 38 条连接 identical（JA4 `t13d1713h1_5b57614c22b0_7f527383e249`、JA3 `1523504b38f0fae0d881d4b6554aac1b`、ALPN 只 `http/1.1`） | 38 条连接，**identical**，值相同 |
-| 组装对账（L4） | `assembly-cases-2.1.316.json` | 76/76，上游 64，`acceptance: pass` | **76/76**，上游 64，`acceptance: pass` |
-| 客户端来源 × 内容策略 | 14 项 | 14/14 | **14/14** |
-| 官方客户端实时转发 / 抓包回放（L6） | 官方 2.1.316 | 10/10；`verified` | **10/10**；**`verified`** |
-| 组件组合（L5） | 216 项 | 216/216 | **216/216** |
-| Worker 策略矩阵（L7） | `config-matrix-policies-2.1.316.json` | `passed`，上游 98 | **`passed`**，上游 98 |
-| 首轮工具注入 | `test/injection-tools-probe.cjs` 对官方抓包 | 失败：`Agent`、`ListAgents` 不同，`ToolSearch`/placeholder 缺失 | **通过**：11 个工具与 placeholder 同名同序，定义逐字相同，只差 Bash 后台超时缺省值（第 5.2 节） |
-| 离线回归：噪声 | v41 + 官方 2.1.312 客户端两次 | 0 of 73，149 个请求 | **0 of 73**，149 个请求 |
-| 离线回归 D1 | 官方 2.1.312 客户端，v41 对候选 | 3 of 73（规则：两条版本替换） | **3 of 73**（规则另加 `v26.12.1`→`v26.3.0`，隐藏 149 次，正好每个上游请求一次），同样 3 个"高"等级场景、同一处官方提示词变化 |
-| 离线回归 D2 | 官方 2.1.316 客户端经候选，`crossversion` | `gatewayOnly` 只有那处官方变化（+ `login-account` 归因假象） | 与 v42 相同 |
-| 客户端对网关 A/B | `compare.cjs` | `x-stainless-runtime-version` A/B 差异 67 处（与 v41 基线相同） | **0 处** |
-| 定向断言 | `verify.cjs` | 四次运行 1662/1662 | 四次运行 **1662/1662** |
-| 其他 | values、beta-check、capcheck、respmatch、classify、conc | values 12/12；beta 只有已知 1 条；capcheck 149/149、0 缺失；respmatch 135/135 | 相同 |
-| Go（Linux） | engine、worker、contracts，`GOOS=linux go vet` | engine 顶层 249 过（16 跳过，需真实 CLI）；worker 23 过；contracts 59 过；vet 通过 | 没有改 Go，未重跑 |
-| 真实 CLI 用例 | `CCG_REAL_CLI` = 官方 2.1.316 / 2.1.312 | 两版集合相同：6 过 5 败（已知） | 未重跑（与 CLI 补丁无关） |
-| 断网资源回归 | `TestResourceManagementLinuxOfflineNetNone` | 两版集合相同（24 败，已知：官方 CLI 没有 `ccgateway-mgmt`） | 未重跑 |
-| 控制器 | controller-go、guard | 389 过、85 过（Python 控制器已删） | 未重跑 |
+| 层 | 内容 | v42 | v43 | v44（候选） |
+|---|---|---|---|---|
+| 单测 + 原生对账 | `CCG_CLI_VERSION=<v> CCG_REQUIRE_ARTIFACTS=1 npm test` | Linux（`node:22-bookworm-slim`，`--network none`）2.1.316 与 2.1.312 各 32 个文件 212/212；本机 Windows 四版 212/212 | Linux 四版：2.1.316 34 个文件 **226/226**，2.1.312/2.1.310/2.1.304 各 33 个文件 **222/222**；本机 Windows 四版 225/226、221/222（各 1 条只在 Linux 上跑的用例跳过）；0 失败，无 `CCG_NATIVE_TEST_SKIPPED` | Linux（ovh `node:22-bookworm-slim`，`--network none`）四版：2.1.316 35 个文件 **228/228**，2.1.312/2.1.310/2.1.304 各 33 个文件 **223/223**；本机 Windows 227/228、222/223（各 1 条只在 Linux 上跑的用例跳过）；0 失败，无 `CCG_NATIVE_TEST_SKIPPED`（多出的用例：`request-error` 的 stored-login 用例、`native/2.1.316/stored-login.test.mjs`） |
+| 补丁器 | `patch-cli.cjs`、`anchor-hazards` | 27 处替换、无 hazard；重新补丁与 `patched-v42` 逐文件相同 | 同（27/27）；`patched-v43` 与 v42 只差第 6 节列的文件；2.1.312/2.1.310/2.1.304 也补丁成功 | 27/27、无 hazard；`patched-v44` 与 `patched-v43` 只差 `ccgateway-request-error.js`、`cli.js` 的补丁标签、`ccgateway-patch.json` |
+| 运行时版本 | 编好的 CLI 报告的 `process.version`（`runtime-check.cjs`） | `v26.3.0`（被新检查拒绝） | **`v26.12.1`**，打包时通过 | **`v26.12.1`**，打包时通过 |
+| 请求头 | `tls-fingerprint.sh` 记录的请求头，对官方 2.1.316 | `x-stainless-runtime-version` `v26.3.0`（其余相同） | **`x-stainless-*` 逐项相同**（`runtime-version v26.12.1`），头名与顺序相同（只少请求本身不带的 prompt-id / beta） | **PASS**：`x-stainless-*` 与官方 2.1.316 逐项相同，头名与顺序与 v43 相同 |
+| TLS 指纹 | 同一次运行 | 38 条连接 identical（JA4 `t13d1713h1_5b57614c22b0_7f527383e249`、JA3 `1523504b38f0fae0d881d4b6554aac1b`、ALPN 只 `http/1.1`） | 38 条连接，**identical**，值相同 | 22 条连接（官方 2.1.316、v43、v44 的 direct/build 各两次），Messages 连接 **identical**（JA4 `t13d1713h1_5b57614c22b0_7f527383e249`、JA3 `1523504b38f0fae0d881d4b6554aac1b`、ALPN `http/1.1`） |
+| 组装对账（L4） | `assembly-cases-2.1.316.json` | 76/76，上游 64，`acceptance: pass` | **76/76**，上游 64，`acceptance: pass` | **76/76**，上游 64，`acceptance: pass` |
+| 客户端来源 × 内容策略 | 14 项 | 14/14 | **14/14** | **14/14** |
+| 官方客户端实时转发 / 抓包回放（L6） | 官方 2.1.316 | 10/10；`verified` | **10/10**；**`verified`** | **10/10**；**`verified`** |
+| 组件组合（L5） | 216 项 | 216/216 | **216/216** | **216/216** |
+| Worker 策略矩阵（L7） | `config-matrix-policies-2.1.316.json` | `passed`，上游 98 | **`passed`**，上游 98 | **`passed`**，上游 98 |
+| 首轮工具注入 | `test/injection-tools-probe.cjs` 对官方抓包 | 失败：`Agent`、`ListAgents` 不同，`ToolSearch`/placeholder 缺失 | **通过**：11 个工具与 placeholder 同名同序，定义逐字相同，只差 Bash 后台超时缺省值（第 5.2 节） | **通过**（3/3），工具与 v43 的录制逐字相同；夹具按 v44 重新录制 |
+| 离线回归：噪声 | v41 + 官方 2.1.312 客户端两次 | 0 of 73，149 个请求 | **0 of 73**，149 个请求 | 基线 v43（`ccgateway-app:0.1.122` 自带）+ 官方 2.1.316 客户端两次：**0 of 73**，149 个请求 |
+| 离线回归 D1 | 官方 2.1.312 客户端，v41 对候选 | 3 of 73（规则：两条版本替换） | **3 of 73**（规则另加 `v26.12.1`→`v26.3.0`，隐藏 149 次，正好每个上游请求一次），同样 3 个"高"等级场景、同一处官方提示词变化 | 官方 2.1.316 客户端，v43 对 v44（`NEW=1`），**不用规则**：**0 of 73**，149 个请求（出口无差异） |
+| 离线回归 D2 | 官方 2.1.316 客户端经候选，`crossversion` | `gatewayOnly` 只有那处官方变化（+ `login-account` 归因假象） | 与 v42 相同 | 不需要（D1 已用官方 2.1.316 客户端） |
+| 客户端对网关 A/B | `compare.cjs` | `x-stainless-runtime-version` A/B 差异 67 处（与 v41 基线相同） | **0 处** | `compare.cjs` 报告 v43 与 v44 都是 1374 行，逐行差异 1308 与 v43 两次运行之间的噪声相同（每次运行的随机值） |
+| 定向断言 | `verify.cjs` | 四次运行 1662/1662 | 四次运行 **1662/1662** | 三次运行 **1662/1662** |
+| 其他 | values、beta-check、capcheck、respmatch、classify、conc | values 12/12；beta 只有已知 1 条；capcheck 149/149、0 缺失；respmatch 135/135 | 相同 | 三次运行：values 12/12；beta 只有已知 1 条；capcheck 149/149、`missing 0`、`bodyMismatch 0`、`secretsLeaked false`；respmatch 135/135；classify/conc 完成；`all` 61 次退出 0、1 次非 0（`login` 场景，基线相同） |
+| Go（Linux） | engine、worker、contracts，`GOOS=linux go vet` | engine 顶层 249 过（16 跳过，需真实 CLI）；worker 23 过；contracts 59 过；vet 通过 | 没有改 Go，未重跑 | 没有改 Go，未重跑 |
+| 真实 CLI 用例 | `CCG_REAL_CLI` = 官方 2.1.316 / 2.1.312 | 两版集合相同：6 过 5 败（已知） | 未重跑（与 CLI 补丁无关） | 未重跑 |
+| 断网资源回归 | `TestResourceManagementLinuxOfflineNetNone` | 两版集合相同（24 败，已知：官方 CLI 没有 `ccgateway-mgmt`） | 未重跑 | 未重跑 |
+| 控制器 | controller-go、guard | 389 过、85 过（Python 控制器已删） | 未重跑 | 未重跑 |
 
 没有跑或没有覆盖：经 Worker 的"高"等级全部工具注入（0.1.121 的合同还不认 6 个新名字，只在 CLI 层验证；合同与能力关由负责 engine/合同的一方改）、D0 重抓、`controller-go/integration/l7`、压缩后 `cc_prev_*` 的透传、核心↔插件与真实上游（发布后用生产账号测）。
 
@@ -207,3 +207,31 @@ v42 由独立验证者在 ovh 一次性容器里按 2.1.312 迁移记录的矩�
 | RUNBOOK §3.4（官方新增逻辑） | 只看 equiv 的 changed 与锚点能否命中，看不出官方在被改写函数里新加的、绕过我们跳过逻辑的调用（本次 `MN` 末尾的重读/重建）；它在 API-key-only 路线上破坏"跳过同一组调用"的不变式 | 审查 changed 的被改写函数时，逐条看新增语句是否落在我们跳过的路径上；本次加第 6 条锚点 |
 | 任务要求"`nativeBillingExtras` 加三个新字段（如需要）" | 官方首轮抓包不带它们，测试不需要；加了会放宽对我们自己写的头的检查 | 不加，理由见第 3 节 |
 | RUNBOOK“硬性规则”（Bun 修订号） | 原写“官方修订号与 Docker 镜像修订号不同不影响：只核对版本号，TLS 指纹已实测一致”。TLS 一致不代表运行时信息一致：同为 1.4.4，私有修订报告的 Node.js 版本不同，上游看得到 `X-Stainless-Runtime-Version`（v38 起就存在，到 2.1.316 的离线验证才发现）；2.1.312 迁移只比了 TLS，没比请求头的值 | 规则扩到 `runtimeVersion`（还原器读出、profile 记录、补丁器装上、打包与镜像运行核对、测试检查，第 5.1 节）；手册“硬性规则”与“常见坑”已补；`tls-fingerprint.sh` 的请求头记录要逐项比 `x-stainless-*` |
+
+## 10. v44：CC 不肯用已存的登录时回 401/403（`ccgateway-v44-stored-login`）
+
+2026-11-02，v43 上线（插件 0.1.122，新账号）之后。来源：`artifacts/claude-2.1.316/eval/transport.md` 第 1 节。
+
+- 官方 2.1.316 新增 `StoredLoginHeldBackError`（`chunk-7c9mpntp.js` 的 `nU`，基类是 `chunk-2g090z7k.js` 的 `TelemetrySafeError` `C`，构造参数依次是 message、telemetryMessage、`errorClass`）：message 取原因对应的原文，telemetryMessage 是 `Stored login held back`，`errorClass` 是 `stored_login_refused_<原因>`，`name` 是 `StoredLoginHeldBackError`，**没有 `.code`**。客户端工厂 `MN` 在 OAuth 订阅、远程受管设置尚未加载并且 `jie()` 判定要扣下登录时抛出（`throw new nU(uwe())`）。三种原因与原文：`admin`（组织设置要管理员修 API key helper 配置）、`settings_unloaded`（组织设置没加载到，检查网络后重启）、`restart_needed`（重启以完成登录）。
+- v43 之前它被 `localErrorFrame` 当成 502 `cli_transport_error`：核心换号重试、插件只冷却 10 秒、账号永远不会被禁用（与 0.1.116 之前的 `OAuthRefreshDeadError` 同样的问题），也违反“认证/登录失效一律 401、消息原样”。
+- v44（只改支持模块 `request-error.js`）：`loginFailure` 在错误及其 cause 链里按类名 `StoredLoginHeldBackError`（类名是字面量，压缩后仍在）找到它，从实例的 `errorClass` 读原因：
+
+| `errorClass` | 状态 | type / code | 理由 |
+|---|---|---|---|
+| `stored_login_refused_admin` | 403 | `permission_error` / `stored_login_refused_admin` | 组织的策略不让用这个登录，和 `OAuthAccountOnHoldError` 同类，每个请求都一样 |
+| `stored_login_refused_restart_needed` | 401 | `authentication_error` / `stored_login_refused_restart_needed` | 登录没完成；每个请求都起新进程，“重启”没用，要重新授权 |
+| `stored_login_refused_settings_unloaded` | 502（source 仍是 transport） | `api_error` / `stored_login_refused_settings_unloaded` | 暂时性的（“检查网络”），换号重试是对的；code 只为让日志能搜到 |
+
+  message 一律是 CC 原文。未知原因、或别的类带同样的 `errorClass`，照旧走 transport 映射。401/403 在 build/input 阶段与其他登录错误一样记 `source: input`，502 在任何阶段都是 transport（可重试）。
+- 核心侧（不在 cli-mods，另行处理）：要让这两个 401/403 真正禁用账号，默认失败规则 `login-invalid` 加关键词 `stored_login_refused_restart_needed`、`account-on-hold` 加 `stored_login_refused_admin`（`server/internal/gateway/failure_policy.go` 与一条幂等迁移）；不加的话核心把插件的 DISABLE 降为冷却，但客户端看到的状态已经对了。
+- 测试：`test/request-error.test.mjs`（官方形状的构造错误：三种原因 × 四个阶段、cause 链、未知原因与别的类不受影响）；`test/native/2.1.316/stored-login.test.mjs`（在 vm 里从还原源码取 `C`、`o`、`nU` 实例化真正的错误，核对 name/errorClass/telemetryMessage、无 `.code`、原因集合等于 CC 的 `o`，再核对映射）。
+- 标签：2.1.316 `ccgateway-v43-cc-2-1-316` → `ccgateway-v44-stored-login`；共用支持模块变了，三个旧 profile 也升：2.1.312 → `ccgateway-v47-stored-login`、2.1.310 → `ccgateway-v48-stored-login`、2.1.304 → `ccgateway-v49-stored-login`（v44–v46 已被 `runtime-version` 占用），不编译、不发布。`test/fixtures/injected-tools-2.1.316.json` 按 v44 重新录制（工具与 v43 逐字相同）。
+- 编译与验证见第 6、7 节的 v44 列：ELF `76b11ddd052bd92506a10cc6ddcb7b81da12ddc5f19aee91c048a9739172f99b`；出口与 v43 完全相同（离线回归 D1 0 of 73，TLS 指纹与请求头与官方 2.1.316 相同）。release 在 `artifacts/claude-2.1.316/release-v44/` 与 ovh `~/sup2api/checks/cli-releases/release-v44-2.1.316`。
+
+## 变更记录
+
+| 日期 | 版本 | 内容 |
+|---|---|---|
+| 2026-11-02 | v42 | 移到 2.1.316，逻辑与 v41 相同（未发布） |
+| 2026-11-02 | v43 | 报告官方运行时版本 `v26.12.1`；首轮工具注入（`build_injection_tools_v2`）；插件 0.1.122 起新账号使用 |
+| 2026-11-02 | v44 | `StoredLoginHeldBackError` 按 `errorClass` 回 403 / 401 / 可重试 502（第 10 节）；候选，未发布 |

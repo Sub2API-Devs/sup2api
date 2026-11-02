@@ -239,11 +239,12 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  // The 2.1.316 profile names its patch ccgateway-v43-cc-2-1-316 (v42 before the
-  // official runtime version and the first-turn tool injection, never
-  // released; 2.1.312: ccgateway-v44-runtime-version; 2.1.310:
-  // ccgateway-v45-runtime-version; 2.1.304: ccgateway-v46-runtime-version).
-  assert.equal(patchManifest.extension, 'ccgateway-v43-cc-2-1-316');
+  // The 2.1.316 profile names its patch ccgateway-v44-stored-login (v43 the
+  // released one, before CC's StoredLoginHeldBackError mapped to 401/403; v42
+  // before the official runtime version and the first-turn tool injection,
+  // never released; 2.1.312: ccgateway-v47-stored-login; 2.1.310:
+  // ccgateway-v48-stored-login; 2.1.304: ccgateway-v49-stored-login).
+  assert.equal(patchManifest.extension, 'ccgateway-v44-stored-login');
   assert(patchManifest.capabilities.includes('build_injection_tools_v2'));
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_capture_v1'));

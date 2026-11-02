@@ -1,10 +1,11 @@
 // The tools build injects on a first turn are the official 2.1.316 ones
 // (2026-11-02: "工具注入不代表我们需要实现 只是带上定义而已"). The recording is
-// the compiled v43 CLI's own output (test/injection-tools-probe.cjs, run
-// against the release in an offline Worker image container); this test holds
-// it to the official capture of the same version, so the recording cannot
-// drift from what official Claude Code sends, and to the current patch, so a
-// new patch is probed again before it is released.
+// the compiled v44 CLI's own output (test/injection-tools-probe.cjs, run
+// against the release in an offline Worker image container; v43 recorded the
+// same tools); this test holds it to the official capture of the same
+// version, so the recording cannot drift from what official Claude Code
+// sends, and to the current patch, so a new patch is probed again before it
+// is released.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

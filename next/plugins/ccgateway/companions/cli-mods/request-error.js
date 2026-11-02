@@ -41,7 +41,9 @@ export function localErrorFrame(error, { phase, timedOut, interrupted, responseS
   // must not read as a transport failure the gateway retries (2026-11-01).
   const login = loginFailure(error);
   if (login) {
-    return { protocol: errorProtocol, source: phase === 'input' || phase === 'build' ? 'input' : 'transport', status: login.status,
+    // A transient refusal (5xx) stays a transport failure in every phase.
+    const input = login.status < 500 && (phase === 'input' || phase === 'build');
+    return { protocol: errorProtocol, source: input ? 'input' : 'transport', status: login.status,
       error: { type: errorType(login.status), code: login.code, message: login.message }, responseStarted: !!responseStarted };
   }
   if (phase === 'input' || phase === 'build') {
@@ -81,6 +83,25 @@ const loginErrors = {
   OAuthAccountOnHoldError: { status: 403, code: 'oauth_account_on_hold' },
 };
 
+// StoredLoginHeldBackError (2.1.316) is CC refusing to use its stored login
+// while the organization's managed settings are not usable. It has no .code;
+// the reason is only in errorClass (`stored_login_refused_<reason>`, set by
+// CC's TelemetrySafeError base). User rule: a login CC will not use answers
+// 401 (403 when it is the organization's standing), message verbatim:
+// - admin: the organization's apiKeyHelper setting needs an administrator,
+//   the same verdict as OAuthAccountOnHoldError (403);
+// - restart_needed: the login is not finished; each request starts a new
+//   process, so only a new authorization helps (401);
+// - settings_unloaded: the settings could not be fetched ("check your
+//   connection"), which is transient: it stays a retryable transport 5xx and
+//   only names the reason in the code so the logs can find it.
+// An unknown reason is left to the transport mapping.
+const storedLoginRefusals = {
+  stored_login_refused_admin: { status: 403, code: 'stored_login_refused_admin' },
+  stored_login_refused_restart_needed: { status: 401, code: 'stored_login_refused_restart_needed' },
+  stored_login_refused_settings_unloaded: { status: 502, code: 'stored_login_refused_settings_unloaded' },
+};
+
 // LoginRequiredError is the request command's own refusal to send without
 // CC's OAuth login (request-headers.js): the runtime is signed out.
 export class LoginRequiredError extends Error {
@@ -98,7 +119,9 @@ export function loginFailure(error) {
     if (e instanceof LoginRequiredError || e.name === 'LoginRequiredError') {
       return { status: 401, code: 'not_logged_in', message: message ?? 'Claude Code is not signed in' };
     }
-    const known = Object.hasOwn(loginErrors, e.name) ? loginErrors[e.name] : undefined;
+    const known = Object.hasOwn(loginErrors, e.name) ? loginErrors[e.name]
+      : e.name === 'StoredLoginHeldBackError' && typeof e.errorClass === 'string' && Object.hasOwn(storedLoginRefusals, e.errorClass) ? storedLoginRefusals[e.errorClass]
+        : undefined;
     if (known) return { ...known, message: message ?? e.name };
   }
   return undefined;

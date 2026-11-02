@@ -1,7 +1,7 @@
 {
-  "provenance": "Tools the patched CLI injects on a first turn (test/injection-tools-probe.cjs against the compiled release in a disposable offline ccgateway-app:0.1.121 container, Worker-like environment)",
-  "cli_sha256": "f8f9afa447be6ef132f87c6af7d1880fc822e68f4cf9249f2143a59fdfa163a0",
-  "patch": "ccgateway-v43-cc-2-1-316",
+  "provenance": "Tools the patched CLI injects on a first turn (test/injection-tools-probe.cjs against the compiled release in a disposable offline ccgateway-app:0.1.122 container, Worker-like environment)",
+  "cli_sha256": "76b11ddd052bd92506a10cc6ddcb7b81da12ddc5f19aee91c048a9739172f99b",
+  "patch": "ccgateway-v44-stored-login",
   "model": "claude-sonnet-4-6",
   "runtime_version": "v26.12.1",
   "cases": [
