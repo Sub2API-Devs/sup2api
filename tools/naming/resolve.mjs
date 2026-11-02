@@ -7,7 +7,7 @@
 //   {file, key:"@<binding identifier offset>", name, source, confidence, via, note?}):
 //   analysis/names/*.jsonl         generated (reference.jsonl, vendor.jsonl, auto.jsonl)
 //   naming/semantic-*.jsonl        hand/agent-written, highest priority
-// Priority: semantic > vendor > reference > auto; ties by confidence.
+// Priority: facade (original export names) > semantic > vendor > reference > auto; ties by confidence.
 //
 // Top-level rules:
 //   - a top-level name must be unique inside its chunk (the runnable tree) and
@@ -26,7 +26,7 @@ const A = process.argv[2] ?? 'analysis';
 const OUT = process.argv[3] ?? 'naming/final';
 fs.mkdirSync(OUT, { recursive: true });
 const readJsonl = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
-const PRIORITY = { semantic: 4, vendor: 3, reference: 2, auto: 1 };
+const PRIORITY = { facade: 5, semantic: 4, vendor: 3, reference: 2, auto: 1 };
 const RESERVED = new Set(['arguments', 'await', 'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do', 'else', 'enum', 'eval', 'export', 'extends', 'false', 'finally', 'for', 'function', 'if', 'implements', 'import', 'in', 'instanceof', 'interface', 'let', 'new', 'null', 'package', 'private', 'protected', 'public', 'return', 'static', 'super', 'switch', 'this', 'throw', 'true', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield', 'undefined', 'NaN', 'Infinity',
   // globals a top-level binding must never shadow
   'process', 'Buffer', 'require', 'module', 'exports', 'globalThis', 'console', 'Promise', 'Symbol', 'Error', 'Object', 'Array', 'String', 'Number', 'Boolean', 'Map', 'Set', 'WeakMap', 'WeakSet', 'JSON', 'Math', 'Date', 'RegExp', 'URL', 'URLSearchParams', 'Bun', 'fetch', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'AbortController', 'AbortSignal', 'TextEncoder', 'TextDecoder', 'Response', 'Request', 'Headers', 'WebSocket', 'ReadableStream', 'WritableStream', 'TransformStream', 'Uint8Array', 'ArrayBuffer', 'DataView', 'Reflect', 'Proxy', 'BigInt', 'Intl', 'TypeError', 'RangeError', 'SyntaxError', 'structuredClone', 'performance', 'crypto', 'navigator', 'window', 'document', 'self', 'global', 'atob', 'btoa', 'Function', 'Event', 'EventTarget', 'Blob', 'File', 'FormData', 'setImmediate', 'clearImmediate', '__dirname', '__filename', 'Iterator', 'AggregateError', 'WeakRef', 'FinalizationRegistry', 'Atomics', 'SharedArrayBuffer', 'Float32Array', 'Float64Array', 'Int8Array', 'Int16Array', 'Int32Array', 'Uint16Array', 'Uint32Array', 'Uint8ClampedArray', 'BigInt64Array', 'BigUint64Array', 'escape', 'unescape', 'encodeURIComponent', 'decodeURIComponent', 'encodeURI', 'decodeURI', 'isNaN', 'isFinite', 'parseInt', 'parseFloat']);

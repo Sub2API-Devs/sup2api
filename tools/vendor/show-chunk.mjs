@@ -13,6 +13,6 @@ for (const l of fs.readFileSync('analysis/vendor/index/orig-decls.jsonl', 'utf8'
 for (const r of rows.slice(+from, +from + +count)) {
   const u = decls.get(r.id);
   const snippet = src.slice(u.start, Math.min(u.end, u.start + 90)).replace(/\s+/g, ' ');
-  const lab = r.label ? `${r.label.method} ${r.label.fid ?? r.label.kind} ${r.label.score}` : r.cand ? `-- (cand ${r.cand.fid} ${r.cand.score})` : '--';
+  const lab = r.label ? `${r.label.method} ${r.label.pkg ? r.label.pkg + '@' + r.label.version + '/' + r.label.path : r.label.kind} ${r.label.score}` : r.cand ? `-- (cand ${r.cand.pkg}/${r.cand.path} ${r.cand.score})` : '--';
   console.log(`${r.id.padEnd(28)} ${String(r.bytes).padStart(6)} w=${String(r.w).padStart(5)} ${r.wrap ?? ''} | ${lab} | ${snippet}`);
 }

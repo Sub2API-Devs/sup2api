@@ -29,7 +29,9 @@
 //      emits 0. Staying in a key is free, moving within the package costs b1,
 //      anything else b, a CommonJS wrapper in between forbids staying. Units
 //      without tokens inherit their neighbours' key (layout interpolation).
-//      A run filter then drops runs that are not convincing (see below).
+//      A run filter then drops runs that are not convincing (see below), and
+//      layout-only units at run edges yield to a first-party match from
+//      analysis/match/decl-map.jsonl (score >= fpVeto).
 //   C. Versions: per package, the version explaining the largest weight of
 //      units is chosen (ties kept as candidates); units no chosen version
 //      explains form a second copy when they are substantial (two majors of
@@ -40,7 +42,8 @@ import { readJsonl, eachJsonl, writeJsonl } from './lib/common.mjs';
 
 const [V = 'analysis/vendor'] = process.argv.slice(2);
 const IDX = path.join(V, 'index');
-const P = { alpha: 1, delta: 0.35, gamma: 4, cap: 5, beta: 8, beta1: 1.5, diceAccept: 0.45, diceGraph: 0.15, diceContext: 0.2, tie: 0.08, runMinDistinct: 3, runMinGain: 80, exactW: 25, dfMax: 400, secondCopyW: 150, versionTolAbs: 20, versionTolRel: 0.002 };
+const FP = path.join(path.dirname(V), 'match', 'decl-map.jsonl'); // lead's first-party matches, read only
+const P = { alpha: 1, delta: 0.35, gamma: 4, cap: 5, beta: 8, beta1: 1.5, diceAccept: 0.45, diceGraph: 0.15, diceContext: 0.2, tie: 0.08, runMinDistinct: 3, runMinGain: 80, exactW: 25, minShared: 20, fpVeto: 0.5, dfMax: 400, dfMaxFile: 3000, secondCopyW: 150, versionTolAbs: 20, versionTolRel: 0.002 };
 const t0 = Date.now();
 const log = (...a) => console.error(`[${((Date.now() - t0) / 1000).toFixed(1)}s]`, ...a);
 
@@ -113,7 +116,7 @@ const weight = (t) => {
 };
 for (const F of fkeys) for (const v of F.variants) v.w = weight(v.t);
 const invF = new Map();
-for (const F of fkeys) for (const t of F.union) if (df[t] <= P.dfMax) (invF.get(t) ?? invF.set(t, []).get(t)).push(F.k);
+for (const F of fkeys) for (const t of F.union) if (df[t] <= P.dfMaxFile) (invF.get(t) ?? invF.set(t, []).get(t)).push(F.k);
 for (const F of fkeys) delete F.union;
 
 // npm units, deduplicated per file key by token set
@@ -211,6 +214,17 @@ function scoreFk(u, k) {
   return { k, score: Math.max(best, 0), versions: vs ?? new Set() };
 }
 const pkgOf = (k) => fkeys[k].pkg;
+// Tie-break between files of one package with the same code (minified copy,
+// UMD/browser bundle, CJS and ESM builds): Bun resolves the "import"/"node"
+// conditions, so prefer unminified Node ESM builds.
+const pathBias = (k) => {
+  const p = fkeys[k].path;
+  let b = 0;
+  if (/\.min\.|[./-]umd[./]|\/bundles?\/|\/browser\/|\.browser\.|\/web\//.test(p)) b -= 0.05;
+  if (/(^|\/)(esm|es|module|mjs|esnext)(\/|$)|\.mjs$|\.esm\./.test(p)) b += 0.02;
+  if (/(^|\/)(cjs|commonjs)(\/|$)|\.cjs$/.test(p)) b -= 0.01;
+  return b;
+};
 
 // ---------- helpers ----------
 for (const u of units) if (u.helper) u.label = { kind: u.helper.startsWith('bun-runtime') ? 'bun-runtime' : 'embedded-runtime', method: 'helper', score: 1, role: u.helper };
@@ -220,7 +234,7 @@ const isCjsFk = (k) => fkeys[k].fmt === 'cjs' || fkeys[k].fmt === 'json';
 const cjsUnits = units.filter((u) => u.wrap === 'cjs' && !u.label && !u.body?.match(/^(native|resource)$/));
 for (const u of cjsUnits) {
   const acc = new Map();
-  for (const t of rareTokens(u)) for (const k of invF.get(t) ?? []) if (isCjsFk(k)) acc.set(k, (acc.get(k) ?? 0) + idf(t));
+  for (const t of [...u.t].filter((t) => df[t] > 0 && df[t] <= P.dfMaxFile).sort((a, b) => df[a] - df[b]).slice(0, 24)) for (const k of invF.get(t) ?? []) if (isCjsFk(k)) acc.set(k, (acc.get(k) ?? 0) + idf(t));
   const cands = [...acc].sort((a, b) => b[1] - a[1]).slice(0, 40).map(([k]) => scoreFk(u, k));
   cands.sort((a, b) => b.score - a.score);
   u.cands = cands.slice(0, 6);
@@ -262,7 +276,22 @@ for (let round = 0; round < 10; round++) {
         if (c.label?.k !== undefined) c.label.k === req[i] ? agree++ : disagree++;
       });
     const positional = callees.length === req.length && disagree === 0 && (agree > 0 || callees.length <= 2);
+    const reqSet = new Set(req);
     callees.forEach((c, i) => {
+      // a fingerprint label outside the caller's require list yields to a
+      // require-list file that scores about as well
+      if (c.label?.method === 'cjs-fingerprint' && !reqSet.has(c.label.k)) {
+        let alt = null;
+        for (const k of req) {
+          const s = scoreFk(c, k);
+          if (!alt || s.score > alt.score) alt = s;
+        }
+        if (alt && alt.score >= c.label.score - 0.1 && alt.score >= P.diceGraph) {
+          c.label = { k: alt.k, versions: alt.versions, method: 'cjs-require-graph', score: alt.score, via: u.id, overrode: true };
+          changed++;
+        }
+        return;
+      }
       if (c.label) return;
       let best = null;
       for (const k of req) {
@@ -351,6 +380,7 @@ for (const [file, us] of byChunk) {
     statePkg[s] = pkgIdx.get(p);
   });
   statePkg[U] = -1;
+  const stateBias = states.map(pathBias);
   const NP = pkgIdx.size;
   const chunkTok = new Set();
   for (const u of seq) for (const t of u.t) chunkTok.add(t);
@@ -379,8 +409,8 @@ for (const [file, us] of byChunk) {
     const local = new Map(); // state -> {e, m, nw, nis[]}
     for (const [ni, m] of acc) {
       const nu = nunits[ni];
-      const e = Math.max(-cap, (1 + alpha) * m - alpha * u.w - gamma - delta * Math.max(0, nu.w - m));
       const s = stateOf.get(nu.k);
+      const e = Math.max(-cap, (1 + alpha) * m - alpha * u.w - gamma - delta * Math.max(0, nu.w - m)) + stateBias[s];
       const cur = local.get(s);
       if (!cur || e > cur.e + 1e-9) local.set(s, { e, m, nw: nu.w, nis: [ni] });
       else if (Math.abs(e - cur.e) <= 1e-9) cur.nis.push(ni);
@@ -433,7 +463,7 @@ for (const [file, us] of byChunk) {
       const strong = u.w && x && x.e > 0;
       const versions = new Set();
       if (strong) for (const ni of x.nis) for (const v of nunits[ni].versions) versions.add(v);
-      u.label = { k: states[s], versions, method: strong ? 'esm-fingerprint' : 'esm-layout', score: x ? (2 * x.m) / (u.w + x.nw) : 0, nu: strong ? x.nis[0] : undefined, gain: strong ? x.e : 0 };
+      u.label = { k: states[s], versions, method: strong ? 'esm-fingerprint' : 'esm-layout', score: x ? (2 * x.m) / (u.w + x.nw) : 0, nu: strong ? x.nis[0] : undefined, gain: strong ? x.e : 0, m: x ? x.m : 0 };
     }
     if (i > 0) s = back[i * S + s];
   }
@@ -456,9 +486,11 @@ for (const [file, us] of byChunk) {
       continue;
     }
     const strong = run.filter((u) => u.label.method === 'esm-fingerprint');
-    const matched = new Set(strong.filter((u) => u.label.score >= 0.6).map((u) => u.label.nu));
+    // distinct npm declarations matched with real evidence (shared weight
+    // >= minShared: a few common property names such as r/g/b do not count)
+    const matched = new Set(strong.filter((u) => u.label.score >= 0.6 && u.label.m >= P.minShared).map((u) => u.label.nu));
     const gain = strong.reduce((a, u) => a + u.label.gain, 0);
-    const exact = strong.some((u) => u.label.score >= 0.95 && u.w >= P.exactW);
+    const exact = strong.some((u) => u.label.score >= 0.95 && u.label.m >= P.exactW);
     let fileW = 0,
       hitW = 0;
     for (const k of new Set(run.map((u) => u.label.k))) fileW += fkWeight.get(k) ?? 0;
@@ -507,6 +539,34 @@ for (const [file, us] of byChunk) {
   }
 }
 log('B viterbi labelled', vitUnits, 'dropped by run filter', dropped.length);
+// Edge trimming: a unit without vendor evidence (esm-layout) at the edge of a
+// run is as likely to belong to the neighbouring first-party module; it keeps
+// the vendor label only when the lead's first-party matcher has nothing for
+// it. Interior layout units stay (an npm file is emitted contiguously).
+const fpMatched = new Set();
+if (fs.existsSync(FP)) eachJsonl(FP, (m) => m.refFile && m.method && m.score >= P.fpVeto && fpMatched.add(m.id));
+let trimmed = 0;
+for (const us of byChunk.values()) {
+  const seq = us.filter((u) => u.wrap !== 'cjs');
+  const pk = (u) => (u?.label?.k !== undefined ? pkgOf(u.label.k) : null);
+  const drop = (u) => {
+    dropped.push({ id: u.id, pkg: pk(u), reason: 'edge-layout-vs-first-party' });
+    u.label = null;
+    trimmed++;
+  };
+  for (let changed = true; changed; ) {
+    changed = false;
+    seq.forEach((u, i) => {
+      if (u.label?.method !== 'esm-layout' || !fpMatched.has(u.declId)) return;
+      const p = pk(u);
+      if (pk(seq[i - 1]) !== p || pk(seq[i + 1]) !== p) {
+        drop(u);
+        changed = true;
+      }
+    });
+  }
+}
+log('B edge trimming dropped', trimmed);
 
 // ---------- C. versions ----------
 const byPkg = new Map();
@@ -548,10 +608,14 @@ for (const [pkg, us] of byPkg) {
   }
   versionsOut[pkg] = { chosen, ranking, unexplainedUnits: remaining.length, unexplainedW: +remaining.reduce((a, e) => a + e.w, 0).toFixed(1) };
   for (const u of us) {
-    const c = chosen.find((c) => c.versions.some((v) => u.label.versions?.has(v))) ?? chosen[0];
-    const inSet = c && c.versions.filter((v) => u.label.versions?.has(v));
-    u.label.version = c ? (inSet?.length ? inSet : c.versions) : [];
-    u.label.versionMismatch = !!(c && u.label.versions?.size && !inSet?.length);
+    const c = chosen.find((c) => c.versions.some((v) => u.label.versions?.has(v)));
+    if (c) u.label.version = c.versions.filter((v) => u.label.versions.has(v));
+    else if (u.label.versions?.size) {
+      // another copy of the package (e.g. lru-cache 6 under openid-client next
+      // to lru-cache 11): the unit's own version set
+      u.label.version = [...u.label.versions].sort(cmpVer);
+      u.label.otherCopy = true;
+    } else u.label.version = chosen[0]?.versions ?? []; // layout-only unit: the main copy
   }
 }
 fs.writeFileSync(path.join(IDX, 'versions.json'), JSON.stringify(versionsOut, null, 1));
@@ -576,7 +640,7 @@ writeJsonl(
     if (u.label?.k !== undefined) {
       const l = u.label;
       const vs = l.version ?? [];
-      label = { ...fkLabel(l.k), version: vs.length === 1 ? vs[0] : vs.length ? `${vs[0]}..${vs.at(-1)}` : null, versionCandidates: vs.length > 1 ? vs : undefined, versionMismatch: l.versionMismatch || undefined, method: l.method, score: +l.score.toFixed(3), margin: l.margin !== undefined ? +l.margin.toFixed(3) : undefined, via: l.via, npmNames: l.nu !== undefined ? nunits[l.nu].names : undefined };
+      label = { ...fkLabel(l.k), version: vs.length === 1 ? vs[0] : vs.length ? `${vs[0]}..${vs.at(-1)}` : null, versionCandidates: vs.length > 1 ? vs : undefined, otherCopy: l.otherCopy || undefined, method: l.method, score: +l.score.toFixed(3), margin: l.margin !== undefined ? +l.margin.toFixed(3) : undefined, via: l.via, npmNames: l.nu !== undefined ? nunits[l.nu].names : undefined };
       label.fid = `${label.pkg}@${vs.at(-1) ?? '?'}/${label.path}`;
     } else if (u.label) label = u.label;
     return { id: u.id, names: u.names, bytes: u.bytes, wrap: u.wrap, body: u.body, w: +u.w.toFixed(1), label, cand: !u.label && u.cands?.[0] ? { ...fkLabel(u.cands[0].k), score: +u.cands[0].score.toFixed(3) } : undefined };

@@ -70,6 +70,18 @@ for (const v of readJsonl(path.join(A, 'vendor/decl-vendor.jsonl'))) {
   if (v.pkg === 'bun-runtime') label[d.i] = { path: 'bun-runtime.js', kind: 'runtime', method: v.method };
   else label[d.i] = { path: `${v.pkg}/${v.pkgFile ?? 'index.js'}`, kind: 'vendor', method: v.method, pkg: v.pkg };
 }
+// 2b. facade chunks: a facade re-exports exactly one source module, so every
+// declaration it exports belongs to that module (analysis/facades, tools/ast/facades.mjs)
+const facadePath = path.join(A, 'facades/facades.json');
+if (fs.existsSync(facadePath)) {
+  for (const [facade, f] of Object.entries(JSON.parse(fs.readFileSync(facadePath, 'utf8')))) {
+    if (!f.path) continue;
+    for (const id of Object.values(f.exports)) {
+      const d = byId.get(id);
+      if (d && !label[d.i]) label[d.i] = { path: f.path, kind: 'first-party', method: f.pathMethod, facade };
+    }
+  }
+}
 // 3. first-party matches (+ the matcher's own layout interpolation)
 const refLine = new Map();
 for (const r of readJsonl(path.join(A, 'reference/decls.jsonl'))) refLine.set(`${r.file}#${r.names[0] ?? '@' + r.line}`, r.line);

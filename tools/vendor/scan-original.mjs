@@ -118,9 +118,9 @@ function wrapperBodyKind(p) {
   const e = body[0].expression;
   if (e.type !== "AssignmentExpression" || e.left.type !== "MemberExpression" || e.left.property?.name !== "exports") return undefined;
   const r = e.right;
-  if (r.type === "CallExpression" && r.callee.name === "require" && /.node$/.test(r.arguments[0]?.value ?? "")) return "native";
+  if (r.type === "CallExpression" && r.callee.name === "require" && /\.node$/.test(r.arguments[0]?.value ?? "")) return "native";
   if (r.type === "Identifier" && /^__cc_resource_/.test(r.name)) return "resource";
-  const lit = (n) => !n || /^(String|Numeric|Boolean|Null)Literal$/.test(n.type) || (n.type === "UnaryExpression" && lit(n.argument)) || (n.type === "ArrayExpression" && n.elements.every(lit)) || (n.type === "ObjectExpression" && n.properties.every((q) => q.type === "ObjectProperty" && !q.computed && lit(q.value)));
+  const lit = (n) => !n || /^(String|Numeric|Boolean|Null)Literal$/.test(n.type) || (n.type === "TemplateLiteral" && !n.expressions.length) || (n.type === "UnaryExpression" && lit(n.argument)) || (n.type === "ArrayExpression" && n.elements.every(lit)) || (n.type === "ObjectExpression" && n.properties.every((q) => q.type === "ObjectProperty" && !q.computed && lit(q.value)));
   if ((r.type === "ObjectExpression" || r.type === "ArrayExpression") && lit(r)) return "json";
   return undefined;
 }
@@ -138,7 +138,11 @@ function roleOfLocal(m, local, seen = 0) {
   return null;
 }
 const runtimeChunks = mods.filter((m) => Object.keys(m.helpers).length >= 3 && m.decls.length <= 12 && Object.values(m.exportsMap).every((l) => m.helpers[l] || m.decls.some((d) => d.names.includes(l)))).map((m) => m.file);
-const helpersOut = { runtimeChunks, chunks: {} };
+const helpersOut = {
+  note: "Bun 1.4.4 bundler runtime. roles: __commonJS (lazy CJS wrapper, one npm file each), __esm (lazy ESM init), __toESM (CJS->ESM interop), __export (namespace object getters), __copyProps, __require (import.meta.require), react-compiler-sentinel (Symbol.for(react.memo_cache_sentinel / early_return_sentinel), emitted by the React Compiler into first-party components), runtime-other. defined = declared in that chunk (the shared runtime chunk, or a pre-bundled npm dist file carrying its own esbuild-style runtime).",
+  runtimeChunks,
+  chunks: {},
+};
 for (const m of mods) {
   const imported = {};
   for (const [local, im] of m.importLocal) {
@@ -148,7 +152,11 @@ for (const m of mods) {
   // non-helper names exported by the runtime chunk (internals such as the
   // `{getPrototypeOf,defineProperty,...}=Object` aliases) are still runtime
   for (const [local, im] of m.importLocal) if (!imported[local] && runtimeChunks.includes(im.from)) imported[local] = { role: 'runtime-other', from: im.from, name: im.name };
-  if (Object.keys(imported).length || Object.keys(m.helpers).length) helpersOut.chunks[m.file] = { imported, defined: m.helpers };
+  // roles: role -> local names, the compact view ("which local is __commonJS here")
+  const roles = {};
+  for (const [l, i] of Object.entries(imported)) (roles[i.role] ??= []).push(l);
+  for (const [l, r] of Object.entries(m.helpers)) (roles[r] ??= []).includes(l) || roles[r].push(l);
+  if (Object.keys(imported).length || Object.keys(m.helpers).length) helpersOut.chunks[m.file] = { roles, imported, defined: m.helpers };
 }
 
 // ---------- pass 3: resolve refs/calls to declaration ids ----------
