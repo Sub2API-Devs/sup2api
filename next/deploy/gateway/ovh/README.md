@@ -2,6 +2,13 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-02 核心 **0.1.229**（`fc7ab36ca`，manifest `98eb84c0…e1a4`，计划 `8b6f07a944a1dd6e4372275226baf71a` completed/13，81 秒，北京时间 13:05，迁移 0073/0074，Host API 8，UI SDK 3.4）：
+- 内容：PR #4–#13（插件页面懒加载、侧栏重组/面包屑/设置侧导航、共享组件、删分组保留 API Key、#12 审核修复、定时自动禁用到期即可调度）。
+- 迁移 0073（`api_keys.group_id` 可空、删分组置空）已执行，110 个 Key 都仍有分组；0074 在本库是空操作（0072 已拆分，规则仍是 login-invalid / account-on-hold / migrated-disable，revision 2 未变）。升级前后 20 个 auto_disabled 账号状态与解除时间不变（5 个登录失效无解除时间，15 个限流按 `auto_disabled_until` 到期）。
+- 内置插件：anthropic 0.2.8、moderation 0.6.2、volcengine 0.12.6、dynweight 0.4.1 从本提交构建并用 `sup2api-plugins-2026` 签名（moderation/dynweight 的原生 UI 在本机构建，现在带 `chunks/`，脚本核对 sha256），其余照搬 0.1.228；四个插件已自动升到新版。
+- 升级窗口内 1 个 503（"model availability could not be verified"），之后无 5xx；两节点 release digest 都是 `98eb84c0…`、ready。
+- 脚本 `stage/0.1.229`，备份 `backups/core-0.1.229`（`d5acedff…758a`）。
+
 2026-11-02 核心 **0.1.228**（`3b26e11b6`，manifest `602a399e…5aef`，计划 `a78fc486e3aed4a13c383d087ce64b2f` completed/13，56 秒，北京时间 01:34，无迁移、schema 不变，Host API 8）：
 - compose 模板的控制器 `mem_limit` 2g（ovh 的 `/opt/ccgateway/compose.yml` 已提前手工改成同样内容）；核心默认 controller/guard 镜像换成 CI 的 `3bb9d3a8d` 构建；用量日志的上游账号显示为"#id 名称"（PR #8，`a9eac2ecf`）。
 - 内置插件的 ccgateway 从 0.1.118（Python 控制器）换成 0.1.120 包（与两节点在用的同一个文件），其余内置插件照搬 0.1.227。
