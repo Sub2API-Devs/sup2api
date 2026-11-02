@@ -642,12 +642,12 @@ func (c *call) forwardBuilt(ctx context.Context, rt *typeRoute, acc *core.Accoun
 	if rt.binding.Type.ModelAvailability {
 		expected := acc.MapModel(c.model)
 		if built.GetUpstreamModel() != "" && built.GetUpstreamModel() != expected {
-			return attemptResult{kind: attemptFailover, err: availabilityFailure(false)}
+			return attemptResult{kind: attemptFailover, err: c.availabilityMismatch(ctx, &acc.AccountRef, expected, built.GetUpstreamModel())}
 		}
 		if rt.modelPath != "" {
 			actual := gjson.GetBytes(body, rt.modelPath)
 			if (actual.Exists() || gjson.GetBytes(upBody, rt.modelPath).Exists()) && (actual.Type != gjson.String || actual.Str != expected) {
-				return attemptResult{kind: attemptFailover, err: availabilityFailure(false)}
+				return attemptResult{kind: attemptFailover, err: c.availabilityMismatch(ctx, &acc.AccountRef, expected, actual.String())}
 			}
 		}
 	}

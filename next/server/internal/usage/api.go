@@ -470,8 +470,138 @@ func (s *Service) detail(c *gin.Context, self *int64) {
 				d.Settlement.AccountID = nil
 			}
 		}
+		d.Anomalies = s.shapeAnomalies(ctx, d.Anomalies, accounts)
 	}
 	httpapi.OK(c, d)
+}
+
+// Keys of usage_logs.anomalies whose JSON names accounts.
+const anomalyFailurePolicy = "failure_policy"
+
+// shapeAnomalies prepares the traces in a record's anomalies for an
+// operator (CONTRACTS §15.2): without account:read every account id goes
+// (the availability samples stay, without their account, and so do the
+// failure policy events); with it the availability samples get the
+// account names, read in one query. A trace that cannot be parsed is
+// dropped for a caller without account:read rather than shown unredacted.
+func (s *Service) shapeAnomalies(ctx context.Context, raw json.RawMessage, accounts bool) json.RawMessage {
+	if len(raw) == 0 {
+		return raw
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &m); err != nil {
+		if accounts {
+			return raw
+		}
+		return nil
+	}
+	changed := false
+	if v, ok := m[core.AnomalyAvailability]; ok {
+		out, keep := s.shapeAvailability(ctx, v, accounts)
+		if keep {
+			m[core.AnomalyAvailability] = out
+		} else {
+			delete(m, core.AnomalyAvailability)
+		}
+		changed = true
+	}
+	if v, ok := m[anomalyFailurePolicy]; ok && !accounts {
+		if out, ok := redactFailurePolicy(v); ok {
+			m[anomalyFailurePolicy] = out
+		} else {
+			delete(m, anomalyFailurePolicy)
+		}
+		changed = true
+	}
+	if !changed {
+		return raw
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		return nil
+	}
+	return out
+}
+
+// decodeTrace reads an anomalies value: a JSON string holding JSON.
+func decodeTrace(v json.RawMessage, into any) bool {
+	var s string
+	return json.Unmarshal(v, &s) == nil && json.Unmarshal([]byte(s), into) == nil
+}
+
+func encodeTrace(v any) (json.RawMessage, bool) {
+	inner, err := json.Marshal(v)
+	if err != nil {
+		return nil, false
+	}
+	out, err := json.Marshal(string(inner))
+	return out, err == nil
+}
+
+func (s *Service) shapeAvailability(ctx context.Context, v json.RawMessage, accounts bool) (json.RawMessage, bool) {
+	var tr core.AvailabilityTrace
+	if !decodeTrace(v, &tr) {
+		return v, accounts
+	}
+	lists := [][]core.AvailabilitySample{tr.Samples, tr.Guard}
+	if !accounts {
+		for _, list := range lists {
+			for i := range list {
+				list[i].AccountID, list[i].AccountName = 0, ""
+			}
+		}
+		return encodeTrace(&tr)
+	}
+	var ids []int64
+	for _, list := range lists {
+		for _, sample := range list {
+			if sample.AccountID > 0 {
+				ids = append(ids, sample.AccountID)
+			}
+		}
+	}
+	if len(ids) == 0 {
+		return v, true
+	}
+	names := map[int64]string{}
+	rows, err := s.db.Pool.Query(ctx, `SELECT id, name FROM accounts WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return v, true // the ids still say which accounts
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var name string
+		if rows.Scan(&id, &name) == nil {
+			names[id] = name
+		}
+	}
+	if rows.Err() != nil {
+		return v, true
+	}
+	for _, list := range lists {
+		for i := range list {
+			list[i].AccountName = names[list[i].AccountID]
+		}
+	}
+	out, ok := encodeTrace(&tr)
+	if !ok {
+		return v, true
+	}
+	return out, true
+}
+
+// redactFailurePolicy removes account_id from every failure policy event,
+// keeping every other field as recorded.
+func redactFailurePolicy(v json.RawMessage) (json.RawMessage, bool) {
+	var events []map[string]json.RawMessage
+	if !decodeTrace(v, &events) {
+		return nil, false
+	}
+	for _, e := range events {
+		delete(e, "account_id")
+	}
+	return encodeTrace(events)
 }
 
 // SummaryRow is one group of GET /usage/summary.
@@ -615,9 +745,10 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 	// "plugin" says the plugin answered, which on a plugin-metered platform is
 	// every request. Counting it would make this column read "everything is
 	// wrong" exactly where nothing is; "fallback" (the plugin did not answer)
-	// still counts.
-	anomalous := fmt.Sprintf(`(u.anomalies - '%s' - 'failure_policy') <> '{}'::jsonb OR (u.anomalies ? '%s' AND u.anomalies->>'%s' <> $%d)`,
-		core.AnomalyUsageExtract, core.AnomalyUsageExtract, core.AnomalyUsageExtract, base+3)
+	// still counts. The failure policy and availability traces describe how
+	// the request was routed, not the record: they never count.
+	anomalous := fmt.Sprintf(`(u.anomalies - '%s' - 'failure_policy' - '%s') <> '{}'::jsonb OR (u.anomalies ? '%s' AND u.anomalies->>'%s' <> $%d)`,
+		core.AnomalyUsageExtract, core.AnomalyAvailability, core.AnomalyUsageExtract, core.AnomalyUsageExtract, base+3)
 	args := append(f.Args(), core.ReconcileAbandoned, core.ReconcileEstimated, core.UsageExtractPlugin)
 	if useTZ {
 		args = append(args, tz)

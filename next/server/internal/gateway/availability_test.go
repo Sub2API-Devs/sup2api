@@ -52,6 +52,12 @@ type availabilitySource struct {
 	observations []*pluginv1.QuotaResult
 	generations  []int64
 	err          error
+	// stale marks ids AccountQuotaView reports as stale; missing ids it
+	// cannot read: it waits for the context like the mirror, then reports
+	// them Missing. delay holds every view back (up to the context).
+	stale   map[int64]bool
+	missing map[int64]bool
+	delay   time.Duration
 }
 
 func (s *availabilitySource) ObserveQuotaHeaders(int64, []manifest.QuotaHeader, int, http.Header) {}
@@ -67,12 +73,47 @@ func (s *availabilitySource) AccountQuotaSnapshots(_ context.Context, ids []int6
 	}
 	return out, s.err
 }
+
+// errFakeQuotaLag is what the fake view returns with Missing ids, as the
+// mirror does: err != nil exactly when Missing is not empty.
+var errFakeQuotaLag = errors.New("quota snapshot not read in time")
+
 func (s *availabilitySource) AccountQuotaView(ctx context.Context, ids []int64) (core.QuotaView, error) {
+	s.mu.Lock()
+	delay, waitMissing := s.delay, false
+	for _, id := range ids {
+		waitMissing = waitMissing || s.missing[id]
+	}
+	s.mu.Unlock()
+	if delay > 0 {
+		select {
+		case <-ctx.Done():
+			return core.QuotaView{Missing: append([]int64(nil), ids...)}, errFakeQuotaLag
+		case <-time.After(delay):
+		}
+	}
+	if waitMissing {
+		<-ctx.Done()
+	}
 	snapshots, err := s.AccountQuotaSnapshots(ctx, ids)
 	if err != nil {
 		return core.QuotaView{Missing: append([]int64(nil), ids...)}, err
 	}
-	return core.QuotaView{Snapshots: snapshots}, nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	view := core.QuotaView{Snapshots: snapshots, Stale: map[int64]bool{}}
+	for _, id := range ids {
+		if s.missing[id] {
+			delete(snapshots, id)
+			view.Missing = append(view.Missing, id)
+		} else if s.stale[id] {
+			view.Stale[id] = true
+		}
+	}
+	if len(view.Missing) > 0 {
+		return view, errFakeQuotaLag
+	}
+	return view, nil
 }
 func (s *availabilitySource) ApplyAccountQuotaObservation(_ context.Context, id, generation int64, q *pluginv1.QuotaResult) error {
 	s.mu.Lock()
@@ -97,7 +138,7 @@ func enableAvailability(e *env, index int) (*availabilityPlugin, *availabilitySo
 	b.Type.ModelAvailability = true
 	p := &availabilityPlugin{PlatformPlugin: b.Client}
 	b.Client = p
-	s := &availabilitySource{snapshots: map[int64]*pluginv1.AccountQuotaSnapshot{}}
+	s := &availabilitySource{snapshots: map[int64]*pluginv1.AccountQuotaSnapshot{}, stale: map[int64]bool{}, missing: map[int64]bool{}}
 	e.gw.d.Quota = s
 	return p, s
 }
@@ -133,16 +174,33 @@ func TestAvailabilityHardFilterBeforeStickyAndRank(t *testing.T) {
 	}
 }
 
-func TestAvailabilityFailuresDoNotFailOpen(t *testing.T) {
-	for _, kind := range []string{"denied", "missing", "duplicate", "outside", "unknown", "invalid", "nil", "timeout", "unavailable", "unimplemented", "source", "no_source", "absent_checker"} {
+// Only a definite UNAVAILABLE blocks (MODEL-AVAILABILITY-PRECHECK-DESIGN
+// §5.1): every check that cannot be made lets the request through, says why
+// in the usage record, and the precheck never answers 503.
+func TestAvailabilityPluginFailuresFailOpen(t *testing.T) {
+	for _, tc := range []struct{ kind, reason string }{
+		{"denied", ""},
+		{"missing", availReasonBadResponse},
+		{"duplicate", availReasonBadResponse},
+		{"outside", availReasonBadResponse},
+		{"unknown", availReasonUnknown},
+		{"invalid", availReasonBadResponse},
+		{"nil", availReasonBadResponse},
+		{"timeout", availReasonPluginTimeout},
+		{"unavailable", availReasonPluginError},
+		{"unimplemented", availReasonPluginError},
+		{"source", availReasonSnapshot},
+		{"no_source", availReasonSnapshot},
+		{"absent_checker", availReasonPluginError},
+	} {
+		kind := tc.kind
 		t.Run(kind, func(t *testing.T) {
 			e := newEnv(t)
 			p, s := enableAvailability(e, 0)
-			want := 503
+			e.gw.availabilityPluginTimeout = 50 * time.Millisecond
 			switch kind {
 			case "denied":
 				s.deny(1, 2, 3)
-				want = 429
 			case "source":
 				s.err = errors.New("snapshot failure")
 			case "no_source":
@@ -184,10 +242,28 @@ func TestAvailabilityFailuresDoNotFailOpen(t *testing.T) {
 				}
 			}
 			r := e.messages(body(testModel, false))
-			if r.status != want || e.plat.buildCount() != 0 || len(e.up.keys()) != 0 {
+			rec := e.record()
+			if kind == "denied" {
+				if r.status != 429 || e.plat.buildCount() != 0 || len(e.up.keys()) != 0 {
+					t.Fatalf("%d %s builds=%d", r.status, r.body, e.plat.buildCount())
+				}
+				if rec.AccountID != nil || rec.Availability == nil || rec.Availability.Outcome != core.AvailabilityBlockedAll || rec.Availability.Counts[availReasonUnavailable] != 3 {
+					t.Fatalf("record %+v %+v", rec, rec.Availability)
+				}
+				return
+			}
+			if r.status != 200 || e.plat.buildCount() == 0 || len(e.up.keys()) != 1 {
 				t.Fatalf("%d %s builds=%d", r.status, r.body, e.plat.buildCount())
 			}
-			e.record()
+			tr := rec.Availability
+			if tr == nil || tr.Outcome != core.AvailabilityFailOpen || tr.Candidates != 3 || tr.Admitted != 3 || tr.Counts[tc.reason] != 3 || len(tr.Samples) == 0 {
+				t.Fatalf("trace %+v", tr)
+			}
+			for _, sample := range tr.Samples {
+				if sample.Decision != core.AvailabilityFailOpen || !strings.HasPrefix(sample.Reason, tc.reason) {
+					t.Fatalf("sample %+v", sample)
+				}
+			}
 		})
 	}
 }
@@ -359,11 +435,12 @@ func TestAvailabilityQuotaObservationPreservesAdminPolicy(t *testing.T) {
 }
 
 func TestAvailabilityBoundedBatches(t *testing.T) {
-	for _, mode := range []string{"valid", "missing", "duplicate", "outside", "timeout"} {
+	for _, mode := range []string{"valid", "missing", "duplicate", "outside", "timeout", "denied_then_bad"} {
 		t.Run(mode, func(t *testing.T) {
 			e := newEnv(t)
 			p, source := enableAvailability(e, 0)
-			cl := &call{g: e.gw, gen: e.gen, platform: "anthropic", ep: endpointOf(t, builtinPlatform(t, "anthropic"), "anthropic.messages"), model: testModel, modelRefs: []modelReference{{model: "client-extra"}, {model: "client-other"}}}
+			e.gw.availabilityPluginTimeout = 200 * time.Millisecond
+			cl := &call{g: e.gw, gen: e.gen, rec: &core.UsageRecord{}, platform: "anthropic", ep: endpointOf(t, builtinPlatform(t, "anthropic"), "anthropic.messages"), model: testModel, modelRefs: []modelReference{{model: "client-extra"}, {model: "client-other"}}}
 			cl.planRoutes()
 			refs := make([]core.AccountRef, 140)
 			for i := range refs {
@@ -383,7 +460,7 @@ func TestAvailabilityBoundedBatches(t *testing.T) {
 				deadline = got
 				if mode == "timeout" {
 					if calls == 1 {
-						time.Sleep(availabilityTimeout / 2)
+						time.Sleep(e.gw.availabilityPluginTimeout / 2)
 					} else {
 						<-ctx.Done()
 						return nil, ctx.Err()
@@ -394,11 +471,15 @@ func TestAvailabilityBoundedBatches(t *testing.T) {
 					if candidate.ClientModel == "client-extra" && candidate.Model != "up-extra" {
 						t.Error("mapped reference lost")
 					}
-					out.Results = append(out.Results, &pluginv1.ModelAvailability{AccountId: candidate.AccountId, Model: candidate.Model, State: pluginv1.ModelAvailability_AVAILABLE})
+					state := pluginv1.ModelAvailability_AVAILABLE
+					if mode == "denied_then_bad" && calls == 1 {
+						state = pluginv1.ModelAvailability_UNAVAILABLE
+					}
+					out.Results = append(out.Results, &pluginv1.ModelAvailability{AccountId: candidate.AccountId, Model: candidate.Model, State: state})
 				}
 				if calls == 2 {
 					switch mode {
-					case "missing":
+					case "missing", "denied_then_bad":
 						out.Results = out.Results[1:]
 					case "duplicate":
 						out.Results[1] = out.Results[0]
@@ -419,11 +500,64 @@ func TestAvailabilityBoundedBatches(t *testing.T) {
 				}
 				return
 			}
-			if len(out) != 0 || failure == nil || failure.Status != 503 || calls != 2 {
-				t.Fatalf("invalid batch admitted: %d %d %v", len(out), calls, failure)
+			// Three models per account: the first batch answers accounts
+			// 1-43 (43 starts in it), the failed second batch and the
+			// batches never asked leave 44-140 unchecked.
+			firstBatch := (availabilityBatchSize + 2) / 3
+			if calls != 2 || failure != nil {
+				t.Fatalf("calls=%d failure=%v", calls, failure)
 			}
-			if mode == "timeout" && time.Since(started) > availabilityTimeout*2 {
-				t.Fatal("batch timeout was multiplied")
+			reason := availReasonBadResponse
+			if mode == "timeout" {
+				reason = availReasonPluginTimeout
+				if time.Since(started) > e.gw.availabilityPluginTimeout*2 {
+					t.Fatal("batch timeout was multiplied")
+				}
+			}
+			unchecked := len(refs) - firstBatch
+			wantOut := len(refs)
+			if mode == "denied_then_bad" {
+				// The valid first batch still blocks its accounts.
+				wantOut = unchecked
+			}
+			if len(out) != wantOut {
+				t.Fatalf("admitted %d want %d", len(out), wantOut)
+			}
+			tr := cl.rec.Availability
+			// Account 43 straddles the batches: answered in the first, unchecked in the second.
+			wantOpen := unchecked + 1
+			if mode == "denied_then_bad" {
+				wantOpen = unchecked
+				if tr.Counts[availReasonUnavailable] != firstBatch || tr.Outcome != core.AvailabilityPartial {
+					t.Fatalf("trace %+v", tr)
+				}
+			} else if tr.Outcome != core.AvailabilityFailOpen {
+				t.Fatalf("trace %+v", tr)
+			}
+			if tr.Counts[reason] != wantOpen || tr.Admitted != wantOut || tr.Candidates != len(refs) {
+				t.Fatalf("trace counts %+v", tr)
+			}
+			batchSamples := 0
+			for _, s := range tr.Samples {
+				if s.Batch {
+					batchSamples++
+					if s.AccountID != 0 || s.Reason != reason || s.Plugin != "anthropic" {
+						t.Fatalf("batch sample %+v", s)
+					}
+				}
+			}
+			if batchSamples != 1 || len(tr.Samples) > availTraceSamples {
+				t.Fatalf("samples %+v", tr.Samples)
+			}
+			if cl.availability[int64(len(refs))].reason != reason {
+				t.Fatalf("admission reason %q", cl.availability[int64(len(refs))].reason)
+			}
+			if mode == "denied_then_bad" {
+				if _, ok := cl.availability[1]; ok {
+					t.Fatal("blocked account admitted")
+				}
+			} else if cl.availability[1].reason != "" {
+				t.Fatalf("answered account marked unchecked: %q", cl.availability[1].reason)
 			}
 		})
 	}
@@ -457,7 +591,7 @@ func TestAvailabilityRetryAfterOnlyForCompleteDenial(t *testing.T) {
 				return out, nil
 			}
 			r := e.messages(body(testModel, false))
-			e.record()
+			rec := e.record()
 			want := ""
 			if mode == "denied" {
 				want = "60"
@@ -467,6 +601,20 @@ func TestAvailabilityRetryAfterOnlyForCompleteDenial(t *testing.T) {
 			}
 			if r.header.Get("Retry-After") != want {
 				t.Fatalf("retry hint %q want %q (status %d)", r.header.Get("Retry-After"), want, r.status)
+			}
+			wantStatus := 429
+			if mode == "unknown_state" || mode == "partial" {
+				// UNKNOWN is the plugin not knowing: the account goes through.
+				wantStatus = 200
+			}
+			if r.status != wantStatus {
+				t.Fatalf("status %d want %d: %s", r.status, wantStatus, r.body)
+			}
+			if wantStatus == 429 && (rec.AccountID != nil || rec.Availability.Outcome != core.AvailabilityBlockedAll) {
+				t.Fatalf("blocked record %+v %+v", rec, rec.Availability)
+			}
+			if mode == "denied" && rec.Availability.RetryAt != 1060 {
+				t.Fatalf("trace retry_at %d", rec.Availability.RetryAt)
 			}
 		})
 	}
