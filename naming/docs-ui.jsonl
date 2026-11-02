@@ -1,0 +1,204 @@
+{"id":"chunk-p2qwpk2k.js#jr","doc":"/help 的命令标签页：列出可用命令及描述，按名称排序。"}
+{"id":"chunk-yxcx2jtr.js#J","doc":"/help 对话框：标签页切换（General、Commands、自定义命令），help:dismiss 或 Esc 关闭并发系统消息 \"Help dialog dismissed\"。"}
+{"id":"chunk-b79vwm1h.js#b$n","doc":"会话选择器：显示会话列表（标题、时间、消息数、分支/PR、标签），支持搜索（tengu_session_search_toggled）、所有项目切换、按 sessionId 分组、worktree 检测与预览。"}
+{"id":"chunk-18hwfzwa.js#iDe","doc":"/model 选择器：列出可用模型选项（默认/Opus/Sonnet/Haiku 及 1M、Fast 变体），左右键调节 effort（low/medium/high/xhigh/max），显示当前模型与基础模型，支持搜索。"}
+{"id":"chunk-9h8dr0qb.js#Ns","doc":"/config 主体：可搜索的设置列表，布尔项回车切换、枚举项左右切换（主题、编辑器模式 normal/vim、通知方式、自动压缩、显示回合耗时、自动复制、减少动画、输出样式、模型、语言等），修改写入对应 settings 并记录事件。"}
+{"id":"chunk-9h8dr0qb.js#rTe","doc":"设置对话框外壳：Status / Config / Usage / Stats（/ Gates 仅内部）标签页，关闭时发系统消息。"}
+{"id":"chunk-6p6y0k3t.js#lCr","doc":"/status：构造主区（版本、会话名、cwd、账号、认证、API 提供商）与次区（模型、MCP、插件、IDE、内存文件、设置来源），以属性列表显示。"}
+{"id":"chunk-9689amr8.js#S","doc":"/usage：当前会话与本周用量条（全部模型/Sonnet/Opus）、重置时间，团队/企业的额外用量区。"}
+{"id":"chunk-9h8dr0qb.js#ds","doc":"/stats：活跃热力图、token 用量图表、常用模型、峰值日与连续天数等统计。"}
+{"id":"chunk-5je9hz27.js#IWe","doc":"主题选择器：列出 dark/light/daltonized/ansi 等主题，选中即预览（含 diff 示例），ctrl+t 切换语法高亮，确定后写入 userSettings。"}
+{"id":"chunk-bajxb7bf.js#kt","doc":"/hooks 菜单：选择事件 → 匹配器 → hook → 详情；hooks 来自 user/project/local/policy/插件/会话，远程会话中标注哪些不会运行；只读，提示通过编辑 settings.json 或让 Claude 修改。"}
+{"id":"chunk-18hwfzwa.js#b1","doc":"MCP elicitation：form 模式按 requestedSchema 渲染字段（校验、日期格式化），URL 模式打开链接并等待；结果 accept/decline/cancel 回传服务器。"}
+{"id":"chunk-cpqpnzp4.js#kn","doc":"/mcp：服务器列表 → 服务器菜单（stdio/remote/agent）→ 工具列表 → 工具详情；无服务器时提示运行 claude doctor。"}
+{"id":"chunk-vrb44rx7.js#Lc","doc":"远程 MCP 服务器菜单：显示状态与能力，执行 OAuth 认证（tengu_claudeai_mcp_auth_completed）、重连、清除认证、启用/禁用、查看工具。"}
+{"id":"chunk-cpqpnzp4.js#yn","doc":"MCP 列表面板：按作用域（项目/本地/用户/企业/claude.ai/动态）分组列出服务器及状态图标。"}
+{"id":"chunk-c55mbvfz.js#zo","doc":"/memory：列出可编辑的记忆文件（用户/项目/本地 CLAUDE.md、自动记忆目录），以及团队/账号记忆同步状态（paused/active），选择后用编辑器打开。"}
+{"id":"chunk-00qhwn8e.js#qe","doc":"/skills：按来源分组列出技能（用户、项目、插件、旧 commands），显示描述与云会话中是否加载。"}
+{"id":"chunk-ey2qag4x.js#Je","doc":"通用选择组件（Select 封装），被 115 处使用——旧版名 ModelSelector 可能是错配。"}
+{"id":"chunk-eavynfj6.js#$e","doc":"根据用户描述调用模型生成子代理配置（identifier、whenToUse、systemPrompt），支持中止与超时。"}
+{"id":"chunk-4v9zy7gn.js#Ke","doc":"GitHub Actions 工作流多选：为每个选中的工作流在仓库中创建文件。"}
+{"id":"chunk-20skp6hd.js#PFn","doc":"新 MCP 服务器批准：Use this server / Use all future servers / Continue without，结果写入 localSettings 的 enabled/disabled 列表。"}
+{"id":"chunk-20skp6hd.js#IFn","doc":"多个新 MCP 服务器的多选启用，结果写入 localSettings。"}
+{"id":"chunk-g3xfp0ds.js#h2","doc":"按主题名取调色板：light/light-ansi/dark-ansi/light-daltonized/dark-daltonized，其他（含 dark）返回 dark 调色板。"}
+{"id":"chunk-g3xfp0ds.js#U","doc":"六套主题调色板（每套约 75 个颜色键：claude、permission、planMode、autoAccept、bashBorder、promptBorder、diffAdded/Removed(+Dimmed/Word)、success/error/warning、subtle/inactive、userMessageBackground、rainbow_*、*_FOR_SUBAGENTS_ONLY 等）。"}
+{"id":"chunk-g3xfp0ds.js#gYr","doc":"把主题色值转为 ANSI 转义（rgb → 真彩、ansi: → 16 色）。"}
+{"id":"chunk-v9w831vx.js#HUn","doc":"主题 Provider：从全局配置读 theme（默认 dark），auto 时跟随系统明暗；支持临时预览（setPreviewTheme/cancelPreview）、自定义主题（用户 + 插件）与覆盖色；保存时写入 theme 设置。"}
+{"id":"chunk-v9w831vx.js#Nr","doc":"返回 [currentTheme, setThemeSetting]（被 44 处使用）。"}
+{"id":"chunk-x6v6jz2y.js#n","doc":"主题文本：color/backgroundColor 支持主题键或原始颜色，dimColor 用主题 inactive 色，其余属性透传给 Ink Text。"}
+{"id":"chunk-agvt6ygy.js#rr","doc":"颜色解析为 chalk：rgb()/#hex/ansi256()/ansi: 直接用，主题键查当前调色板，foreground 表示默认前景。"}
+{"id":"chunk-thjvqmbc.js#we","doc":"对话框：标题（permission 等色）、副标题、内容、底部快捷键提示（Esc 取消 / 双击退出），可选 onCancel。"}
+{"id":"chunk-1dkfja46.js#Qw","doc":"标签页：标题行（可聚焦）+ 当前标签内容，左右/tab 切换，down 把焦点移入内容；Tab 子组件声明标题。"}
+{"id":"chunk-18hwfzwa.js#GZt","doc":"模糊搜索选择器：顶部（或底部）搜索框，按查询过滤并高亮，上下选择，回车确认，Esc 取消，无结果显示 \"No results\"。"}
+{"id":"chunk-ey2qag4x.js#is","doc":"通用单选：按 layout 渲染选项（可带描述、两栏、数字前缀），useSelectState 管理焦点与视口，支持 input 类型选项（就地编辑）、onFocus/onChange/onCancel。"}
+{"id":"chunk-ey2qag4x.js#yRr","doc":"Select 导航：reducer 处理 focus-next/previous-option、翻页、视口滚动与重置，保证聚焦项在可见窗口内。"}
+{"id":"chunk-ey2qag4x.js#Pi","doc":"Select 按键：select:next/previous/first/last、数字直选、回车提交、输入选项内的编辑与粘贴。"}
+{"id":"chunk-095ptjmr.js#mJe","doc":"向导上下文：步骤列表与当前步骤、共享数据、next/back/goTo/cancel，Esc 双击退出。"}
+{"id":"chunk-18hwfzwa.js#nEe","doc":"队友 inbox 轮询器：定期读取未读消息，区分队友消息、权限请求与回复、计划审批（只接受 team-lead）、关停请求，投递到会话或对应回调并标记已读。"}
+{"id":"chunk-18hwfzwa.js#MUe","doc":"远程（云）会话：订阅云端事件流，把消息写入本地转录；发送用户提示（确认送达，否则提示 \"Couldn't send your message\"）；转发权限请求/中断；断线重连与状态显示。"}
+{"id":"chunk-18hwfzwa.js#wvt","doc":"Remote Control 桥：启用后注册环境并建立会话，把本地消息/工具结果/权限请求转发到 claude.ai，把远程提示、权限回复、命令（/clear、fork、模式切换、teleport pull）应用到本地；处理错误与重连。"}
+{"id":"chunk-18hwfzwa.js#Pte","doc":"IDE 集成：检测可连接的 IDE（ws-ide/sse-ide），按 autoConnectIde 设置/flag 自动连接并加入动态 MCP 配置，必要时自动安装扩展，返回 {installationStatus, installExtension}。"}
+{"id":"chunk-18hwfzwa.js#Lie","doc":"加载已启用插件的命令、agents、hooks、输出样式、主题、技能并注入 AppState；失败时发 generic-error 通知。"}
+{"id":"chunk-bbtre4r8.js#l","doc":"记录错误：写入错误日志与内存环形缓冲（有长度上限），非生产时输出调试；被约 1790 处调用。"}
+{"id":"chunk-nq7jz8ya.js#ve","doc":"多选：空格切换选中，回车提交选中集合，支持 compact 布局与可输入项。"}
+{"id":"chunk-18hwfzwa.js#d9e","doc":"主输入框。从 PromptDraft 订阅 value/cursorOffset/mode/pastedContents/interimRange/decorations，从 scope 取 commands；组合：模式指示 + TextInput/VimTextInput（由 editorMode 决定）+ 建议列表（useTypeahead）+ 历史（useArrowKeyHistory / Ctrl+R）+ 粘贴（usePasteHandler，图片转 [Image #N]）+ 语音（useVoiceIntegration）+ 页脚/帮助菜单。\n关键行为：输入首字符 ! 切到 bash 模式；@队友 提及高亮；超长输入自动折叠；排队命令可上箭头回到编辑（queueEditIndex）；alt+w 切换 workflow 关键词；提交时调用 onSubmit(value, helpers)。"}
+{"id":"chunk-18hwfzwa.js#oie","doc":"拼输入框上边框文字（如会话标题/状态）。"}
+{"id":"chunk-18hwfzwa.js#Mge","doc":"通知内容：语音 recording/processing、apiKeyHelper 慢、\"Now using usage credits\"、IDE 状态等按类型渲染；无通知时显示其他状态。"}
+{"id":"chunk-18hwfzwa.js#V3e","doc":"页脚组件：上方建议列表（有建议时），否则左侧 PromptInputFooterLeftSide + 右侧 Notifications；全屏与帮助菜单打开时布局不同。"}
+{"id":"chunk-ag5x7vhf.js#NXe","doc":"Remote Control（bridge）状态指示：连接/断开/重连中。"}
+{"id":"chunk-18hwfzwa.js#MX","doc":"页脚左侧：显示权限模式（shift+tab 循环 default/acceptEdits/plan/auto/bypass）、\"Press Ctrl-C again to exit\"、后台任务计数（可点开）、PR 状态、语音提示、catchupReplay/detach 提示。"}
+{"id":"chunk-18hwfzwa.js#t3e","doc":"权限模式指示与切换提示（shift+tab），含 frame/artifact 链接（tengu_copper_thistle）。"}
+{"id":"chunk-8jypjjdf.js#MDe","doc":"建议列表：根据终端宽高计算可见窗口，按类型（命令/文件/MCP/agent/emoji）渲染 SuggestionItemRow，选中项高亮。"}
+{"id":"chunk-18hwfzwa.js#TLt","doc":"\"?\" 帮助菜单：三列列出 ! bash 模式、/ 命令、@ 文件、& 后台、双击 esc 回退、shift+tab 模式切换、ctrl+o transcript、ctrl+t 任务、ctrl+_ 撤销等，按当前 keybinding 显示。"}
+{"id":"chunk-h93cnm7e.js#mpt","doc":"输入提示符：prompt 模式 ❯（读屏器下为 $），bash 模式 ! 并用 bashBorder 色；查看队友时用队友颜色并显示名字。"}
+{"id":"chunk-18hwfzwa.js#fH","doc":"排队命令预览：把 queuedCommands 的文本/图片内容截断显示在输入框上方（图片块显示占位）。"}
+{"id":"chunk-18hwfzwa.js#Xno","doc":"超过阈值时保留首尾各 500 字符，中段替换为 \"[...Truncated text #id +N lines...]\"，返回 {truncatedText, placeholderContent}。"}
+{"id":"chunk-18hwfzwa.js#r6e","doc":"对整段输入做截断：先把中段内已有的文本粘贴引用展开、图片引用移出，再调用 formatTruncatedTextRef；把被折叠的中段作为新的 text 粘贴内容存入 pastedContents。"}
+{"id":"chunk-7p2hc4jn.js#Ymt","doc":"粘贴/拖放处理：长于阈值的按键序列视为粘贴；把粘贴文本按行拆分，识别图片路径（含 macOS 截图临时目录），并行读取图片并调用 onImagePaste，其余文本交 onPaste；空粘贴在 macOS/WSL 上改读剪贴板图片；粘贴期间吞掉紧随的回车并在结束后补发。"}
+{"id":"chunk-7p2hc4jn.js#qnn","doc":"文本输入核心：把按键映射为 Cursor 操作（ctrl+a/e/b/f/h/d/k/u/w/y、alt+b/f/d、方向键、home/end、换行 \\⏎/shift+⏎），上下键在多行内移动或触发历史；Esc 双击清空（escape-again-to-clear），Ctrl-C 清空或退出提示；Apple Terminal 特判；返回 onInput、渲染文本与光标位置。"}
+{"id":"chunk-530hfzwb.js#M_o","doc":"vim 输入：维护 NORMAL/INSERT/VISUAL/VISUAL LINE 状态，解析操作符(d/c/y)+动作、文本对象、计数与点重复；INSERT 下回落到 useTextInput。"}
+{"id":"chunk-ey2qag4x.js#R0t","doc":"vim 模式输入框：在 TextInput 基础上显示当前 vim 模式（NORMAL/VISUAL/VISUAL LINE）。"}
+{"id":"chunk-81qqq1aq.js#Hr","doc":"普通输入框：调用 useTextInput，渲染 BaseTextInput；语音录音时显示电平条。"}
+{"id":"chunk-18hwfzwa.js#Eye","doc":"撤销缓冲：pushToBuffer 防抖记录 {text, cursorOffset, pastedContents}，undo 回到上一个快照，clearBuffer 清空；最多 maxBufferSize 条。"}
+{"id":"chunk-18hwfzwa.js#Aye","doc":"上下箭头历史：按批（10 条）从历史文件加载，按 bash/prompt 模式过滤，记住当前草稿以便回到底部；第一次使用时弹出 \"ctrl+r to search history\" 提示；返回 onHistoryUp/Down/Reset。"}
+{"id":"chunk-18hwfzwa.js#Wce","doc":"Ctrl+R 历史搜索：打开时流式读取全部历史（history_search_scan），输入时增量匹配（含粘贴文本内容），accept 把匹配填回输入框，execute 直接提交，cancel 恢复原输入；记录 history_search_open/accept/execute 事件。"}
+{"id":"chunk-18hwfzwa.js#rme","doc":"全屏历史搜索对话框：列出匹配的历史 prompt（fuzzy），显示扫描进度与截断状态，选中后回填。"}
+{"id":"chunk-18hwfzwa.js#Rue","doc":"补全核心：根据光标前的 token 判定触发类型——\"/\" 命令与命令参数、\"@\" 文件/目录/agent/MCP 资源、bash 模式下的命令/路径/变量（shell completion）、\":\" emoji、/resume 会话标题；生成建议写入 suggestionsStore，处理 autocomplete:accept/dismiss/next/previous 与 Tab 补全，接受后改写 draft 的 value 与光标。"}
+{"id":"chunk-18hwfzwa.js#fA","doc":"是否为 {type: \"file\"|\"directory\"} 路径元数据对象。"}
+{"id":"chunk-18hwfzwa.js#GQt","doc":"bash 模式补全：调用 shell completion，失败记 tengu_shell_completion_failed。"}
+{"id":"chunk-x3qn5k1g.js#H0i","doc":"生成 @ 文件建议：用缓存的文件索引做模糊匹配（partial/full），远程会话时走 file_suggestions RPC；记录耗时。"}
+{"id":"chunk-x3qn5k1g.js#nVn","doc":"后台刷新文件索引缓存（git ls-files + untracked 合并），完成或失败写调试日志。"}
+{"id":"chunk-x3qn5k1g.js#q","doc":"用 git ls-files（含子模块，core.quotepath=false）列出已跟踪与未跟踪文件；非 git 仓库返回 null。"}
+{"id":"chunk-x3qn5k1g.js#Z","doc":"获取项目文件列表：优先 git ls-files，失败回落 ripgrep --files（可选尊重 .gitignore）。"}
+{"id":"chunk-x3qn5k1g.js#rVn","doc":"把选中的文件建议应用到输入：替换 @ token 并移动光标。"}
+{"id":"chunk-18hwfzwa.js#gue","doc":"统一 @ 建议：并行收集文件、MCP 资源/资源模板、agent 建议，转换成统一建议项并截断描述。"}
+{"id":"chunk-18hwfzwa.js#IP","doc":"全局快捷键处理：ctrl+o 切换 transcript（tengu_toggle_transcript）、ctrl+t 任务/todo 面板（tengu_toggle_todos）、brief 视图切换等；只在 prompt 屏挂载。"}
+{"id":"chunk-18hwfzwa.js#IQ","doc":"读取 keybinding 配置中 \"command:<name>\" 动作并绑定为提交 \"/<name>\"。"}
+{"id":"chunk-18hwfzwa.js#ep","doc":"提交命令时使用的空 helpers（setCursorOffset/clearBuffer/resetHistory 都是 no-op）。"}
+{"id":"chunk-1kwgxcw6.js#rUn","doc":"双击退出：app:interrupt（Ctrl-C）/app:exit（Ctrl-D）第一次只显示 \"Press X again to exit\"，超时内再按才退出。"}
+{"id":"chunk-tzghj6zv.js#wXe","doc":"全屏模式下选区完成即写剪贴板（clipboard_write），可在 /config 关闭。"}
+{"id":"chunk-18hwfzwa.js#jce","doc":"预测建议：tengu_prompt_suggestion 开启时显示模型生成的下一句建议，Tab/→ 接受，记录 shown/accepted/ignored。"}
+{"id":"chunk-18hwfzwa.js#HQ","doc":"订阅 Claude in Chrome 的 notifications/message：把带图片的提示提交到会话，必要时切换权限模式（set_permission_mode）。"}
+{"id":"chunk-tzghj6zv.js#Vb","doc":"搜索输入：维护 query/cursorOffset，处理字符输入、退格、Emacs kill/yank、左右移动，return 触发 onExit，escape 触发 onCancel；不处理翻页/滚轮等键。"}
+{"id":"chunk-tzghj6zv.js#Opt","doc":"语音集成：录音状态变化时在光标处插入/替换临时转写文本（interimRange），最终转写落地；输入在录音期间被改动则放弃插入（input_diverged）。"}
+{"id":"chunk-tzghj6zv.js#kXe","doc":"语音快捷键：voice:pushToTalk 按住开始/松开结束，Esc 取消，处理 hold 与 toggle 两种模式。"}
+{"id":"chunk-a658aeqp.js#M","doc":"语音引擎类：管理麦克风录音、电平计算、连接语音转写服务、静音超时自动结束与错误映射（no audio/no speech/连接失败）。"}
+{"id":"chunk-n770a3wm.js#o_e","doc":"从剪贴板读取图片：执行平台命令保存到临时文件，读取并转 base64，返回 {base64, mediaType, dimensions}；失败记录 clipboard_read 错误类型。"}
+{"id":"chunk-n770a3wm.js#rGs","doc":"从粘贴的文件路径读取图片：去引号/转义、权限检查（可能 refused）、空文件警告，返回图片数据或 null。"}
+{"id":"chunk-n770a3wm.js#D","doc":"各平台剪贴板图片命令表：macOS osascript（PNGf）、Windows/WSL PowerShell、Linux xclip/wl-paste，以及截图临时文件名。"}
+{"id":"chunk-ah34pb7m.js#Bp","doc":"工具调用消息：根据 lookups 判定状态（排队/运行/等待权限/已完成/失败/已停止），显示 ToolUseLoader 圆点 + userFacingName + renderToolUseMessage(input)；运行中显示进度消息，排队时显示 renderToolUseQueuedMessage；MCP 工具名 mcp__server__tool 拆开显示。"}
+{"id":"chunk-ah34pb7m.js#ul","doc":"安全调用 tool.renderToolUseMessage，异常时记录 \"Error rendering tool use message for <tool>\"（MCP 名脱敏）。"}
+{"id":"chunk-ah34pb7m.js#pd","doc":"附件分派：按 attachment.type 渲染——file/directory/notebook/pdf_reference（\"Read N lines\"）、file_unchanged、diagnostics、selected_lines_in_ide/diff、hook_*（成功/阻塞错误/非阻塞错误/取消/系统消息/权限决定）、async_hook_response、skill_listing/invoked_skills/dynamic_skill、relevant_memories/nested_memory/account_memory_recall、plan_file_reference、queued_command、task_status、teammate_shutdown_batch、goal_status、tool_hosts_* 等；不在 NULL_RENDERING_TYPES 中的才显示。"}
+{"id":"chunk-ah34pb7m.js#km","doc":"系统消息分派：turn_duration（\"Worked for …\"、预算/后台 agent）、memory_saved/account_memory_saved、away_summary、agents_killed、stop_hook_summary（\"Ran N hooks\"）、bridge_status（\"/remote-control is active\"）、api_error、model_fallback/model_refusal_*、permission_denied/permission_retry、scheduled_task_fire、cloud_session_status 等；其余按 level 着色显示文本。"}
+{"id":"chunk-ah34pb7m.js#Kf","doc":"回合耗时消息：\"✻ <随机完成动词> for Xm Ys\"，附带 token 用量、提醒（nudge）计数与仍在后台运行的 agent/工作流数。"}
+{"id":"chunk-ah34pb7m.js#gp","doc":"助手文本：空文本/占位不渲染；识别 API 错误文本（余额不足、API_TIMEOUT_MS 超时、Opus 高需求、prompt too long、未登录等）显示为错误提示；否则 Markdown 渲染，前面加 ● 圆点（shouldShowDot）。"}
+{"id":"chunk-ah34pb7m.js#Xs","doc":"思考块：非 verbose/transcript 时显示 \"✻ Thinking…\"（可 ctrl+o 展开），否则显示全文。"}
+{"id":"chunk-ah34pb7m.js#lf","doc":"折叠读/搜索组：统计 Read/Grep/Glob 等调用次数显示一行摘要（进行中显示当前目标），verbose 或 transcript 下逐个渲染 VerboseToolUse；含权限规则命中/本地错误等标记。"}
+{"id":"chunk-ah34pb7m.js#am","doc":"压缩边界：\"✻ Conversation compacted (ctrl+o for history)\"，说明早先消息保存在 transcript 中。"}
+{"id":"chunk-ah34pb7m.js#kh","doc":"tool_result 分派：is_error 时 UserToolErrorMessage（非 verbose 时可能按工具格式化错误），拒绝内容时 UserToolRejectMessage，否则 UserToolSuccessMessage；找不到对应 tool_use 时不渲染。"}
+{"id":"chunk-ah34pb7m.js#Za","doc":"工具成功结果：调用 tool.renderToolResultMessage(output, progress, {verbose, theme, …})，auto 模式放行时附 \"Allowed by auto mode\"，并显示 PostToolUse hook 进度。"}
+{"id":"chunk-08945j39.js#Ie","doc":"判断一段用户文本是否是带 XML 标签的系统性内容（<bash-stdout>、<local-command-stdout>、<teammate-message>、<bash-input>、<command-message>、<user-memory-input>、<task-notification>、MCP 资源更新等）。"}
+{"id":"chunk-18hwfzwa.js#Q9","doc":"Markdown 组件：用缓存的 marked lexer 切成令牌，表格令牌交给 MarkdownTable，其余经 formatToken 转 ANSI 文本后用 Ansi 渲染。"}
+{"id":"chunk-8wvtd8sr.js#pg","doc":"流式 Markdown：只对最后一个未闭合块重新 lex，前面已稳定的块复用。"}
+{"id":"chunk-bc20zedk.js#zr","doc":"Markdown 表格：计算各列自然宽度，按终端宽度收缩并换行，支持 left/center/right 对齐；宽度实在不够时改为每行纵向\"列名: 值\"布局。"}
+{"id":"chunk-yqj79cx2.js#St","doc":"语法高亮代码：{code, filePath, width, dim, startLine, lineNumbers}；按扩展名选语言，结果缓存，超长截断为 \"… from line N\"。"}
+{"id":"chunk-887tgx6t.js#H7","doc":"结构化 diff：{patch, dim, filePath, width, …}；原生 color-diff 可用时调用 renderColorDiff 得到带词级高亮的行，否则用 StructuredDiffFallback。tab 先展开。"}
+{"id":"chunk-r2w21sc3.js#Yl","doc":"diff 外框（虚线边框、subtle 色），被 Edit/Write/Notebook 等 20 处复用。"}
+{"id":"chunk-vnfdjr3f.js#jtn","doc":"编辑成功消息：\"Added N lines, removed M lines\"，非 condensed 时下方显示 StructuredDiffList。"}
+{"id":"chunk-vnfdjr3f.js#hce","doc":"编辑/写入被拒绝：\"User rejected update/write to <路径>\"，写入显示被拒内容（高亮），编辑显示被拒 diff。"}
+{"id":"chunk-t1sz4atx.js#eh","doc":"工具错误兜底：字符串错误去掉 <tool_use_error> 标签，InputValidationError 显示 \"Invalid tool parameters\"，非 verbose 截断到若干行并提示 ctrl+o 展开。"}
+{"id":"chunk-mt2ya4ef.js#Hf","doc":"\"(ctrl+o to expand)\" 提示：按当前 keybinding 显示，子代理上下文内不显示。"}
+{"id":"chunk-ah34pb7m.js#zu","doc":"限流消息：根据订阅（pro/max/team/enterprise）与 overage 状态给出建议（/upgrade、/usage-credits、/login、联系管理员），显示重置时间。"}
+{"id":"chunk-ah34pb7m.js#Wr","doc":"hook 进度：\"Running <事件> hooks…\"，完成后 \"N <事件> hooks ran\"。"}
+{"id":"chunk-tw8fk0yz.js#ln","doc":"格式化时长（ms）：如 \"1h 2m 3s\"、\"45s\"，可选隐藏 0 单位或最大单位数。被 60+ 处使用。"}
+{"id":"chunk-xkeryp4t.js#en","doc":"格式化文件大小：bytes/KB/MB/GB。被 70+ 处使用。"}
+{"id":"chunk-tw8fk0yz.js#tV","doc":"相对时间（Intl.RelativeTimeFormat，narrow/long），如 \"3h ago\"/\"in 2d\"。"}
+{"id":"chunk-tw8fk0yz.js#AR","doc":"重置时间显示：今天只显示时刻，否则带月日，可附时区。"}
+{"id":"chunk-s5p7fp0c.js#$De","doc":"登录流程：选择登录方式（Claude 订阅 / Console API 计费 / 网关，可由参数预选），启动本地 OAuth 回调并打开浏览器，显示等待/粘贴代码提示，换取并保存凭证，完成后回调 onDone。"}
+{"id":"chunk-zkzpd9ky.js#gt","doc":"登录状态文案（starting/waiting_for_login/保存凭证等）。"}
+{"id":"chunk-p8fze0jh.js#Yt","doc":"首次引导：依次展示主题选择、登录（OAuth/网关）、安全须知、终端设置（shift+enter 等）等步骤，记录 tengu_began_setup/tengu_onboarding_step。"}
+{"id":"chunk-tzghj6zv.js#Pr","doc":"JS 安装的自动更新：间隔检查最新版本，跳过无权限或 claude.exe 被锁的情况，执行全局安装并显示结果。"}
+{"id":"chunk-tzghj6zv.js#Nr","doc":"原生安装的自动更新：下载新版本、验证签名与校验和、失败按类型（超时/校验失败/网络）记录，成功提示 /restart。"}
+{"id":"chunk-tzghj6zv.js#ki","doc":"把更新错误分类（signature_verification、checksum_mismatch、超时、网络等）。"}
+{"id":"chunk-tzghj6zv.js#Mpt","doc":"检测安装类型后渲染 NativeAutoUpdater / PackageManagerAutoUpdater / AutoUpdater。"}
+{"id":"chunk-18hwfzwa.js#S2","doc":"Remote Control 对话框：显示连接/会话状态与 URL（可切换二维码），d 键断开并关闭启动时自动连接，重试错误状态，显示 cwd 与分支。"}
+{"id":"chunk-10q8r8ck.js#G","doc":"/context：按类别统计估算 token（系统提示、系统工具、MCP 工具、自定义 agent、记忆文件、技能、消息、自动压缩缓冲、空闲），用彩色格子图与明细树显示。"}
+{"id":"chunk-seqjkch8.js#xt","doc":"/feedback：输入描述 → 确认是否附带记录 → 提交（submitFeedback）→ 显示 feedback ID 与可打开的 GitHub issue 链接。"}
+{"id":"chunk-xx1vmpsq.js#fen","doc":"提交反馈到 /api/claude_cli_feedback（检查策略 allow_product_feedback 与大小），返回 feedback ID。"}
+{"id":"chunk-seqjkch8.js#Et","doc":"用模型为公开 issue 生成简洁技术标题（不超过 80 字符），失败回落 \"Bug Report\"。"}
+{"id":"chunk-18hwfzwa.js#kve","doc":"会话调查调度：读取 tengu_feedback_survey_config（概率、最少时长/消息数、冷却），按 good/fine/bad 评分读取对应的分享记录询问配置，管理显示与提交。"}
+{"id":"chunk-18hwfzwa.js#Zh","doc":"调查状态机：closed → digit（评分）→ followup（是否分享）→ thanks/submitted/share_failed。"}
+{"id":"chunk-18hwfzwa.js#jZt","doc":"后台任务对话框：把各类任务（local_bash、local_agent、in_process_teammate、local_workflow、remote_agent、monitor_mcp、dream）转成列表项，list/detail 两级视图，支持停止所有 agent（chat:killAgents）、进入队友视图、查看输出。"}
+{"id":"chunk-18hwfzwa.js#Mpe","doc":"云会话详情：ultraplan 显示阶段与计划审阅（在浏览器中查看），ultrareview 显示发现/验证计数，可终止或归档会话。"}
+{"id":"chunk-18hwfzwa.js#A5","doc":"后台 shell / monitor 详情：命令、运行时长、输出尾部（截断行数），可停止。"}
+{"id":"chunk-18hwfzwa.js#Gte","doc":"退出 worktree 会话：检查未提交改动与 worktree 状态，选择保留或删除 worktree（必要时先确认丢弃改动），结束 tmux 会话并返回原目录。"}
+{"id":"chunk-fggt3ccb.js#FTr","doc":"条款更新对话框：宽限期内可接受新条款、选择是否允许用于训练（accept_opt_in/opt_out），宽限期后必须选择；记录 tengu_grove_policy_*。"}
+{"id":"chunk-qh0448cn.js#h$n","doc":"teleport 前置错误：需要登录时进入登录，需要 stash 时进入 TeleportStash，完成后继续。"}
+{"id":"chunk-0bntfk7p.js#Npt","doc":"teleport 恢复：显示进度，中断键取消（tengu_teleport_cancelled），完成后回调恢复的会话。"}
+{"id":"chunk-zj31az9x.js#ce","doc":"远程环境选择：拉取环境列表，单个时确认、多个时选择并可设为默认（userSettings）。"}
+{"id":"chunk-e6aww6q8.js#$Z","doc":"一次性切换所有队友的权限模式（default/auto 循环）。"}
+{"id":"chunk-18hwfzwa.js#_1o","doc":"关停队友：发送 shutdown，等待完成并从 inbox 移除，记录 teammate_terminated。"}
+{"id":"chunk-7hdssadt.js#NTr","doc":"询问是否使用环境中的 ANTHROPIC_API_KEY（推荐否时使用订阅登录），结果记入配置的已批准/已拒绝列表。"}
+{"id":"chunk-jz0q3n7b.js#uCr","doc":"外部 CLAUDE.md 引用确认：列出工作目录外被 @ 引用的文件，允许或拒绝（记录 tengu_claude_md_external_includes_dialog_*）。"}
+{"id":"chunk-am3vy82s.js#b","doc":"/export：选择复制到剪贴板或导出到文件（默认文件名带时间），完成后显示结果。"}
+{"id":"chunk-ds2d8kad.js#C","doc":"交给桌面版：检测是否安装 Claude Desktop，未安装则提示下载（按平台下载链接），已安装则打开并传递会话。"}
+{"id":"chunk-18hwfzwa.js#y5","doc":"记忆整理（dream）任务详情：涉及的会话与文件数、当前步骤与工具活动。"}
+{"id":"chunk-18hwfzwa.js#w5","doc":"进程内队友详情：状态（运行/完成/被杀）、当前活动、token、最近消息与提示。"}
+{"id":"chunk-18hwfzwa.js#J2","doc":"后台异步 agent 详情：描述、状态、进度、工具活动、结果或错误。"}
+{"id":"chunk-18hwfzwa.js#X$o","doc":"canUseTool 主流程：每次工具调用返回一个 Promise。先匹配最近拒绝记录；调用 hasPermissionsToUseTool（规则 + 模式 + auto 分类器）得出 allow/deny/ask；allow 时记录日志直接 buildAllow；ask 时取工具 description，进入 pWn（交互式请求：本地对话框 + bridge + channel + hooks 竞速）；deny 记录拒绝；中止时 resolveIfAborted。"}
+{"id":"chunk-s4bxxzsw.js#We","doc":"打开并管理一个权限对话框：用 toolUseContext.requestDialog(dialog, descriptor, …) 入对话框队列，记录 tengu_tool_use_show_permission_request，处理对话框结果（allow/reject/反馈/模式切换/规则持久化）、超时与中止，结束时执行 teardown。"}
+{"id":"chunk-s4bxxzsw.js#Jo","doc":"交互式权限竞速：除本地对话框外，同时向 Remote Control bridge 发送请求、监听 channel 回复、服务器审批 watcher 与 PermissionRequest hooks，任一方先给出决定即 claim 并 teardown 其余方。"}
+{"id":"chunk-re9y5nwg.js#Jlr","doc":"把决策原因映射为日志 surface 字符串（rule/session/host_dialog 等）。"}
+{"id":"chunk-s4bxxzsw.js#fWn","doc":"为一次权限请求创建上下文对象：logDecision、logCancelled、persistPermissions（写规则）、setModeFromBridge、resolveIfAborted、buildAllow、cancelAndAbort、runHooks。"}
+{"id":"chunk-18hwfzwa.js#Qft","doc":"Bash 权限对话框主体：显示命令（可编辑前缀）、说明、复合命令子结果、沙箱信息与规则解释；选项来自 bashToolUseOptions，反馈模式由 useShellPermissionFeedback 管理；accept/reject 时调用 onAllow/onReject 并可持久化规则。"}
+{"id":"chunk-18hwfzwa.js#z1","doc":"Bash 权限选项：允许一次；\"Yes, and don't ask again for <前缀/命令>\"（应用建议规则或编辑后的前缀）；可选开启 auto 模式；拒绝（可附反馈）。"}
+{"id":"chunk-3v13eg2e.js#Ca","doc":"权限对话框外框：圆角边框（permission 色）、标题 \"Permission Required: …\"、可选副标题与队友徽章。"}
+{"id":"chunk-0e8j1zzj.js#Xmo","doc":"通用权限请求：渲染工具的 renderToolUseMessage 摘要（失败时退回参数表格），显示规则解释；选项允许一次/不再询问（工具级规则）/启用 auto/拒绝并反馈。"}
+{"id":"chunk-18hwfzwa.js#oyt","doc":"文件权限对话框：根据工具类型选择 file-edit-diff/file-write-diff/notebook-edit-diff 预览（或 IDE 中显示 diff），选项由 getFilePermissionOptions 生成，处理器表 PERMISSION_HANDLERS。"}
+{"id":"chunk-18hwfzwa.js#xht","doc":"文件权限选项：允许一次；本会话允许编辑（项目内 / ~/.claude / 项目 .claude 目录的不同文案，shift+tab 循环模式）；拒绝。"}
+{"id":"chunk-0e8j1zzj.js#sce","doc":"权限选择提示：Select 列出选项，选中带 input 的选项时展开反馈输入框（默认占位 \"tell Claude what to do differently\"）；Esc 视为拒绝。"}
+{"id":"chunk-18hwfzwa.js#tht","doc":"计划批准对话框：读取计划文件（缺失时提示先写计划），显示计划 Markdown 与上下文用量；选项由 buildPlanApprovalOptions 生成（清空上下文 + auto/acceptEdits/bypass、保留上下文、继续规划/反馈、ultraplan）；批准时设置模式并可清空上下文。"}
+{"id":"chunk-18hwfzwa.js#kPe","doc":"AskUserQuestion 对话框入口：校验/改写问题后渲染 AskUserQuestionPermissionRequestBody。"}
+{"id":"chunk-18hwfzwa.js#SPe","doc":"问答主体：多问题状态（useMultipleChoiceState）、导航条、单问题/预览视图、粘贴图片附件、提交页；提交时把答案（与图片）组装为工具结果。"}
+{"id":"chunk-18hwfzwa.js#jPe","doc":"进入计划模式确认：说明计划模式会做什么，允许/拒绝并记录 tengu_plan_enter。"}
+{"id":"chunk-18hwfzwa.js#BRe","doc":"沙箱网络请求：显示请求访问的主机，选项允许一次 / 永久允许该域名（写 userSettings 的 sandbox 规则）/ 拒绝。"}
+{"id":"chunk-18hwfzwa.js#KAe","doc":"WebFetch 权限：显示 URL 与安全检查结果，选项允许一次 / 不再询问该域名（domain: 规则）/ 拒绝并反馈。"}
+{"id":"chunk-18hwfzwa.js#WAe","doc":"Skill 权限：显示技能名、来源与安全检查，选项允许 / 应用建议规则 / 拒绝。"}
+{"id":"chunk-18hwfzwa.js#Ryt","doc":"PowerShell 权限对话框（同 Bash 结构，选项来自 powershellToolUseOptions）。"}
+{"id":"chunk-0e8j1zzj.js#_De","doc":"反馈模式状态：在 accept/reject 选项上按 Tab 进入附加说明输入，记录 tengu_accept/reject_feedback_mode_entered/collapsed。"}
+{"id":"chunk-0e8j1zzj.js#Rv","doc":"规则解释：显示命中的规则及其来源（settings.json/插件 hooks.json/SKILL.md），auto 模式分类器原因，沙箱覆盖、连续拒绝等。"}
+{"id":"chunk-3v13eg2e.js#Qre","doc":"权限对话框标题：工具名、副标题（截断）、队友徽章、读屏 aria-label。"}
+{"id":"chunk-znr63w8n.js#Jr","doc":"队友徽章：显示发起请求的队友名与颜色（被 37 处使用）。"}
+{"id":"chunk-p2qwpk2k.js#Pi","doc":"/permissions 界面：Recent（auto 模式拦截）/Allow/Ask/Deny/Workspace 标签，规则按来源显示，可查看详情、删除（policySettings 不可删）、新增规则与目录。"}
+{"id":"chunk-8rmevhsy.js#Qo","doc":"工作区信任对话框：列出项目中会自动执行或放权的配置（hooks、MCP 服务器、bash 权限、apiKeyHelper、OTEL headers helper、AWS/GCP 命令、危险 env、技能/插件），用户选择信任后写入项目配置；拒绝则退出。"}
+{"id":"chunk-7sw8gya5.js#je","doc":"托管设置安全对话框：比较危险设置与上次批准时是否变化，列出变化项（hooks、apiKeyHelper、env 等），批准后记录，拒绝则退出。"}
+{"id":"chunk-styvqsd2.js#k","doc":"Bypass Permissions 模式确认：说明不会再请求许可的风险，接受写入 userSettings，拒绝退出。"}
+{"id":"chunk-2b4rzray.js#ogo","doc":"auto 模式默认开启提示：accept 写 userSettings 为 auto，decline 保持；记录 tengu_auto_default_nudge_shown。"}
+{"id":"chunk-18hwfzwa.js#Ovt","doc":"队友权限：把请求写入领导的 mailbox（permission_swarm_forward），注册回调等待 useSwarmPermissionPoller 收到回复；写入失败时提示无法送达。"}
+{"id":"chunk-s4bxxzsw.js#sWn","doc":"协调者模式：先运行自动权限检查，检查失败或需要人工时回到交互流程（reprompted）。"}
+{"id":"chunk-e6aww6q8.js#c3s","doc":"记录一次权限决策：批准/拒绝事件、来源（config/classifier/hook/user_permanent/user_temporary/user_abort）、OTEL tool_decision。"}
+{"id":"chunk-rha5p3kj.js#mln","doc":"处理领导经 mailbox 回复的权限响应：校验输入摘要（不匹配则拒绝），调用注册的回调并应用 permissionUpdates。"}
+{"id":"chunk-18hwfzwa.js#XOe","doc":"主交互屏幕（316 重写为“控制器 + 外部 store”架构）。按 props 建立一组长生命周期控制器（useState 初始化器里 new）：ReplSessionScope、TurnController+转录 store、ComposerChrome、SessionController、PromptSubmitController、ScrollPin、PromptDraft、IdleNudge、BackgroundGesture 等，\n再用 useLayoutEffect 一次性 bindHost 把 mainLoopModel/canUseTool/通知等宿主能力注入各控制器。渲染：transcript 屏返回 gQ 转录视图；prompt 屏返回 FullscreenLayout{scrollable=Gee 消息列表, abovePrompt=通知/任务/权限区, bottom=y8 输入区, sidebar=diff 侧栏, dock=面板坞}，\n外层包 MCPConnectionManager、$A.Provider(tokenWarning)、LF、_F 屏幕框架。也挂 GlobalKeybindingHandlers、useQueueProcessor、useScheduledTasks、useMailboxBridge、useLogMessages 等副作用 hook。"}
+{"id":"chunk-18hwfzwa.js#RH","doc":"transcript 模式（ctrl+o）底部页脚：显示 \"Showing detailed transcript\"、切换快捷键、滚动/打开编辑器提示或搜索计数；宽度不足时退化为 \"? for shortcuts\"。"}
+{"id":"chunk-18hwfzwa.js#Hse","doc":"transcript 模式按 ? 显示的快捷键帮助页脚（滚动、搜索、打印到 scrollback、用编辑器打开、退出）。"}
+{"id":"chunk-18hwfzwa.js#q0e","doc":"transcript 搜索栏（/）：useSearchInput 读输入，首次打开时预热搜索索引（indexing… / indexed in Nms），查询变化后调用 jumpRef.setSearchQuery 并高亮。"}
+{"id":"chunk-18hwfzwa.js#BZ","doc":"终端标题组件：从 titles 存储取标题，工作中且终端聚焦时以 960ms 交替 ◐/◑ 前缀，否则 ✳；在 tmux 等复用器下受 tengu_static_title_under_mux 控制改为静态。"}
+{"id":"chunk-18hwfzwa.js#hkr","doc":"REPL 外壳：用 props.messageQueue（缺省取全局消息队列）建队列 Provider，并提供写入节流上下文后渲染 REPL。"}
+{"id":"chunk-82kqcve8.js#kJo","doc":"是否处于\"挫败检测\"可触发状态（功能开启且记忆同步状态为 closed）。"}
+{"id":"chunk-ag5x7vhf.js#kHt","doc":"全屏布局组件：scrollable 槽（消息列表）放在 ScrollBox 中并提供 ScrollChromeContext；底部 bottom/abovePrompt 槽、可选 sidebar/dock；未读分隔线、\"新消息\"药丸、置顶提示头、modal/对话框浮层与建议浮层。"}
+{"id":"chunk-ag5x7vhf.js#iC","doc":"统计未读分隔线之后的助手回合数（跳过 progress 与无可见文本的助手消息）。"}
+{"id":"chunk-ag5x7vhf.js#ixs","doc":"根据最后一次已读位置计算未读分隔线（位置与计数），跳过 progress/attachment。"}
+{"id":"chunk-ag5x7vhf.js#td","doc":"管理未读分隔线：用户向上滚动后记录 dividerIndex，响应 down/pageup/pagedown/home 等按键，回到底部时清除。"}
+{"id":"chunk-ag5x7vhf.js#od","doc":"\"新消息\"药丸：不在底部且有未读时显示 \"Jump to bottom\"，点击或 scroll:bottom 快捷键跳到底部。"}
+{"id":"chunk-ag5x7vhf.js#nd","doc":"全屏滚动时置顶显示当前可见区域对应的用户提示（StickyPromptHeader）。"}
+{"id":"chunk-ag5x7vhf.js#Ww","doc":"消息列表单行：决定是否显示时间戳/模型、是否仍在流式（isMessageStreaming）、工具是否全部完成，渲染 Message；transcript 屏与折叠分组有特殊处理。"}
+{"id":"chunk-ag5x7vhf.js#Bp","doc":"MessageRow = React.memo(MessageRowImpl, areMessageRowPropsEqual)。"}
+{"id":"chunk-ag5x7vhf.js#LA","doc":"判断消息是否仍在流式输出：与当前流式工具 ID 比较，按 assistant/user/grouped_tool_use/collapsed_read_search 分类检查。"}
+{"id":"chunk-ag5x7vhf.js#Jp","doc":"虚拟滚动消息列表：useVirtualScroll 计算可见区间，只挂载视口内的 VirtualItem；支持搜索索引（warmSearchIndex/setSearchQuery）、高亮跳转与 StickyTracker 置顶提示。"}
+{"id":"chunk-ah34pb7m.js#q_","doc":"单条消息渲染（memo 前的实现）：按 message.type 分派——assistant 逐内容块交给 AssistantMessageBlock，user 交给 UserMessage，attachment/system/grouped_tool_use/collapsed_read_search/work_segment 等交给对应组件；处理 addMargin、verbose、transcript 模式。"}
+{"id":"chunk-ah34pb7m.js#Ah","doc":"用户消息分派：按内容块类型（text/image/tool_result）选择 UserTextMessage、UserImageMessage、UserToolResultMessage；coordinator 模式特殊处理。"}
+{"id":"chunk-ah34pb7m.js#Ih","doc":"助手内容块分派：text→AssistantTextMessage，tool_use→AssistantToolUseMessage，thinking/redacted_thinking→思考组件，server_tool_use/advisor 等；无法渲染的块记一次错误日志。"}
+{"id":"chunk-ah34pb7m.js#PW","doc":"Message 的 memo 比较：uuid、verbose、最新 bash 输出、transcript 模式、续行/说话人标签、进度消息等变化才重渲染。"}
+{"id":"chunk-wq9366y3.js#ze","doc":"工具结果缩进容器：首行前缀 \"⎿\"，嵌套时不重复；前缀 aria-hidden；被 100+ 处使用。"}
+{"id":"chunk-rshven70.js#S","doc":"运行时公共常量：React Compiler 的两个哨兵符号与 Bun 打包器帮助函数（实属运行时/vendor，被误归到本模块）。"}
+{"id":"chunk-9t1jcaah.js#z","doc":"fflate 解压常量表（第三方库 fflate 的 inflate 实现，被误归到 AnimatedAsterisk）。"}
