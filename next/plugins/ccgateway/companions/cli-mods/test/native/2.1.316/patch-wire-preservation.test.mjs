@@ -244,7 +244,10 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   // before the official runtime version and the first-turn tool injection,
   // never released; 2.1.312: ccgateway-v47-stored-login; 2.1.310:
   // ccgateway-v48-stored-login; 2.1.304: ccgateway-v49-stored-login).
-  assert.equal(patchManifest.extension, 'ccgateway-v44-stored-login');
+  // 2026-11-03: ccgateway-v45-first-party-shape (was ccgateway-v44-stored-login); the first-party shape conversion
+  // changed the shared support modules and the profile's native bindings.
+  assert.equal(patchManifest.extension, 'ccgateway-v45-first-party-shape');
+  assert(patchManifest.capabilities.includes('build_first_party_shape_v1'));
   assert(patchManifest.capabilities.includes('build_injection_tools_v2'));
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_capture_v1'));
@@ -266,7 +269,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(cli.includes('if(t[0]==="request"){let{runRequest}=await import("./ccgateway-request-entry.js");process.exit(await runRequest(t.slice(1),o))}'));
   assert.equal(cli.split('./ccgateway-request-entry.js').length, 2);
   assert.doesNotMatch(cli, /ccgPrefix|ccgBilling|ccgDirect|ccgHead/);
-  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1","request_levels_v1","client_user_agent_v1","request_capture_v1","management_http_v1","build_session_state_v1","build_injection_tools_v2"]/);
+  assert.match(cli, /"request_identity_v1","build_identity_line_v1","direct_billing_v1","request_agent_context_v1","build_injection_v1","request_levels_v1","client_user_agent_v1","request_capture_v1","management_http_v1","build_session_state_v1","build_injection_tools_v2","build_first_party_shape_v1"]/);
   // The command's wiring is its support module: CC's fast-path policy, the
   // native bindings it composes, and the command itself.
   const entry = fs.readFileSync(path.join(output, 'ccgateway-request-entry.js'), 'utf8');
@@ -282,7 +285,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert.deepEqual(profile.natives.entry, { loadFastPathPolicy: 'chunk-hhv17y7d.js:loadFastPathPolicy' });
   assert.deepEqual(profile.natives.natives, { oauthBeta: 'chunk-bwbq4xvm.js:UEe', requestIdentity: 'chunk-w5ndchqs.js:vVe', attributionHeader: 'chunk-w5ndchqs.js:JXs',
     billingHeaderPrefix: 'chunk-1t61stbc.js:fit', reminderOpen: 'chunk-bbtre4r8.js:Zx', attributionFingerprint: 'chunk-s61vbvea.js:Vei', mainAgentContext: 'chunk-aepeg2w5.js:ad',
-    querySourceFor: 'chunk-7z0xhm2s.js:nue', ccgatewayLayerVocabulary: 'chunk-e6aww6q8.js:ccgatewayLayerVocabulary', ccgatewayPromptTurn: 'chunk-e6aww6q8.js:ccgatewayPromptTurn' });
+    querySourceFor: 'chunk-7z0xhm2s.js:nue', ccgatewayLayerVocabulary: 'chunk-e6aww6q8.js:ccgatewayLayerVocabulary', ccgatewayPromptTurn: 'chunk-e6aww6q8.js:ccgatewayPromptTurn', ccgatewayBuiltInAgents: 'chunk-e6aww6q8.js:ccgatewayBuiltInAgents' });
   const natives = fs.readFileSync(path.join(output, 'ccgateway-request-natives.js'), 'utf8');
   assert(natives.includes("from './ccgateway-native-natives.js';"));
   assert(!/from '\.\/chunk-/.test(natives));
@@ -295,7 +298,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   // The beta order is the builder's own list, read by AST from the hash-bound
   // core and installed in its support module; the core exports nothing of it.
   const betas = fs.readFileSync(path.join(output, 'ccgateway-request-betas.js'), 'utf8');
-  assert.match(betas, /^import \{ modelBetas \} from '\.\/ccgateway-native-command\.js';\nimport \{ [\w$]+(,[\w$]+)* \} from "\.\/chunk-bwbq4xvm\.js";\n/m);
+  assert.match(betas, /^import \{ modelBetas, promptCachingScopeBeta, cacheDiagnosisBeta, extendedCacheTtlBeta \} from '\.\/ccgateway-native-command\.js';\nimport \{ [\w$]+(,[\w$]+)* \} from "\.\/chunk-bwbq4xvm\.js";\n/m);
   const builderBetas = /const builderBetas = \[([^\]]*)\];/.exec(betas)[1].split(',');
   assert.equal(builderBetas.length, 12, 'the builder pushes twelve betas');
   assert.equal(new Set(builderBetas).size, builderBetas.length);

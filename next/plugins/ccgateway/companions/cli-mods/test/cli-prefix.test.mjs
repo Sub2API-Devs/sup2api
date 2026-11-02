@@ -43,7 +43,7 @@ test('the command sends build as it returned it, and direct unchanged', async ()
     await installSupport(dir, ['request-command', 'request-options', 'request-output', 'request-error', 'request-identity', 'request-policy', 'request-agent']);
     for (const [name, code] of Object.entries({
       'stub-transport.js': 'export class AnthropicClient {} export const createClient=async()=>new AnthropicClient(); export const modelFetch=()=>{};',
-      'stub-context.js': 'export const mainAgentContext=()=>({});export const modelBetas=()=>[];',
+      'stub-context.js': 'export const mainAgentContext=()=>({});export const modelBetas=()=>[];export const promptCachingScopeBeta={name:"prompt_caching_scope",header:"prompt-caching-scope-2026-01-05"},cacheDiagnosisBeta={name:"cache_diagnosis",header:"cache-diagnosis-2026-04-07"},extendedCacheTtlBeta={name:"extended_cache_ttl",header:"extended-cache-ttl-2025-04-11"};',
       'stub-betas.js': 'export const betasAllowed=()=>true;',
       'stub-session.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
       // Build reports what it assembled, and the apiKey flag it was given.

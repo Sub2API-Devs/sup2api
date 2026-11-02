@@ -1,7 +1,7 @@
 // The identity source decides what metadata.user_id the upstream request
 // carries. Only the verified Worker supplies this context; no account secret or
 // client identifier enters the CLI environment.
-import { uuidV4Pattern as uuid } from './shared.js';
+import { uuidV4Pattern as uuid, uuidPattern as anyUUID } from './shared.js';
 
 const modes = new Set(['client', 'worker', 'replace']);
 
@@ -22,9 +22,10 @@ function identity() {
       value.session_id !== undefined && !uuid.test(value.session_id) ||
       value.device_id !== undefined && !/^[0-9a-f]{64}$/.test(value.device_id) ||
       value.parent_session_id !== undefined && !uuid.test(value.parent_session_id) ||
-      Object.keys(value).some(key => !['version', 'mode', 'rewrite', 'session_id', 'device_id', 'parent_session_id', 'carrier', 'previous'].includes(key)) ||
+      Object.keys(value).some(key => !['version', 'mode', 'rewrite', 'session_id', 'device_id', 'parent_session_id', 'carrier', 'previous', 'spawn'].includes(key)) ||
       value.carrier !== undefined && !['json', 'object', 'flat'].includes(value.carrier) ||
-      value.previous !== undefined && (value.session_id === undefined || !validPrevious(value.previous))) {
+      value.previous !== undefined && (value.session_id === undefined || !validPrevious(value.previous)) ||
+      value.spawn !== undefined && (value.session_id === undefined || !validSpawn(value.spawn))) {
     throw Error('Invalid Worker request identity');
   }
   cachedRaw = raw; cachedValue = value;
@@ -35,15 +36,24 @@ function identity() {
 // session_state.go): the thread (main, or a subagent's agent ID), the
 // request-id Claude Code accepts as cc_prev_req (the native header's own
 // test), and on the main thread a turn position the native count writes
-// (promptIndex <= turnIndex <= 1e7) with its prompt's hash.
+// (promptIndex <= turnIndex <= 1e7) with its prompt's hash. For a request
+// converted to the first-party shape (build_first_party_shape_v1) it may also
+// hold the answer's message ID (the native cc_prev_msg test), the prompt ID
+// the thread's header used and, for a subagent, its agent type.
 const turnBound = 1e7;
 const count = (value, least) => Number.isInteger(value) && value >= least && value <= turnBound;
+const messageID = /^msg_[A-Za-z0-9_]{1,64}$/;
+const agentType = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/;
+const shapeFields = value => (value.message_id === undefined || typeof value.message_id === 'string' && messageID.test(value.message_id)) &&
+  (value.prompt_id === undefined || typeof value.prompt_id === 'string' && anyUUID.test(value.prompt_id)) &&
+  (value.agent_type === undefined || typeof value.agent_type === 'string' && agentType.test(value.agent_type));
 function validPrevious(previous) {
   if (!previous || typeof previous !== 'object' || Array.isArray(previous) ||
-      Object.keys(previous).some(key => !['thread', 'request_id', 'turn_position', 'prompt_hash'].includes(key))) return false;
+      Object.keys(previous).some(key => !['thread', 'request_id', 'turn_position', 'prompt_hash', 'message_id', 'prompt_id', 'agent_type'].includes(key))) return false;
   const { thread, request_id: id, turn_position: turn, prompt_hash: hash } = previous;
   if (typeof thread !== 'string' || !/^[!-~]{1,256}$/.test(thread)) return false;
   if (id !== undefined && !/^req_[A-Za-z0-9_-]{1,36}$/.test(id)) return false;
+  if (!shapeFields(previous) || thread === 'main' && previous.agent_type !== undefined) return false;
   if ((turn === undefined) !== (hash === undefined)) return false;
   if (turn === undefined) return true;
   return thread === 'main' && typeof hash === 'string' && /^[0-9a-f]{64}$/.test(hash) && turn !== null && typeof turn === 'object' &&
@@ -51,10 +61,25 @@ function validPrevious(previous) {
     count(turn.turn_index, 1) && count(turn.prompt_index, 0) && turn.prompt_index <= turn.turn_index;
 }
 
+// validSpawn is what the Worker read off the parent thread's last answer for
+// a subagent's first request (first-party shape): the Agent call whose
+// prompt is this subagent's, with the parent's prompt ID and the agent type
+// it asked for.
+function validSpawn(spawn) {
+  return spawn !== null && typeof spawn === 'object' && !Array.isArray(spawn) &&
+    Object.keys(spawn).every(key => ['prompt_id', 'agent_type'].includes(key)) && spawn.message_id === undefined && shapeFields(spawn);
+}
+
 // previousSession is what the Worker remembers of the request's upstream
 // session (request-session.js), or undefined.
 export function previousSession() {
   return identity()?.previous;
+}
+
+// spawnContext is the parent's Agent call that spawned this subagent, as the
+// Worker proved it (first-party shape), or undefined.
+export function spawnContext() {
+  return identity()?.spawn;
 }
 
 // requestSessionID is the root session the CLI must use, so the transport

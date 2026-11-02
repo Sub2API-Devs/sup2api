@@ -25,7 +25,9 @@ const validTurn = turn => Boolean(turn) && Number.isInteger(turn.turnIndex) && N
 // requestThread is the thread a request is built as: the main thread, or the
 // subagent's agent ID (undefined when a subagent has none: such a request
 // does not use the memory).
-export const requestThread = agent => !agent || agent.requestClass === 'main' ? mainThread : agent.agentContext?.agentId;
+// A compaction request is the main thread's (CC sends it from the main
+// thread's transcript, with its last answered request).
+export const requestThread = agent => !agent || agent.requestClass === 'main' || agent.requestClass === 'compaction' ? mainThread : agent.agentContext?.agentId;
 
 // promptHash tells a prompt sent again (a retry) from a new one.
 export const promptHash = content => createHash('sha256').update(JSON.stringify(content ?? null)).digest('hex');

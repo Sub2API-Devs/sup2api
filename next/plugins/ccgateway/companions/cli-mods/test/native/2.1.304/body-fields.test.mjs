@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { validateBuildParameters, mergeAdditionalParameters, wireToolDefinitions, nativeParameterFields, generationControls } from '../../../request-parameters.js';
+import { validateBuildParameters, mergeAdditionalParameters, wireToolDefinitions, nativeParameterFields, generationControls, nativeBodyOrder } from '../../../request-parameters.js';
 import { parseRequestJSON, parseBuildJSON } from '../../../request-options.js';
 import { installSupport, linkNatives } from '../../support.mjs';
 import { pinned } from '../../artifacts.mjs';
@@ -50,4 +50,16 @@ test('the native body literal matches the adapter\'s field ownership', { skip: n
   // value over the native builder's.
   const extensions = new Set(['agentContext', 'context_management', 'safeguards', 'type', 'classifier_context', 'speed', 'thread', 'previous_message_id', 'diagnostics']);
   for (const field of nativeKeys) if (!nativeParameterFields.includes(field)) assert(extensions.has(field), `${field} is neither native-owned nor a client extension`);
+  // The body's members in the literal's order, conditional ones (a spread of
+  // an object literal) included: the order build writes them in
+  // (request-parameters.js nativeBodyOrder, 2026-11-03).
+  const order = [];
+  for (const property of body[0].init.properties) {
+    if (property.type === 'ObjectProperty') { order.push(property.key.name ?? property.key.value); continue; }
+    const objects = find(property, node => node.type === 'ObjectExpression');
+    for (const object of objects.filter(o => !objects.some(other => other !== o && other.start <= o.start && other.end >= o.end))) {
+      for (const inner of object.properties) if (inner.type === 'ObjectProperty') order.push(inner.key.name ?? inner.key.value);
+    }
+  }
+  assert.deepEqual(order, [...nativeBodyOrder]);
 });

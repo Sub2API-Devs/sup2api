@@ -66,6 +66,8 @@ function billingApi(c) {
     requestBilling: system => requestBilling(c, system),
     hasBilling: system => hasBilling(c, system),
     setLeadingBillingField: (system, field, value) => setLeadingBillingField(c, system, field, value),
+    thirdPartyBilling: system => thirdPartyBilling(c, system),
+    completeBillingHeader: (nativeBilling, client, policy) => completeBillingHeader(c, nativeBilling, client, policy),
   };
 }
 function error(message, status = 400) {
@@ -570,4 +572,58 @@ function setLeadingBillingField(c, system, field, value) {
   const blocks = structuredClone(system);
   blocks[0].text = splice(blocks[0].text, [{ start: existing.start, end: existing.end, value }]);
   return blocks;
+}
+
+// The third-party shape (2026-11-03): Claude Code connected through a custom
+// ANTHROPIC_BASE_URL writes its header with the fields native Dns does not
+// gate on the first-party shape only (cc_version, cc_entrypoint, and
+// cc_workload and cc_is_subagent when they apply); the rest (cch,
+// cc_prev_req, cc_prompt_id, the turn fields, ...) only for the first-party
+// shape. thirdPartyBilling is the client's fields when the system opens with
+// such a header and nothing else in that block, from a client version whose
+// first-party field set is the one this CLI writes (2.1.304 and later: the
+// same nine fields in every restored version); null otherwise.
+const thirdPartyFields = new Set(['cc_version', 'cc_entrypoint', 'cc_workload', 'cc_is_subagent']);
+const firstPartyFieldsSince = [2, 1, 304];
+function thirdPartyBilling(c, system) {
+  if (!Array.isArray(system) || system[0]?.type !== 'text' || typeof system[0].text !== 'string') return null;
+  const header = leadingHeader(c, system[0].text);
+  if (!header || header.line.body !== system[0].text) return null;
+  const fields = fieldValues(header.keys);
+  if (Object.keys(fields).some(field => !thirdPartyFields.has(field)) || fields.cc_entrypoint === undefined) return null;
+  if (fields.cc_is_subagent !== undefined && fields.cc_is_subagent !== 'true') return null;
+  const version = /^(\d+)\.(\d+)\.(\d+)\.[0-9a-f]{3}$/.exec(fields.cc_version ?? '');
+  if (!version) return null;
+  const parts = version.slice(1, 4).map(Number);
+  const at = parts.findIndex((part, i) => part !== firstPartyFieldsSince[i]);
+  if (at >= 0 && parts[at] < firstPartyFieldsSince[at]) return null;
+  return fields;
+}
+
+// completeBillingHeader is the first-party header for a client's third-party
+// one: the line CC's own builder (native Dns, captured from the build) wrote
+// for this request, in its own field order and spelling, with the client's
+// own values where the two shapes share a field: its cc_version (the client's
+// version and attribution fingerprint) and cc_workload, unless the policy
+// makes the Worker own cc_version. The entrypoint is already the request's
+// (setEntrypointOnRequests) and the subagent field follows the same agent
+// context, so a native line that disagrees with the client on either, or one
+// that is not the first-party shape (no cch), is not used: null.
+function completeBillingHeader(c, nativeBilling, client, policy = {}) {
+  if (typeof nativeBilling !== 'string' || !client) return null;
+  const generated = leadingHeader(c, nativeBilling);
+  if (!generated || generated.line.body !== nativeBilling) return null;
+  const fields = [...generated.keys].map(([field, { value }]) => [field, value]);
+  // The native line is prefix, then "field=value;" each after one space.
+  const render = list => c.billingHeader + list.map(([field, value]) => ` ${field}=${value};`).join('');
+  if (render(fields) !== nativeBilling) return null;
+  const native = Object.fromEntries(fields);
+  if (native.cch === undefined || native.cc_version === undefined) return null;
+  const worker = field => policy.build_billing_sources?.[field] === 'worker';
+  if (!worker('cc_entrypoint') && native.cc_entrypoint !== client.cc_entrypoint) return null;
+  if ((native.cc_is_subagent === undefined) !== (client.cc_is_subagent === undefined)) return null;
+  const out = fields.filter(([field]) => field !== 'cc_workload' || client.cc_workload !== undefined)
+    .map(([field, value]) => [field, field === 'cc_version' && !worker('cc_version') ? client.cc_version : field === 'cc_workload' ? client.cc_workload : value]);
+  if (client.cc_workload !== undefined && native.cc_workload === undefined) out.splice(out.findIndex(([field]) => field === 'cch') + 1, 0, ['cc_workload', client.cc_workload]);
+  return render(out);
 }

@@ -136,6 +136,29 @@ export const ccgatewayDefaultPrompt = async (tools, model, appended) => {
   const append = appended.reduce((joined, text) => ccgatewayJoinAppend(joined, text), undefined);
   return native_systemPromptBlocks([...native_withToolSections(await native_defaultSystemPrompt(tools, model), { tools, memoryMechanicsPrompt: null, appendSystemPrompt: void 0 }), ...append ? [append] : []]);
 };
+// The first-party shape of a client's system prompt (2026-11-03,
+// first-party-shape.js). ccgatewayPromptSections is CC's default prompt for
+// the tools and model as the session's sections: the static ones, the
+// dynamic boundary (when this CLI's prompt has one, as the first-party shape
+// does), then the dynamic ones. ccgatewayFirstPartySystem is CC's own system
+// blocks for its prompt texts (the header, the line, the sections around the
+// boundary): CC's split (s2o) and cache markers, with the given lifetime.
+export const ccgatewayPromptSections = async (tools, model) => {
+  const sections = await ccgatewayDefaultPrompt(tools, model, []);
+  const at = sections.indexOf(native_dynamicBoundary);
+  return at < 0 ? null : { static: sections.slice(0, at), dynamic: sections.slice(at + 1), boundary: native_dynamicBoundary };
+};
+export const ccgatewayFirstPartySystem = (texts, caching, cacheTtl) => native_systemCacheBlocks(texts, caching, { cacheTtl });
+// The openings of CC's compaction prompts (its prompt builder's own opening
+// paragraph, for the two summary forms it asks for): a request whose last
+// prompt opens with one is CC's compaction request, which a third-party
+// client sends without its request-class header.
+// The opening line of CC's reminder that announces the deferred tools (the
+// names follow, one a line): CC's prompt builder writes its static sections
+// for its whole tool pool, deferred tools included, which a request lists
+// only there.
+export const ccgatewayDeferredToolsOpening = () => native_deferredToolsOpening;
+export const ccgatewayCompactionOpenings = () => [native_compactionPrompt(native_compactionAnalysis), native_compactionPrompt(native_compactionSummary)];
 // The permission context a fresh non-interactive session starts with.
 export const ccgatewayPermissionContext = () => native_permissionContext();
 // The agents Claude Code has without any agent files or plugins: its built-in

@@ -29,7 +29,7 @@
 
 - `p1`（:8788）→ `w1`（:8787，OAuth：假的已登录凭据 + `CLAUDE_CODE_OAUTH_TOKEN`）。
 - `p3`（:8778）→ `w3`（:8777，API Key 账号，`CREDIT_SIM=1`：带 credit beta 的请求先查 Worker 资源身份，再加跟踪头，模拟核心 0.1.187+ 的 credit 路径）。`w3` 的 CLI 经 `shim.sh` 包一层：离线容器里定制 CLI 的 `auth status --json` 会等管理端点，shim 只代答这一个子命令，模型请求不经过它。
-- 客户端都设 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`：客户端指向自定义地址时会少发很多 CC 字段（`cch`、`cc_prompt_id`、request-class 等头、`diagnostics`、一块 system），设了以后形状与直连官方相同。线上用户是改 base URL 接入的，评估网关保真度要从客户端实际发来的东西出发。
+- 客户端都设 `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1`：客户端指向自定义地址时会少发很多 CC 字段（`cch`、`cc_prompt_id`、request-class 等头、`diagnostics`、一块 system），设了以后形状与直连官方相同。线上用户是改 base URL 接入的，评估网关保真度要从客户端实际发来的东西出发。`thirdparty` 模式的 B 侧例外：按线上用户的接法不设这个变量，测网关把三方形状转成一方形状（2026-11-03 用户决定）。
 
 ## 目录与脚本
 
@@ -41,6 +41,7 @@
 | `values.sh` + `values.cjs` + `values-verify.cjs` | `values` 模式：12 个“客户端值保真”请求与断言 |
 | `conc.sh` | `conc` 模式：两个被跟踪的 credit 流同时在途 |
 | `classify.sh` + `noncc3.cjs` | `classify` 模式：计费头位置决定 CC / 非 CC 归类 |
+| `thirdparty.sh` + `fp-compare.cjs` | `thirdparty` 模式（2026-11-03）：官方客户端按线上用户的接法（自定义 `ANTHROPIC_BASE_URL`、**不设** `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`）发三方形状，经网关转成一方形状（能力 `build_first_party_shape_v1`）；A 侧是同一客户端的一方形状直连假上游。`fp-compare.cjs <cap 根> [场景…]` 先查 B 侧不变式（`cch=00000`、prompt-id 头等于 `cc_prompt_id`、压缩以外都有 prompt/turn 字段、子代理类型不是 `custom`、都带 `diagnostics`、prompt ID 的共用方式与 A 相同；`-off`/`-direct` 场景查"没有转换"），再规范化后列出 A/B 每处剩余差异与汇总，不变式失败时退出码 1 |
 | `shim.sh` | 只代答 `auth status`（见上），其余转给镜像里的 `/opt/ccgateway/cli/<CC_VERSION>/claude` |
 | `fake-upstream.cjs` | 假上游（TLS over unix socket）：每个请求按到达顺序记成 `req-NN.json`（`rawHeaders` 保序、`body`、`rawBody` 原文）；按 `SCENARIO` 回答（`text`、`tool`、`subagent`、`sub1/2/3`、`bg`、`fork`、`aux`、`credit`、`credit-slow`、`error400`）；另答 Worker 资源身份探测 `GET /api/oauth/profile`（写 `profile.json`，不计入请求） |
 | `proxy.cjs` | 扮演核心：原样转发，只加策略头（`CREDIT_SIM=1` 时再加 credit 跟踪头）；记录入站 `in-NN.json`（原始头与正文）与 Worker 答复 `resp-NN.json`（状态、头、trailer、正文、首字节/结束时间） |
@@ -94,6 +95,7 @@
 | `values` | 客户端值保真 12 个请求，并当场执行 `values-verify.cjs` | `cap/values/` | `values done`（前面有 `values N/12 pass`） |
 | `conc` | 两个被跟踪的 credit 流并发 | `cap/credit-concurrent/` | `conc done` |
 | `classify` | 计费头位置归类 3 个请求 | `cap/noncc-classify/` | `classify done` |
+| `thirdparty` | 三方形状客户端 15 个场景（下文"其他模式的场景"）；完成后在宿主机对 `work-<标签>/cap` 单独跑 `fp-compare.cjs` | `cap/tp-*/` | `thirdparty done` |
 | `smoke` | 冒烟：官方客户端一次、非 CC 一次、credit 一次、资源身份、API Key 账号一次 | `cap/smoke-*` | `smoke done` |
 | `calib1` / `calib2` | 校准（同一批简化场景各跑一遍，看噪声） | `cal1/` / `cal2/` | `calib done (...)` |
 
@@ -189,6 +191,12 @@
 | `values` | values | 12 个：`numbers`（tool_use 与 schema 里的 `12345678901234567891`、`1.0`、`-0`、`1e2`、`0.1`、`1.00000000000000001`、`99999999999999999999`、`-9007199254740993`）、`numbers-direct`、`top-k-extra`（`top_k:5.0` 与未知字段 `x_future`）、`max-tokens-inexact`、`max-tokens-ten`（`10.0`）、`max-tokens-zero`、`thinking-future`（未知类型）、`thinking-no-budget`、`stream-string`（`"true"`）、`user-id-number`、`user-id-bad-json`、`user-id-number-direct` |
 | `credit-concurrent` | conc | 两个被跟踪的流式 credit，间隔 0.2 秒发出 |
 | `noncc-classify` | classify | 三个请求带同样的伪造子代理头：计费头在第二块、无计费头、计费头在首块 |
+| `tp-main-low`、`tp-main-micro`、`tp-main-stream`、`tp-sonnet-low` | thirdparty | 单轮（低 / 微 / stream-json / Sonnet 4.6，后者的静态段依赖 reminder 里的延迟工具） |
+| `tp-main-off`、`tp-main-direct` | thirdparty | 对照：策略 `first_party_shape:false`、direct，B 侧必须不转换 |
+| `tp-tool-low`、`tp-subagent-low`、`tp-sub3-low` | thirdparty | 工具循环、一层子代理、三层嵌套子代理（prompt ID 跨子代理共用、agent type 不是 `custom`） |
+| `tp-turn2-low`、`tp-compact-low` | thirdparty | 两轮（第二轮 `--continue`）、第二轮 `/compact`（压缩请求不带 prompt/turn，带 `diagnostics`） |
+| `tp-token-low`、`tp-apikey-low`、`tp-apikey-account` | thirdparty | 客户端用 `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_API_KEY` 接入、API Key 账号（经 `p3`/`w3`） |
+| `tp-entry-cli` | thirdparty | `CLAUDE_CODE_ENTRYPOINT=cli`（`cc_turn_origin` 按入口） |
 | `smoke-main`、`smoke-plain`、`smoke-credit`、`smoke-apikey` | smoke | 冒烟 |
 | `c-main-low`、`c-tool-low`、`c-sub-low`、`c-direct`、`c-sonnet`、`c-identity`、`c-context`、`c-sub3`、`c-credit-stream` | calib1/calib2 | 校准 |
 

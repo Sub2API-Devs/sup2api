@@ -36,7 +36,7 @@ func requestCancellationPeer() {
 		_ = file.Close()
 		if target := os.Getenv("CCG_TEST_REQUEST_ENV_CAPTURE"); target != "" {
 			values := map[string]string{}
-			for _, name := range []string{"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "DISABLE_TELEMETRY", "DO_NOT_TRACK", "DISABLE_ERROR_REPORTING", "CLAUDE_CODE_ENABLE_TELEMETRY", "CCG_REPORT_CONTAINER_RESOURCES", "CCG_HARDWARE_PROFILE_PATH", requestIdentityEnv, directPolicyEnv, requestAgentEnv, "CLAUDE_CODE_REMOTE_SESSION_ID", "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL",
+			for _, name := range []string{"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "DISABLE_TELEMETRY", "DO_NOT_TRACK", "DISABLE_ERROR_REPORTING", "CLAUDE_CODE_ENABLE_TELEMETRY", "CCG_REPORT_CONTAINER_RESOURCES", "CCG_HARDWARE_PROFILE_PATH", requestIdentityEnv, directPolicyEnv, requestAgentEnv, firstPartyShapeEnv, "CLAUDE_CODE_REMOTE_SESSION_ID", "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL",
 				"CCG_API_KEY", "CCG_ADMIN_KEY", "ccg_api_key", "CCG_ACCOUNT_DISK_QUOTA_BYTES"} {
 				if value, ok := os.LookupEnv(name); ok {
 					values[name] = value
@@ -70,6 +70,12 @@ func requestCancellationPeer() {
 			_, _ = io.WriteString(os.Stdout, cancellationFirstEvent)
 			_, _ = io.WriteString(os.Stderr, cancellationErrorFrame)
 			os.Exit(1)
+		}
+		// CCG_TEST_REQUEST_ANSWER_BODY is the answer's event stream, when the
+		// test reads it (answer_observer.go).
+		if body := os.Getenv("CCG_TEST_REQUEST_ANSWER_BODY"); body != "" {
+			_, _ = io.WriteString(os.Stdout, body)
+			return
 		}
 		_, _ = io.WriteString(os.Stdout, cancellationFirstEvent+"event: message_stop\ndata: {}\n\n")
 		return

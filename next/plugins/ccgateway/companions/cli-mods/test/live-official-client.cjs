@@ -37,6 +37,13 @@ const scenarios = [
   { id: 'custom_system', entrypoint: 'sdk-ts', flags: ['--system-prompt', 'LIVE CUSTOM SYSTEM: keep this text exactly.', '--exclude-dynamic-system-prompt-sections'],
     policy: multi, custom_system: true },
   { id: 'session_first', entrypoint: 'sdk-ts', session: true, flags: ['--session-id', sessionID], policy: {} },
+  // The first-party shape (2026-11-03): this official client connects through
+  // ANTHROPIC_BASE_URL, so it sends its third-party shape, which the Worker's
+  // default policy converts. Every other scenario runs with
+  // first_party_shape false, the preservation oracle; these two compare the
+  // conversion undone (firstPartyUndone) with the same oracle.
+  { id: 'first_party_default', policy: {}, first_party: true },
+  { id: 'first_party_directory', policy: { build_attachment_sources: { primary_directory: 'worker' } }, must_change: ['primary_directory'], first_party: true },
   { id: 'session_resume', entrypoint: 'sdk-ts', session: true, flags: ['--resume', sessionID], policy: multi,
     must_change: ['primary_directory', 'shell', 'cc_entrypoint'], resumed: true },
 ];
@@ -171,7 +178,7 @@ function nativeMetadata(value) {
       const headers = new Headers();
       for (const [key, value] of Object.entries(req.headers))
         if (!['host', 'content-length', 'connection', 'transfer-encoding'].includes(key) && value !== undefined) headers.set(key, Array.isArray(value) ? value.join(',') : value);
-      const policy = { schema_version: 1, relay_mode: active.mode ?? 'build', cli_version: version, ...active.policy };
+      const policy = { schema_version: 1, relay_mode: active.mode ?? 'build', cli_version: version, ...active.first_party ? {} : { first_party_shape: false }, ...active.policy };
       headers.set('x-ccgateway-request-policy', JSON.stringify(policy));
       const entry = { case_id: active.id, raw: raw.toString('utf8'), body: JSON.parse(raw.toString('utf8')), raw_sha256: sha(raw),
         client_key_matched: req.headers['x-api-key'] === clientKey,
@@ -195,6 +202,24 @@ function nativeMetadata(value) {
     }
   });
   await new Promise(resolve => proxy.listen(18089, '127.0.0.1', resolve));
+  // firstPartyUndone is a converted request with the conversion undone, for
+  // the preservation oracle, after checking what the conversion must have
+  // done: CC's first-party header (the cch placeholder, a prompt ID that the
+  // prompt-id header carries too, the turn fields, the client's cc_version),
+  // CC's four blocks (the line unmarked, the static block global), and the
+  // first request's diagnostics.
+  function firstPartyUndone(wire, input, check) {
+    const system = normalizeSystem(wire.system), client = normalizeSystem(input.system), header = system[0]?.text ?? '';
+    const field = (line, name) => new RegExp('(?:^|[ :])' + name + '=([^;]+);').exec(line)?.[1];
+    check('first-party.header', field(header, 'cch') === '00000' && /^[0-9a-f-]{36}$/.test(field(header, 'cc_prompt_id') ?? '') && field(header, 'cc_turn_origin') !== undefined, { header });
+    check('first-party.client-version', field(header, 'cc_version') === field(client[0]?.text ?? '', 'cc_version'));
+    check('first-party.split', system.length === 4 && client.length === 3 && system[1].cache_control === undefined && system[2].cache_control?.scope === 'global' && client[2].text === system[2].text + '\n\n' + system[3].text);
+    check('first-party.diagnostics', JSON.stringify(wire.diagnostics) === JSON.stringify({ previous_message_id: null }));
+    const out = structuredClone(wire);
+    delete out.diagnostics;
+    if (system.length === 4 && client.length === 3) out.system = [client[0], { ...system[1], ...client[1].cache_control && { cache_control: client[1].cache_control } }, { ...system[3], text: system[2].text + '\n\n' + system[3].text }];
+    return out;
+  }
   for (const scenario of scenarios) {
     active = scenario;
     const start = Date.now(), before = runtime.captures.length, ingressBefore = ingress.length;
@@ -208,7 +233,8 @@ function nativeMetadata(value) {
       check('official.one-live-request', received.length === 1, { count: received.length });
       check('worker.one-upstream-request', sent.length === 1, { count: sent.length });
       if (received.length === 1 && sent.length === 1) {
-        const inbound = received[0], outgoing = sent[0], input = inbound.body, wire = outgoing.body;
+        const inbound = received[0], outgoing = sent[0], input = inbound.body;
+        const wire = scenario.first_party ? firstPartyUndone(outgoing.body, input, check) : outgoing.body;
         row.input = input; row.output = wire; row.client_headers = inbound.client_headers;
         row.ingress_sha256 = inbound.raw_sha256; row.outgoing_sha256 = sha(outgoing.raw);
         check('ingress.client-auth', inbound.client_key_matched && !inbound.client_supplied_policy);

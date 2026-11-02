@@ -76,14 +76,19 @@ function uuidV4(bytes) {
 // the names of the headers that carry the client's own loop state, by field
 // (CC's constants, ccgatewayLayerVocabulary). Mapped values
 // replace the client's only when the context says so; IDs the client never
-// sent are derived in either mode.
-export function resolveAgentContext(context, { billing, prompt = '', querySourceFor, loopHeaders }) {
+// sent are derived in either mode. shape is set for a request converted to
+// the first-party shape (2026-11-03, first-party-shape.js): the upstream
+// session and what the Worker proved of the conversation (spawn, previous);
+// builtInAgents are CC's own agent types.
+export function resolveAgentContext(context, { billing, prompt = '', querySourceFor, loopHeaders, builtInAgents = [], shape, compaction = false }) {
   if (loopFields.some(field => typeof loopHeaders?.[field] !== 'string')) throw Error('Missing native loop header names');
   const { map, key } = context;
   const own = (label, value) => map ? derive(key, label, value) : undefined;
   const claudeCode = billing !== null && billing !== undefined;
   const client = claudeCode ? context.client : {};
-  const requestClass = client.request_class ?? (claudeCode && billing.cc_is_subagent === 'true' ? 'subagent' : 'main');
+  // A converted request whose last prompt is CC's compaction prompt is CC's
+  // compaction request (request-build.js); its client sends no class header.
+  const requestClass = client.request_class ?? (claudeCode && billing.cc_is_subagent === 'true' ? 'subagent' : shape && claudeCode && compaction ? 'compaction' : 'main');
   const clientPrompt = client.prompt_id ?? (claudeCode && uuid.test(billing.cc_prompt_id ?? '') ? billing.cc_prompt_id : undefined);
   const promptId = clientPrompt !== undefined ? (map ? uuidV4(own('prompt', clientPrompt)) : clientPrompt)
     : claudeCode ? undefined : uuidV4(derive(key, 'prompt-text', prompt));
@@ -101,15 +106,41 @@ export function resolveAgentContext(context, { billing, prompt = '', querySource
     // Only a request without one gets a derived ID.
     const agentId = client.agent_id ?? agentID(derive(key, 'agent-text', prompt));
     const parentAgentId = client.parent_agent_id;
-    // A custom agent's type is never sent (CC reports "custom"); a built-in
-    // one's is its name, which CC reads back from the query source.
-    result.querySource = client.agent_type !== undefined && client.agent_type !== 'custom' ? querySourceFor(client.agent_type, true) : querySourceFor(undefined, false);
-    result.agentContext = { agentType: 'subagent', agentId, ...parentAgentId !== undefined && { parentAgentId }, ...promptId !== undefined && { parentPromptId: promptId }, invocationKind: 'spawn' };
+    // What the Worker proved of this subagent (first-party shape): its own
+    // earlier request in the conversation, else the parent's Agent call that
+    // spawned it (on its first request). The prompt ID is the parent
+    // thread's, already as sent upstream.
+    const remembered = shape && (shape.previous?.thread === agentId ? shape.previous : shape.spawn);
+    const subagentPrompt = promptId ?? remembered?.prompt_id;
+    // The client's own type: a custom agent's is never sent (CC reports
+    // "custom"); a built-in one's is its name, which CC reads back from the
+    // query source. A type read off the parent's Agent call counts only when
+    // it is one of CC's own agents. Without a known type the client is
+    // given CC's query source for an agent of no type (agent:default): CC
+    // then writes the subagent class and no agent-type header, where
+    // agent:custom claimed "custom" for what is often general-purpose
+    // (2026-11-03). The build keeps agent:custom.
+    const derivedType = client.agent_type === undefined && builtInAgents.includes(remembered?.agent_type) ? remembered.agent_type : undefined;
+    if (client.agent_type !== undefined) result.querySource = client.agent_type !== 'custom' ? querySourceFor(client.agent_type, true) : querySourceFor(undefined, false);
+    else if (derivedType !== undefined) { result.querySource = querySourceFor(derivedType, true); result.agentType = derivedType; }
+    else { result.querySource = querySourceFor(undefined, false); result.clientSource = querySourceFor(undefined, true); }
+    if (subagentPrompt !== undefined) result.promptId = subagentPrompt;
+    if (promptId === undefined && subagentPrompt !== undefined) result.shapePrompt = true;
+    result.agentContext = { agentType: 'subagent', agentId, ...parentAgentId !== undefined && { parentAgentId }, ...subagentPrompt !== undefined && { parentPromptId: subagentPrompt }, invocationKind: 'spawn' };
     // workflow needs a run CC would have; the class is stated instead.
     if (requestClass === 'workflow') result.explicitClass = 'workflow';
   } else {
     result.querySource = requestClass === 'compaction' ? 'compact' : 'sdk';
     if (requestClass !== 'main' && requestClass !== 'compaction') result.explicitClass = requestClass;
+    // A main thread's prompt ID for a request converted to the first-party
+    // shape whose client sent none: CC makes one per prompt submission and
+    // keeps it for the turn's requests and its subagents. It is derived from
+    // the upstream session, the prompt's turn and its content, so a turn's
+    // requests (its tool loop, a retry) share it and the next prompt gets
+    // another (request-build.js once the turn is known).
+    if (shape && claudeCode && clientPrompt === undefined && requestClass === 'main') {
+      result.derivePromptId = (turnIndex, hash) => uuidV4(derive(key, 'prompt-turn', [shape.session ?? '', turnIndex, hash]));
+    }
   }
   return result;
 }

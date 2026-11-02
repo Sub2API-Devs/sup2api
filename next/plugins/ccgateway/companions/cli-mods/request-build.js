@@ -1,13 +1,14 @@
-import { queryModel, renderAttachment, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns, ccgatewayPermissionContext, ccgatewayBuiltInAgents, ccgatewaySystemRecord,
+import { queryModel, renderAttachment, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns, ccgatewayPermissionContext, ccgatewayBuiltInAgents, ccgatewaySystemRecord, ccgatewayCompactionOpenings, cacheDiagnosisBeta,
   billingHeaderPrefix, isBillingHeader, reminderOpen, reminderClose, mainAgentContext, toolPool as nativeToolPool, identityLine, isIdentityLine,
   getRootSession, setEntrypointOnRequests } from './native-build.js';
 import { requestTool } from './ccgateway-native-tools.js';
 import { prepareBuildInput, wireMessages, wireRecords, fingerprintMessages } from './ccgateway-request-input.js';
-import { continueSession, requestThread } from './ccgateway-request-session.js';
+import { continueSession, requestThread, promptHash } from './ccgateway-request-session.js';
+import { previousSession, spawnContext, requestSessionID } from './ccgateway-request-identity.js';
 import { normalizeBetas, setProtocolHeaders } from './ccgateway-request-headers.js';
 import { createContentPolicy } from './ccgateway-content-policy.js';
 import { validateRequestPolicy, runtimeContext, contentDiagnostic, identityLineFor, injectionChoices } from './ccgateway-request-policy.js';
-import { validateBuildParameters, wireToolDefinitions, mergeAdditionalParameters, generationControls } from './ccgateway-request-parameters.js';
+import { validateBuildParameters, wireToolDefinitions, mergeAdditionalParameters, generationControls, nativeOrder } from './ccgateway-request-parameters.js';
 import { toBlocks } from './ccgateway-shared.js';
 
 // The content policy recognizes CC's own wording: the environment renderers'
@@ -17,6 +18,11 @@ const nativeContentPolicy = () => contentPolicy ??= createContentPolicy({ ...ccg
 const nativeLayers = () => layerVocabulary ??= ccgatewayLayerVocabulary();
 
 const firstPrompt = 'CCGATEWAY_FIRST_PROMPT_7d3c1a';
+
+// The Worker turns the first-party shape conversion on per request
+// (features.FirstPartyShapeCapability, WorkerPolicy.first_party_shape):
+// engine request_command.go sets this variable for build only.
+const firstPartyShapeOn = () => process.env.CCG_FIRST_PARTY_SHAPE === '1';
 
 // collectBuilt runs CC's request builder (queryModel, patched to yield the request
 // instead of sending it) and returns the request body.
@@ -239,16 +245,34 @@ export async function buildRequest(components, headers, signal, resolveAgent, { 
   // The client's own header, wherever it is, makes the request Claude Code's
   // (hasBilling decides the same): its kind and IDs come from that header.
   const clientBilling = billing.requestBilling(initial.systemBlocks);
-  const agent = resolveAgent?.({ billing: clientBilling, prompt: fingerprint[0].message.content });
+  // An official client connected through a custom base URL writes its
+  // third-party shape; when the Worker says so it goes upstream in the
+  // first-party shape (2026-11-03): CC's own header for it, CC's split of
+  // its prompt, and what the Worker proved of the conversation (the upstream
+  // session, this thread's earlier request, the Agent call that spawned it).
+  const thirdParty = firstPartyShapeOn() ? billing.thirdPartyBilling(initial.systemBlocks) : null;
+  const shape = thirdParty && { session: requestSessionID(), previous: previousSession(), spawn: spawnContext() };
+  const agent = resolveAgent?.({ billing: clientBilling, prompt: fingerprint[0].message.content, ...shape && { shape, compaction: compactionRequest(content.messages) } });
   const prompt = !agent || agent.requestClass === 'main' ? markPrompt(records, agent?.promptId, entrypoint) : undefined;
   // A header this build writes continues the upstream session (the Worker's
-  // request-id and turn, request-session.js); the client's own header is the
-  // client's.
-  const continued = clientBilling === null ? continueSession(records, prompt, { human: entrypoint === 'cli', thread: requestThread(agent) }) : undefined;
+  // request-id and turn, request-session.js); so does one it converts. Any
+  // other client header is the client's.
+  const thread = requestThread(agent);
+  const continued = clientBilling === null || thirdParty ? continueSession(records, prompt, { human: entrypoint === 'cli', thread }) : undefined;
+  // The converted main thread's prompt ID, once its turn is known.
+  if (thirdParty && prompt && agent?.derivePromptId) {
+    prompt.promptId = agent.promptId = agent.derivePromptId(prompt.turnPosition?.turnIndex ?? 0, promptHash(prompt.message?.content));
+    agent.shapePrompt = true;
+  }
   const body = initial.request, clientBetas = normalizeBetas(new Headers(headers).get('anthropic-beta'), body.betas);
   const tools = clientTools(initial.customTools);
   const native = {}, controls = generationControls(external.parameters);
   const options = buildOptions(body, initial, content, { controls, agent, clientBetas, fingerprint, tools: external.tools, captureBilling: value => { native.billing = value; }, capturePrefix: value => { native.prefix = value; } });
+  if (thirdParty) {
+    const { firstPartySystem } = await import('./first-party-shape.js');
+    const system = await firstPartySystem(content.system, { model: body.model, tools, messages: content.messages });
+    if (system) options.ccgatewaySystemBlocks = system;
+  }
   // A request with a billing header is Claude Code's own and only has its
   // fields and attachments converted; one without gets the chosen layers.
   const layers = billing.hasBilling(initial.systemBlocks) ? null
@@ -260,7 +284,30 @@ export async function buildRequest(components, headers, signal, resolveAgent, { 
   const identity = identityRequest(policy, entrypoint, { clientBilling, appended: layers?.appended === true, system: content.system, apiKey });
   options.recordedCliPrefix = identity.recorded;
   const built = await collectBuilt({ messages: records, systemPrompt: content.system.map(block => block.text), thinkingConfig: thinkingConfigFor(controls), tools, signal, options }, signal, 'CC request builder did not produce a request');
-  return { ...finishBuilt(built, { body, headers, external, controls, policy, nativeBilling: native.billing, agent, clientBilling, clientBetas, layers, identity }), session: continued };
+  const conversion = thirdParty && { client: thirdParty, system: content.system, messages: content.messages, previous: shape.previous?.thread === thread ? shape.previous : undefined };
+  const { converted, ...finished } = finishBuilt(built, { body, headers, external, controls, policy, nativeBilling: native.billing, agent, clientBilling, clientBetas, layers, identity, conversion });
+  return { ...finished, session: sessionReport(continued, conversion ? converted : undefined, agent) };
+}
+
+// compactionRequest says whether the last user message is CC's compaction
+// prompt: its first text opens with one of the openings CC's compaction
+// prompt builder writes (native, ccgatewayCompactionOpenings).
+function compactionRequest(messages) {
+  const last = messages.findLast(message => message?.role === 'user');
+  const first = toBlocks(last?.content ?? [])?.find?.(block => block?.type === 'text' && typeof block.text === 'string');
+  return first !== undefined && ccgatewayCompactionOpenings().some(opening => typeof opening === 'string' && opening.length > 0 && first.text.startsWith(opening));
+}
+
+// sessionReport is what the Worker keeps of this request once it is answered
+// (request-session.js): for a converted request also the prompt ID its header
+// used and a subagent's type, which the thread's later requests and the
+// subagents it spawns are given. A client header the build could not convert
+// stayed the client's: nothing is kept.
+function sessionReport(continued, converted, agent) {
+  if (!continued || converted === undefined) return continued;
+  if (!converted) return undefined;
+  return { ...continued, ...agent?.promptId !== undefined && { prompt_id: agent.promptId },
+    ...continued.thread !== 'main' && agent?.agentType !== undefined && { agent_type: agent.agentType } };
 }
 
 // convertContent applies the content policy to the system and messages as the
@@ -305,8 +352,8 @@ function applyLayers(options, layers, messages) {
 // finishBuilt completes CC's request: the parameters CC does not own, the
 // cache breakpoint limit, the billing header, the identity line, the betas and
 // stream.
-function finishBuilt(native, { body, headers, external, controls, policy, nativeBilling, agent, clientBilling, clientBetas, layers, identity }) {
-  const { mergeBillingAttribution, setLeadingBillingField } = nativeContentPolicy();
+function finishBuilt(native, { body, headers, external, controls, policy, nativeBilling, agent, clientBilling, clientBetas, layers, identity, conversion }) {
+  const { mergeBillingAttribution, setLeadingBillingField, completeBillingHeader } = nativeContentPolicy();
   // Preserve only parameters which the native builder does not own. Its
   // normalized model/thinking/tool choice/metadata and output effort/format
   // remain authoritative, including intentional omission of those fields.
@@ -314,7 +361,26 @@ function finishBuilt(native, { body, headers, external, controls, policy, native
   // A control the builder could not carry goes as the client wrote it.
   for (const [key, value] of Object.entries(controls.raw)) built[key] = structuredClone(value);
   if (layers?.system) limitBreakpoints(built, layers.ownLines);
-  built.system = mergeBillingAttribution(built.system, policy, nativeBilling, contentDiagnostic);
+  // A converted request carries the header CC's builder wrote for it, with
+  // the client's own values (content-policy.js completeBillingHeader), and
+  // the diagnostics CC writes for its thread. One whose header cannot be
+  // completed goes as the client sent it, whole.
+  const line = conversion ? completeBillingHeader(nativeBilling, conversion.client, policy) : null;
+  if (line !== null) {
+    built.system = structuredClone(built.system);
+    built.system[0] = { ...built.system[0], text: line };
+    // Only where CC's builder writes diagnostics for this model and query
+    // (its own value is one it made up from the client's history). CC sends
+    // its compaction request as a fork of the main thread, which the builder
+    // gives diagnostics whenever it adds the cache diagnosis beta (its own
+    // condition, t$); this build is not a fork, so that beta says it.
+    const diagnosable = native.diagnostics !== undefined || agent?.requestClass === 'compaction' && normalizeBetas(native.betas).includes(cacheDiagnosisBeta.header);
+    const previous = diagnosable ? diagnosticsFor(conversion) : undefined;
+    if (previous !== undefined) built.diagnostics = { previous_message_id: previous };
+  } else {
+    if (conversion) unconverted(built, conversion, agent);
+    built.system = mergeBillingAttribution(built.system, policy, nativeBilling, contentDiagnostic);
+  }
   // The client's header names its prompt; it must match the mapped prompt header.
   if (agent?.billingPromptId) built.system = setLeadingBillingField(built.system, 'cc_prompt_id', agent.billingPromptId);
   // The line the native selector chose and PAs put after the header; without a
@@ -330,7 +396,31 @@ function finishBuilt(native, { body, headers, external, controls, policy, native
   delete built.betas;
   // The native body has no stream; the client's goes last, where Claude Code
   // sends it, and a client that sent none gets none (absent means false).
+  // Every member CC writes goes where CC writes it (request-parameters.js).
   delete built.stream;
-  if ('stream' in body) built.stream = body.stream;
-  return { body: built, headers: Object.fromEntries(outgoingHeaders), identityLine, agent, clientBetas, addedBetas };
+  const sent = nativeOrder(built);
+  if ('stream' in body) sent.stream = body.stream;
+  return { body: sent, headers: Object.fromEntries(outgoingHeaders), identityLine, agent, clientBetas, addedBetas, converted: line !== null };
+}
+
+// diagnosticsFor is a converted request's diagnostics.previous_message_id, as
+// Claude Code writes it from its thread's transcript (the last answer's
+// message ID, null before the first): null when the request's messages hold
+// no answer yet, the remembered answer's ID when the Worker proved that the
+// request continues it, and undefined (no diagnostics) when neither is
+// certain (a shortened or rewritten history, a fork, a request the Worker did
+// not see answered, a thread with another request in flight).
+function diagnosticsFor({ messages, previous }) {
+  if (!messages.some(message => message?.role === 'assistant')) return null;
+  return previous?.message_id;
+}
+
+// unconverted undoes what the conversion set before the build for a request
+// whose header could not be completed: its system goes as the client sent it,
+// and no prompt ID of the conversion's goes out.
+function unconverted(built, conversion, agent) {
+  built.system = structuredClone(conversion.system);
+  if (!agent?.shapePrompt) return;
+  agent.promptId = undefined;
+  if (agent.agentContext) delete agent.agentContext.parentPromptId;
 }

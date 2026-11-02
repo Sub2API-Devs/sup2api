@@ -22,15 +22,27 @@ export function normalizeBetas(...sources) {
 
 // finalBetas is the request's betas as Claude Code writes them: the client's
 // own in the client's order, then the ones the request adds (build's
-// per-request betas, and a login's) where CC orders them. A beta already in
-// the client's list is never added twice; one CC does not order goes last.
+// per-request betas, and a login's) where CC orders them: right after the
+// last listed beta CC writes before it, else before the first one CC writes
+// after it. The betas CC's order does not name (its main query pushes them:
+// effort, thinking-token-count, advanced-tool-use, ...) sit where CC writes
+// them, after its model list and before its builder's betas (order.builderAt,
+// betaOrder): a model-list beta goes ahead of them (2026-11-03, official
+// 2.1.316 Sonnet: the prompt caching scope right after context management), a
+// builder beta after them (the 1-hour cache beta after effort). A beta
+// already in the client's list is never added twice; one CC does not order
+// goes last.
 export function finalBetas(client, additions, order = []) {
-  const rank = beta => order.indexOf(beta), placed = [...client];
+  const unnamed = (order.builderAt ?? order.length) - 0.5, placed = [...client];
+  const rank = beta => { const at = order.indexOf(beta); return at < 0 ? unnamed : at; };
   for (const beta of additions) {
     if (!beta || placed.includes(beta)) continue;
-    const at = rank(beta) < 0 ? -1 : placed.findIndex(listed => rank(listed) > rank(beta));
-    if (at < 0) placed.push(beta);
-    else placed.splice(at, 0, beta);
+    if (!order.includes(beta)) { placed.push(beta); continue; }
+    const before = placed.findLastIndex(listed => rank(listed) < rank(beta));
+    const after = placed.findIndex(listed => rank(listed) > rank(beta));
+    if (before >= 0) placed.splice(before + 1, 0, beta);
+    else if (after >= 0) placed.splice(after, 0, beta);
+    else placed.push(beta);
   }
   return placed;
 }

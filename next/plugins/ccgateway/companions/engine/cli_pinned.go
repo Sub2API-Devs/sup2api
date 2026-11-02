@@ -83,6 +83,11 @@ func (g *Gateway) requestCapabilities() []string {
 	if g.CLIInfo.supports(features.RequestCaptureCapability) {
 		out = append(out, features.RequestCaptureCapability)
 	}
+	// The CLI converts an official client's third-party shape, and the Worker
+	// gives it the conversation's memory (session_state.go, 2026-11-03).
+	if g.CLIInfo.supports(features.FirstPartyShapeCapability) {
+		out = append(out, features.FirstPartyShapeCapability)
+	}
 	// The Worker logs each request at the level its policy names
 	// (request_log_diagnostic.go capture); the CLI takes no part.
 	out = append(out, features.RequestLogPolicyCapability)

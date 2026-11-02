@@ -20,9 +20,9 @@ const chunks = {
   'stub-billing.js': 'export const billingHeaderPrefix = "x-anthropic-billing-header:";',
   'stub-reminder.js': 'export const reminderOpen = "<system-reminder>"; export const reminderClose = "</system-reminder>";',
   'stub-fingerprint.js': 'export const attributionFingerprint = messages => "fingerprint";',
-  'stub-context.js': 'export const mainAgentContext = () => ({}); export const modelBetas = () => [];',
+  'stub-context.js': 'export const mainAgentContext = () => ({}); export const modelBetas = () => []; export const promptCachingScopeBeta={name:"prompt_caching_scope",header:"prompt-caching-scope-2026-01-05"},cacheDiagnosisBeta={name:"cache_diagnosis",header:"cache-diagnosis-2026-04-07"},extendedCacheTtlBeta={name:"extended_cache_ttl",header:"extended-cache-ttl-2025-04-11"};',
   'stub-query-source.js': 'export const querySourceFor = (type, builtIn) => builtIn ? "agent:builtin:" + type : "agent:custom";',
-  'stub-core.js': 'export const ccgatewayLayerVocabulary = () => ({ loopHeaders: {} }); export const ccgatewayPromptTurn = () => ({});',
+  'stub-core.js': 'export const ccgatewayLayerVocabulary = () => ({ loopHeaders: {} }); export const ccgatewayPromptTurn = () => ({}); export const ccgatewayBuiltInAgents = () => [];',
   'stub-transport.js': 'export class AnthropicClient {} export const createClient = async () => new AnthropicClient(); export const modelFetch = () => {};',
   'stub-session.js': 'export const getRootSession = () => ({}); export const setEntrypointOnRequests = () => {};',
   'ccgateway-request-command.js': `import fs from 'node:fs';
@@ -62,7 +62,7 @@ test('the entry asks CC\'s fast-path policy, then runs the command with its nati
     assert.deepEqual(command.args, ['--build', 'body.json']);
     assert.deepEqual(command.natives, ['agentNative', 'directBuild', 'identityBuild', 'oauthBeta']);
     assert.equal(command.oauthBeta, 'oauth-fixture', 'the login\'s beta is the native one');
-    assert.deepEqual(command.agentNative, ['entrypoint', 'leadingBilling', 'loopHeaders', 'prompt', 'querySourceFor', 'requestBilling', 'turn']);
+    assert.deepEqual(command.agentNative, ['builtInAgents', 'entrypoint', 'leadingBilling', 'loopHeaders', 'prompt', 'querySourceFor', 'requestBilling', 'turn']);
     assert.equal(command.identityBuild, 'function');
     assert.equal(command.directBuild, 'function');
   } finally { delete process.env.CCG_FIXTURE_DIR; await fs.rm(f.dir, { recursive: true, force: true }); }

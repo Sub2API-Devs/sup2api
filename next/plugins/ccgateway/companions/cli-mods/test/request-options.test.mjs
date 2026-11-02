@@ -102,11 +102,11 @@ test('OAuth retains native authentication and transport while selecting explicit
 test('the login and cache betas go where Claude Code writes them', () => {
   const native = new Headers({ authorization: 'Bearer native-fixture' });
   const cases = [{
-    order: ['oauth-2025-04-20', 'interleaved-thinking-2025-05-14', 'thinking-token-count-2026-05-13', 'context-management-2025-06-27', 'prompt-caching-scope-2026-01-05', 'claude-code-20250219', 'extended-cache-ttl-2025-04-11', 'cache-diagnosis-2026-04-07'],
+    order: ['oauth-2025-04-20', 'interleaved-thinking-2025-05-14', 'thinking-token-count-2026-05-13', 'context-management-2025-06-27', 'prompt-caching-scope-2026-01-05', 'claude-code-20250219', 'thinking-binding-controls-2026-08-01', 'extended-cache-ttl-2025-04-11', 'cache-diagnosis-2026-04-07'],
     client: 'interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,claude-code-20250219,advanced-tool-use-2025-11-20,thinking-binding-controls-2026-08-01,cache-diagnosis-2026-04-07',
     official: 'oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,claude-code-20250219,advanced-tool-use-2025-11-20,thinking-binding-controls-2026-08-01,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07',
   }, {
-    order: ['claude-code-20250219', 'oauth-2025-04-20', 'interleaved-thinking-2025-05-14', 'thinking-token-count-2026-05-13', 'context-management-2025-06-27', 'prompt-caching-scope-2026-01-05', 'per-turn-control-2026-07-01', 'mid-conversation-tool-changes-2026-07-01', 'extended-cache-ttl-2025-04-11', 'cache-diagnosis-2026-04-07'],
+    order: ['claude-code-20250219', 'oauth-2025-04-20', 'interleaved-thinking-2025-05-14', 'thinking-token-count-2026-05-13', 'context-management-2025-06-27', 'prompt-caching-scope-2026-01-05', 'per-turn-control-2026-07-01', 'mid-conversation-tool-changes-2026-07-01', 'thinking-binding-controls-2026-08-01', 'extended-cache-ttl-2025-04-11', 'cache-diagnosis-2026-04-07'],
     client: 'claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,advanced-tool-use-2025-11-20,mid-conversation-system-clear-at-2026-08-21,effort-2025-11-24,thinking-binding-controls-2026-08-01,cache-diagnosis-2026-04-07',
     official: 'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,advanced-tool-use-2025-11-20,mid-conversation-system-clear-at-2026-08-21,effort-2025-11-24,thinking-binding-controls-2026-08-01,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07',
   }];
@@ -122,6 +122,37 @@ test('the login and cache betas go where Claude Code writes them', () => {
   // Without CC's order a beta goes last, as before.
   assert.deepEqual(finalBetas(['a', 'b'], ['c', 'a']), ['a', 'b', 'c']);
   assert.deepEqual(finalBetas(['a', 'b'], ['x'], ['b', 'x']), ['a', 'b', 'x']);
+  // A model-list beta goes right after the last listed one CC writes before
+  // it, ahead of the client's betas CC's order does not name (official 2.1.316
+  // Sonnet: the prompt caching scope after context management).
+  const sonnet = ['claude-code-20250219', 'oauth-2025-04-20', 'interleaved-thinking-2025-05-14', 'context-management-2025-06-27', 'prompt-caching-scope-2026-01-05', 'thinking-binding-controls-2026-08-01', 'extended-cache-ttl-2025-04-11', 'cache-diagnosis-2026-04-07'];
+  assert.deepEqual(finalBetas(['claude-code-20250219', 'oauth-2025-04-20', 'interleaved-thinking-2025-05-14', 'context-management-2025-06-27', 'thinking-token-count-2026-05-13', 'advanced-tool-use-2025-11-20', 'effort-2025-11-24', 'thinking-binding-controls-2026-08-01'], ['prompt-caching-scope-2026-01-05', 'extended-cache-ttl-2025-04-11', 'cache-diagnosis-2026-04-07'], sonnet).join(','),
+    'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,effort-2025-11-24,thinking-binding-controls-2026-08-01,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07');
+  // With the builder's place known (betaOrder), a builder beta goes after the
+  // betas CC's main query writes (official 2.1.316: effort before the 1-hour
+  // cache beta), a model-list beta still ahead of them.
+  const opus = Object.assign(['claude-code-20250219', 'oauth-2025-04-20', 'interleaved-thinking-2025-05-14', 'context-management-2025-06-27', 'prompt-caching-scope-2026-01-05', 'thinking-binding-controls-2026-08-01', 'extended-cache-ttl-2025-04-11', 'cache-diagnosis-2026-04-07'], { builderAt: 5 });
+  assert.equal(finalBetas([], ['oauth-2025-04-20', 'prompt-caching-scope-2026-01-05', 'effort-2025-11-24', 'extended-cache-ttl-2025-04-11'], opus).join(','),
+    'oauth-2025-04-20,prompt-caching-scope-2026-01-05,effort-2025-11-24,extended-cache-ttl-2025-04-11');
+  assert.equal(finalBetas(['claude-code-20250219', 'oauth-2025-04-20', 'interleaved-thinking-2025-05-14', 'context-management-2025-06-27', 'thinking-token-count-2026-05-13', 'effort-2025-11-24', 'thinking-binding-controls-2026-08-01'], ['prompt-caching-scope-2026-01-05', 'extended-cache-ttl-2025-04-11', 'cache-diagnosis-2026-04-07'], opus).join(','),
+    'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,thinking-token-count-2026-05-13,effort-2025-11-24,thinking-binding-controls-2026-08-01,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07');
+  // The official 2.1.316 client in its third-party shape (2026-11-03 e2e,
+  // tp-main-low, tp-main-stream, tp-sonnet-low): the betas the conversion adds
+  // land where the same client writes them in its first-party shape, which
+  // has only mid-conversation-system-clear-at besides (not converted).
+  const builder = ['context-1m-2025-08-07', 'dangerous-tool-use-2026-09-03', 'thinking-binding-controls-2026-08-01', 'thinking-display-updates-2026-08-18', 'thinking-resumption-2026-07-17', 'fast-mode-2026-02-01', 'afk-mode-2026-01-31', 'extended-cache-ttl-2025-04-11', 'prompt-caching-evict-2026-05-12', 'cache-diagnosis-2026-04-07', 'cache-keepalive-2026-09-03', 'message-threads-2026-08-12'];
+  const cc = (...models) => Object.assign([...models, ...builder], { builderAt: models.length });
+  const opus48 = cc('claude-code-20250219', 'oauth-2025-04-20', 'interleaved-thinking-2025-05-14', 'context-management-2025-06-27', 'prompt-caching-scope-2026-01-05', 'mid-conversation-tool-changes-2026-07-01');
+  const sonnet46 = cc('claude-code-20250219', 'oauth-2025-04-20', 'interleaved-thinking-2025-05-14', 'context-management-2025-06-27', 'prompt-caching-scope-2026-01-05');
+  const added = ['prompt-caching-scope-2026-01-05', 'thinking-binding-controls-2026-08-01', 'cache-diagnosis-2026-04-07'];
+  for (const [order, client, official] of [
+    [opus48, 'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,mid-conversation-tool-changes-2026-07-01,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,effort-2025-11-24,extended-cache-ttl-2025-04-11',
+      'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-tool-changes-2026-07-01,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,effort-2025-11-24,thinking-binding-controls-2026-08-01,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07'],
+    [opus48, 'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,mid-conversation-tool-changes-2026-07-01,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,effort-2025-11-24,thinking-display-updates-2026-08-18,extended-cache-ttl-2025-04-11',
+      'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-tool-changes-2026-07-01,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,effort-2025-11-24,thinking-binding-controls-2026-08-01,thinking-display-updates-2026-08-18,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07'],
+    [sonnet46, 'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,effort-2025-11-24,extended-cache-ttl-2025-04-11',
+      'claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,thinking-token-count-2026-05-13,advanced-tool-use-2025-11-20,effort-2025-11-24,thinking-binding-controls-2026-08-01,extended-cache-ttl-2025-04-11,cache-diagnosis-2026-04-07'],
+  ]) assert.equal(finalBetas(client.split(','), added, order).join(','), official);
 });
 
 test('explicit API key does not select native OAuth even when OAuth metadata is available', () => {

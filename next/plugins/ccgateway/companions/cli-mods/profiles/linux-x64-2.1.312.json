@@ -1,7 +1,7 @@
 {
   "binarySHA256": "4f4178ce41d83e23341ebfbaecdbcf8ea6bf7baea0690025abe49eeec3a5d01d",
   "version": "2.1.312",
-  "extension": "ccgateway-v47-stored-login",
+  "extension": "ccgateway-v50-first-party-shape",
   "bunVersion": "1.4.4",
   "runtimeVersion": "v26.12.1",
   "capabilities": [
@@ -37,6 +37,7 @@
     "request-command",
     "request-input",
     "request-build",
+    "first-party-shape",
     "request-parameters",
     "request-output",
     "request-options",
@@ -76,7 +77,10 @@
       "mainAgentContext": "chunk-f7avdr1b.js:ld",
       "modelBetas": "chunk-f7avdr1b.js:xvn",
       "betasAllowed": "chunk-afamv62a.js:fXr",
-      "setEntrypointOnRequests": "chunk-c2txqh1z.js:setEntrypointOnRequests"
+      "setEntrypointOnRequests": "chunk-c2txqh1z.js:setEntrypointOnRequests",
+      "promptCachingScopeBeta": "chunk-afamv62a.js:vYe",
+      "cacheDiagnosisBeta": "chunk-afamv62a.js:LAt",
+      "extendedCacheTtlBeta": "chunk-afamv62a.js:lYt"
     },
     "natives": {
       "oauthBeta": "chunk-afamv62a.js:dPe",
@@ -88,7 +92,8 @@
       "mainAgentContext": "chunk-f7avdr1b.js:ld",
       "querySourceFor": "chunk-ca54vwf0.js:tde",
       "ccgatewayLayerVocabulary": "chunk-7dmym6x9.js:ccgatewayLayerVocabulary",
-      "ccgatewayPromptTurn": "chunk-7dmym6x9.js:ccgatewayPromptTurn"
+      "ccgatewayPromptTurn": "chunk-7dmym6x9.js:ccgatewayPromptTurn",
+      "ccgatewayBuiltInAgents": "chunk-7dmym6x9.js:ccgatewayBuiltInAgents"
     },
     "build": {
       "queryModel": "chunk-7dmym6x9.js:$Ut",
@@ -111,7 +116,12 @@
       "ccgatewayMarkTurns": "chunk-7dmym6x9.js:ccgatewayMarkTurns",
       "ccgatewayPermissionContext": "chunk-7dmym6x9.js:ccgatewayPermissionContext",
       "ccgatewayBuiltInAgents": "chunk-7dmym6x9.js:ccgatewayBuiltInAgents",
-      "ccgatewaySystemRecord": "chunk-7dmym6x9.js:ccgatewaySystemRecord"
+      "ccgatewaySystemRecord": "chunk-7dmym6x9.js:ccgatewaySystemRecord",
+      "ccgatewayPromptSections": "chunk-7dmym6x9.js:ccgatewayPromptSections",
+      "ccgatewayFirstPartySystem": "chunk-7dmym6x9.js:ccgatewayFirstPartySystem",
+      "ccgatewayCompactionOpenings": "chunk-7dmym6x9.js:ccgatewayCompactionOpenings",
+      "cacheDiagnosisBeta": "chunk-afamv62a.js:LAt",
+      "ccgatewayDeferredToolsOpening": "chunk-7dmym6x9.js:ccgatewayDeferredToolsOpening"
     },
     "management": {
       "userAgent": "chunk-r600resh.js:Ws"
@@ -167,7 +177,13 @@
     "headerCompactionRequest": "C9t",
     "headerClaudeCodeCompaction": "x9t",
     "headerContextCompacted": "R9t",
-    "headerClaudeCodeContextCompacted": "A9t"
+    "headerClaudeCodeContextCompacted": "A9t",
+    "systemCacheBlocks": "Jmr",
+    "dynamicBoundary": "uN",
+    "compactionPrompt": "Htn",
+    "compactionAnalysis": "R9e",
+    "compactionSummary": "aB",
+    "deferredToolsOpening": "nvs"
   },
   "coreImports": {
     "betaFromHeader": "chunk-afamv62a.js:FQo",

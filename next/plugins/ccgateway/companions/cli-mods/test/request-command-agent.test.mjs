@@ -20,7 +20,7 @@ test('the client factory and direct billing get the client kind of request', asy
         export class AnthropicClient {}
         export const createClient=async options=>{const {apiKey,...rest}=options;fs.writeFileSync('factory.json',JSON.stringify(rest));return new AnthropicClient()};
         export const modelFetch=()=>{};`,
-      'stub-context.js': 'export const mainAgentContext=()=>({agentType:"main",agentId:"native-session"});export const modelBetas=()=>[];',
+      'stub-context.js': 'export const mainAgentContext=()=>({agentType:"main",agentId:"native-session"});export const modelBetas=()=>[];export const promptCachingScopeBeta={name:"prompt_caching_scope",header:"prompt-caching-scope-2026-01-05"},cacheDiagnosisBeta={name:"cache_diagnosis",header:"cache-diagnosis-2026-04-07"},extendedCacheTtlBeta={name:"extended_cache_ttl",header:"extended-cache-ttl-2025-04-11"};',
       'stub-betas.js': 'export const betasAllowed=()=>true;',
       // CC's request-scoped entrypoint (TY/H2r), recorded.
       'stub-session.js': "import fs from 'node:fs';export const getRootSession=()=>({});export const setEntrypointOnRequests=e=>fs.writeFileSync('entrypoint.json',JSON.stringify(e));",
@@ -36,7 +36,7 @@ test('the client factory and direct billing get the client kind of request', asy
         import {runRequestCommand} from './ccgateway-request-command.js';
         import {clientUserAgent} from './ccgateway-request-agent.js';
         const leading=system=>Array.isArray(system)&&system[0]?.text.startsWith('x-anthropic-billing-header:')?Object.fromEntries([...system[0].text.matchAll(/(\\w+)=([^;]+);/g)].map(m=>[m[1],m[2]])):null;
-        const agentNative={leadingBilling:leading,entrypoint:(system,policy)=>{const own=leading(system)?.cc_entrypoint;return own!==undefined&&policy.build_billing_sources?.cc_entrypoint!=='worker'?own:policy.build_billing_entrypoint},querySourceFor:(type,builtIn)=>builtIn?'agent:builtin:'+type:'agent:custom',
+        const agentNative={leadingBilling:leading,entrypoint:(system,policy)=>{const own=leading(system)?.cc_entrypoint;return own!==undefined&&policy.build_billing_sources?.cc_entrypoint!=='worker'?own:policy.build_billing_entrypoint},querySourceFor:(type,builtIn)=>builtIn?(type?'agent:builtin:'+type:'agent:default'):'agent:custom',
           loopHeaders:{prev_tool_durations:'x-claude-code-prev-tool-durations',cc_compaction_request:'x-cc-compaction-request',claude_code_compaction:'x-claude-code-compaction',cc_context_compacted:'x-cc-context-compacted',claude_code_context_compacted:'x-claude-code-context-compacted'},
           turn:(messages,interactive)=>({turnOrigin:interactive?'human':'sdk',turnPosition:{promptIndex:0,turnIndex:messages.filter(m=>m.role==='user').length}}),
           requestBilling:system=>Array.isArray(system)&&system[0]?.text.startsWith('x-anthropic-billing-header:')?Object.fromEntries([...system[0].text.matchAll(/(\\w+)=([^;]+);/g)].map(m=>[m[1],m[2]])):null,
@@ -117,6 +117,16 @@ test('the client factory and direct billing get the client kind of request', asy
     assert.equal(direct.promptId, factory.promptId);
     assert.equal(direct.turnOrigin, 'sdk');
     assert.deepEqual(direct.turnPosition, { promptIndex: 0, turnIndex: 2 });
+
+    // A subagent whose type nobody named (a third-party client sends no
+    // agent-type header): CC is told agent:default for the headers, which
+    // writes the subagent class and no agent type, never "custom"
+    // (2026-11-03); the build keeps agent:custom.
+    result = await run(subagent, { CCG_REQUEST_AGENT: JSON.stringify({ ...context, client: { agent_id: 'a12268251d7ed891f' } }) });
+    assert.equal(result.code, 0, result.stderr);
+    factory = await read('factory.json');
+    assert.equal(factory.source, 'agent:default');
+    assert.equal(factory.querySource, 'agent:custom');
 
     // No Worker context: CC's native main thread, as before.
     result = await run(subagent, { CCG_REQUEST_AGENT: '' });

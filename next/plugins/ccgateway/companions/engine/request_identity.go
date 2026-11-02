@@ -196,6 +196,9 @@ type requestIdentity struct {
 	// Previous is what the Worker remembers of the upstream session's last
 	// answered request (session_state.go), for the CLI's own header.
 	Previous *sessionState `json:"previous,omitempty"`
+	// Spawn is the Agent call that spawned a subagent, for its first request
+	// converted to the first-party shape (session_state.go spawned).
+	Spawn *spawnContext `json:"spawn,omitempty"`
 	// named: the session is the client's own (its metadata.user_id named
 	// one), not one the Worker derived from the conversation's first message.
 	named bool

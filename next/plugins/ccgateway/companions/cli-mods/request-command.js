@@ -5,7 +5,7 @@ import { checkModelRequest, openModelRequest, readModelResponse, cancelModelResp
 import { writeOutput as write } from './ccgateway-request-output.js';
 import { parseRequestOptions, parseRequestJSON, parseBuildJSON } from './ccgateway-request-options.js';
 import { normalizeBetas, finalBetas } from './ccgateway-request-headers.js';
-import { betaOrder } from './ccgateway-request-betas.js';
+import { betaOrder, bodyBetas } from './ccgateway-request-betas.js';
 import { validateDirectPolicy } from './ccgateway-request-policy.js';
 import { readRequestAgent, resolveAgentContext, setClientUserAgent } from './ccgateway-request-agent.js';
 import { continueDirectSession, requestThread } from './ccgateway-request-session.js';
@@ -171,7 +171,11 @@ async function prepareOutgoing(ctx, incoming) {
   // A request sent with the client's own header keeps the client's User-Agent
   // (build reads the client's system from its components).
   setClientUserAgent(agent, agentNative?.leadingBilling(options.mode === 'build' ? incoming.body.systemPrompt : incoming.body.system), agentNative?.leadingBilling(outgoing.body.system));
-  const betas = requestBetas(outgoing.body?.model, clientBetas, [...addedBetas, ...(ctx.apiKey ? [] : [oauthBeta])]);
+  // A build's betas follow its body (2026-11-03): the betas Claude Code adds
+  // for global cache scopes, diagnostics and the 1-hour cache lifetime come
+  // only with them (request-betas.js bodyBetas); the client's own stay.
+  const added = options.mode === 'build' ? bodyBetas(outgoing.body, clientBetas, addedBetas, { firstParty: agentNative?.leadingBilling(outgoing.body?.system)?.cch !== undefined }) : addedBetas;
+  const betas = requestBetas(outgoing.body?.model, clientBetas, [...added, ...(ctx.apiKey ? [] : [oauthBeta])]);
   if (betas.length && !betasAllowed(betas)) throw Error('Experimental betas are disabled by the active CC policy');
   outgoing.headerPolicy = { apiKey: ctx.apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };
   return { outgoing, agent };
@@ -191,7 +195,7 @@ function requestBetas(model, client, additions) {
 function agentResolver(agentNative) {
   if (!process.env.CCG_REQUEST_AGENT || !agentNative) return undefined;
   const context = readRequestAgent();
-  return facts => resolveAgentContext(context, { ...facts, querySourceFor: agentNative.querySourceFor, loopHeaders: agentNative.loopHeaders });
+  return facts => resolveAgentContext(context, { ...facts, querySourceFor: agentNative.querySourceFor, loopHeaders: agentNative.loopHeaders, builtInAgents: agentNative.builtInAgents?.() ?? [] });
 }
 
 // readInput is the request JSON text, from a file or stdin, without a BOM.
@@ -258,7 +262,10 @@ async function prepareBuild(ctx, body, resolveAgent) {
 // request.
 async function openClient(init, apiKey, agent) {
   const querySource = agent?.querySource ?? 'sdk';
-  const client = await createClient({ ...init, apiKey, ccgatewayAPIKeyOnly: Boolean(apiKey), maxRetries: 0, source: querySource, querySource,
+  // The client's source names the headers CC writes (request-class,
+  // agent-type); a subagent of no known type is named agent:default, whose
+  // header CC leaves out (request-agent.js).
+  const client = await createClient({ ...init, apiKey, ccgatewayAPIKeyOnly: Boolean(apiKey), maxRetries: 0, source: agent?.clientSource ?? querySource, querySource,
     ...agent?.explicitClass !== undefined && { requestClass: agent.explicitClass }, agentContext: agent?.agentContext ?? mainAgentContext(),
     ...agent?.promptId !== undefined && { promptId: agent.promptId } });
   if (!(client instanceof AnthropicClient)) throw Error('claude request currently supports Anthropic-compatible Messages routes only');

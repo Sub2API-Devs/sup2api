@@ -111,3 +111,19 @@ export function mergeAdditionalParameters(built, parameters) {
   }
   return result;
 }
+
+// The members of CC's request body in the order its builder writes them (the
+// body literal's keys, conditional ones included; the beta Messages call adds
+// stream after them). test/native/<version>/body-fields.test.mjs reconciles
+// it with each version's literal.
+export const nativeBodyOrder = Object.freeze(['model', 'messages', 'system', 'tools', 'tool_choice', 'metadata', 'max_tokens', 'thinking', 'temperature', 'context_management', 'safeguards', 'output_config', 'speed', 'thread', 'diagnostics']);
+
+// nativeOrder puts the members CC writes where CC writes them, whoever
+// supplied the value (2026-11-03: a client's safeguards went after
+// output_config, appended by mergeAdditionalParameters; CC writes it before).
+// Members CC never writes keep their order, after CC's.
+export function nativeOrder(body) {
+  const known = nativeBodyOrder.filter(key => has(body, key));
+  const rest = Object.keys(body).filter(key => !nativeBodyOrder.includes(key));
+  return Object.fromEntries([...known, ...rest].map(key => [key, body[key]]));
+}

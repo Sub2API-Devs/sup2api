@@ -243,7 +243,10 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   // before the patched entries reported the official runtime version; v38
   // before CC's login refusals became 401s; 2.1.310:
   // ccgateway-v48-stored-login; 2.1.304: ccgateway-v49-stored-login).
-  assert.equal(patchManifest.extension, 'ccgateway-v47-stored-login');
+  // 2026-11-03: ccgateway-v50-first-party-shape (was ccgateway-v47-stored-login); the first-party shape conversion
+  // changed the shared support modules and the profile's native bindings.
+  assert.equal(patchManifest.extension, 'ccgateway-v50-first-party-shape');
+  assert(!patchManifest.capabilities.includes('build_first_party_shape_v1'));
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_capture_v1'));
   assert(patchManifest.capabilities.includes('request_levels_v1'));
@@ -280,7 +283,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert.deepEqual(profile.natives.entry, { loadFastPathPolicy: 'chunk-44429y21.js:loadFastPathPolicy' });
   assert.deepEqual(profile.natives.natives, { oauthBeta: 'chunk-afamv62a.js:dPe', requestIdentity: 'chunk-pd06as9s.js:Qze', attributionHeader: 'chunk-pd06as9s.js:d2s',
     billingHeaderPrefix: 'chunk-a354k8k1.js:art', reminderOpen: 'chunk-frekxwcp.js:BP', attributionFingerprint: 'chunk-65my4caa.js:oYs', mainAgentContext: 'chunk-f7avdr1b.js:ld',
-    querySourceFor: 'chunk-ca54vwf0.js:tde', ccgatewayLayerVocabulary: 'chunk-7dmym6x9.js:ccgatewayLayerVocabulary', ccgatewayPromptTurn: 'chunk-7dmym6x9.js:ccgatewayPromptTurn' });
+    querySourceFor: 'chunk-ca54vwf0.js:tde', ccgatewayLayerVocabulary: 'chunk-7dmym6x9.js:ccgatewayLayerVocabulary', ccgatewayPromptTurn: 'chunk-7dmym6x9.js:ccgatewayPromptTurn', ccgatewayBuiltInAgents: 'chunk-7dmym6x9.js:ccgatewayBuiltInAgents' });
   const natives = fs.readFileSync(path.join(output, 'ccgateway-request-natives.js'), 'utf8');
   assert(natives.includes("from './ccgateway-native-natives.js';"));
   assert(!/from '\.\/chunk-/.test(natives));
@@ -293,7 +296,7 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   // The beta order is the builder's own list, read by AST from the hash-bound
   // core and installed in its support module; the core exports nothing of it.
   const betas = fs.readFileSync(path.join(output, 'ccgateway-request-betas.js'), 'utf8');
-  assert.match(betas, /^import \{ modelBetas \} from '\.\/ccgateway-native-command\.js';\nimport \{ [\w$]+(,[\w$]+)* \} from "\.\/chunk-afamv62a\.js";\n/m);
+  assert.match(betas, /^import \{ modelBetas, promptCachingScopeBeta, cacheDiagnosisBeta, extendedCacheTtlBeta \} from '\.\/ccgateway-native-command\.js';\nimport \{ [\w$]+(,[\w$]+)* \} from "\.\/chunk-afamv62a\.js";\n/m);
   const builderBetas = /const builderBetas = \[([^\]]*)\];/.exec(betas)[1].split(',');
   assert.equal(builderBetas.length, 12, 'the builder pushes twelve betas');
   assert.equal(new Set(builderBetas).size, builderBetas.length);

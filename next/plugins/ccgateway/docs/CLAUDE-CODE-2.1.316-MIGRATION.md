@@ -1,4 +1,4 @@
-# Claude Code 2.1.312 → 2.1.316 迁移记录（CLI v41 → v43，后续 v44）
+# Claude Code 2.1.312 → 2.1.316 迁移记录（CLI v41 → v43，后续 v44、v45）
 
 2026-11-02。把账号 Worker 里的定制 CLI 从官方 2.1.312（`ccgateway-v41-login-401`）移到官方 2.1.316，要求 `claude request --build|--direct` 与 `claude ccgateway-mgmt` 的逻辑与 v41 一样，只允许出现官方自己的变化。做法按 [CLI-UPGRADE-RUNBOOK](CLI-UPGRADE-RUNBOOK.md) 第 1–5 节，上一次迁移见 [CLAUDE-CODE-2.1.312-MIGRATION](CLAUDE-CODE-2.1.312-MIGRATION.md)，计费头规则见 [CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION](CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION.md)。
 
@@ -9,9 +9,9 @@
 | 内嵌 Bun | 1.4.4（修订 `0ae49f8b6`） | 1.4.4（修订 `71c9bf0ca`），profile `bunVersion` 仍为 1.4.4 |
 | Bun 报告的 Node.js 版本 | 官方 `v26.12.1`；v41 发 `v26.3.0` | 官方 `v26.12.1`；v43 起 profile `runtimeVersion` `v26.12.1`，CLI 报告它（第 4、5 节） |
 | 还原 | 2813 模块 / 2581 JS | 2880 模块 / 2648 JS，`unresolved` 为空，入口 `cli.js` |
-| 补丁标签 | `ccgateway-v41-login-401` | `ccgateway-v43-cc-2-1-316`（插件 0.1.122 起新账号使用；v42 `ccgateway-v42-cc-2-1-316` 编译验证过、未发布）；候选 `ccgateway-v44-stored-login`（第 10 节） |
-| 定制 ELF SHA-256 | `2c80da64281533d32faecbb3816a1f6a8c8070037dd49d035ef2c7387b1af211`（线上 v41） | `f8f9afa447be6ef132f87c6af7d1880fc822e68f4cf9249f2143a59fdfa163a0`（v43，325183664 字节；v42 是 `3a1ca882…78a4`）；v44 `76b11ddd052bd92506a10cc6ddcb7b81da12ddc5f19aee91c048a9739172f99b`（325183664 字节），第 6 节 |
-| 能力 | 20 项 | 21 项：v41 的 20 项加 `build_injection_tools_v2`（第 5 节） |
+| 补丁标签 | `ccgateway-v41-login-401` | `ccgateway-v43-cc-2-1-316`（插件 0.1.122 起新账号使用；v42 `ccgateway-v42-cc-2-1-316` 编译验证过、未发布）；`ccgateway-v44-stored-login`（第 10 节，未发布）；候选 `ccgateway-v45-first-party-shape`（第 11 节） |
+| 定制 ELF SHA-256 | `2c80da64281533d32faecbb3816a1f6a8c8070037dd49d035ef2c7387b1af211`（线上 v41） | `f8f9afa447be6ef132f87c6af7d1880fc822e68f4cf9249f2143a59fdfa163a0`（v43，325183664 字节；v42 是 `3a1ca882…78a4`）；v44 `76b11ddd052bd92506a10cc6ddcb7b81da12ddc5f19aee91c048a9739172f99b`（325183664 字节），第 6 节；v45 `724ebb3397eef4abb88d4e320ebef0e55edc66fe1ca409263ada6db05a6b3bde`，第 11.4 节 |
+| 能力 | 20 项 | 21 项：v41 的 20 项加 `build_injection_tools_v2`（第 5 节）；v45 22 项，再加 `build_first_party_shape_v1`（第 11 节） |
 
 分析中间产物在 `artifacts/claude-2.1.316/`（不进 Git）：`official-manifest.json`、`claude-linux-x64`、`linux-restored/`、`seeds.json`、`equiv-312-316.json`、`equiv-index-82961a4ddc91.json`（旧树）、`equiv-index-d8c229e5ecfa.json`（新树）、`equiv.out`、`carry.json`、`diffs/g1…g4/`（unitdiff）、`review/`（四组审查报告 `g1-query.md`、`g2-core.md`、`g3-transport.md`、`g4-entry.md` 与脚本）、`captures/`（官方抓包，2.1.312 重抓与 2.1.316）、`patched-v42/`、`patched-v43/`、`release-v42/`、`release-v43/`、`runtime/`（运行时探针）、`inject/`（注入工具探针）、`verify/`（v42 的 `RESULTS.md`、v43 的 `RESULTS-v43.md` 与日志）、`port/`（本次移植用的一次性脚本：生成 profile、作用域自由名对照、测试移植、产物断言）。
 
@@ -146,6 +146,8 @@ v42 只做版本迁移；v42 编译验证后、发布前（2026-11-02）加了�
 | `--version` | `2.1.316 (Claude Code)` | 同 | 同 |
 | release | `artifacts/claude-2.1.316/release-v42/` | `artifacts/claude-2.1.316/release-v43/`（`manifest.json`：`2.1.316` → `2.1.316/claude`，补丁 `ccgateway-v43-cc-2-1-316`，modes `build`/`direct`；ovh 上保留 `/tmp/ccg316-rt/build/release-v43`）；日志 `artifacts/claude-2.1.316/build/build-v43.log`，脚本 `verify/scripts-v43/ovh-build-v43.sh` | `artifacts/claude-2.1.316/release-v44/`（补丁 `ccgateway-v44-stored-login`，modes `build`/`direct`）；ovh 上 `~/sup2api/checks/cli-releases/release-v44-2.1.316`（v43 的目录未动）；日志 `build/build-v44.log`，脚本 `verify/scripts-v44/ovh-build-v44.sh`（与 v43 的相同，只换目录与标签） |
 
+v45 的编译与打包见第 11.4 节（做法与 v44 相同，脚本 `verify/scripts-v45/`）。
+
 2.1.312/2.1.310/2.1.304 的补丁产物也变了（入口导入、注入工具渲染），标签升为 v44/v45/v46，补丁成功，但都不编译、不发布；线上旧账号继续用 v41。v44 改了共用的 `request-error.js`，三者再升为 `ccgateway-v47-stored-login`/`v48-stored-login`/`v49-stored-login`，同样不编译、不发布。
 
 ## 7. 验证
@@ -175,6 +177,8 @@ v42 由独立验证者在 ovh 一次性容器里按 2.1.312 迁移记录的矩�
 | 真实 CLI 用例 | `CCG_REAL_CLI` = 官方 2.1.316 / 2.1.312 | 两版集合相同：6 过 5 败（已知） | 未重跑（与 CLI 补丁无关） | 未重跑 |
 | 断网资源回归 | `TestResourceManagementLinuxOfflineNetNone` | 两版集合相同（24 败，已知：官方 CLI 没有 `ccgateway-mgmt`） | 未重跑 | 未重跑 |
 | 控制器 | controller-go、guard | 389 过、85 过（Python 控制器已删） | 未重跑 | 未重跑 |
+
+v45 的验证（同样的矩阵，另加三方形状场景）见第 11.4 节。
 
 没有跑或没有覆盖：经 Worker 的"高"等级全部工具注入（0.1.121 的合同还不认 6 个新名字，只在 CLI 层验证；合同与能力关由负责 engine/合同的一方改）、D0 重抓、`controller-go/integration/l7`、压缩后 `cc_prev_*` 的透传、核心↔插件与真实上游（发布后用生产账号测）。
 
@@ -228,10 +232,90 @@ v42 由独立验证者在 ovh 一次性容器里按 2.1.312 迁移记录的矩�
 - 标签：2.1.316 `ccgateway-v43-cc-2-1-316` → `ccgateway-v44-stored-login`；共用支持模块变了，三个旧 profile 也升：2.1.312 → `ccgateway-v47-stored-login`、2.1.310 → `ccgateway-v48-stored-login`、2.1.304 → `ccgateway-v49-stored-login`（v44–v46 已被 `runtime-version` 占用），不编译、不发布。`test/fixtures/injected-tools-2.1.316.json` 按 v44 重新录制（工具与 v43 逐字相同）。
 - 编译与验证见第 6、7 节的 v44 列：ELF `76b11ddd052bd92506a10cc6ddcb7b81da12ddc5f19aee91c048a9739172f99b`；出口与 v43 完全相同（离线回归 D1 0 of 73，TLS 指纹与请求头与官方 2.1.316 相同）。release 在 `artifacts/claude-2.1.316/release-v44/` 与 ovh `~/sup2api/checks/cli-releases/release-v44-2.1.316`。
 
+## 11. v45：三方形状转一方形状（`ccgateway-v45-first-party-shape`）
+
+2026-11-03 用户决定：官方 CC 客户端经自定义 `ANTHROPIC_BASE_URL` 接入（线上用户都这样接）时发的是三方形状——短计费头（只有 `cc_version`、`cc_entrypoint`，可能有 `cc_workload`/`cc_is_subagent`）、三块 system（头、身份行、整段提示词，后两块各一个缓存标记）、没有 CC 的请求头（request-class、prompt-id 等）、没有 `diagnostics`；直连 `api.anthropic.com` 时发一方形状。网关把前者转成后者。规则全文与逐项做法在 [CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION](CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION.md) §0、§2.4、§5，这里记 CLI/Worker 的实现、原生依据与验证。
+
+### 11.1 开关
+
+| 层 | 做法 |
+|---|---|
+| 合同（另一位负责，本次未改） | 能力 `features.FirstPartyShapeCapability = "build_first_party_shape_v1"`；`WorkerPolicy.FirstPartyShape *bool`（json `first_party_shape`），`FirstPartyShapeEnabled()`：nil 或 true 为开。核心只对声明了能力的 Worker 写显式值；跳过预检的路径根本不发这个字段，所以 Worker 把"没有"当开。核心从不因此拒绝请求 |
+| CLI | 只在 2.1.316 的 profile 声明这个能力（`--ccgateway-info` 22 项）；2.1.312/310/304 的 profile 加了同样的支持模块与原生绑定，但不声明，Worker 不会让它们转换 |
+| Worker | `engine/request_command.go`：`parseRequestPolicy` 记下 `FirstPartyShapeEnabled()`；`admitRequest` 在 build、不是控制台测试（probe）、CLI 声明了能力时才开；开时给 CLI 进程加环境变量 `CCG_FIRST_PARTY_SHAPE=1`（不放进 CLI 的请求信封，合同里没有它）；`cli_pinned.go` 的 `requestCapabilities` 报告这个能力 |
+| 回退 | 任何一步对不上都不转（整条），请求照常发；从不因为这个功能拒绝请求 |
+
+### 11.2 三类改动
+
+| 类 | 项 | 实现 | 原生依据 |
+|---|---|---|---|
+| ① 不管开关 | 子代理不发 `x-claude-code-agent-type: custom` | `request-agent.js`：客户端给了类型用它的；否则父线程那次 Agent 调用的 `subagent_type` 是 CC 内置类型（新原生绑定 `ccgatewayBuiltInAgents`）时用它；都没有时客户端工厂的 `source` 用 `agent:default`（原生 `LEi`/`HEi` 对它给子代理类别、不写类型头） | `MN` 客户端工厂按 `source` 算类别与类型 |
+| ① | 正文键序 | `request-parameters.js nativeOrder`：顶层键按原生构造器 `g5n` 的对象字面量 `Qc`（model、messages、system、tools、tool_choice、metadata、max_tokens、thinking、temperature、context_management、safeguards、output_config、speed、thread、diagnostics），未知键保持原相对位置放在最后 | `g5n` |
+| ① | beta 与正文一致 | `request-betas.js bodyBetas`：`prompt-caching-scope` 只在一方计费头（带 `cch`）或有 `scope:global` 标记时、`cache-diagnosis` 只在有 `diagnostics` 时、`extended-cache-ttl` 只在有 1h 标记时；正文用到而客户端与构造器都没发的补上；客户端自己的 beta 不动 | 构造器按 `j3()`/`t$()`/TTL 推这三个 beta（描述符：2.1.316 `chunk-bwbq4xvm.js` `cOe`/`VPt`/`l9t`，2.1.312 `chunk-afamv62a.js` `vYe`/`LAt`/`lYt`，2.1.310 `chunk-at88wjsn.js` `rqe`/`KEt`/`BKt`，2.1.304 `chunk-4qs43hr1.js` `m1t`/`H_t`/`g1t`） |
+| ① | beta 放置 | `request-headers.js finalBetas` 与 `betaOrder` 的 `builderAt`：加进来的 beta 放在它前面最后一个 CC 排在它之前的 beta 后面；CC 顺序表不认识的（主查询自己 push 的 effort、thinking-token-count、advanced-tool-use、mid-conversation-*，以及客户端独有的）视为排在模型表之后、构造器 beta 之前 | 官方一方抓包：模型表 → 主查询 push → 构造器 push（第一次离线运行发现 v45 初版把 `thinking-binding-controls` 放到 effort 前、把 1h beta 放到 effort 前，按此修正后重编） |
+| ② 无状态 | 计费头 | `content-policy.js thirdPartyBilling` 识别（首块整块一行，字段 ⊆ {`cc_version`, `cc_entrypoint`, `cc_workload`, `cc_is_subagent=true`}，版本 ≥ 2.1.304）；`completeBillingHeader`：原生 `Dns` 为本请求写的整行（`JXs` 截获）重渲染必须逐字往返且带 `cch`，入口、子代理标记要与客户端一致，`cc_version` 换回客户端的（Worker 拥有时除外）、`cc_workload` 取客户端的（原生行没有时插在 `cch` 之后） | `Dns` 字段顺序 |
+| ② | system 3→4 | `first-party-shape.js firstPartySystem`：三块都是纯文本块、头无标记、第二块是身份行、行与提示词标记相同；静态段用新原生绑定 `ccgatewayPromptSections`（原生提示词构造器带动态边界渲染）按请求模型与工具渲染，客户端 reminder 列出的延迟工具（原生开头 `mPs`，一行一个名字）作为延迟工具桩加进工具池，先带延迟工具、再不带；提示词必须恰好以 `静态段 + "\n\n"` 开头；拆块与标记交给原生（`ccgatewayFirstPartySystem` → `ZSr`） | `s2o`/`ZSr`/`vX`，边界 `h$`（2.1.312 `Jmr`/`uN`，2.1.310 `Ekr`/`U0`，2.1.304 `Jfr`/`kL`） |
+| ② | 压缩请求 | 末条用户消息以原生压缩提示词开头（`ccgatewayCompactionOpenings` = `Tsn(q9e)`、`Tsn(TB)`；2.1.312 `Htn`/`R9e`/`aB`，2.1.310 `Tcn`/`V8e`/`WH`，2.1.304 `rln`/`G8e`/`eB`）时按压缩请求构建：类别 `compaction`、头里没有 prompt/turn、主线程的 `cc_prev_req`、构造器带 `cache-diagnosis` 时带 diagnostics；客户端带了压缩头照原样透传 | 原生压缩是 fork，`t$()&&(Et||forkPointUuid)` 成立 |
+| ③ 有状态 | `cc_prompt_id` / `x-claude-code-prompt-id` | 主线程没有客户端值时按（上游会话，turn 序号，prompt 哈希）派生 UUIDv4（`request-agent.js derivePromptId`）；子代理用父线程本轮的值：Worker 记住每次应答的 message id、prompt id 与 Agent/Task 调用（`engine/answer_observer.go` 解析 SSE/JSON 应答，有界），子代理线程首个请求按"唯一一个 prompt 相同的调用、父线程不忙"配对（`engine/session_state.go spawned`），之后用本线程记忆 | 官方：同一 prompt 的主线程请求与全部子代理共用 |
+| ③ | `cc_prev_req`、turn | 沿用 v38 起的会话记忆（`build_session_state_v1`），转换的请求也续接 | — |
+| ③ | `diagnostics` | 只在原生构造器本来会写时：线程首个请求 `{previous_message_id:null}`，Worker 证明续接上一次应答时为那次的 message id，其余不带 | `t$()&&(Et||forkPointUuid)&&JF` |
+
+Worker 侧另修一处让记忆对 CC 客户端生效的问题：CC 每轮把缓存标记挪到最后一条消息、把只有一段文字的 content 写成字符串，原来的历史摘要因此永远对不上；现在摘要前统一成文本块数组并去掉 `cache_control`（`canonicalMessage`）。
+
+不做（用户决定）：`mid-conversation-system-clear-at`、1 小时缓存 TTL、订阅用户才有的工具/技能、改标题请求的模型。做不到：`x-claude-code-prev-tool-durations`（网关不知道客户端执行工具的耗时）、压缩头 `x-cc-compaction-request`/`x-claude-code-compaction`（手动还是自动不可知）、压缩之后的 `cc_prev_msg` 一组。
+
+与任务要求不同的一处：要求写"没拆块时不加 global scope 的 beta"；官方一方抓包里子代理请求（system 不拆、没有 global 块）也带 `prompt-caching-scope`（`j3()` 为真就推），所以一方计费头的请求一律保留它，与官方相同。
+
+### 11.3 测试
+
+- 单测：`test/first-party-shape.test.mjs`（13 项：头的识别与补全、键序、agent 类型、prompt id、主线程/第二轮/子代理/开关关闭/静态段不符/补不全的转换、`bodyBetas`、身份信封校验、压缩、延迟工具）；`test/request-options.test.mjs` 加真实三方形状 beta 的放置用例；其余测试桩按新原生导出更新。
+- 原生对账：`test/native/2.1.316/first-party-shape.test.mjs`（4 项）——从还原源码取出真正的 `s2o`/`ZSr`/`vX` 与 `Dns` 规则，对官方同一客户端两种形状的抓包（`fixtures/first-party-shape-2.1.316.json`，11 个请求，`build-first-party-shape-fixture.cjs` 生成）逐块逐字节得出一方形状；beta 集合等于官方；官方压缩提示词都以原生开头之一开始（`compaction-prompts-2.1.316.json`）。四版 `patch-wire-preservation` 断言新标签、能力、原生绑定与 beta 导入行，四版 `body-fields` 断言 `nativeBodyOrder` 等于原生字面量。
+- Worker：`engine/first_party_shape_test.go`（应答解析、开关、会话记忆、子代理只在确定时配对、上报、缓存标记与字符串 content）。
+- 离线 e2e：新模式 `thirdparty`（`test/e2e/thirdparty.sh`，15 个场景，**不设** `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`）与 `fp-compare.cjs`（B 侧不变式 + 对 A 侧一方形状逐项列差异）；`live-official-client.cjs`、`official-client-replay.cjs` 作为"保留"对照时在策略里写 `first_party_shape:false`，另加两个转换场景。
+
+### 11.4 编译与验证
+
+做法与 v44 相同（第 6、7 节），ovh 一次性容器 `/tmp/ccg316-v45`（用完已删），脚本 `artifacts/claude-2.1.316/verify/scripts-v45/`（`ovh-rebuild.sh` → `ovh-build-v45.sh` → `ovh-everything.sh`：npm、Go、TLS、L4–L7、e2e、e2e 检查），日志 `verify/v45/final/final.tgz`；第一次运行（发现 beta 放置问题、修正前的 ELF `13e1f68f…efe`，未保留）的结果在 `verify/v45/run1/run1.tgz`。Worker 是本次 engine 改动编出的 Linux 静态二进制（`7739700a6f1c34496a0b398573f7d36b75e6b797968c0040527a5f90c42e9180`），挂在 `ccgateway-app:0.1.123` 上。
+
+| 项 | v45 |
+|---|---|
+| 补丁树 | `artifacts/claude-2.1.316/patched-v45`（日志 `build/patch-v45.log`）：改写 8 个模块（与 v44 相同，锚点没有改，27 处替换），36 个支持文件（多 `ccgateway-first-party-shape.js`） |
+| 打包 | 2907 个模块；`package-release.cjs` 的运行时检查通过（`v26.12.1`）；`Bun v1.4.4 (38afee6c8)` |
+| 定制 ELF SHA-256 | `724ebb3397eef4abb88d4e320ebef0e55edc66fe1ca409263ada6db05a6b3bde`（325228720 字节） |
+| `--ccgateway-info` | `{"version":"2.1.316","patch":"ccgateway-v45-first-party-shape", capabilities: 22 项}`（v44 的 21 项加 `build_first_party_shape_v1`） |
+| release | `artifacts/claude-2.1.316/release-v45/`（modes `build`/`direct`）；ovh `~/sup2api/checks/cli-releases/release-v45-2.1.316` |
+| 单测 + 原生对账 | Linux（`node:22-bookworm-slim`，`--network none`，`CCG_REQUIRE_ARTIFACTS=1`）：2.1.316 37 个文件 **245/245**，2.1.312/2.1.310/2.1.304 各 34 个文件 **236/236**，无 `CCG_NATIVE_TEST_SKIPPED`；本机 Windows 244/245、235/236（各 1 条只在 Linux 上跑的用例跳过） |
+| Go（Linux，`golang:1.27-bookworm`） | engine 255 过、16 跳过（需真实 CLI）；worker 3 个包、contracts 7 个包全过；`go vet`、`GOOS=linux go vet` 通过（本机同） |
+| TLS 指纹 | 22 条连接（官方 2.1.316、v44、v45 的 direct/build 各两次）：10 条 Messages 连接 **identical**（JA4 `t13d1713h1_5b57614c22b0_7f527383e249`）；请求头 **PASS**（头名与顺序相同，`x-stainless-*` 逐项相同） |
+| 组装对账（L4） | **76/76**，上游 64，`acceptance: pass` |
+| 客户端来源 × 内容策略 | **14/14** |
+| 官方客户端实时转发（L6） | **12/12**（原 10 项在策略里写 `first_party_shape:false` 作"保留"对照，另加 `first_party_default`、`first_party_directory` 两项按转换后的形状核对再还原比较）；抓包回放 14 项 **`verified`** |
+| 组件组合（L5） | **216/216** |
+| Worker 策略矩阵（L7） | **`passed`**，上游 98 |
+| 首轮工具注入 | 3/3，工具与 v44 的录制逐字相同；夹具按 v45 重新录制（只换 ELF SHA） |
+| 离线回归：噪声 | 基线 v44（`ccgateway-app:0.1.123` 自带 Worker）两次：**0 of 73**，149 个请求；含三方形状场景 **0 of 88**，178 个请求 |
+| 离线回归 D1（v44 → v45，73 个原有场景） | **35 of 73** 不同，**只有 `anthropic-beta`**，正文与其他头 0 差异；全部是 ① 的修正：去掉正文没用到的 `cache-diagnosis`（没有 `diagnostics` 的请求，6+9+2 个请求）、`extended-cache-ttl`（没有 1h 标记，3 个）或两者（47 个：非 CC、API-key 形状、错误、probe、values 等）；顺序变化两类：客户端独有的 `fallback-credit`/`server-side-fallback`（CC 顺序表里没有）之前插入 `prompt-caching-scope`（11 个请求，模型表的 beta 排在 CC 不认识的 beta 之前）；`s5b-two-beta-lines-build` 的 `prompt-caching-scope` 移到 `oauth` 之后（1 个，v44 把它放到了 `oauth` 前面，与 CC 的模型表相反） |
+| 定向断言 / 其他 | `verify.cjs` 三次运行 2168/2168、2168/2168、**2193/2193**（多出的 25 项是 `verify.cjs` 只在请求带 prompt id 时才做的"prompt-id 头 = 计费头 `cc_prompt_id`"，转换后的三方形状请求有了 prompt id）；values 12/12；beta-check 只有已知 2 条；capcheck 178/178、`missing 0`、`bodyMismatch 0`、`secretsLeaked false`；respmatch 164/164；classify/conc 完成；`all` 61 次退出 0、1 次非 0（`login` 场景，基线相同） |
+| 三方形状对一方形状（`fp-compare.cjs`，15 个场景、28 对请求） | 不变式：v45 **0 失败**（v44 110 失败）；规范化后的差异 v44 260 处 → v45 92 处，剩下的见下表 |
+
+v45 的 92 处差异全部归类如下（场景名见 `test/e2e/README.md`）：
+
+| 差异 | 次数 | 场景 | 原因 |
+|---|---|---|---|
+| `mid-conversation-system-clear-at` 只在 A | 28 | 所有 Opus 请求 | 用户决定不做 |
+| 消息里的延迟工具清单多 `RemoteTrigger`、`WebFetch`，技能清单多 `schedule` | 28（19 + 9） | 所有有首轮 reminder 的请求 | 客户端自己写的内容：同一客户端接自定义地址时就这样列，网关不改消息（订阅专属工具/技能，用户决定不做） |
+| `x-claude-code-prev-tool-durations` 只在 A | 6 | 工具循环与子代理的续接请求 | 网关不知道客户端执行工具的耗时 |
+| `x-cc-compaction-request`、`x-claude-code-compaction` 只在 A | 4 | `tp-compact-low` | 手动还是自动压缩不可知（客户端带了就透传） |
+| 计费头、system 拆块与标记、prompt-id 头、`diagnostics`、`prompt-caching-scope`/`cache-diagnosis`/`thinking-binding-controls` beta | 19 | `tp-main-off`、`tp-main-direct` | 对照场景，按设计不转换 |
+| `oauth` beta、`authorization`/`x-api-key` | 7 | `tp-apikey-low`、`tp-token-low`、`tp-apikey-account` | 客户端的认证方式与账号类型不同（API key 客户端经 OAuth 账号、OAuth 客户端经 API key 账号），与形状无关 |
+
+没有跑或没有覆盖：真实上游（发布后用生产账号测）、核心 ↔ 插件（核心与合同由另一位负责）、`controller-go/integration/l7`、真实 CLI 的 engine 用例（16 跳过，与 v44 相同）。
+
 ## 变更记录
 
 | 日期 | 版本 | 内容 |
 |---|---|---|
 | 2026-11-02 | v42 | 移到 2.1.316，逻辑与 v41 相同（未发布） |
 | 2026-11-02 | v43 | 报告官方运行时版本 `v26.12.1`；首轮工具注入（`build_injection_tools_v2`）；插件 0.1.122 起新账号使用 |
-| 2026-11-02 | v44 | `StoredLoginHeldBackError` 按 `errorClass` 回 403 / 401 / 可重试 502（第 10 节）；候选，未发布 |
+| 2026-11-02 | v44 | `StoredLoginHeldBackError` 按 `errorClass` 回 403 / 401 / 可重试 502（第 10 节）；未发布，并入 v45 |
+| 2026-11-03 | v45 | 三方形状转一方形状（`build_first_party_shape_v1`）与三处一致性修正（第 11 节）；候选，需要同一次改动的 Worker |

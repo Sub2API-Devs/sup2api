@@ -4,7 +4,7 @@
 // naming (Zoe) and the layer vocabulary, composed here with the support modules
 // that use them. The request command imports this module; the patched entry
 // only loads the command.
-import { oauthBeta as oauthAuth, requestIdentity as nativeIdentity, attributionHeader, billingHeaderPrefix as billingHeader, reminderOpen, attributionFingerprint, mainAgentContext, querySourceFor, ccgatewayLayerVocabulary, ccgatewayPromptTurn } from './native-natives.js';
+import { oauthBeta as oauthAuth, requestIdentity as nativeIdentity, attributionHeader, billingHeaderPrefix as billingHeader, reminderOpen, attributionFingerprint, mainAgentContext, querySourceFor, ccgatewayLayerVocabulary, ccgatewayPromptTurn, ccgatewayBuiltInAgents } from './native-natives.js';
 import { applyBuildMetadata } from './ccgateway-request-identity.js';
 import { applyDirectBilling } from './ccgateway-direct-billing.js';
 import { createBillingPolicy } from './ccgateway-content-policy.js';
@@ -34,10 +34,11 @@ export const directBuild = (raw, body, options) => applyDirectBilling(raw, body,
 });
 
 // agentNative is the client's kind of request as CC names it: the query source
-// naming, the client loop header names, the billing header's kind, the first
-// prompt and its turn.
+// naming, CC's own agent types, the client loop header names, the billing
+// header's kind, the first prompt and its turn.
 export const agentNative = {
   querySourceFor,
+  builtInAgents: () => ccgatewayBuiltInAgents().map(agent => agent.agentType),
   loopHeaders: ccgatewayLayerVocabulary().loopHeaders,
   requestBilling: system => billing.requestBilling(system),
   leadingBilling: system => billing.leadingBilling(system),

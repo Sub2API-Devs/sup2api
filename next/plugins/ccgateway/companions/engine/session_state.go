@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"regexp"
+	"slices"
 	"sync"
 	"time"
 
@@ -27,6 +28,22 @@ type sessionState struct {
 	RequestID  string        `json:"request_id,omitempty"`
 	Turn       *turnPosition `json:"turn_position,omitempty"`
 	PromptHash string        `json:"prompt_hash,omitempty"`
+	// For a request converted to the first-party shape
+	// (features.FirstPartyShapeCapability, 2026-11-03): the answer's message
+	// ID (read off the answer, answer_observer.go), the prompt ID the
+	// thread's header used and a subagent's agent type (both reported by the
+	// CLI). Only a CLI with the capability is given them.
+	MessageID string `json:"message_id,omitempty"`
+	PromptID  string `json:"prompt_id,omitempty"`
+	AgentType string `json:"agent_type,omitempty"`
+}
+
+// spawnContext is what a subagent's first request is given of the Agent call
+// that spawned it (first-party shape): the parent thread's prompt ID and the
+// agent type the call asked for.
+type spawnContext struct {
+	PromptID  string `json:"prompt_id,omitempty"`
+	AgentType string `json:"agent_type,omitempty"`
 }
 
 // turnPosition is Claude Code's prompt and turn count (native turnPosition).
@@ -55,6 +72,8 @@ var (
 	// (the native header's own test); anything else is not kept.
 	upstreamRequestID = regexp.MustCompile(`^req_[A-Za-z0-9_-]{1,36}$`)
 	promptHashPattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	// promptIDPattern is a prompt ID Claude Code writes (a UUID).
+	promptIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 )
 
 // valid reports whether p is a position Claude Code writes (native $3).
@@ -107,7 +126,10 @@ type sessionEntry struct {
 	// history is the answered request's messages: the next request names it
 	// only if its own messages continue them.
 	history historyDigest
-	at      time.Time
+	// spawns are the answer's Agent calls (first-party shape): a subagent
+	// whose first prompt is one of them is this thread's.
+	spawns []agentSpawn
+	at     time.Time
 }
 
 // threadClaim is a thread's requests in flight. shared: another request came
@@ -131,6 +153,9 @@ type historyDigest struct {
 type messageHistory struct {
 	digests       [][32]byte
 	lastAssistant int
+	// prompts are the digests of the first user message's texts (its text
+	// blocks, or its string content): a subagent's first prompt is one.
+	prompts [][32]byte
 }
 
 // readMessages is the body's messageHistory.
@@ -149,11 +174,81 @@ func readMessages(body *requestBody) messageHistory {
 		if json.Unmarshal(message, &value) != nil {
 			return none
 		}
-		if object, _ := value.(map[string]any); object["role"] == "assistant" {
+		object, _ := value.(map[string]any)
+		if object["role"] == "assistant" {
 			out.lastAssistant = i
 		}
-		canonical, _ := json.Marshal(value)
+		if object["role"] == "user" && out.prompts == nil {
+			out.prompts = promptTexts(object["content"])
+		}
+		canonical, _ := json.Marshal(canonicalMessage(object, value))
 		out.digests = append(out.digests, sha256.Sum256(canonical))
+	}
+	return out
+}
+
+// canonicalMessage is a message as the memory compares it: what Claude Code
+// changes in a message it sends again is not part of it. CC marks the last
+// blocks of a request for the prompt cache and moves the markers on as the
+// conversation grows, and writes a message whose one text block lost its
+// marker as a string (2.1.316, a third-party client's environment message:
+// a block with cache_control first, the bare string on the next request).
+// So a content string is its one text block, and cache_control is dropped
+// from every block; nothing else changes.
+func canonicalMessage(object map[string]any, value any) any {
+	if object == nil {
+		return value
+	}
+	out := make(map[string]any, len(object))
+	for key, field := range object {
+		out[key] = field
+	}
+	if text, ok := object["content"].(string); ok {
+		out["content"] = []any{map[string]any{"type": "text", "text": text}}
+	} else if blocks, ok := object["content"].([]any); ok {
+		out["content"] = withoutCacheMarkers(blocks)
+	}
+	return out
+}
+
+// withoutCacheMarkers is blocks without their cache_control, a tool result's
+// own content blocks included.
+func withoutCacheMarkers(blocks []any) []any {
+	out := make([]any, len(blocks))
+	for i, item := range blocks {
+		block, ok := item.(map[string]any)
+		if !ok {
+			out[i] = item
+			continue
+		}
+		copied := make(map[string]any, len(block))
+		for key, field := range block {
+			if key == "cache_control" {
+				continue
+			}
+			if nested, ok := field.([]any); ok && key == "content" {
+				field = withoutCacheMarkers(nested)
+			}
+			copied[key] = field
+		}
+		out[i] = copied
+	}
+	return out
+}
+
+// promptTexts are the digests of a user message's texts.
+func promptTexts(content any) [][32]byte {
+	out := [][32]byte{}
+	switch value := content.(type) {
+	case string:
+		out = append(out, sha256.Sum256([]byte(value)))
+	case []any:
+		for _, item := range value {
+			block, _ := item.(map[string]any)
+			if text, ok := block["text"].(string); ok && block["type"] == "text" {
+				out = append(out, sha256.Sum256([]byte(text)))
+			}
+		}
 	}
 	return out
 }
@@ -196,14 +291,8 @@ func (s *sessionStates) clock() time.Time {
 func (s *sessionStates) latest(key string) (*sessionState, historyDigest) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	element := s.entries[key]
-	if element == nil {
-		return nil, historyDigest{}
-	}
-	entry := element.Value.(*sessionEntry)
-	if s.clock().Sub(entry.at) >= sessionStatesIdle {
-		s.order.Remove(element)
-		delete(s.entries, key)
+	entry := s.entry(key)
+	if entry == nil {
 		return nil, historyDigest{}
 	}
 	state := entry.state
@@ -214,16 +303,81 @@ func (s *sessionStates) latest(key string) (*sessionState, historyDigest) {
 	return &state, entry.history
 }
 
+// entry is the thread's live entry (s.mu held), forgetting an idle one.
+func (s *sessionStates) entry(key string) *sessionEntry {
+	element := s.entries[key]
+	if element == nil {
+		return nil
+	}
+	entry := element.Value.(*sessionEntry)
+	if s.clock().Sub(entry.at) >= sessionStatesIdle {
+		s.order.Remove(element)
+		delete(s.entries, key)
+		return nil
+	}
+	return entry
+}
+
+// spawned is what the parent thread's last answer says of a subagent whose
+// first request has these messages (first-party shape): the Agent call whose
+// prompt is one of its first message's texts, with the parent's prompt ID.
+// Nothing when the parent has another request in flight (its last answer may
+// no longer be the one that spawned it), has no such call, or two calls
+// share the prompt with different agent types.
+func (s *sessionStates) spawned(parentKey string, messages messageHistory) *spawnContext {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.busy[parentKey] != nil {
+		return nil
+	}
+	entry := s.entry(parentKey)
+	if entry == nil {
+		return nil
+	}
+	var found *agentSpawn
+	for i := range entry.spawns {
+		call := &entry.spawns[i]
+		if !slices.Contains(messages.prompts, call.prompt) {
+			continue
+		}
+		if found != nil && found.agentType != call.agentType {
+			return nil
+		}
+		found = call
+	}
+	if found == nil || entry.state.PromptID == "" && found.agentType == "" {
+		return nil
+	}
+	return &spawnContext{PromptID: entry.state.PromptID, AgentType: found.agentType}
+}
+
+// answerFacts are what the Worker read off an answer (answer_observer.go).
+type answerFacts struct {
+	messageID string
+	spawns    []agentSpawn
+}
+
 // keptState is what an answer leaves of the thread, whole or not at all: its
 // request-id and, on the main thread, the turn the CLI reported with its
-// prompt's hash. An answer with a value Claude Code would not write leaves
-// the thread as it was.
-func keptState(requestID string, reported sessionState) (sessionState, bool) {
+// prompt's hash; for a converted request also the prompt ID, a subagent's
+// agent type and the answer's message ID, each kept only when Claude Code
+// would write it. An answer with a request-id or turn Claude Code would not
+// write leaves the thread as it was.
+func keptState(requestID string, reported sessionState, facts answerFacts) (sessionState, bool) {
 	if !upstreamRequestID.MatchString(requestID) {
 		return sessionState{}, false
 	}
 	state := sessionState{Thread: reported.Thread, RequestID: requestID}
+	if answerMessageID.MatchString(facts.messageID) {
+		state.MessageID = facts.messageID
+	}
+	if promptIDPattern.MatchString(reported.PromptID) {
+		state.PromptID = reported.PromptID
+	}
 	if reported.Thread != mainThread {
+		if agentTypeName.MatchString(reported.AgentType) {
+			state.AgentType = reported.AgentType
+		}
 		return state, true
 	}
 	if !reported.Turn.valid() || !promptHashPattern.MatchString(reported.PromptHash) {
@@ -238,7 +392,12 @@ func keptState(requestID string, reported sessionState) (sessionState, bool) {
 // request's messages (keptState), unless another request of the thread was
 // in flight with it.
 func (s *sessionStates) answered(key, requestID string, history historyDigest, reported sessionState) {
-	state, ok := keptState(requestID, reported)
+	s.answeredWith(key, requestID, history, reported, answerFacts{})
+}
+
+// answeredWith is answered with what the Worker read off the answer.
+func (s *sessionStates) answeredWith(key, requestID string, history historyDigest, reported sessionState, facts answerFacts) {
+	state, ok := keptState(requestID, reported, facts)
 	if !ok {
 		return
 	}
@@ -250,7 +409,7 @@ func (s *sessionStates) answered(key, requestID string, history historyDigest, r
 	if s.entries == nil {
 		s.entries, s.order = map[string]*list.Element{}, list.New()
 	}
-	entry := &sessionEntry{key: key, state: state, history: history, at: s.clock()}
+	entry := &sessionEntry{key: key, state: state, history: history, spawns: facts.spawns, at: s.clock()}
 	if element := s.entries[key]; element != nil {
 		element.Value = entry
 		s.order.MoveToFront(element)
@@ -310,18 +469,23 @@ type requestSession struct {
 //     a session the Worker derives from the conversation's first message is
 //     shared by every conversation that opens alike, so a later turn of one
 //     would be given another's request and turn;
-//   - never for a request carrying the client's own billing header (the CLI
-//     keeps it): one whose system opens with it is left before its messages
-//     are read;
+//   - for a request carrying the client's own billing header only when the
+//     request may be converted to the first-party shape (p.shape: the CLI
+//     converts a third-party header and uses the memory then, and keeps any
+//     other header as it is); otherwise one whose system opens with it is
+//     left before its messages are read;
 //   - only for a thread the Worker can tell apart, with no other request of
 //     it in flight;
 //   - only when the request's messages continue the answered request's
 //     (historyDigest.continuedBy): a shortened or rewritten history is given
-//     nothing, and its turn counts from its own history.
+//     nothing, and its turn counts from its own history;
+//   - a converted subagent's first request (no answer in its messages yet)
+//     is given the Agent call of its parent thread's last answer that
+//     spawned it (sessionStates.spawned), when there is exactly one.
 //
 // Console tests are the gateway's own requests, not a conversation's.
 func (g *Gateway) attachSessionState(p *requestPlan, h http.Header, body *requestBody) {
-	if p.identity == nil || !p.identity.named || p.identity.Session == "" || p.probe || !g.CLIInfo.supports(features.SessionStateCapability) || body.leadsWithBillingHeader() {
+	if p.identity == nil || !p.identity.named || p.identity.Session == "" || p.probe || !g.CLIInfo.supports(features.SessionStateCapability) || !p.shape && body.leadsWithBillingHeader() {
 		return
 	}
 	thread, ok := sessionThread(h)
@@ -336,12 +500,34 @@ func (g *Gateway) attachSessionState(p *requestPlan, h http.Header, body *reques
 	if !p.session.usable {
 		return
 	}
+	if p.shape && thread != mainThread && p.session.messages.lastAssistant < 0 {
+		p.identity.Spawn = g.sessionStates.spawned(sessionKey(p.identity.Session, parentThread(h)), p.session.messages)
+	}
 	state, history := g.sessionStates.latest(key)
 	if state == nil || !history.continuedBy(p.session.messages) {
 		return
 	}
 	state.Thread = thread
+	if !p.shape {
+		// Only a converting CLI is given the first-party shape's facts.
+		state.MessageID, state.PromptID, state.AgentType = "", "", ""
+	}
 	p.identity.Previous = state
+}
+
+// parentThread is the thread that spawned a subagent: the agent its request
+// names as its parent, else the main thread (Claude Code sends a parent
+// agent ID only for a subagent of a subagent).
+func parentThread(h http.Header) string {
+	for _, field := range features.AgentContextHeaders {
+		if field.Field != "parent_agent_id" {
+			continue
+		}
+		if value := h.Get(field.Header); value != "" && field.Valid(value) {
+			return value
+		}
+	}
+	return mainThread
 }
 
 // rememberSessionState keeps a request answered in full whose header the CLI
@@ -354,7 +540,8 @@ func (g *Gateway) rememberSessionState(p *requestPlan, o *requestCommandOutput) 
 	if s == nil || !s.usable || o.session == nil || o.session.Thread != s.thread || o.status < 200 || o.status > 299 {
 		return
 	}
-	g.sessionStates.answered(s.key, o.requestID, s.messages.all(), *o.session)
+	messageID, spawns := o.observer.facts()
+	g.sessionStates.answeredWith(s.key, o.requestID, s.messages.all(), *o.session, answerFacts{messageID: messageID, spawns: spawns})
 }
 
 // releaseSessionState gives back the thread the request claimed.

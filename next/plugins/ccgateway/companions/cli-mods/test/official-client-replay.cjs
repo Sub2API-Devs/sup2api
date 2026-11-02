@@ -151,7 +151,7 @@ async function replay(name, body, mode = 'build', sources = {}, billing = {}, ex
     const response = await fetch('http://127.0.0.1:18087/v1/messages', { method: 'POST', headers: {
       ...(name.startsWith('official-') ? officialHeaders : {}),
       'x-api-key': 'replay-worker-key', 'content-type': 'application/json',
-      'x-ccgateway-request-policy': JSON.stringify({ schema_version: 1, relay_mode: mode, cli_version: version,
+      'x-ccgateway-request-policy': JSON.stringify({ schema_version: 1, relay_mode: mode, cli_version: version, first_party_shape: false,
         ...(mode === 'build' ? { build_attachment_sources: sources, build_billing_sources: billing } : {}) }),
     }, body: sent, signal: AbortSignal.timeout(60000) });
     const responseText = await response.text();

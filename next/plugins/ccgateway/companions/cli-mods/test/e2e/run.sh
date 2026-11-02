@@ -7,7 +7,7 @@
 # core also writes the Worker answer (in/resp-N.json: headers, trailers, body,
 # first-byte/end timing). extra.sh adds the r3 phases.
 #
-# RUN_MODE=all|calib|values|extra|conc|classify  SMOKE=1  CALIB2=1
+# RUN_MODE=all|calib|values|extra|conc|classify|thirdparty  SMOKE=1  CALIB2=1
 # CC_VERSION         the gateway CLI version (default 2.1.304): policy cli_version,
 #                    the manifest entry the Workers pin, the shim's target
 # CLIENT_CC_VERSION  the version in the kit's synthetic CC client values (billing
@@ -198,6 +198,13 @@ if [ "$MODE" = conc ]; then
   echo "conc done"; exit 0
 fi
 
+if [ "$MODE" = thirdparty ]; then
+  . $T/thirdparty.sh
+  kill $(cat $T/proxy-*.pid) $(cat $T/worker-*.pid) 2>/dev/null
+  sleep 1
+  echo "== captures"; for d in $CAP/tp-*/; do echo "$(basename $d) a=$(ls $d/a 2>/dev/null | grep -c '^req-') b=$(ls $d/b 2>/dev/null | grep -c '^req-') in=$(ls $d/in 2>/dev/null | grep -c '^in-')"; done
+  echo "thirdparty done"; exit 0
+fi
 if [ "$MODE" = extra ]; then
   . $T/extra.sh all
   kill $(cat $T/proxy-*.pid) $(cat $T/worker-*.pid) 2>/dev/null

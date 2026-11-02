@@ -45,7 +45,7 @@ test('the command records what the transport sent, for direct and build', async 
           fs.writeFileSync('wire.json', JSON.stringify({ url: String(url), method: init.method, headers: [...new Headers(init.headers)] }));
           return new Response('{"ok":true}', { status: 200, headers: { 'content-type': 'application/json' } });
         };`,
-      'stub-context.js': 'export const mainAgentContext=()=>({});export const modelBetas=()=>[];',
+      'stub-context.js': 'export const mainAgentContext=()=>({});export const modelBetas=()=>[];export const promptCachingScopeBeta={name:"prompt_caching_scope",header:"prompt-caching-scope-2026-01-05"},cacheDiagnosisBeta={name:"cache_diagnosis",header:"cache-diagnosis-2026-04-07"},extendedCacheTtlBeta={name:"extended_cache_ttl",header:"extended-cache-ttl-2025-04-11"};',
       'stub-betas.js': 'export const betasAllowed=()=>true;',
       'stub-session.js': 'export const getRootSession=()=>({});export const setEntrypointOnRequests=()=>{};',
       // Build assembles a body around the client's components; the kept number

@@ -10,7 +10,7 @@
 #
 #   B=/tmp/ccg-e2e IMG=ccgateway-app:0.1.103 OFFICIAL_CLI=/path/claude-official \
 #     [CC_VERSION=2.1.304] [NEW=1] [TAG=name] [REQUEST_LOG=full] \
-#     sh docker.sh all | values | extra | conc | classify | smoke | calib1 | calib2
+#     sh docker.sh all | values | extra | conc | classify | thirdparty | smoke | calib1 | calib2
 #
 # Every default below is the value the 2.1.304 runs used (release-0195..0203),
 # so a run without overrides reproduces them.
@@ -51,8 +51,9 @@ case "${1:-all}" in
   conc)   ENVS='RUN_MODE=conc' ;;
   classify) ENVS='RUN_MODE=classify' ;;
   values) ENVS='RUN_MODE=values' ;;
+  thirdparty) ENVS='RUN_MODE=thirdparty' ;;
   all)    ENVS='RUN_MODE=all' ;;
-  *) echo "usage: $0 all|values|extra|conc|classify|smoke|calib1|calib2"; exit 2 ;;
+  *) echo "usage: $0 all|values|extra|conc|classify|thirdparty|smoke|calib1|calib2"; exit 2 ;;
 esac
 # The work directory is created once per tag; delete it to start over (files
 # in it belong to UID 1000, see README).

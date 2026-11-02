@@ -61,7 +61,18 @@ type requestPlan struct {
 	// session: the request's place in the Worker's memory of its session
 	// thread (session_state.go), nil when it has none.
 	session *requestSession
+	// shape: an official client's third-party shape goes upstream in the
+	// first-party shape (features.FirstPartyShapeCapability, 2026-11-03):
+	// build only, with a CLI that declares it, unless the core's policy says
+	// first_party_shape false. A policy without the field is on: the core
+	// leaves it out for some routes, and a request run by hand has none.
+	shape bool
+	// shapeWanted is the policy's own answer, before the mode and the CLI.
+	shapeWanted bool
 }
+
+// firstPartyShapeEnv tells the CLI to convert (request-build.js).
+const firstPartyShapeEnv = "CCG_FIRST_PARTY_SHAPE"
 
 // requestRefusal is the Worker's own answer before the CLI runs.
 type requestRefusal struct {
@@ -132,6 +143,9 @@ func (g *Gateway) admitRequest(w http.ResponseWriter, r *http.Request, d *reques
 	if refusal = g.checkCapabilities(plan); refusal != nil {
 		return nil, refusal
 	}
+	// Never refused for: a Worker that cannot convert sends the request as
+	// the client wrote it.
+	plan.shape = plan.shapeWanted && building(plan) && !plan.probe && g.CLIInfo.supports(features.FirstPartyShapeCapability)
 	if r.Method != http.MethodPost {
 		return nil, refuse(405, "invalid_request_error", "Use POST")
 	}
@@ -171,6 +185,7 @@ func (g *Gateway) prepareRequest(w http.ResponseWriter, r *http.Request, d *requ
 func (g *Gateway) parseRequestPolicy(r *http.Request) (*requestPlan, *requestRefusal) {
 	plan := &requestPlan{mode: g.RequestMode}
 	var policy features.WorkerPolicy
+	defer func() { plan.shapeWanted = policy.FirstPartyShapeEnabled() }()
 	if value := r.Header.Get(features.PolicyHeader); value != "" {
 		parsed, err := features.ParseWorkerPolicy([]byte(value))
 		if err != nil {
@@ -412,7 +427,7 @@ func (g *Gateway) runCLI(w http.ResponseWriter, r *http.Request, d *requestDiagn
 	if building(p) {
 		cmd.Dir = runner.WorkingDirectory
 	}
-	run.output = &requestCommandOutput{writer: w, meta: run.meta, diagnostic: d, credit: p.credit}
+	run.output = &requestCommandOutput{writer: w, meta: run.meta, diagnostic: d, credit: p.credit, observe: p.shape && p.session != nil && p.session.usable}
 	run.stderr = &requestErrorReader{diagnostic: d}
 	cmd.Stdout, cmd.Stderr = run.output, run.stderr
 	d.trace("request_command", Object{"mode": p.mode, "configured_mode": g.RequestMode, "probe": p.probe, "cli_version": runner.Version})
@@ -466,6 +481,9 @@ func (g *Gateway) requestCommand(ctx context.Context, p *requestPlan, meta strin
 	}
 	if p.direct != nil {
 		cmd.Env = envWith(cmd.Env, map[string]string{directPolicyEnv: string(p.direct)})
+	}
+	if p.shape {
+		cmd.Env = envWith(cmd.Env, map[string]string{firstPartyShapeEnv: "1"})
 	}
 	if p.agent != nil {
 		// Claude Code writes its request-class, agent-type and prompt-id
@@ -567,12 +585,16 @@ func (c *cliRun) fail(w http.ResponseWriter, d *requestDiagnostic, frame *reques
 }
 
 type requestCommandOutput struct {
-	writer      http.ResponseWriter
-	meta        string
-	started     bool
-	status      int
-	requestID   string        // the upstream answer's request-id
-	session     *sessionState // the turn the CLI's own header used
+	writer    http.ResponseWriter
+	meta      string
+	started   bool
+	status    int
+	requestID string        // the upstream answer's request-id
+	session   *sessionState // the turn the CLI's own header used
+	// observe: the answer is read for the session memory (a converted
+	// request's thread, answer_observer.go); observer reads a 2xx answer.
+	observe     bool
+	observer    *answerObserver
 	diagnostic  *requestDiagnostic
 	contentType string
 	// A tracked response keeps a copy for its credit claim (request_credit.go).
@@ -635,6 +657,9 @@ func (o *requestCommandOutput) commit(status int, h http.Header) {
 	o.status = status
 	o.requestID = h.Get("request-id")
 	o.started = true
+	if o.observe && status >= 200 && status <= 299 {
+		o.observer = newAnswerObserver(h.Get("Content-Type"), h.Get("Content-Encoding"))
+	}
 }
 
 func (o *requestCommandOutput) Write(p []byte) (int, error) {
@@ -644,6 +669,7 @@ func (o *requestCommandOutput) Write(p []byte) (int, error) {
 	if o.credit != nil {
 		o.keepCredit(p)
 	}
+	o.observer.write(p)
 	n, err := o.writer.Write(p)
 	if err == nil {
 		_ = http.NewResponseController(o.writer).Flush()
