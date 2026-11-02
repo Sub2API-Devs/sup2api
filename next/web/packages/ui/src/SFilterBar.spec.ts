@@ -12,9 +12,11 @@ describe('SFilterBar', () => {
     expect(w.text()).toContain('UTC')
     await w.get('[data-testid="filter-reset"]').trigger('click')
     expect(onReset).toHaveBeenCalledOnce()
-    const clean = mount(SFilterBar, { props: { onReset, card: false } })
+    const clean = mount(SFilterBar, { props: { onReset, card: false, dirty: false } })
     expect(clean.get('[data-testid="filter-reset"]').attributes('disabled')).toBeDefined()
     expect(clean.classes()).not.toContain('card')
+    // Without :dirty the page does not track it: Reset stays usable.
+    expect(mount(SFilterBar, { props: { onReset } }).get('[data-testid="filter-reset"]').attributes('disabled')).toBeUndefined()
     expect(mount(SFilterBar).find('[data-testid="filter-reset"]').exists()).toBe(false)
   })
 })

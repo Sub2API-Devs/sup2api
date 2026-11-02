@@ -3,7 +3,7 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SPageHeader, SSelect, STitleScope } from '@sub2api/ui'
+import { SAlert, SPageHeader, SSelect, SSkeleton, STitleScope } from '@sub2api/ui'
 import type { PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -61,14 +61,17 @@ const GROUPS: Array<{ key: string; items: Array<{ key: string; perm: string; lab
 
 /** Enabled plugins with console settings: a schema form, or the core's ccgateway view. */
 const pluginList = ref<PluginSummary[]>([])
+const pluginsLoaded = ref(false)
 onMounted(async () => {
-  if (!auth.has('plugin:read')) return
   try {
+    if (!auth.has('plugin:read')) return
     const list = await api.get<PluginSummary[]>('/plugins')
     pluginList.value = (list || []).filter((p) => p.status === 'enabled' && hasConsoleSettings(p, (perm) => auth.has(perm)))
   } catch {
     // The plugin group is an index; the plugin list page still reaches them.
     pluginList.value = []
+  } finally {
+    pluginsLoaded.value = true
   }
 })
 
@@ -91,8 +94,13 @@ const entries = computed(() => groups.value.flatMap((g) => g.items))
 
 const tab = ref('')
 watch(() => route.query.tab, (value) => { tab.value = typeof value === 'string' ? value : '' }, { immediate: true })
+const known = computed(() => entries.value.some((x) => x.key === tab.value))
+/** A plugin page asked for by a link waits for the plugin list instead of opening the first page meanwhile. */
+const waiting = computed(() => tab.value.startsWith('plugin:') && !pluginsLoaded.value && !known.value)
+/** A linked page the user cannot see (plugin disabled, no permission): say so instead of silently showing another one. */
+const missing = computed(() => !!tab.value && !waiting.value && !known.value)
 /** The selected page when the user may see it, else the first visible one. */
-const active = computed(() => (entries.value.some((x) => x.key === tab.value) ? tab.value : entries.value[0]?.key))
+const active = computed(() => (waiting.value ? undefined : known.value ? tab.value : entries.value[0]?.key))
 const activePlugin = computed(() => (active.value?.startsWith('plugin:') ? active.value.slice('plugin:'.length) : ''))
 const activeLabel = computed(() => entries.value.find((x) => x.key === active.value)?.label ?? '')
 const options = computed(() => groups.value.flatMap((g) => g.items.map((x) => ({ value: x.key, label: `${g.label} · ${x.label}` }))))
@@ -136,7 +144,9 @@ function select(key: string) {
         </div>
       </nav>
       <STitleScope :title="activeLabel" class="min-w-0" role="region" :aria-label="activeLabel" data-testid="settings-panel">
-        <BillingSettingsCard v-if="active === 'billing'" />
+        <SAlert v-if="missing" tone="warning" class="mb-4" data-testid="settings-missing">{{ t('settings.missingTab') }}</SAlert>
+        <SSkeleton v-if="waiting" height="12rem" data-testid="settings-waiting" />
+        <BillingSettingsCard v-else-if="active === 'billing'" />
         <GatewaySettingsCard v-else-if="active === 'gateway'" />
         <EnvironmentSettingsCard v-else-if="active === 'environment'" />
         <NotificationsSettingsCard v-else-if="active === 'notifications'" />

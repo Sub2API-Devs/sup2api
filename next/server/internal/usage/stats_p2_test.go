@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"encoding/csv"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -49,6 +50,7 @@ func TestAllOverview(t *testing.T) {
 	_, err := f.db.Pool.Exec(t.Context(), `INSERT INTO accounts(name,plugin_key,type,credentials_enc,status) VALUES('ok','anthropic','apikey','','active'),('bad','anthropic','apikey','','error')`)
 	require.NoError(t, err)
 
+	f.svc.Authz = nil
 	ov := f.get(f.user, "/usage/overview?tz=UTC", 200)["data"].(map[string]any)
 	require.Equal(t, float64(2), ov["last_5m"].(map[string]any)["requests"])
 	require.NotContains(t, ov, "users") // no Authorizer: optional sections hidden
@@ -76,6 +78,9 @@ func TestUsageExport(t *testing.T) {
 	f := newFixture(t)
 	a, b, other := f.record("exp-1", false), f.record("exp-2", false), f.record("exp-3", false)
 	a.Model = "=HYPERLINK(\"x\")"
+	var accountID int64
+	require.NoError(t, f.db.Pool.QueryRow(t.Context(), `INSERT INTO accounts(name,plugin_key,type,credentials_enc) VALUES('Export Account','anthropic','apikey','') RETURNING id`).Scan(&accountID))
+	a.AccountID = &accountID // b keeps no account: the request ended before one was picked
 	b.CreatedAt = a.CreatedAt.Add(time.Second)
 	other.UserID = f.other
 	f.svc.process(t.Context(), []*core.UsageRecord{a, b, other})
@@ -97,11 +102,51 @@ func TestUsageExport(t *testing.T) {
 	require.Contains(t, mine, `"'=HYPERLINK(""x"")"`)
 	require.NotContains(t, lines[0], "账号")
 	require.NotContains(t, mine, "exp-3")
+	require.NotContains(t, mine, "Export Account")
 
 	all := get("/usage/export?lang=en&from=2026-09-20T00:00:00Z")
-	require.Contains(t, strings.SplitN(all, "\n", 2)[0], "Account ID,Account")
-	require.Len(t, strings.Split(strings.TrimSpace(all), "\n"), 4)
+	rows := strings.Split(strings.TrimSpace(all), "\n")
+	require.Len(t, rows, 4)
+	accountCells := func(row string) string {
+		r, err := csv.NewReader(strings.NewReader(row)).Read()
+		require.NoError(t, err)
+		return r[6] + "|" + r[7] // Account ID, Account
+	}
+	require.Equal(t, "Account ID|Account", accountCells(strings.TrimPrefix(rows[0], "\xef\xbb\xbf")))
+	for _, row := range rows[1:] {
+		switch {
+		case strings.Contains(row, "exp-1"):
+			require.Equal(t, strconv.FormatInt(accountID, 10)+"|Export Account", accountCells(row))
+		case strings.Contains(row, "exp-2"):
+			require.Equal(t, "|", accountCells(row))
+		}
+	}
+
+	// An operator without account:read sees no account anywhere: not in the
+	// export, the list or the detail, and may not filter by account.
+	f.svc.Authz = denyAccounts{}
+	noAcc := get("/usage/export?lang=en&from=2026-09-20T00:00:00Z")
+	require.NotContains(t, strings.SplitN(noAcc, "\n", 2)[0], "Account")
+	require.NotContains(t, noAcc, "Export Account")
+	for _, path := range []string{"/usage?from=2026-09-20T00:00:00Z", "/usage?cursor=&from=2026-09-20T00:00:00Z"} {
+		for _, it := range f.get(f.user, path, 200)["data"].([]any) {
+			row := it.(map[string]any)
+			require.Nil(t, row["account_id"], path)
+			require.NotContains(t, row, "account_name", path)
+			if row["request_id"] == "exp-1" {
+				d := f.get(f.user, "/usage/"+strconv.FormatInt(int64(row["id"].(float64)), 10), 200)["data"].(map[string]any)
+				require.Nil(t, d["account_id"])
+				require.NotContains(t, d, "account_name")
+			}
+		}
+	}
+	for _, q := range []string{"account_id=" + strconv.FormatInt(accountID, 10), "account_name=Export"} {
+		f.get(f.user, "/usage?"+q, 403)
+		f.get(f.user, "/usage/summary?"+q, 403)
+		f.get(f.user, "/usage/export?"+q, 403)
+	}
+	f.svc.Authz = allowAll{}
 
 	f.get(f.user, "/me/usage/export?lang=fr", 400)
-	require.Equal(t, "2", f.scalar(`SELECT count(*)::text FROM audit_logs WHERE action = 'usage.export'`))
+	require.Equal(t, "3", f.scalar(`SELECT count(*)::text FROM audit_logs WHERE action = 'usage.export'`)) // the refused exports are not audited
 }

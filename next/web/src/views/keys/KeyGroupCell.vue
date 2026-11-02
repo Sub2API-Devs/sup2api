@@ -3,15 +3,22 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SHint } from '@sub2api/ui'
 import GroupBadge from '@/components/platform/GroupBadge.vue'
+import type { ApiKey } from '@/api/types'
 
 // Group of an API key as a badge of the platforms the key can access
 // (CONTRACTS §13) and its rate multiplier. `platforms` undefined: the server
 // did not report them; empty: the key reaches no platform. `status` other
 // than active says why the group cannot serve the key (deleted, disabled,
 // no longer open to the owner); the owner then picks another group.
-const props = defineProps<{ name: string; multiplier?: string | number; platforms?: string[] | null; status?: string }>()
+const props = defineProps<{ name: string; multiplier?: string | number; platforms?: string[] | null; status?: ApiKey['group_status'] }>()
 const { t } = useI18n()
-const problem = computed(() => (props.status && props.status !== 'active' ? `apikeys.groupState.${props.status}` : ''))
+const PROBLEMS: Record<string, string> = {
+  deleted: 'apikeys.groupState.deleted',
+  disabled: 'apikeys.groupState.disabled',
+  unavailable: 'apikeys.groupState.unavailable'
+}
+/** A state this console does not know yet shows no hint rather than a raw message key. */
+const problem = computed(() => PROBLEMS[props.status ?? ''] ?? '')
 </script>
 
 <template>

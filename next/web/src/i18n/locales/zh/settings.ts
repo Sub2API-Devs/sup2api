@@ -1,5 +1,6 @@
 export default {
   description: '全局的计费、网关与调度设置。',
+  missingTab: '链接指向的设置页不可用（没有权限，或对应插件未启用），已显示第一个设置页。',
   navLabel: '设置分类',
   groups: {
     gateway: '网关',

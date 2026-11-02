@@ -3,8 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import en from '@/i18n/locales/en/plugins'
 import zh from '@/i18n/locales/zh/plugins'
-import { statusTone } from '@sub2api/ui'
-import { HOST_PERMISSION_RISK, PLUGIN_TONES, accountTypesOf, consoleSettings, endpointText, hpKey, nativeSettingsPath, platformsOf, settingsFieldErrors } from './pluginUtil'
+import { HOST_PERMISSION_RISK, accountTypesOf, consoleSettings, endpointText, hpKey, nativeSettingsPath, platformsOf, pluginStatusTone, settingsFieldErrors } from './pluginUtil'
 
 describe('plugin endpoint declarations', () => {
   it('preserves the same subset in manifests and installation reviews', () => {
@@ -83,7 +82,7 @@ describe('settings modes (§75.5)', () => {
 })
 
 describe('plugin status tones', () => {
-  it('keep the plugin pages\' colours on top of the SDK statusTone', () => {
+  it('are the plugin pages\' own, independent of the SDK statusTone', () => {
     const expected: Record<string, string> = {
       enabled: 'success', active: 'success', ready: 'success', running: 'success', ok: 'success', success: 'success', succeeded: 'success', approved: 'success',
       enabling: 'primary', upgrading: 'primary', preparing: 'primary', activating: 'primary', pending: 'primary', starting: 'primary',
@@ -91,7 +90,7 @@ describe('plugin status tones', () => {
       failed: 'danger', error: 'danger', crashed: 'danger', rolled_back: 'danger', rejected: 'danger', revoked: 'danger', unavailable: 'danger', abnormal: 'danger',
       disabled: 'gray', stopped: 'gray', removed: 'gray', healthy: 'gray', expired: 'gray', draining: 'gray', loading: 'gray', stopping: 'gray', banned: 'gray', unknown: 'gray'
     }
-    for (const [status, tone] of Object.entries(expected)) expect([status, statusTone(status, PLUGIN_TONES)]).toEqual([status, tone])
-    expect(statusTone(null, PLUGIN_TONES)).toBe('gray')
+    for (const [status, tone] of Object.entries(expected)) expect([status, pluginStatusTone(status)]).toEqual([status, tone])
+    expect(pluginStatusTone(null)).toBe('gray')
   })
 })

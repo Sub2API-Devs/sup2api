@@ -93,6 +93,8 @@ describe('usage records layout', () => {
     })
     expect(w.find('[data-testid="usage-detail"]').exists()).toBe(false)
     expect(w.text()).not.toContain('Account nine')
+    expect(w.text()).not.toContain('#9')
+    expect(w.findAll('[data-testid="usage-account"]')).toHaveLength(0)
     const expand = w.get('[data-testid="mobile-usage-record"] button[aria-expanded]')
     await expand.trigger('click')
     expect(expand.attributes('aria-expanded')).toBe('true')

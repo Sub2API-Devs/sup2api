@@ -35,7 +35,7 @@ const date = computed(() => {
 // Only relative texts tick; an auto text a week in the past stays absolute.
 const now = useNow(() => {
   if (!date.value || props.mode === 'absolute' || props.mode === 'time') return 0
-  if (props.mode === 'auto' && Date.now() - date.value.getTime() >= WEEK) return 0
+  if (props.mode === 'auto' && Math.abs(Date.now() - date.value.getTime()) >= WEEK) return 0
   return props.live ? 1000 : 60_000
 })
 const lang = computed(() => (locale() === 'zh' ? 'zh-CN' : locale()))
@@ -67,7 +67,8 @@ const relative = computed(() => {
   if (!date.value) return ''
   const diff = (date.value.getTime() - now.value) / 1000
   const abs = Math.abs(diff)
-  if (abs < 1) return new Intl.RelativeTimeFormat(lang.value, { numeric: 'auto', style: 'narrow' }).format(0, 'second')
+  // Without live the text ticks once a minute: under a minute it says "now" rather than a frozen "5s ago".
+  if (abs < (props.live ? 1 : 60)) return new Intl.RelativeTimeFormat(lang.value, { numeric: 'auto', style: 'narrow' }).format(0, 'second')
   const rtf = new Intl.RelativeTimeFormat(lang.value, { numeric: 'always', style: 'narrow' })
   for (const [unit, sec] of UNITS) if (abs >= sec) return rtf.format(Math.sign(diff) * Math.floor(abs / sec), unit)
   return rtf.format(0, 'second')

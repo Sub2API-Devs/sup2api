@@ -7,8 +7,11 @@ name: CCGateway images
 # the release host runs next/deploy/docker/build-ccgateway-images.sh before
 # building the core (prepare-core-release.sh, REQUIRE_CCGATEWAY_IMAGES=1) and
 # the core installs / pushes the bundled archives itself. The `bundle` job
-# below runs that very script on a GitHub runner and packs ccgateway with its
-# images, so the release path is exercised on every change. The GHCR push
+# below runs that very script and packs ccgateway with its images, but only
+# where the customized CLI (cli-mods/release, gitignored) is present: on
+# GitHub-hosted runners it never is, so that job and the ccgateway-app image
+# are skipped with a warning and the release path is checked on the release
+# host only. The GHCR push
 # (`images`) is kept for anyone pulling the images directly (the GHCR
 # packages are private).
 #

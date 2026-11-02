@@ -75,11 +75,16 @@ export function conflictLines(p: { resource_conflicts?: ResourceConflict[] | nul
 }
 
 /**
- * Plugin lifecycle / rollout / node state tones that differ from the SDK's
- * statusTone (pass as SStatusBadge `tones`). In-flight states are primary
- * rather than warning, and a few generic ones stay gray here.
+ * Plugin lifecycle / rollout / node state tones, complete on their own (not a
+ * patch over the SDK's generic statusTone, whose vocabulary may change):
+ * in-flight states are primary, anything unlisted gray.
  */
-export const PLUGIN_TONES: Record<string, Tone> = {
+const PLUGIN_TONES: Record<string, Tone> = {
+  enabled: 'success',
+  active: 'success',
+  ready: 'success',
+  running: 'success',
+  ok: 'success',
   success: 'success',
   succeeded: 'success',
   approved: 'success',
@@ -91,16 +96,19 @@ export const PLUGIN_TONES: Record<string, Tone> = {
   starting: 'primary',
   awaiting_consent: 'warning',
   installed: 'warning',
+  failed: 'danger',
+  error: 'danger',
+  crashed: 'danger',
   rolled_back: 'danger',
   rejected: 'danger',
+  revoked: 'danger',
   unavailable: 'danger',
-  abnormal: 'danger',
-  healthy: 'gray',
-  expired: 'gray',
-  draining: 'gray',
-  loading: 'gray',
-  stopping: 'gray',
-  banned: 'gray'
+  abnormal: 'danger'
+}
+
+/** Badge tone of a plugin state (PluginStatusBadge). */
+export function pluginStatusTone(status: string | null | undefined): Tone {
+  return PLUGIN_TONES[status || ''] ?? 'gray'
 }
 
 /** Localized plugin state label (`plugins.status.*`); unknown values are shown raw. */

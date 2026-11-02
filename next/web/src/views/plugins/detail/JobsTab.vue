@@ -2,15 +2,15 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SCode, SHint, SStatusBadge, STable, toast, type TableColumn } from '@sub2api/ui'
+import { SButton, SCard, SCode, SHint, STable, toast, type TableColumn } from '@sub2api/ui'
+import PluginStatusBadge from '../parts/PluginStatusBadge.vue'
 import { formatDateTime } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
-import { PLUGIN_TONES, durationMs, formatDuration, usePluginStatusLabel, type PluginDetail, type PluginJob } from '../pluginUtil'
+import { durationMs, formatDuration, type PluginDetail, type PluginJob } from '../pluginUtil'
 
 const props = defineProps<{ detail: PluginDetail }>()
 const { t } = useI18n()
-const statusLabel = usePluginStatusLabel()
 const auth = useAuthStore()
 
 const jobs = ref<PluginJob[]>(props.detail.jobs || [])
@@ -73,7 +73,7 @@ onMounted(load)
       <template #cell-last="{ row }">
         <template v-if="row.last_run">
           <div class="flex items-center gap-2">
-            <SStatusBadge :status="row.last_run.status" :tones="PLUGIN_TONES" :label="statusLabel(row.last_run.status)" />
+            <PluginStatusBadge :status="row.last_run.status" />
             <SHint inline size="xs">{{ row.last_run.node_id }}</SHint>
           </div>
           <SHint size="xs" class="whitespace-nowrap">{{ formatDateTime(row.last_run.started_at) }}</SHint>

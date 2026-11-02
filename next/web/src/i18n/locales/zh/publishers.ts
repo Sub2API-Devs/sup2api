@@ -28,7 +28,6 @@ export default {
   notAfter: '失效时间',
   rangeInvalid: '必须晚于生效时间',
   keyAdded: '公钥已添加',
-  expired: '已过期',
   notYetValid: '未生效',
   revoke: '吊销',
   copyPublicKey: '复制公钥 {key}',

@@ -130,9 +130,9 @@
 
 | 方法 路径 | 权限 |
 |---|---|
-| GET/POST `/me/api-keys`，DELETE `/me/api-keys/:id` | `apikey:self:manage`；创建返回明文 `key`（`sk-s2a-` 前缀），已加密保存的新 Key 可通过显式 reveal 再复制；不含 `user_email`；普通用户不能修改自己的 Key，只能删除重建 |
+| GET/POST `/me/api-keys`，PATCH/DELETE `/me/api-keys/:id` | `apikey:self:manage`；创建返回明文 `key`（`sk-s2a-` 前缀），已加密保存的新 Key 可通过显式 reveal 再复制；不含 `user_email`；PATCH 修改名称、分组、限额等（2026-10-26 起，见 §15.1 末尾） |
 | GET `/me/groups` | auth（当前用户可用的分组） |
-| GET/POST `/groups`，GET/PATCH/DELETE `/groups/:id` | `group:read` / `group:manage`；DELETE 不再因分组下有 API Key 而拒绝（2026-11-01）：`?move_keys_to=<分组 id>` 把 Key 迁到该分组（须为另一个已存在的分组，否则 400 `details.fields[{field:"move_keys_to"}]`），不带时 Key 保留但解除绑定（`group_id` 置 `null`，§15.1）；分组下的账号只移出分组 |
+| GET/POST `/groups`，GET/PATCH/DELETE `/groups/:id` | `group:read` / `group:manage`；DELETE 不再因分组下有 API Key 而拒绝（2026-11-01）：`?move_keys_to=<分组 id>` 把 Key 迁到该分组（须为另一个已存在的分组，否则 400 `details.fields[{field:"move_keys_to"}]`），不带时 Key 保留但解除绑定（`group_id` 置 `null`，§15.1）；分组下的账号只移出分组。插件按 (用户, 分组) 记的资源与历史（`provider_*` 表）不随 Key 迁移，留在原分组 id 下，删除后无法再通过网关读取或删除，目前没有清理任务 |
 | GET/POST `/proxies`，GET/PATCH/DELETE `/proxies/:id` | `proxy:read` / `proxy:manage`（或 `proxy:own:*`，只作用于自己创建的，§21）；密码省略或 `null` 不改、`""` 清除，没有掩码值（§15.4） |
 | POST `/proxies/:id/test` | `proxy:manage` / `proxy:own:manage`（会发起外部连接） |
 | POST `/proxies/:id/reveal-url` | `proxy:manage` / `proxy:own:manage`（返回含明文密码的代理串，写审计） |
@@ -517,7 +517,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | POST `/me/api-keys` | `apikey:self:manage` | `{name, group_id, expires_at?}` | 201 `APIKey`（含 `key`）。`name` 去首尾空格后 1–100 字符；`expires_at` 必须晚于当前时间；`group_id` 须为 `active` 且对该用户可用（`visibility=public` 或已分配给用户），否则 `details.fields[{field:"group_id", code:"not_available"}]` |
 | DELETE `/me/api-keys/:id` | `apikey:self:manage` | | 204；只能删自己的 Key（软删除），他人的 Key 返回 404 |
 
-- 普通用户**没有**修改自己 Key 的接口（没有 `PATCH /me/api-keys/:id`），只能删除重建。
+- `PATCH /me/api-keys/:id`（2026-10-26 起）修改自己 Key 的名称、分组、IP 白名单、过期时间与限额，字段见本文 2026-10-26 的说明；分组被删除的 Key 选新分组即恢复。
 - 修改或删除后立即清除该 Key 的 Redis 缓存（`apikey:{sha256}`），网关侧立即生效。
 
 ### 15.2 列表接口的筛选与排序
@@ -542,7 +542,7 @@ POST `/me/api-keys/:id/rotate` 强制匹配当前登录用户 ID，不设管理�
 | GET `/plugins/:key/egress` | 明细分页 | `from`、`to`（默认最近 24 小时） | 汇总按连接数倒序（最多 200 条）；明细按 `started_at` 倒序 | `plugin/api/ops.go` |
 
 响应字段补充：
-- `/usage`、`/me/usage` 列表项：`id, request_id, created_at, user_id, user_email?, api_key_id, api_key_name?, group_id, group_name?, account_id, account_name?, plugin_key, platform, protocol, account_type, upstream_protocol, endpoint, model, upstream_model, stream, status_code, success, error_type, error_message, attempts, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens, total_cost, rate_multiplier, billing_status, billing_mode, matched_tier, latency_ms, first_token_ms, sticky_hit, client_ip`（`?` 为空串时省略）。`/me/usage`（列表与详情）把 `account_id` 置 `null`，`account_name`、`account_type`、`upstream_protocol` 置空，详情另把 `node_id` 置空。
+- `/usage`、`/me/usage` 列表项：`id, request_id, created_at, user_id, user_email?, api_key_id, api_key_name?, group_id, group_name?, account_id, account_name?, plugin_key, platform, protocol, account_type, upstream_protocol, endpoint, model, upstream_model, stream, status_code, success, error_type, error_message, attempts, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cache_creation_1h_tokens, total_cost, rate_multiplier, billing_status, billing_mode, matched_tier, latency_ms, first_token_ms, sticky_hit, client_ip`（`?` 为空串时省略）。`/me/usage`（列表与详情）把 `account_id` 置 `null`，`account_name`、`account_type`、`upstream_protocol`、`upstream_model`（账号的模型映射）置空，详情另把 `node_id` 置空。`/usage`（列表、详情、导出）对没有 `account:read` 的管理员同样把 `account_id` 置 `null`、`account_name` 置空，导出不含"账号 ID""账号"两列；这样的调用者带 `account_id` 或 `account_name` 筛选（列表、汇总、导出）返回 403 `permission_denied`（2026-11-02，用户决定：没有账号查看权限的管理员看不到使用记录里的账号）。控制台同样只对有 `account:read` 的管理员显示账号列和账号筛选。
 - `/usage/:id`、`/me/usage/:id` 详情另含：`plugin_version, metrics, sticky_rule, hook_decisions, price_id, price?:{id, model, source, plugin_key}, expr_hash, billing_detail, ledger_id, client_ip, user_agent, node_id`。`/me/usage/:id` 访问他人记录返回 404。
 - `usage_logs` 还有一列 `sched_decisions`（jsonb，迁移 0011，记录 `scheduler.rank` 插件对本次调度的改写，格式与语义见 §24.5），**接口不返回它**：它不在上面的详情字段里，`hook_decisions` 暴露而它不暴露是当前有意的取舍，排查请直接查库。
 - `/usage/summary` 每项：`{key, user_email?, requests, success, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, prompt_tokens, total_cost}`；`group_by=day` 时 `key` 为 UTC 日期 `YYYY-MM-DD`，`user` 时为用户 id 字符串并带 `user_email`；`ip` 时为调用 IP（没记录到 IP 的请求归入空串）并带该 IP 最近一次请求的时间 `last_at`；`cache_creation_tokens` 为 5 分钟与 1 小时缓存写入之和。`prompt_tokens` 按各请求保存的 usage semantics 归一化：inclusive 使用原始输入，exclusive 将输入、缓存读和两类缓存写入相加，再汇总；缓存命中率为 `cache_read_tokens / prompt_tokens`。历史记录若有缓存用量但缺少 semantics，所在汇总项的 `prompt_tokens` 返回 `null`，界面显示“—”，不按客户端协议猜测。新免费记录也保存 semantics，但不额外保存定价请求头或参数。
@@ -757,7 +757,7 @@ POST `/accounts/:id/test`（`account:test` / `account:own:test`）：
 | 8 | `/usage` 的筛选参数更多；`/me/usage` 不支持 `user_id`、`account_id`、`account_type` | **以代码为准**，参数以 §15.2 为准。§5.5 已改 |
 | 9 | `/prices` 的 `platform` 筛选已删除 | **以代码为准**：`mode`、`source`、`plugin_key`、`enabled`、`q`。§5.5 已改；§5.4 `/accounts` 的 `platform` 筛选同理改为 `plugin_key`、`type` |
 | 10 | 账号测试超时 30 秒与平台调用 10 秒 | **两者都对，不冲突**：每次插件调用（`BuildTestRequest`）限 10 秒（`grpcruntime.TimeoutPlatformConsole`），测试接口整体（含向上游发送测试请求）限 30 秒。§11.7 已改 |
-| 11 | `/me/api-keys` 不含 `user_email`；普通用户没有修改自己 Key 的接口 | **以代码为准**：用户只能删除后重建（Key 绑定的分组不应由用户随意切换，名称和过期时间也不是必要功能）。以后需要再加 `PATCH /me/api-keys/:id`。§5.3 已改 |
+| 11 | `/me/api-keys` 不含 `user_email`；普通用户没有修改自己 Key 的接口 | **以代码为准**：用户只能删除后重建（Key 绑定的分组不应由用户随意切换，名称和过期时间也不是必要功能）。2026-10-26 起已加 `PATCH /me/api-keys/:id`，以 §5.3、§15.1 为准 |
 | 12 | §14 部分条目当时尚未实现 | 已于第四轮实现，见 §14 |
 
 ## 16. 模型价格只用完整模型 ID（2026-09-25；"插件默认价格"部分已被 §17 取代）
@@ -1158,8 +1158,11 @@ type ProxyResolver interface {
 - 只有概览和我的账户的用户（没有 gateway/security/finance/users/system 任何一区），控制台把"我的账户"排到仪表盘之后并且不画它的标题；插件区照常有标题。
 - 侧栏收起时分区标题隐藏，各区之间画一条分隔线。
 - 用到 `security`、`users` 的插件需要核心 0.1.229 或更高（guard 0.2.7、moderation 0.6.2 的 `hostCompat`）。
+- `security`、`users` 是本次新增的核心区 id，从此是保留 id：插件在 `ui.sections` 里声明 id 为 `security` 或 `users` 的自有区，上传/安装时校验失败 `ui.sections[i].id / invalid`（"reserved for the core sidebar"）。校验只在上传/安装时做，已经装好的这类插件照常加载：它的菜单 `section:"security"`/`"users"` 在运行时按核心区处理，并入核心的"安全"/"用户与权限"区，自己声明的 `label` 和 `order` 被忽略。
+- 用其他 id 声明的旧自有区不受影响，仍作为插件自己的区显示，例如 moderation 0.1.1–0.6.1 的 `safety`（order 350，排在 security 与 finance 之间，区名取声明的 label）；升级到 moderation 0.6.2 后它的菜单进入核心 `security` 区。
+- 核心区的 id 与 order 只有一处定义：`sdk/manifest` 的 `CoreMenuSections()`（另有 `PluginMenuSectionOrder` = 650）；manifest 校验（`sdk/manifest/check`）和 `GET /me/menus`（`server/internal/authz/menus.go`，`coreMenus` 只补标签和核心项，测试保证与 SDK 列表同序同 id）都读它。
 
-**表格页的"新建"按钮**：manifest `ui.pages.<id>.create: {page, permission?}` 只能写在 `type:"table"` 的页面上，`page` 必须是同一插件的 `type:"form"` 页面，`permission` 是 `userPermissions` 里的 key。控制台在表格上方画一个主按钮，文字取目标页的 `title`，点击打开 `/p/<插件>/<page>`。`GET /ui/plugins` 对没有该权限的调用者去掉 `create`，表单页如果没有可见菜单指向它也一并去掉。校验错误：`ui.pages.<id>.create` invalid（非表格页）、`.create.page` unknown / invalid（不存在 / 不是表单）、`.create.permission` unknown。volcengine 0.12.6 用它替代了"新建素材组""新建素材"两个菜单项，需要核心 0.1.229。
+**表格页的"新建"按钮**：manifest `ui.pages.<id>.create: {page, permission?}` 只能写在 `type:"table"` 的页面上，`page` 必须是同一插件的 `type:"form"` 页面，`permission` 是 `userPermissions` 里的 key。控制台在表格上方画一个主按钮，文字取目标页的 `title`，点击打开 `/p/<插件>/<page>`。`GET /ui/plugins` 对没有该权限的调用者去掉 `create`，表单页如果没有可见菜单指向它也一并去掉；表格页本身因菜单权限对调用者不可见时，它的 `create` 链接同样不算可用，只靠这条链接到达的表单页也去掉（即使链接不要求权限）。校验错误：`ui.pages.<id>.create` invalid（非表格页）、`.create.page` unknown / invalid（不存在 / 不是表单）、`.create.permission` unknown。volcengine 0.12.6 用它替代了"新建素材组""新建素材"两个菜单项，需要核心 0.1.229。
 
 **控制台布局**：路由 `meta.parent` 指向上级页面，顶栏在标题前显示面包屑（价格详情、价格同步源、同步预览、插件详情、发布进度、安装授权、插件设置）。设置页改为左侧二级导航（网关 / 计费 / 通知 / 系统 / 插件设置），页面仍用 `?tab=` 选择；"插件设置"列出已启用且有设置表单的插件（以及 ccgateway），选中为 `?tab=plugin:<key>`，内容即插件设置页。
 
@@ -1169,7 +1172,7 @@ type ProxyResolver interface {
 
 ### 23.1 加载方式与 import map
 
-- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.4.0`；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试），入口只保留 slot 组件、文案和 `register` 需要的代码。
+- 控制台 `GET /ui/plugins` 后（`web/src/stores/plugins.ts`），对 `native_entry` 非空、`trust` 为 `official`/`verified`、且 `host_ui_compat` 匹配 `HOST_UI_VERSION`（当前 `3.4.0`；`satisfiesRange` 支持 `^1.0`、`~1.2`、`>=1.0.0 <2.0.0`、`1.x`、`*`、`||`）的插件执行 `import(asset_base + native_entry)`，调用模块导出的 `register(host)`；插件被禁用或 `native_entry` 的 URL 变化（版本升级）时调用 `unregister?()` 并丢弃已注册组件。不满足条件或 `register` 抛错的记在 `errors[key]`，页面显示原因。列表一到就置 `listed`（只要列表的地方看 `listed`，不等模块；菜单来自 `GET /me/menus`，不等插件）；各插件模块并行加载，`pending[key]` 标记仍在加载的插件，插件页只等自己插件的模块；`refresh()` 在本次启动的模块都加载或失败后返回，重叠的 `refresh()` 不重复加载仍在 `pending` 的插件。所有原生入口在控制台启动时都会加载，所以插件**页面**组件应在 `register` 里以 `defineAsyncComponent(() => import('./Page.vue'))` 注册（`@sub2api/ui` 导出的 `lazyPage`（UI 3.4，manifest 声明 `hostUICompat: "^3.4"`）封装了这一步，带加载占位和两次重试（间隔 500ms、1000ms；每次挂载重新计数，所以插件页的"重试"按钮和再次进入页面都会重新走完两次重试）），入口只保留 slot 组件、文案和 `register` 需要的代码。核心按 `hostCompat` 安装插件，不看 `hostUICompat`；核心 0.1.228 是最后一个带 UI 3.3 的版本，UI 3.4 从核心 0.1.229 起。所以 `hostUICompat` 需要 3.4 或更高的插件，`hostCompat` 下限必须至少是 0.1.229，否则 `sdk/manifest` 校验报 `hostCompat / below_ui_core`（dynweight 0.4.1、growth 的下限因此提到 0.1.229）。
 - `entry.js` 的形状是 `NativePluginModule`：`register(host: PluginHost): void | Promise<void>`、`unregister?(): void | Promise<void>`。`register` 里用 `host.registerComponent(name, comp)` 注册 manifest `ui.pages[].component`、`ui.slots[].component` 引用的组件名，用 `host.addMessages({en, zh})` 注册文案；`unregister` 释放模块级状态（moderation 的 `entry.ts` 是最小样例）。
 - **import map**：控制台 `index.html` 注入 `<script type="importmap">`，把 `vue`、`vue-router`、`pinia`、`vue-i18n`、`@sub2api/ui`、`@sub2api/host` 映射到控制台自己构建出的 chunk（`web/vite.config.ts` 的 `SHARED`，`preserveEntrySignatures: 'strict'`，所有导出都保留；dev 下映射到源码，复用同样的预打包依赖）。插件用 `@sub2api/vite-preset` 构建时这些模块（`SHARED_MODULES`，前缀匹配 `vue/*` 之类的子路径）全部 external，**不得打进插件包**，否则页面里会出现第二份 Vue 运行时和第二套组件/状态：`toast`、`confirm`、i18n、路由、`theme` 都不再与控制台共享，组件的 `provide/inject` 也会失效。
 - 构建：`vite.config.ts` 写 `export default defineConfig(sub2apiPlugin({ entry: 'src/entry.ts' }))`；选项 `entry`（默认 `src/entry.ts`）、`outDir`（默认 `dist`）、`vue`（透传 `@vitejs/plugin-vue`）、`minify`（默认 true）。输出 `dist/entry.js`（ES module，target es2022）、`dist/entry.css`（有样式时；`entry.js` 头部自动按自身 URL 插一条 `<link rel="stylesheet">`，同源，CSP 不用改）、`dist/chunks/*`、`dist/assets/*`。打包成插件时放到 manifest `ui.native.entry` 指向的位置（moderation：`ui/native/entry.js`）。preset 也导出 `HOST_UI_VERSION`，manifest `hostUICompat` 按它声明（官方插件 dynweight、growth、guard、moderation 用 `^3.4`，因为它们用到 3.4 的 `lazyPage`；`sdk/manifest`：声明了 `ui.native` 时必填）。
@@ -4587,7 +4590,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 参数：与对应列表（`/me/usage`、`/usage`）相同的筛选，另加 `tz=`（时间列的时区，校验同 66.1）和 `lang=zh|en`（表头语言；缺省看 `Accept-Language`，以 `zh` 开头为中文，否则英文；其他值 400）。筛选在写出第一个字节前校验，非法时照常回 JSON 错误。
 - 回应：`200 text/csv; charset=utf-8`，`Content-Disposition: attachment; filename="usage_YYYYMMDD_HHMMSS.csv"`（`tz` 的当地时间），`Cache-Control: no-store`。文件以 UTF-8 BOM（`EF BB BF`）开头，表格软件因此按 UTF-8 打开。
 - 行：新到旧，按 `(created_at, id)` 游标分页，每批 1000 行，不跑单条大查询。最多 100000 行，超出时最后一行是 `# truncated at 100000 rows; narrow the time range or filters`。表头已发出后查询出错，最后一行是 `# export failed: …`，不会被当成完整文件。
-- 列：时间、请求 ID、客户端请求 ID、用户*、API 密钥、分组、账号*、模型、上游模型*、端点、协议、流式、状态码、成功、错误类型、输入 / 输出 / 缓存读取 / 缓存写入 Token（缓存写入含 1 小时写）、费用、原价（费用 ÷ 倍率，倍率为 0 计 0）、倍率、计费状态、首 token (ms)、耗时 (ms)、调用 IP。带 * 的三列只在管理员导出里有；自助导出与自助列表一样隐藏上游信息。
+- 列：时间、请求 ID、客户端请求 ID、用户*、API 密钥、分组、账号 ID*、账号*、模型、上游模型*、端点、协议、流式、状态码、成功、错误类型、输入 / 输出 / 缓存读取 / 缓存写入 Token（缓存写入含 1 小时写）、费用、原价（费用 ÷ 倍率，倍率为 0 计 0）、倍率、计费状态、首 token (ms)、耗时 (ms)、调用 IP。带 * 的四列只在管理员导出里有，其中"账号 ID""账号"还要求 `account:read`（§15.2 列表项说明）；自助导出与自助列表一样隐藏上游信息。
 - 以 `= + - @`、制表符或回车开头的单元格前加 `'`，防表格公式注入。
 - 每次导出写一条审计 `usage.export`（`detail`：行数、是否截断、是否自助、原始查询串）。
 
@@ -5647,7 +5650,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
 - 所有节点都是新核心后，再由管理员启用 `dynweight`。
 - dynweight 0.2.0 新增 `app.events.v1` 能力和 `events` 授权（`account.status_changed`），升级时需要管理员重新确认授权。状态文档新增的 `last_ln`、`last_latency_counts` 字段在旧状态里缺省为空，下一次评估写入；没有迁移。
 - dynweight 0.3.0：能力和授权不变（`sticky.clear` 的说明加上了降到 0 时的清理）。迁移 `0002_sticky_pending_defaults` 新建 `sticky_pending`，并把仍是 0.2.0 出厂默认的规则换成新默认（见 §74.5"0.2.0 的默认规则迁到 0.3.0"）；换过规则的层，键在下一次评估时各记一条 `rules_change`，有效权重保留。`min_samples_strict`、`clear_sticky_on_zero` 在旧配置里按开启读：升级后被降权和清理策略引用的规则，样本不足时不再判定。状态的 `last_rules` 多了字符 `2`（未判定），旧版插件读到时按未命中显示。迁移 0001 第一行注释写成了 §73.5（应为 §74.5），没有改：插件迁移按整个文件的 sha256 记校验和，改注释会让核心把 0001 重跑一遍（幂等，但没有必要）。
-- dynweight 0.4.0：能力和授权不变。默认降权策略加上清理 30% 粘性会话，迁移 `0003_default_affinity_clear` 把仍是 0.3.0 出厂默认的策略换成新默认（见 §74.5"0.3.0 的默认策略迁到 0.4.0"）。控制台配置页的修正见 §74.5"界面"。
+- dynweight 0.4.0：能力和授权不变。（0.4.1 只把控制台页面改成懒加载，`hostCompat` 下限提到 0.1.229，见 §23.1。）默认降权策略加上清理 30% 粘性会话，迁移 `0003_default_affinity_clear` 把仍是 0.3.0 出厂默认的策略换成新默认（见 §74.5"0.3.0 的默认策略迁到 0.4.0"）。控制台配置页的修正见 §74.5"界面"。
 
 ## 75. 插件设置权限、插件写操作审计、按 id 查用户（2026-10-31，审计 moderation 与 dynweight 时发现的通用缺口）
 

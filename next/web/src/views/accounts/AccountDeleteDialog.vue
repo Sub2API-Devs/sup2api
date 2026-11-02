@@ -57,7 +57,7 @@ async function remove() {
     <div class="space-y-3">
       <p :id="messageId">{{ t('common.confirmDelete', { name: account?.name ?? '' }) }}</p>
       <template v-if="retentionDays > 0">
-        <SRadioGroup v-model="keep" :options="choices" :aria-label="t('accounts.deleteResources.label')" data-testid="account-delete-resources" />
+        <SRadioGroup v-model="keep" :options="choices" :disabled="busy" :aria-label="t('accounts.deleteResources.label')" data-testid="account-delete-resources" />
         <SHint :id="hintId">{{ keep === 'retain' ? t('accounts.deleteResources.retainHint', { days: retentionDays }) : t('accounts.deleteResources.nowHint') }}</SHint>
       </template>
     </div>

@@ -3,14 +3,15 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SChoiceCards, SDropdown, SEmpty, SHint, SIcon, SLink, SFormModal, SPageHeader, SSpinner, SStatusBadge, STabs, confirm, type ChoiceOption, type MenuAction, type TabItem } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SChoiceCards, SDropdown, SEmpty, SHint, SIcon, SLink, SFormModal, SPageHeader, SSpinner, STabs, confirm, type ChoiceOption, type MenuAction, type TabItem } from '@sub2api/ui'
+import PluginStatusBadge from './parts/PluginStatusBadge.vue'
 import type { Rollout } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import { refreshShell } from '@/stores/app'
 import { consentPath } from './reviewCache'
-import { PLUGIN_TONES, compareVersions, conflictLines, consoleSettings, hasCoreSettings, isPendingConsent, shownStatus, usePluginStatusLabel, type PluginDetail, type PluginSettings } from './pluginUtil'
+import { compareVersions, conflictLines, consoleSettings, hasCoreSettings, isPendingConsent, shownStatus, type PluginDetail, type PluginSettings } from './pluginUtil'
 import PluginAvatar from './parts/PluginAvatar.vue'
 import TrustBadge from './parts/TrustBadge.vue'
 import OverviewTab from './detail/OverviewTab.vue'
@@ -26,7 +27,6 @@ import UninstallModal from './detail/UninstallModal.vue'
 import AuditLogTable from '@/components/AuditLogTable.vue'
 
 const { t } = useI18n()
-const statusLabel = usePluginStatusLabel()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
@@ -162,8 +162,10 @@ function onMore(k: string) {
   else if (k === 'uninstall') uninstallOpen.value = true
 }
 
-async function onUninstalled() {
-  await refreshShell()
+// The shell refresh is not awaited: a plugin module that never settles must not
+// keep the page from leaving; the plugin list does not read the plugin store.
+function onUninstalled() {
+  void refreshShell()
   router.push('/plugins')
 }
 
@@ -206,7 +208,7 @@ onMounted(load)
           <span v-if="detail.desired_version && detail.desired_version !== detail.active_version" class="font-mono text-xs text-primary-600 dark:text-primary-400">
             → v{{ detail.desired_version }}
           </span>
-          <SStatusBadge :status="shownStatus(detail)" :tones="PLUGIN_TONES" :label="statusLabel(shownStatus(detail))" />
+          <PluginStatusBadge :status="shownStatus(detail)" />
           <TrustBadge :trust="detail.trust" />
           <SBadge v-if="detail.builtin" tone="info" :title="t('plugins.builtinHint')">{{ t('plugins.builtin') }}</SBadge>
         </template>

@@ -15,7 +15,6 @@ export default {
   expiresHint: '可选。留空表示永不过期。',
   expiresInPast: '过期时间必须晚于现在',
   noExpiry: '永不',
-  expired: '已过期',
   lastUsed: '最近使用',
   noGroups: '没有可用的分组，请联系管理员分配。',
   groupMultiplier: '费率倍率：×{n}',

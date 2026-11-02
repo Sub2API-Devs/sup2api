@@ -105,3 +105,23 @@ func TestVisibleMenusAndPagesSharedCreateForm(t *testing.T) {
 		t.Fatalf("no create permission: pages=%v", pages)
 	}
 }
+
+// A table hidden by its menu's permission does not reveal the form its
+// "New" link opens, even when the link itself needs no permission.
+func TestVisibleMenusAndPagesHiddenTableHidesCreateForm(t *testing.T) {
+	ui := &manifest.UI{
+		Menus: []manifest.Menu{{ID: "a", Page: "items", Permission: "items:read"}},
+		Pages: map[string]manifest.Page{
+			"items":    {Type: "table", Create: &manifest.PageLink{Page: "new_item"}},
+			"new_item": {Type: "form"},
+		},
+	}
+	menus, pages := visibleMenusAndPages(ui, func(p string) bool { return p == "" })
+	if len(menus) != 0 || len(pages) != 0 {
+		t.Fatalf("caller without items:read: menus=%v pages=%v", menus, pages)
+	}
+	_, pages = visibleMenusAndPages(ui, func(p string) bool { return p == "" || p == "items:read" })
+	if _, ok := pages["new_item"]; !ok || pages["items"].Create == nil {
+		t.Fatalf("reader: pages=%v", pages)
+	}
+}

@@ -25,5 +25,7 @@ describe('API key group cell', () => {
     expect(disabled.get('[data-testid="key-group-problem"]').text()).toBe('分组已停用')
     expect(render({ platforms: ['anthropic'], status: 'unavailable' }).text()).toContain('分组已不对你开放')
     expect(render({ platforms: ['anthropic'], status: 'active' }).find('[data-testid="key-group-problem"]').exists()).toBe(false)
+    // A state added by a newer server shows no hint rather than a raw message key.
+    expect(render({ platforms: ['anthropic'], status: 'paused' }).text()).not.toContain('apikeys.')
   })
 })

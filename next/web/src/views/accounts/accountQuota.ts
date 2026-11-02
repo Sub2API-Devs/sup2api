@@ -2,8 +2,9 @@
 // API calls, display helpers and manual refresh. The list
 // endpoint already carries every row's snapshot, so the page never polls this
 // per row — only the "refresh" action asks the upstream (force=true).
-import { onBeforeUnmount, reactive, ref, type Ref } from 'vue'
+import { reactive, type Ref } from 'vue'
 import { api } from '@sub2api/host'
+import { useNow } from '@sub2api/ui'
 import type { Account, AccountBalance, CredentialRefreshOutcome, QuotaSnapshot, QuotaWindow } from '@/api/types'
 import { todayQuery } from './accountUsage'
 import { usageLevel, type UsageLevel } from './usageLevel'
@@ -64,23 +65,12 @@ export function quotaCountdown(resetsAt: string | null | undefined, nowMs: numbe
 
 // ---------------------------------------------------------------- shared clock
 
-const clock = ref(Date.now())
-let clockUsers = 0
-let clockTimer: ReturnType<typeof setInterval> | undefined
-
 /**
  * One 30 s ticker shared by every quota cell on the page (instead of a timer
  * per row), so countdowns move even with the list's auto refresh off.
  */
-export function useQuotaClock(): Ref<number> {
-  if (clockUsers++ === 0) {
-    clock.value = Date.now()
-    clockTimer = setInterval(() => (clock.value = Date.now()), 30_000)
-  }
-  onBeforeUnmount(() => {
-    if (--clockUsers === 0) clearInterval(clockTimer)
-  })
-  return clock
+export function useQuotaClock(): Readonly<Ref<number>> {
+  return useNow(30_000)
 }
 
 // ---------------------------------------------------------------- manual refresh

@@ -76,14 +76,6 @@ export default {
   account: 'Account',
   createdById: 'Creator ID',
   onlyMine: 'Only mine',
-  status_: {
-    active: 'Active',
-    disabled: 'Disabled',
-    error: 'Error',
-    enabled: 'Enabled',
-    pending: 'Pending',
-    revoked: 'Revoked'
-  },
   theme: {
     toggle: 'Toggle theme'
   },

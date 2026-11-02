@@ -1,6 +1,7 @@
 package usage
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/netip"
@@ -147,11 +148,11 @@ func (r *Record) scanTargets() []any {
 		&r.BillingMode, &r.MatchedTier, &r.LatencyMs, &r.FirstTokenMs, &r.UploadMs, &r.StickyHit, &r.ClientIP}
 }
 
-// hideUpstream removes upstream account details (account, account type and
-// upstream protocol) from self-service views.
+// hideUpstream removes upstream account details (account, account type,
+// upstream protocol and the account's model mapping) from self-service views.
 func (r *Record) hideUpstream() {
-	r.AccountID, r.AccountName = nil, ""
-	r.AccountType, r.UpstreamProtocol = "", ""
+	r.hideAccount()
+	r.AccountType, r.UpstreamProtocol, r.UpstreamModel = "", "", ""
 	// SEC-L3: Classify and sanitize error messages for self-service views.
 	// Client-side errors (4xx) show the message; server-side errors (5xx) show only the type.
 	if r.ErrorMessage != "" && r.StatusCode >= 500 {
@@ -159,15 +160,37 @@ func (r *Record) hideUpstream() {
 	}
 }
 
-// parseFilter reads the common query parameters. self restricts to userID.
-func parseFilter(c *gin.Context, self *int64) (*store.Filter, error) {
+// hideAccount removes which account served the request. An operator who may
+// not read accounts (no account:read) sees neither its id nor its name.
+func (r *Record) hideAccount() { r.AccountID, r.AccountName = nil, "" }
+
+// seesAccounts reports whether the caller may see the account of a usage
+// record: operator views only, and only with account:read (CONTRACTS §66.5),
+// like the accounts section of the overview.
+func (s *Service) seesAccounts(ctx context.Context, self *int64) bool {
+	if self != nil {
+		return false
+	}
+	uid, _ := core.UserID(ctx)
+	return s.can(ctx, uid, "account:read")
+}
+
+// parseFilter reads the common query parameters. self restricts to userID;
+// accounts allows the account filters (seesAccounts).
+func parseFilter(c *gin.Context, self *int64, accounts bool) (*store.Filter, error) {
 	var f store.Filter
 	if self != nil {
 		f.And("u.user_id = ?", *self)
 	}
 	ids := []struct{ q, col string }{{"api_key_id", "u.api_key_id"}, {"group_id", "u.group_id"}}
 	if self == nil {
-		ids = append(ids, struct{ q, col string }{"user_id", "u.user_id"}, struct{ q, col string }{"account_id", "u.account_id"})
+		ids = append(ids, struct{ q, col string }{"user_id", "u.user_id"})
+	}
+	if accounts {
+		ids = append(ids, struct{ q, col string }{"account_id", "u.account_id"})
+	} else if self == nil && (c.Query("account_id") != "" || c.Query("account_name") != "") {
+		// Filtering by account would tell which requests an account served.
+		return nil, core.ErrPermissionDenied.WithMessage("filtering by account requires account:read")
 	}
 	for _, x := range ids {
 		if v := c.Query(x.q); v != "" {
@@ -228,8 +251,10 @@ func parseFilter(c *gin.Context, self *int64) (*store.Filter, error) {
 		{"group_name", "EXISTS (SELECT 1 FROM groups fg WHERE fg.id=u.group_id AND fg.name ILIKE ? ESCAPE E'\\\\')"},
 	}
 	if self == nil {
-		contains = append(contains, struct{ q, cond string }{"user_email", "EXISTS (SELECT 1 FROM users fu WHERE fu.id=u.user_id AND fu.email ILIKE ? ESCAPE E'\\\\')"},
-			struct{ q, cond string }{"account_name", "EXISTS (SELECT 1 FROM accounts fa WHERE fa.id=u.account_id AND fa.name ILIKE ? ESCAPE E'\\\\')"})
+		contains = append(contains, struct{ q, cond string }{"user_email", "EXISTS (SELECT 1 FROM users fu WHERE fu.id=u.user_id AND fu.email ILIKE ? ESCAPE E'\\\\')"})
+		if accounts {
+			contains = append(contains, struct{ q, cond string }{"account_name", "EXISTS (SELECT 1 FROM accounts fa WHERE fa.id=u.account_id AND fa.name ILIKE ? ESCAPE E'\\\\')"})
+		}
 		for _, name := range []string{"node_id", "upstream_model", "upstream_protocol"} {
 			if v := c.Query(name); v != "" {
 				f.And("u."+name+" = ?", v)
@@ -298,7 +323,8 @@ func (s *Service) allUsage(c *gin.Context) { s.list(c, nil) }
 // page.next_cursor while there is more.
 func (s *Service) list(c *gin.Context, self *int64) {
 	ctx := c.Request.Context()
-	f, err := parseFilter(c, self)
+	accounts := s.seesAccounts(ctx, self)
+	f, err := parseFilter(c, self, accounts)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -341,6 +367,8 @@ func (s *Service) list(c *gin.Context, self *int64) {
 		}
 		if self != nil {
 			r.hideUpstream()
+		} else if !accounts {
+			r.hideAccount()
 		}
 		items = append(items, r)
 	}
@@ -420,8 +448,13 @@ func (s *Service) detail(c *gin.Context, self *int64) {
 		d.NodeID = ""
 		d.PluginDetail = nil
 		d.Anomalies = nil
-	} else if e, err := s.loadSettlement(ctx, s.db.Pool, d.ID); err == nil {
-		d.Settlement = e
+	} else {
+		if !s.seesAccounts(ctx, self) {
+			d.hideAccount()
+		}
+		if e, err := s.loadSettlement(ctx, s.db.Pool, d.ID); err == nil {
+			d.Settlement = e
+		}
 	}
 	httpapi.OK(c, d)
 }
@@ -489,7 +522,7 @@ func (s *Service) mySummary(c *gin.Context) {
 
 func (s *Service) summarize(c *gin.Context, self *int64) {
 	ctx := c.Request.Context()
-	f, err := parseFilter(c, self)
+	f, err := parseFilter(c, self, s.seesAccounts(ctx, self))
 	if err != nil {
 		httpapi.Fail(c, err)
 		return

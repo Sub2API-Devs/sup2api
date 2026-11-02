@@ -6,7 +6,7 @@
 import { computed } from 'vue'
 import { useUiT } from './i18n'
 import SBadge from './SBadge.vue'
-import { statusTone } from './status'
+import { byStatus, statusTone } from './status'
 import type { Tone } from './types'
 
 const props = withDefaults(
@@ -26,7 +26,8 @@ const text = computed(() => {
   const s = props.status || ''
   if (props.label) return props.label
   if (!s) return '—'
-  if (props.labels?.[s]) return props.labels[s]
+  const own = byStatus(props.labels, s)
+  if (own) return own
   const key = `ui.status.${s.toLowerCase()}`
   const r = t(key)
   return r === key ? s : r

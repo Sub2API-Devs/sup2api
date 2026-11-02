@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -400,23 +401,28 @@ func (s *Service) delete(c *gin.Context) {
 	}
 	var hashes []string
 	err := s.db.Tx(ctx, func(tx pgx.Tx) error {
-		var exists bool
-		if err := tx.QueryRow(ctx, `SELECT true FROM groups WHERE id = $1 FOR UPDATE`, id).Scan(&exists); err != nil {
-			if store.IsNoRows(err) {
-				return core.ErrNotFound.WithMessage(t(ctx, "group not found", "分组不存在"))
-			}
+		// Lock the group and the move target in id order, so two deletes
+		// moving keys into each other's group cannot deadlock.
+		ids := []int64{id}
+		if moveTo != nil {
+			ids = append(ids, *moveTo)
+		}
+		rows, err := tx.Query(ctx, `SELECT id FROM groups WHERE id = ANY($1) ORDER BY id FOR UPDATE`, ids)
+		if err != nil {
 			return err
 		}
-		if moveTo != nil {
-			if err := tx.QueryRow(ctx, `SELECT true FROM groups WHERE id = $1 FOR SHARE`, *moveTo).Scan(&exists); err != nil {
-				if store.IsNoRows(err) {
-					return core.InvalidFields(core.FieldError{Field: "move_keys_to", Code: "not_found",
-						Message: t(ctx, "the target group does not exist", "目标分组不存在")})
-				}
-				return err
-			}
+		locked, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+		if err != nil {
+			return err
 		}
-		rows, err := tx.Query(ctx, `UPDATE api_keys SET group_id = $2 WHERE group_id = $1 RETURNING key_hash`, id, moveTo)
+		if !slices.Contains(locked, id) {
+			return core.ErrNotFound.WithMessage(t(ctx, "group not found", "分组不存在"))
+		}
+		if moveTo != nil && !slices.Contains(locked, *moveTo) {
+			return core.InvalidFields(core.FieldError{Field: "move_keys_to", Code: "not_found",
+				Message: t(ctx, "the target group does not exist", "目标分组不存在")})
+		}
+		rows, err = tx.Query(ctx, `UPDATE api_keys SET group_id = $2 WHERE group_id = $1 RETURNING key_hash`, id, moveTo)
 		if err != nil {
 			return err
 		}

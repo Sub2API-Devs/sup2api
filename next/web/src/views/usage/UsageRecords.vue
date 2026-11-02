@@ -46,6 +46,10 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
+// Which account served a request is shown to operators who may read accounts
+// (the server leaves it out for everyone else, CONTRACTS §66.5).
+const showAccount = computed(() => props.admin && auth.has('account:read'))
+
 const range = ref<RangeKey>(props.defaultRange)
 const baseFilters = {
   ...rangeBounds(props.defaultRange),
@@ -176,7 +180,7 @@ async function exportCsv() {
 
 <template>
   <div class="flex flex-col gap-4">
-    <UsageFilters class="!mb-0" :model-value="filters" :admin="admin" :group-options="groupOptions" @update:model-value="Object.assign(filters, $event)">
+    <UsageFilters class="!mb-0" :model-value="filters" :admin="admin" :accounts="showAccount" :group-options="groupOptions" @update:model-value="Object.assign(filters, $event)">
       <template #range>
         <div class="flex flex-wrap items-center gap-2">
           <SDateRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" size="sm" :label="false" />
@@ -233,7 +237,7 @@ async function exportCsv() {
         :rows="items"
         :loading="loading"
         :show-user="admin"
-        :show-account="admin"
+        :show-account="showAccount"
         :column-settings-key="admin ? 'usage-log' : 'my-usage-log'"
         show-client-request-id
         :detail-path="(id: number) => `${listPath}/${id}`"
@@ -248,7 +252,7 @@ async function exportCsv() {
         :rows="errors.items.value"
         :loading="errors.loading.value"
         :show-user="admin"
-        :show-account="admin"
+        :show-account="showAccount"
         :column-settings-key="admin ? 'usage-log' : 'my-usage-log'"
         show-client-request-id
         :detail-path="(id: number) => `${listPath}/${id}`"

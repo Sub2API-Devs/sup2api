@@ -1,5 +1,6 @@
 export default {
   description: 'System-wide billing, gateway and scheduling settings.',
+  missingTab: 'That settings page is not available to you (or its plugin is not enabled); showing the first one instead.',
   navLabel: 'Settings sections',
   groups: {
     gateway: 'Gateway',

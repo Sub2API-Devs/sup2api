@@ -2,11 +2,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SHint, SStatusBadge, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import { SButton, SCard, SHint, STable, confirm, toast, type TableColumn } from '@sub2api/ui'
+import PluginStatusBadge from '../parts/PluginStatusBadge.vue'
 import { formatDateTime } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
-import { PLUGIN_TONES, hpKey, riskOf, usePluginStatusLabel, type PluginDetail, type PluginGrant } from '../pluginUtil'
+import { hpKey, riskOf, type PluginDetail, type PluginGrant } from '../pluginUtil'
 import RiskDot from '../parts/RiskDot.vue'
 import ScopeChips from '../parts/ScopeChips.vue'
 import { useConsentLabels } from '../consent/hostPermission'
@@ -14,7 +15,6 @@ import { useConsentLabels } from '../consent/hostPermission'
 const props = defineProps<{ detail: PluginDetail }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
 const { t, te } = useI18n()
-const statusLabel = usePluginStatusLabel()
 const auth = useAuthStore()
 const { hpLabel } = useConsentLabels()
 
@@ -84,7 +84,7 @@ onMounted(load)
         <SHint v-else inline>—</SHint>
       </template>
       <template #cell-status="{ row }">
-        <SStatusBadge :status="row.status" :tones="PLUGIN_TONES" :label="statusLabel(row.status)" />
+        <PluginStatusBadge :status="row.status" />
       </template>
       <template #cell-granted_by="{ row }">
         {{ row.granted_by_email || row.granted_by || '—' }}

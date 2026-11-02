@@ -19,7 +19,7 @@ func TestParseFilterClientRequestID(t *testing.T) {
 	for _, self := range []*int64{nil, new(int64)} {
 		c, _ := gin.CreateTestContext(httptest.NewRecorder())
 		c.Request = httptest.NewRequest("GET", "/usage?client_request_id=abc-123&request_id=r1", nil)
-		f, err := parseFilter(c, self)
+		f, err := parseFilter(c, self, self == nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -44,7 +44,7 @@ func TestParseFilterInvalidSearch(t *testing.T) {
 		t.Run(query, func(t *testing.T) {
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			c.Request = httptest.NewRequest("GET", "/usage?"+query, nil)
-			_, err := parseFilter(c, nil)
+			_, err := parseFilter(c, nil, true)
 			require.Error(t, err)
 		})
 	}

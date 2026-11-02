@@ -84,7 +84,7 @@ async function submit() {
     @submit="submit"
   >
     <SAlert tone="warning">{{ t('groups.deleteKeys.intro', { k: formatNumber(keyCount) }) }}</SAlert>
-    <SRadioGroup v-model="mode" :options="modeOptions" :aria-label="t('groups.deleteKeys.title', { name: group?.name ?? '' })" />
+    <SRadioGroup v-model="mode" :options="modeOptions" :disabled="busy" :aria-label="t('groups.deleteKeys.title', { name: group?.name ?? '' })" />
     <SField
       v-if="mode === 'move'"
       :label="t('groups.deleteKeys.target')"
@@ -95,6 +95,6 @@ async function submit() {
       <SSelect v-model="target" :options="targets" :disabled="busy" data-testid="group-delete-target" />
     </SField>
     <SHint v-else size="xs">{{ t('groups.deleteKeys.unbindHint') }}</SHint>
-    <SHint v-if="group?.account_count" size="xs">{{ t('groups.deleteKeys.accounts', { a: formatNumber(group.account_count) }) }}</SHint>
+    <SHint v-if="group?.account_count" size="xs">{{ t('groups.deleteWithAccounts', { a: formatNumber(group.account_count) }) }}</SHint>
   </SFormModal>
 </template>

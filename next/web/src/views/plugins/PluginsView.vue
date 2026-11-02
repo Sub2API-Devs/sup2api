@@ -3,7 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SBadge, SButton, SEmpty, SHint, SInput, SPageHeader, SSelect, SStatusBadge, STable, toast, type TableColumn, type Tone } from '@sub2api/ui'
+import { SBadge, SButton, SEmpty, SHint, SInput, SPageHeader, SSelect, STable, toast, type TableColumn, type Tone } from '@sub2api/ui'
+import PluginStatusBadge from './parts/PluginStatusBadge.vue'
 import type { PluginReview, PluginSummary } from '@/api/types'
 import { lt } from '@/i18n'
 import { notifyError } from '@/utils/errors'
@@ -13,10 +14,9 @@ import { consentPath, putReview } from './reviewCache'
 import PluginAvatar from './parts/PluginAvatar.vue'
 import RetiredKeys from './parts/RetiredKeys.vue'
 import TrustBadge from './parts/TrustBadge.vue'
-import { PLUGIN_TONES, conflictLines, hasConsoleSettings, shownStatus, usePluginStatusLabel } from './pluginUtil'
+import { conflictLines, hasConsoleSettings, shownStatus } from './pluginUtil'
 
 const { t } = useI18n()
-const statusLabel = usePluginStatusLabel()
 const router = useRouter()
 const auth = useAuthStore()
 
@@ -151,7 +151,7 @@ onMounted(load)
       </template>
       <template #cell-status="{ row }">
         <div class="flex flex-col items-start gap-0.5">
-          <SStatusBadge :status="shownStatus(row)" :tones="PLUGIN_TONES" :label="statusLabel(shownStatus(row))" />
+          <PluginStatusBadge :status="shownStatus(row)" />
           <SHint
             v-if="row.resource_conflicts?.length"
             inline

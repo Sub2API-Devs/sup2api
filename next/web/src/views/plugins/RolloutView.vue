@@ -3,13 +3,14 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SLink, SSpinner, SStatusBadge, confirm, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SEmpty, SHint, SIcon, SLink, SSpinner, confirm, toast } from '@sub2api/ui'
+import PluginStatusBadge from './parts/PluginStatusBadge.vue'
 import type { Rollout, RolloutNode } from '@/api/types'
 import { lt } from '@/i18n'
 import { errorMessage, notifyError } from '@/utils/errors'
 import { useAuthStore } from '@/stores/auth'
 import { refreshShell } from '@/stores/app'
-import { PLUGIN_TONES, ROLLOUT_RUNNING, asArray, display, formatDuration, pick, usePluginStatusLabel, type PluginDetail } from './pluginUtil'
+import { ROLLOUT_RUNNING, asArray, display, formatDuration, pick, type PluginDetail } from './pluginUtil'
 import ReleaseHistory from './parts/ReleaseHistory.vue'
 
 type StepState = 'waiting' | 'running' | 'done' | 'failed' | 'skipped' | 'cancelled'
@@ -17,7 +18,6 @@ type StepState = 'waiting' | 'running' | 'done' | 'failed' | 'skipped' | 'cancel
 const POLL_MS = 1500
 
 const { t } = useI18n()
-const statusLabel = usePluginStatusLabel()
 const route = useRoute()
 const auth = useAuthStore()
 
@@ -118,7 +118,8 @@ async function poll() {
       if (wasRunning || !detail.value) await loadDetail()
       if (rollout.value.phase === 'active' && shellRefreshedFor !== rollout.value.id) {
         shellRefreshedFor = rollout.value.id
-        await refreshShell()
+        // Not awaited: a plugin module that never settles must not hold up the poll.
+        void refreshShell()
       }
     }
   } catch (e) {
@@ -192,7 +193,7 @@ onBeforeUnmount(() => {
         </h1>
         <div class="flex items-center gap-2 text-sm">
           <SHint inline>{{ t('plugins.rollout.phase') }}</SHint>
-          <SStatusBadge :status="rollout.phase" :tones="PLUGIN_TONES" :label="statusLabel(rollout.phase)" />
+          <PluginStatusBadge :status="rollout.phase" />
           <SSpinner v-if="running" size="sm" class="text-primary-500" />
         </div>
       </div>
@@ -249,7 +250,7 @@ onBeforeUnmount(() => {
                 <li v-for="n in nodes" :key="n.node_id + n.boot_id" class="flex flex-wrap items-center gap-2 text-sm">
                   <span class="w-5 text-center">{{ nodeIcon(n) }}</span>
                   <span class="font-medium">{{ n.node_id }}</span>
-                  <SStatusBadge :status="n.state" :tones="PLUGIN_TONES" :label="statusLabel(n.state)" />
+                  <PluginStatusBadge :status="n.state" />
                   <SBadge v-if="n.node_id === rollout.coordinator" tone="purple">{{ t('plugins.rollout.coordinator') }}</SBadge>
                   <span v-if="n.error" class="w-full pl-7 font-mono text-xs text-red-600 dark:text-red-400">{{ n.error }}</span>
                 </li>

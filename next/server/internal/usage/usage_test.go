@@ -63,6 +63,13 @@ func (allowAll) VerifyAccessToken(_ context.Context, token string) (int64, error
 	return strconv.ParseInt(token, 10, 64)
 }
 func (allowAll) Can(context.Context, int64, string) (bool, error) { return true, nil }
+
+// denyAccounts holds every permission but account:read.
+type denyAccounts struct{ allowAll }
+
+func (denyAccounts) Can(_ context.Context, _ int64, perm string) (bool, error) {
+	return perm != "account:read", nil
+}
 func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: true}, nil
 }
@@ -80,6 +87,7 @@ func newFixture(t *testing.T) *fixture {
 	bill := billing.New(db, rdb, nil, pub, nil)
 	f := &fixture{t: t, db: db, bill: bill, ledger: &flakyLedger{Service: bill}}
 	f.svc = New(db, f.ledger, bill, pub, Options{FlushInterval: 10 * time.Millisecond, Workers: 2, RetryInterval: time.Hour, RetryAfter: time.Millisecond})
+	f.svc.Authz = allowAll{} // the caller holds every permission unless a test says otherwise
 
 	for _, email := range []string{"u@example.com", "o@example.com"} {
 		var id int64
@@ -348,7 +356,10 @@ func TestUsageAPI(t *testing.T) {
 	// Served through protocol conversion: client endpoint openai.chat, upstream
 	// anthropic.messages.
 	mine.Platform, mine.Protocol, mine.AccountType = "openai", "openai.chat", "relay_key"
-	f.svc.process(ctx, []*core.UsageRecord{mine, other, f.record("req-mine-2", true)})
+	mineLater := f.record("req-mine-2", true)
+	// The account's model mapping is upstream detail too: self views must not see it.
+	mine.UpstreamModel, mineLater.UpstreamModel = "gpt-upstream-mapped", "claude-upstream-mapped"
+	f.svc.process(ctx, []*core.UsageRecord{mine, other, mineLater})
 
 	list := f.get(f.user, "/me/usage", 200)
 	items := list["data"].([]any)
@@ -357,7 +368,7 @@ func TestUsageAPI(t *testing.T) {
 	}
 	first := items[0].(map[string]any)
 	if first["account_id"] != nil || first["user_email"] != "u@example.com" || first["group_name"] != "default" || first["total_cost"] != "0.708" ||
-		first["account_type"] != "" || first["upstream_protocol"] != "" || first["upload_ms"] != float64(0) {
+		first["account_type"] != "" || first["upstream_protocol"] != "" || first["upstream_model"] != "" || first["upload_ms"] != float64(0) {
 		t.Fatalf("row: %v", first)
 	}
 	all := f.get(f.user, "/usage?model=claude-haiku-4", 200)["data"].([]any)
@@ -409,7 +420,7 @@ func TestUsageAPI(t *testing.T) {
 		t.Fatalf("sched_decisions %q", s)
 	}
 	md := f.get(f.user, "/me/usage/"+strconv.FormatInt(id, 10), 200)["data"].(map[string]any)
-	if md["account_id"] != nil || md["account_type"] != "" || md["upstream_protocol"] != "" {
+	if md["account_id"] != nil || md["account_type"] != "" || md["upstream_protocol"] != "" || md["upstream_model"] != "" {
 		t.Fatalf("self detail leaks account: %v", md)
 	}
 	if md["client_request_id"] != "cli-req-1" || d["client_request_id"] != "cli-req-1" {
