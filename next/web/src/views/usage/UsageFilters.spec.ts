@@ -64,6 +64,19 @@ describe('shared usage search', () => {
     expect(Object.values(w.emitted('update:modelValue')![1]![0] as Record<string, string>).every(value => value === '')).toBe(true)
   })
 
+  it('offers the account filters only to an operator who may read accounts', async () => {
+    const w = mount(UsageFilters, { props: { modelValue: {}, admin: true }, global })
+    await w.get('[data-testid="toggle-usage-filters"]').trigger('click')
+    expect(w.find('[data-testid="filter-user_id"]').exists()).toBe(true)
+    expect(w.find('[data-testid="filter-account_id"]').exists()).toBe(false)
+    expect(w.find('[data-testid="filter-account_name"]').exists()).toBe(false)
+    await w.get('form').trigger('submit')
+    expect(w.emitted('update:modelValue')![0]![0]).not.toHaveProperty('account_id')
+    await w.setProps({ accounts: true })
+    expect(w.find('[data-testid="filter-account_id"]').exists()).toBe(true)
+    expect(w.find('[data-testid="filter-account_name"]').exists()).toBe(true)
+  })
+
   it('keeps administrative fields out of self-service and synchronizes external request-id filters', async () => {
     const w = mount(UsageFilters, { props: { modelValue: {} }, global })
     await w.get('[data-testid="toggle-usage-filters"]').trigger('click')

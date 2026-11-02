@@ -30,51 +30,52 @@ const (
 )
 
 type exportColumn struct {
-	zh, en string
-	admin  bool // operators only
-	value  func(r *Record, loc *time.Location) string
+	zh, en  string
+	admin   bool // operators only
+	account bool // also needs account:read (seesAccounts)
+	value   func(r *Record, loc *time.Location) string
 }
 
 var exportColumns = []exportColumn{
-	{"时间", "Time", false, func(r *Record, loc *time.Location) string { return r.CreatedAt.In(loc).Format("2006-01-02 15:04:05") }},
-	{"请求 ID", "Request ID", false, func(r *Record, _ *time.Location) string { return r.RequestID }},
-	{"客户端请求 ID", "Client request ID", false, func(r *Record, _ *time.Location) string { return r.ClientRequestID }},
-	{"用户", "User", true, func(r *Record, _ *time.Location) string { return r.UserEmail }},
-	{"API 密钥", "API key", false, func(r *Record, _ *time.Location) string { return r.APIKeyName }},
-	{"分组", "Group", false, func(r *Record, _ *time.Location) string { return r.GroupName }},
-	{"账号 ID", "Account ID", true, func(r *Record, _ *time.Location) string {
+	{"时间", "Time", false, false, func(r *Record, loc *time.Location) string { return r.CreatedAt.In(loc).Format("2006-01-02 15:04:05") }},
+	{"请求 ID", "Request ID", false, false, func(r *Record, _ *time.Location) string { return r.RequestID }},
+	{"客户端请求 ID", "Client request ID", false, false, func(r *Record, _ *time.Location) string { return r.ClientRequestID }},
+	{"用户", "User", true, false, func(r *Record, _ *time.Location) string { return r.UserEmail }},
+	{"API 密钥", "API key", false, false, func(r *Record, _ *time.Location) string { return r.APIKeyName }},
+	{"分组", "Group", false, false, func(r *Record, _ *time.Location) string { return r.GroupName }},
+	{"账号 ID", "Account ID", true, true, func(r *Record, _ *time.Location) string {
 		if r.AccountID == nil {
 			return ""
 		}
 		return strconv.FormatInt(*r.AccountID, 10)
 	}},
-	{"账号", "Account", true, func(r *Record, _ *time.Location) string { return r.AccountName }},
-	{"模型", "Model", false, func(r *Record, _ *time.Location) string { return r.Model }},
-	{"上游模型", "Upstream model", true, func(r *Record, _ *time.Location) string { return r.UpstreamModel }},
-	{"端点", "Endpoint", false, func(r *Record, _ *time.Location) string { return r.Endpoint }},
-	{"协议", "Protocol", false, func(r *Record, _ *time.Location) string { return r.Protocol }},
-	{"流式", "Stream", false, func(r *Record, _ *time.Location) string { return strconv.FormatBool(r.Stream) }},
-	{"状态码", "Status", false, func(r *Record, _ *time.Location) string { return strconv.Itoa(r.StatusCode) }},
-	{"成功", "Success", false, func(r *Record, _ *time.Location) string { return strconv.FormatBool(r.Success) }},
-	{"错误类型", "Error type", false, func(r *Record, _ *time.Location) string { return r.ErrorType }},
-	{"输入 Token", "Input tokens", false, func(r *Record, _ *time.Location) string { return strconv.FormatInt(r.InputTokens, 10) }},
-	{"输出 Token", "Output tokens", false, func(r *Record, _ *time.Location) string { return strconv.FormatInt(r.OutputTokens, 10) }},
-	{"缓存读取 Token", "Cache read tokens", false, func(r *Record, _ *time.Location) string { return strconv.FormatInt(r.CacheReadTokens, 10) }},
-	{"缓存写入 Token", "Cache write tokens", false, func(r *Record, _ *time.Location) string {
+	{"账号", "Account", true, true, func(r *Record, _ *time.Location) string { return r.AccountName }},
+	{"模型", "Model", false, false, func(r *Record, _ *time.Location) string { return r.Model }},
+	{"上游模型", "Upstream model", true, false, func(r *Record, _ *time.Location) string { return r.UpstreamModel }},
+	{"端点", "Endpoint", false, false, func(r *Record, _ *time.Location) string { return r.Endpoint }},
+	{"协议", "Protocol", false, false, func(r *Record, _ *time.Location) string { return r.Protocol }},
+	{"流式", "Stream", false, false, func(r *Record, _ *time.Location) string { return strconv.FormatBool(r.Stream) }},
+	{"状态码", "Status", false, false, func(r *Record, _ *time.Location) string { return strconv.Itoa(r.StatusCode) }},
+	{"成功", "Success", false, false, func(r *Record, _ *time.Location) string { return strconv.FormatBool(r.Success) }},
+	{"错误类型", "Error type", false, false, func(r *Record, _ *time.Location) string { return r.ErrorType }},
+	{"输入 Token", "Input tokens", false, false, func(r *Record, _ *time.Location) string { return strconv.FormatInt(r.InputTokens, 10) }},
+	{"输出 Token", "Output tokens", false, false, func(r *Record, _ *time.Location) string { return strconv.FormatInt(r.OutputTokens, 10) }},
+	{"缓存读取 Token", "Cache read tokens", false, false, func(r *Record, _ *time.Location) string { return strconv.FormatInt(r.CacheReadTokens, 10) }},
+	{"缓存写入 Token", "Cache write tokens", false, false, func(r *Record, _ *time.Location) string {
 		return strconv.FormatInt(r.CacheCreationTokens+r.CacheCreation1hTokens, 10)
 	}},
-	{"费用", "Cost", false, func(r *Record, _ *time.Location) string { return r.TotalCost.String() }},
-	{"原价", "List price", false, func(r *Record, _ *time.Location) string {
+	{"费用", "Cost", false, false, func(r *Record, _ *time.Location) string { return r.TotalCost.String() }},
+	{"原价", "List price", false, false, func(r *Record, _ *time.Location) string {
 		if r.RateMultiplier.IsPositive() {
 			return r.TotalCost.DivRound(r.RateMultiplier, 8).String()
 		}
 		return decimal.Zero.String()
 	}},
-	{"倍率", "Multiplier", false, func(r *Record, _ *time.Location) string { return r.RateMultiplier.String() }},
-	{"计费状态", "Billing status", false, func(r *Record, _ *time.Location) string { return r.BillingStatus }},
-	{"首 token (ms)", "First token (ms)", false, func(r *Record, _ *time.Location) string { return strconv.Itoa(r.FirstTokenMs) }},
-	{"耗时 (ms)", "Duration (ms)", false, func(r *Record, _ *time.Location) string { return strconv.Itoa(r.LatencyMs) }},
-	{"调用 IP", "Client IP", false, func(r *Record, _ *time.Location) string { return r.ClientIP }},
+	{"倍率", "Multiplier", false, false, func(r *Record, _ *time.Location) string { return r.RateMultiplier.String() }},
+	{"计费状态", "Billing status", false, false, func(r *Record, _ *time.Location) string { return r.BillingStatus }},
+	{"首 token (ms)", "First token (ms)", false, false, func(r *Record, _ *time.Location) string { return strconv.Itoa(r.FirstTokenMs) }},
+	{"耗时 (ms)", "Duration (ms)", false, false, func(r *Record, _ *time.Location) string { return strconv.Itoa(r.LatencyMs) }},
+	{"调用 IP", "Client IP", false, false, func(r *Record, _ *time.Location) string { return r.ClientIP }},
 }
 
 func (s *Service) myExport(c *gin.Context) {
@@ -88,7 +89,8 @@ func (s *Service) export(c *gin.Context, self *int64) {
 	ctx := c.Request.Context()
 	// Validate the filters before any byte of the file is sent; each page
 	// below parses them again and adds its keyset bound.
-	if _, err := parseFilter(c, self); err != nil {
+	accounts := s.seesAccounts(ctx, self)
+	if _, err := parseFilter(c, self, accounts); err != nil {
 		httpapi.Fail(c, err)
 		return
 	}
@@ -110,7 +112,7 @@ func (s *Service) export(c *gin.Context, self *int64) {
 	}
 	var cols []exportColumn
 	for _, col := range exportColumns {
-		if !col.admin || self == nil {
+		if (!col.admin || self == nil) && (!col.account || accounts) {
 			cols = append(cols, col)
 		}
 	}
@@ -134,7 +136,7 @@ func (s *Service) export(c *gin.Context, self *int64) {
 	var cursorAt time.Time
 	var cursorID int64
 	for rows < exportMaxRows {
-		page, err := parseFilter(c, self)
+		page, err := parseFilter(c, self, accounts)
 		if err != nil {
 			break
 		}

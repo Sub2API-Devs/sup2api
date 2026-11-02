@@ -25,7 +25,8 @@ vi.mock('./useUsageSummary', () => ({
 const replace = vi.fn()
 let query: Record<string, string> = {}
 vi.mock('vue-router', () => ({ useRoute: () => ({ query }), useRouter: () => ({ replace }) }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => false }) }))
+const perms = vi.hoisted(() => ({ accountRead: true }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (key: string) => key === 'account:read' && perms.accountRead }) }))
 vi.mock('./UsageTable.vue', () => ({ default: { name: 'UsageTable', props: ['rows', 'showAccount'], emits: ['filter-account-id'], template: '<div data-testid="usage-table" />' } }))
 vi.mock('./UsageIPPanel.vue', () => ({ default: { name: 'UsageIPPanel', template: '<div data-testid="ip-panel" />' } }))
 vi.mock('@/components/stats/UsageCharts.vue', () => ({ default: { name: 'UsageCharts', template: '<div data-testid="charts" />' } }))
@@ -127,6 +128,17 @@ describe('usage records page', () => {
     table.vm.$emit('filter-account-id', 9)
     await flushPromises()
     expect(lists[0].filters.account_id).toBe('9')
+  })
+
+  it('hides the account from an operator who may not read accounts', () => {
+    perms.accountRead = false
+    try {
+      const w = render(true)
+      expect(w.findComponent({ name: 'UsageTable' }).props('showAccount')).toBe(false)
+      expect(w.findComponent({ name: 'UsageFilters' }).props('accounts')).toBe(false)
+    } finally {
+      perms.accountRead = true
+    }
   })
 
   it('starts from the filters of a link; a user cannot preset another user', async () => {

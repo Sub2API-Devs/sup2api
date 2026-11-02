@@ -10,8 +10,10 @@ import { SButton, SIcon, SInput, SSelect } from '@sub2api/ui'
 const props = withDefaults(defineProps<{
   modelValue: Record<string, unknown>
   admin?: boolean
+  /** The account filters, for an operator who may read accounts. */
+  accounts?: boolean
   groupOptions?: Array<{ value: string | number; label: string }>
-}>(), { admin: false, groupOptions: () => [] })
+}>(), { admin: false, accounts: false, groupOptions: () => [] })
 const emit = defineEmits<{ 'update:modelValue': [value: Record<string, string>] }>()
 const { t } = useI18n()
 const expanded = ref(false)
@@ -23,7 +25,9 @@ const primary = [
 ]
 const advanced = computed(() => [
   'api_key_id', 'group_id', 'group_name', 'request_id', 'client_request_id', 'platform', 'protocol', 'endpoint', 'status_code', 'error_type',
-  ...(props.admin ? ['user_id', 'user_email', 'account_id', 'account_name', 'plugin_key', 'account_type', 'node_id', 'upstream_model', 'upstream_protocol'] : [])
+  ...(props.admin ? ['user_id', 'user_email'] : []),
+  ...(props.admin && props.accounts ? ['account_id', 'account_name'] : []),
+  ...(props.admin ? ['plugin_key', 'account_type', 'node_id', 'upstream_model', 'upstream_protocol'] : [])
 ])
 const keys = computed(() => [...primary.map(p => p.key), ...advanced.value, 'success', 'stream', 'billing_status'])
 watch(() => props.modelValue, value => {

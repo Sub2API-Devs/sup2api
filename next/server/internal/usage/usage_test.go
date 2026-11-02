@@ -63,6 +63,13 @@ func (allowAll) VerifyAccessToken(_ context.Context, token string) (int64, error
 	return strconv.ParseInt(token, 10, 64)
 }
 func (allowAll) Can(context.Context, int64, string) (bool, error) { return true, nil }
+
+// denyAccounts holds every permission but account:read.
+type denyAccounts struct{ allowAll }
+
+func (denyAccounts) Can(_ context.Context, _ int64, perm string) (bool, error) {
+	return perm != "account:read", nil
+}
 func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: true}, nil
 }
@@ -80,6 +87,7 @@ func newFixture(t *testing.T) *fixture {
 	bill := billing.New(db, rdb, nil, pub, nil)
 	f := &fixture{t: t, db: db, bill: bill, ledger: &flakyLedger{Service: bill}}
 	f.svc = New(db, f.ledger, bill, pub, Options{FlushInterval: 10 * time.Millisecond, Workers: 2, RetryInterval: time.Hour, RetryAfter: time.Millisecond})
+	f.svc.Authz = allowAll{} // the caller holds every permission unless a test says otherwise
 
 	for _, email := range []string{"u@example.com", "o@example.com"} {
 		var id int64
