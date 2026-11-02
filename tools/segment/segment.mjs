@@ -82,13 +82,22 @@ if (fs.existsSync(facadePath)) {
     }
   }
 }
-// 3. first-party matches (+ the matcher's own layout interpolation)
+// 3. first-party matches. One-to-many ("fingerprint-shared") matches are
+// clones — the same small helper inlined into several bundles or re-declared
+// per chunk — so they name a declaration but do not place it; the matcher's
+// own layout guesses are redone below with the trusted labels only.
 const refLine = new Map();
 for (const r of readJsonl(path.join(A, 'reference/decls.jsonl'))) refLine.set(`${r.file}#${r.names[0] ?? '@' + r.line}`, r.line);
+const sharedClones = [];
 for (const m of readJsonl(path.join(A, 'match/decl-map.jsonl'))) {
   const d = byId.get(m.id);
   if (!d || label[d.i] || !m.refFile) continue;
+  if (m.method === 'fingerprint-shared' || m.fileMethod === 'layout') { if (m.method === 'fingerprint-shared') sharedClones.push([d, m]); continue; }
   label[d.i] = { path: m.refFile, kind: 'first-party', method: m.fileMethod ?? m.method, order: m.ref ? refLine.get(m.ref) : undefined, refName: m.refName };
+}
+for (const m of readJsonl(path.join(A, 'match/local-map.jsonl'))) {
+  const d = byId.get(m.id);
+  if (d && !label[d.i]) label[d.i] = { path: m.refFile, kind: 'first-party', method: m.method, refName: m.refName };
 }
 
 // Per-chunk ordered lists
@@ -128,6 +137,16 @@ for (let round = 0; round < 20; round++) {
     }
   }
   if (!added) break;
+}
+
+// 4b. a shared clone still unplaced goes to its reference file only when one
+// of its chunk neighbours already sits there (it is then that file's copy)
+for (const [d, m] of sharedClones) {
+  if (label[d.i]) continue;
+  const list = byChunk.get(d.file);
+  const k = list.indexOf(d);
+  const near = [list[k - 1], list[k + 1]].map((x) => x && label[x.i]?.path);
+  if (near.includes(m.refFile)) label[d.i] = { path: m.refFile, kind: 'first-party', method: 'shared-adjacent', refName: m.refName };
 }
 
 // 5. leftovers: contiguous unlabeled runs per chunk
