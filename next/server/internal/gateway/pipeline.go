@@ -96,6 +96,18 @@ type call struct {
 
 	sticky       *stickySession
 	availability map[int64]availabilityAdmission
+	// availabilityOpen marks the plugins whose availability check already
+	// failed open in this request: the guard does not ask them again.
+	availabilityOpen map[string]bool
+	// availabilityChecked / availabilityAdmitted are the precheck's
+	// candidate and admitted counts, for a trace the guard starts.
+	availabilityChecked  int
+	availabilityAdmitted int
+	// quotaPinned: a WebSocket turn, whose quota observations may only be
+	// written under quotaPin, the generation the connection was made with
+	// (0 = unknown, nothing is written).
+	quotaPinned bool
+	quotaPin    int64
 	// ranked holds the per-request priority/weight the scheduler.rank
 	// plugins asked for (CONTRACTS §24); rankDone marks the single call, so
 	// failover attempts reuse the same result. nil = the accounts' own values.
@@ -432,6 +444,13 @@ func (c *call) checkModel(ctx context.Context) *gwError {
 	if (req.ModelParam != "" || req.ModelPath != "") && c.model == "" {
 		return &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
 			Message: "model is required", RecordType: errTypeInvalidRequest}
+	}
+	// A model the client named (path, body or the plugin reading the body)
+	// reaches account selection, plugins and the usage record: refuse what
+	// no model id looks like before any of them sees it (CONTRACTS §15.2).
+	if !c.ep.TaskQuery() && c.model != "" && !validModelName(c.model) {
+		return &gwError{Status: http.StatusBadRequest, Code: core.ErrInvalidArgument.Code,
+			Message: "model must be a model identifier of at most 256 bytes without whitespace or control characters", RecordType: errTypeInvalidRequest}
 	}
 	// request.stream is an endpoint-level fact ("this endpoint only streams")
 	// and always wins, including over a plugin: a plugin answering false would

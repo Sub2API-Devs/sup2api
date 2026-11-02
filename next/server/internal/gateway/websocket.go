@@ -382,6 +382,9 @@ func (s *wsSession) begin(ctx context.Context, m wsMessage) (_ *wsTurn, fatal bo
 		releaseKey()
 		return reject(cl, e)
 	}
+	// Quota observations of this turn go under the connection's generation
+	// only; a connection opened without one never writes any.
+	cl.quotaPinned, cl.quotaPin = true, s.quotaGeneration
 	t := &wsTurn{cl: cl, lease: cl.slotCtx, release: func() { releaseAccount(); releaseKey() }}
 	if t.lease == nil {
 		t.lease = ctx
@@ -481,7 +484,7 @@ func (s *wsSession) connect(ctx context.Context, cl *call) (func(), *gwError) {
 			s.ref = ref
 			s.routes = cl.routes
 			s.session = cl.session
-			s.quotaGeneration = cl.availability[ref.ID].quota.GetGeneration()
+			s.quotaGeneration = cl.availability[ref.ID].generation()
 			cl.finishSticky(ctx, ref.ID, true)
 			pendingRelease = nil
 			return release, nil
@@ -583,7 +586,7 @@ func (s *wsSession) dial(ctx context.Context, cl *call, ref *core.AccountRef) at
 		return attemptResult{kind: attemptFailover, err: failure}
 	}
 	if rt.binding.Type.ModelAvailability && built.GetUpstreamModel() != "" && built.GetUpstreamModel() != upModel {
-		return attemptResult{kind: attemptFailover, err: availabilityFailure(false)}
+		return attemptResult{kind: attemptFailover, err: cl.availabilityMismatch(ctx, ref, upModel, built.GetUpstreamModel())}
 	}
 	dctx, dcancel := context.WithTimeout(context.WithoutCancel(ctx), s.g.ws.handshake)
 	stop := context.AfterFunc(ctx, dcancel)
@@ -675,7 +678,10 @@ func (s *wsSession) reuse(ctx context.Context, cl *call) (func(), *gwError) {
 	if _, failure := cl.filterAvailability(ctx, []core.AccountRef{*s.ref}); failure != nil {
 		return nil, failure
 	}
-	if cl.availability[s.ref.ID].quota.GetGeneration() != s.quotaGeneration {
+	// The connection stays on the identity it was opened with: a changed
+	// generation is a reauthorized account (CONTRACTS §44.7). An unknown one
+	// on either side is not adopted later either (applyQuotaObservation).
+	if !sameQuotaGeneration(s.quotaGeneration, cl.availability[s.ref.ID].generation()) {
 		return nil, availabilityFailure(false)
 	}
 	deadline := time.Now().Add(s.g.ws.slotWait)

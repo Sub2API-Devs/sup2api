@@ -122,6 +122,16 @@ type Gateway struct {
 	// At most four measured upload spools (2 GiB worst case) per process.
 	resourceSpools chan struct{}
 
+	// Model availability precheck budgets (availability.go); zero = the
+	// package constants. Overridable in tests.
+	availabilitySnapshotTimeout      time.Duration
+	availabilityPluginTimeout        time.Duration
+	availabilityGuardSnapshotTimeout time.Duration
+	// availabilityBreakers stops asking a plugin whose availability calls
+	// fail; availabilityWarns throttles the precheck's logs.
+	availabilityBreakers availabilityBreakers
+	availabilityWarns    warnSampler
+
 	stop    chan struct{}
 	wg      sync.WaitGroup
 	cancels []func()

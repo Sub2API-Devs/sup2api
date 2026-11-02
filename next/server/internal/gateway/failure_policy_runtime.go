@@ -150,8 +150,10 @@ func (c *call) classifyFailure(ctx context.Context, accountID int64, status int,
 	return attemptResult{kind: attemptFailover, err: e}
 }
 
-// policyCandidates refreshes availability before every attempt. A same-account
-// retry never silently turns into a different-account retry when unavailable.
+// policyCandidates refreshes the account list (status, cooldowns) before
+// every attempt; it does not run the availability check again - the guard
+// does, per attempt. A same-account retry never silently turns into a
+// different-account retry when the account is gone.
 func (c *call) policyCandidates(ctx context.Context, original []core.AccountRef) ([]core.AccountRef, error) {
 	if c.failurePolicy == nil {
 		return original, nil
@@ -227,6 +229,9 @@ func (c *call) planFailure(ctx context.Context, ref *core.AccountRef, res attemp
 		return res
 	}
 	s := &c.failureState
+	if s.facts == nil && res.err != nil && res.err.RecordType == errTypeModelAvailability {
+		return c.planAvailabilityFailure(ctx, ref, res, attempts, excluded)
+	}
 	if s.facts == nil {
 		if res.err == nil {
 			return res
@@ -248,6 +253,31 @@ func (c *call) planFailure(ctx context.Context, ref *core.AccountRef, res attemp
 	}
 	s.decision.Action = action
 	c.finishFailureDecision(ref, attempts, "retry_scheduled")
+	res.kind = attemptFailover
+	return res
+}
+
+// planAvailabilityFailure handles an attempt the model availability guard
+// refused. It is a statement about one model of the account (a model
+// window ran out, the identity changed under the request), not about the
+// account's health: no account rule runs - a 429 or 503 rule would cool
+// down or disable the whole account - and the same account is never tried
+// again. The request moves to another account unless the usual limits
+// (attempts, committed response, account-bound resources) forbid it.
+func (c *call) planAvailabilityFailure(ctx context.Context, ref *core.AccountRef, res attemptResult, attempts int, excluded map[int64]bool) attemptResult {
+	s := &c.failureState
+	s.facts = &FailureFacts{Source: "core", Status: res.err.Status, Text: res.err.Message, Model: c.model, Protocol: c.ep.Protocol}
+	s.decision = FailureDecision{Action: failureSwitch, AccountAction: "none"}
+	s.accountResult = "unchanged"
+	if reason := c.retryBlocked(ctx, res, attempts, failureSwitch); reason != "" {
+		c.finishFailureDecision(ref, attempts, reason)
+		res.kind = attemptReturn
+		return res
+	}
+	s.preserveSticky = true
+	s.sameID = 0
+	excluded[ref.ID] = true
+	c.finishFailureDecision(ref, attempts, errTypeModelAvailability)
 	res.kind = attemptFailover
 	return res
 }

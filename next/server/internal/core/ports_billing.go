@@ -136,7 +136,10 @@ type UsageRecord struct {
 	ErrorMessage     string
 	Attempts         int
 	// FailurePolicy contains bounded core-only decisions, persisted in anomalies.
-	FailurePolicy  string
+	FailurePolicy string
+	// Availability is the model availability precheck's account of this
+	// request (AnomalyAvailability), nil when every checked account passed.
+	Availability   *AvailabilityTrace
 	UsageSemantics string // exclusive | inclusive
 	Tokens         UsageTokens
 	Metrics        map[string]any // plugin usage facts for u("key")
@@ -298,6 +301,59 @@ const (
 	// ordinary one, i.e. for a free endpoint not at all.
 	AnomalyReservation      = "reservation"
 	AnomalyReservationError = "reservation_error"
+	// AnomalyAvailability: the JSON of an AvailabilityTrace - which accounts
+	// the model availability precheck (or the per-attempt guard) blocked or
+	// let through without an answer, and why. Like failure_policy it is a
+	// trace, not an anomaly of the record: summaries do not count it.
+	AnomalyAvailability = "availability"
+)
+
+// AvailabilityTrace is what the model availability precheck of one request
+// (one WebSocket turn) decided, recorded when it blocked an account or let
+// one through without a definite answer (MODEL-AVAILABILITY-PRECHECK-DESIGN
+// §6.1). Bounded: at most 20 samples, 16 count keys and 5 guard samples.
+type AvailabilityTrace struct {
+	V          int                  `json:"v"`       // 1
+	Outcome    string               `json:"outcome"` // AvailabilityBlockedAll | AvailabilityPartial | AvailabilityFailOpen | AvailabilityPass
+	Candidates int                  `json:"candidates"`
+	Admitted   int                  `json:"admitted"`
+	Counts     map[string]int       `json:"counts"` // reason -> accounts
+	RetryAt    int64                `json:"retry_at,omitempty"`
+	Samples    []AvailabilitySample `json:"samples"`
+	Omitted    int                  `json:"omitted,omitempty"`
+	Guard      []AvailabilitySample `json:"guard,omitempty"`
+}
+
+// AvailabilitySample is one account (or, for a failure of a whole plugin
+// call, one plugin) of an AvailabilityTrace.
+type AvailabilitySample struct {
+	AccountID int64 `json:"account_id,omitempty"`
+	// AccountName is filled by the usage API when the caller may see
+	// accounts; never stored.
+	AccountName string `json:"account_name,omitempty"`
+	Plugin      string `json:"plugin,omitempty"`
+	Model       string `json:"model,omitempty"`
+	Decision    string `json:"decision"` // AvailabilityBlock | AvailabilityFailOpen
+	// Reason is a reason code, followed by the plugin's reason for
+	// "unavailable" and "plugin_unknown": "unavailable:quota_rejected:7d_fable".
+	Reason  string `json:"reason"`
+	RetryAt int64  `json:"retry_at,omitempty"`
+	Attempt int    `json:"attempt,omitempty"` // guard samples only
+	// Batch marks the one sample of a whole plugin call or snapshot read
+	// that failed: it never names an account, so a reader can tell it from
+	// an account sample whose id was redacted.
+	Batch bool `json:"batch,omitempty"`
+}
+
+// Values of AvailabilityTrace.Outcome and AvailabilitySample.Decision.
+const (
+	AvailabilityBlockedAll = "blocked_all"
+	AvailabilityPartial    = "partial"
+	AvailabilityFailOpen   = "fail_open"
+	// AvailabilityPass: the precheck admitted every account; only the guard
+	// had something to record.
+	AvailabilityPass  = "pass"
+	AvailabilityBlock = "block"
 )
 
 // Values of AnomalyReconcile.
@@ -332,6 +388,11 @@ func (r *UsageRecord) Anomalies() map[string]string {
 	put(AnomalyResponseMismatch, r.ResponseMismatch)
 	put(AnomalyUsageExtract, r.UsageExtract)
 	put("failure_policy", r.FailurePolicy)
+	if r.Availability != nil {
+		if raw, err := json.Marshal(r.Availability); err == nil {
+			put(AnomalyAvailability, string(raw))
+		}
+	}
 	if r.ReservationDropped != "" {
 		put(AnomalyReservation, ReservationDropped)
 		put(AnomalyReservationError, r.ReservationDropped)
