@@ -236,3 +236,18 @@ func TestRequestLogAccountWithoutAccountRead(t *testing.T) {
 	require.Nil(t, d["account_id"])
 	require.NotContains(t, d, "request_log_account_id")
 }
+
+// Self-service views hide upstream fields but keep the recorded error
+// message as is, 5xx included (user rule, 2026-11-02).
+func TestHideUpstreamKeepsErrorMessage(t *testing.T) {
+	t.Parallel()
+	id := int64(9)
+	r := Record{AccountID: &id, AccountName: "acc", AccountType: "managed", UpstreamModel: "m", StatusCode: 503,
+		ErrorType: "model_availability", ErrorMessage: "model availability could not be verified, please retry later"}
+	r.hideUpstream()
+	require.Nil(t, r.AccountID)
+	require.Empty(t, r.AccountName)
+	require.Empty(t, r.AccountType)
+	require.Empty(t, r.UpstreamModel)
+	require.Equal(t, "model availability could not be verified, please retry later", r.ErrorMessage)
+}

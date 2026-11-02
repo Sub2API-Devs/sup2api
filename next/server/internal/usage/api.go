@@ -158,11 +158,9 @@ func (r *Record) scanTargets() []any {
 func (r *Record) hideUpstream() {
 	r.hideAccount()
 	r.AccountType, r.UpstreamProtocol, r.UpstreamModel = "", "", ""
-	// SEC-L3: Classify and sanitize error messages for self-service views.
-	// Client-side errors (4xx) show the message; server-side errors (5xx) show only the type.
-	if r.ErrorMessage != "" && r.StatusCode >= 500 {
-		r.ErrorMessage = ""
-	}
+	// The error message is shown as recorded, 5xx included: self-service
+	// views hide fields, they never rewrite values (user rule, 2026-11-02;
+	// replaces SEC-L3's 5xx blanking).
 }
 
 // hideAccount removes which account served the request. An operator who may
