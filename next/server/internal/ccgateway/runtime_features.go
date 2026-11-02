@@ -64,10 +64,29 @@ func withConfirmedTools(p features.WorkerPolicy, capabilities []string) features
 	return p
 }
 
+// withConfirmedShape is p without first_party_shape for a Worker that does not
+// declare build_first_party_shape_v1 (2026-11-03, CONTRACTS §53.23): an
+// account kept on an older Worker and CLI never gets the field and is never
+// refused for it. It is not a required capability (requestPolicyCapabilities).
+// capabilities nil is a Worker not asked (none confirmed).
+func withConfirmedShape(p features.WorkerPolicy, capabilities []string) features.WorkerPolicy {
+	if !slices.Contains(capabilities, features.FirstPartyShapeCapability) {
+		p.FirstPartyShape = nil
+	}
+	return p
+}
+
+// withConfirmedCapabilities is p as it may be sent to a Worker declaring
+// capabilities: withConfirmedTools and withConfirmedShape.
+func withConfirmedCapabilities(p features.WorkerPolicy, capabilities []string) features.WorkerPolicy {
+	return withConfirmedShape(withConfirmedTools(p, capabilities), capabilities)
+}
+
 // requireRequestPolicyCapabilities confirms the Worker behind r (nil: a
 // connection of this request only) can apply p, reusing r's health answer
 // while it is fresh, and returns p as it may be sent: without the tools its
-// CLI cannot render (withConfirmedTools).
+// CLI cannot render and without first_party_shape unless it declares the
+// conversion (withConfirmedCapabilities).
 func (s *Service) requireRequestPolicyCapabilities(ctx context.Context, client *http.Client, base, key string, r *accountRoute, p features.WorkerPolicy) (features.WorkerPolicy, error) {
 	var h workerHealth
 	if cached := s.routeHealthIfFresh(r); cached != nil {
@@ -81,7 +100,7 @@ func (s *Service) requireRequestPolicyCapabilities(ctx context.Context, client *
 			s.keepRouteHealth(r, h)
 		}
 	}
-	p = withConfirmedTools(p, h.Capabilities)
+	p = withConfirmedCapabilities(p, h.Capabilities)
 	return p, h.require(p.CLIVersion, requestPolicyCapabilities(p))
 }
 

@@ -4180,7 +4180,7 @@ native 下客户端附件原样上送、容器 CC 自身的附件不加（§53.1
 
 核心发给 Worker 的请求策略（请求头 `X-CCGateway-Request-Policy`）有唯一的线形类型 `contracts/features.WorkerPolicy`（`wire.go`），核心的 `workerPolicy()` 构造它、Worker 的 `features.ParseWorkerPolicy` 读它；两边不再共用存储结构体。
 
-- **线上只有 7 个键**：`schema_version`（1）、`relay_mode`（build/direct，由等级推出）、`cli_version`、`build_billing_sources`、`build_billing_entrypoint`、`build_attachment_sources`、`build_injection`。来源为 `client` 的项、默认入口 `sdk-cli` 不下发；附件来源只在等级低及以上下发；`build_injection` 只含该等级加上的项（`LevelInjection`，只有 true）。`level` 本身不下发。2026-11-02 起低注入也可下发 `system_prompt`，`tools` 可含 `InjectionToolsV2`，且只发给声明 `build_injection_tools_v2` 的 Worker/CLI（§53.22）。
+- **线上只有 7 个键**：`schema_version`（1）、`relay_mode`（build/direct，由等级推出）、`cli_version`、`build_billing_sources`、`build_billing_entrypoint`、`build_attachment_sources`、`build_injection`。来源为 `client` 的项、默认入口 `sdk-cli` 不下发；附件来源只在等级低及以上下发；`build_injection` 只含该等级加上的项（`LevelInjection`，只有 true）。`level` 本身不下发。2026-11-02 起低注入也可下发 `system_prompt`，`tools` 可含 `InjectionToolsV2`，且只发给声明 `build_injection_tools_v2` 的 Worker/CLI（§53.22）。2026-11-03 起另有 `first_party_shape`，只发给声明 `build_first_party_shape_v1` 的 Worker（§53.23）。
 - **不再下发**：`build_identity_lines`、`request_identity_sources`（身份行由 CLI 按计费头入口自适应、身份固定映射，2026-10-21/23）以及 §53.11/§53.15/§53.16 的全部 native 设置。它们在 `RequestPolicy`（存储形）里标为"stored only"，旧配置照常解码，设置页不编辑。
 - **Worker 对未知键宽容**：发布顺序是先插件后核心，新 Worker 会先收到旧核心带多余键的策略，所以 `ParseWorkerPolicy` 忽略未知键，只严格校验认识的键；Worker 不再解析 `request_identity_sources`/`build_identity_lines`，也不再因它们返回 409。核心实际下发什么由夹具固定（下一条）。
 - **跨层夹具**：`contracts/testdata/core-worker-policies.json` 由核心测试（`server/internal/ccgateway/contract_fixture_test.go`，编辑器 16 例的线形）生成，`CCG_UPDATE_CONTRACT_FIXTURES=1` 重生成；engine 测试（`core_policy_fixture_test.go`）读同一份字节，要求每条都被 Worker 接受并原样成为 CLI 信封的 `requestPolicy`（`WorkerPolicy.CLI()`，contract 2，键：`contract_version`、`build_attachment_sources`、`build_billing_sources`、`build_billing_entrypoint`、`build_injection`）。Worker→CLI 夹具 `worker-cli-requests.json` 同时覆盖 replace/client/worker 三种身份模式（Claude 登录、API Key、无邮箱）。
@@ -4271,6 +4271,19 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 
 **夹具**：`contracts/testdata/web-policy-payloads.json` 新增 `global-low-prompt`（low + 提示词）、`global-lowered-from-high`（情况 a）和 `global-high-v2-tools`（high + Skill/ToolSearch）。`group-level` 和 `account-prompt` 两个用例在"自定义"时会把新增的 6 个工具写成 `false`。`core-worker-policies.json` 只新增这三条线形，原有线形逐字不变；low 默认用例（`global-default`）仍然没有 `system_prompt`。
 
+
+### 53.23 官方客户端第三方形状转换为第一方形状（`first_party_shape`，2026-11-03，用户决定）
+
+背景见 `artifacts/cc-thirdparty/REPORT.md`、`code-and-prod.md`：官方 Claude Code 通过自定义 `ANTHROPIC_BASE_URL` 接入时发的是"第三方形状"（计费头少 `cch`、`cc_prompt_id`、`cc_turn_origin` 等字段，system 3 块而非 4 块，没有 `diagnostics`，部分 CC 请求头缺失或取值不同）；直连 `api.anthropic.com` 时发的是"第一方形状"。2026-11-03 用户决定：网关把这类请求转换成第一方形状，**默认开**。
+
+- **开关**：请求策略新增 `first_party_shape`（布尔）。全局 `RequestPolicy.FirstPartyShape`、分组/账号 `FeatureOverrides.FirstPartyShape`，按 全局 → 分组 → 账号 继承，与其它特性策略字段一样：省略即继承，`null` 拒绝；`FeatureResolution.Sources["first_party_shape"]` 标出来源。全局未设（含 2026-11-03 之前保存的策略）读作开（`EffectiveRequestPolicy` 补 `true`）；保存时请求体不带该键则保留已存值（`mergeStoredPolicy`）。所有等级（含 none/direct）都适用。
+- **控制台**：在"计费头"卡片里，"已有时"下面一行开关"转换为第一方形状"，提示写明适用对象（通过自定义 base URL 接入的 Claude Code 客户端）、转换内容（计费头字段、system 分块、CC 请求头和 diagnostics），以及需要账号 CLI 为 2.1.316 v45 或更新。它属于计费头层：分组/账号"自定义"这一层时把继承值写成显式值，"跟随"时删掉。
+- **线形**：`WorkerPolicy.FirstPartyShape *bool`（`first_party_shape,omitempty`），`nil` 读作开（`FirstPartyShapeEnabled`）。核心的 `workerPolicy()` 总是写显式的 `true`/`false`。`CLIPolicy`（CLI 信封，contract 2）不带这个字段，Worker 怎样交给 CLI 由插件决定。
+- **能力闸门**：新能力 `build_first_party_shape_v1`（`features.FirstPartyShapeCapability`），由 CLI 2.1.316 v45 及以后和新 Worker 声明。核心在能力预检时（`withConfirmedShape`，与 `withConfirmedTools` 一起组成 `withConfirmedCapabilities`，`runtime_features.go`），只对 `/healthz.capabilities` 声明了这项能力的 Worker 保留这个字段，其它 Worker 一律去掉。这项能力**不是**必需能力（不在 `requestPolicyCapabilities` 里），所以旧账号（按用户规则永远停在 CLI 2.1.312 v41 和旧 Worker）既收不到这个字段，也不会因此被拒，行为完全不变。不经预检的路径（`/v1/messages`、`/v1/ccgateway/probe` 以外）同样不带这个字段，已声明能力的 Worker 把"没有这个字段"读作开。
+- **推翻的既有规则（只限于这次转换）**：2026-10-30 的"客户端自带计费头原样保留、一个字段都不加"（BILLING 文档 §0/§2.1/§5.1，`billing-header-gates-injection`），在开关打开、Worker/CLI 声明了能力时，对这类请求不再适用：计费头按第一方形状补齐字段，system 按第一方形状分块，CC 请求头和 `diagnostics` 也按第一方形状补齐。开关关闭，或 Worker/CLI 没有这项能力时，原规则照旧。其它场合（我们自己写的计费头、非 CC 请求的注入）不受影响。具体怎样转换（哪些字段可以推出、哪些需要会话记忆、`cch` 的处理）由 Worker 和 CLI 实现，写在 cli-mods/engine 的文档里。
+- **夹具**：`web-policy-payloads.json` 新增 `global-first-party-shape-default`（2026-11-03 之前保存的策略，原样提交，读作开）、`global-first-party-shape-off`、`group-first-party-shape-on`（全局关、分组 level none 时打开）、`account-first-party-shape-off`；`group-layers` 和 `account-billing` 在"自定义"计费头层时多写一个 `first_party_shape: true`。`core-worker-policies.json` 记录的是发给声明了全部能力的 Worker 的线形，所以每条都多了 `"first_party_shape":true`（或 `false`）；名字含 `first-party-shape` 的用例还多一条 `…/worker-without-capability`，内容是同一策略发给没有这项能力的 Worker 时的线形（不带这个字段）。
+- **测试**：`TestFirstPartyShapeResolvesAndInherits`、`TestFirstPartyShapeGlobalSaveKeepsOmitted`、`TestFirstPartyShapeOnlyReachesAWorkerThatDeclaresIt`（核心：没有能力的 Worker 收不到字段、请求 200；有能力的按设置收到 `true`/`false`）；`TestWorkerPolicyFirstPartyShape`（contracts）；`requestPolicy.spec.ts`、`contractFixtures.spec.ts`（控制台）。
+- **回滚**：2026-11-03 之前的核心解码分组/账号覆盖时用 `DisallowUnknownFields`，带 `first_party_shape` 的覆盖会解码失败：分组覆盖在加密的 `Config` 里，失败会让整份配置读不出来，所有 CCGateway 页面和请求一起失效（§53.19 的问题）；账号覆盖失败只影响该账号。所以回滚核心前，必须先去掉分组/账号覆盖里的这个键（把计费头层改回"跟随"）。全局 `RequestPolicy` 解码时忽略未知键，不受影响。
 
 ## 54. 插件隔离加固 P0（2026-10-10，审查 `docs/audits/2026-10-09-plugin-resources.md` 的 P0）
 

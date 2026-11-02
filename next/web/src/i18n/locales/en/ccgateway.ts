@@ -52,6 +52,8 @@ export default {
     billingMissingHint: "A request without a billing header gets the main thread's full header with this entrypoint; also used when the entrypoint source is Server",
     billingPresent: 'When present',
     billingPresentHint: 'The two fields follow their sources; Client uses the server value when the client lacks the field',
+    firstPartyShape: 'Convert to first-party shape',
+    firstPartyShapeHint: "For Claude Code clients connected through a custom base URL: billing header fields, system blocks, CC request headers and diagnostics are converted to what CC sends to the official API. Needs the account's CLI 2.1.316 v45 or newer; accounts on older CLIs are unchanged",
     version: 'Version',
     identityAdaptive: "Adaptive: a request without an identity line gets the one its billing header's entrypoint calls for",
     identityRules: 'Show rules',

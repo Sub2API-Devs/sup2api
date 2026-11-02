@@ -61,7 +61,7 @@ const KEY: InjectionKey<PolicyLayers> = Symbol('policyLayers')
 
 const layerKeys: Record<FeatureLayer, string[]> = {
   level: ['level'],
-  billing: ['build_billing_entrypoint', 'build_billing_sources.'],
+  billing: ['build_billing_entrypoint', 'build_billing_sources.', 'first_party_shape'],
   environment: ['build_attachment_sources.', 'build_injection.attachments.'],
   prompt: ['build_injection.system_prompt', 'build_injection.tools.']
 }

@@ -108,7 +108,7 @@ describe('editor payloads for the core contract', () => {
     // Global, untouched: the default policy (the low level) as the editor sends it back.
     let w = await remote('global')
     cases.push({ name: 'global-default', layer: 'global', group_id: 0, saved: jsonCopy(saved), body: await submit(w),
-      expect: { level: 'low', relay_mode: 'build', 'build_billing_sources.cc_version': 'client', 'build_attachment_sources.platform_name': 'client', build_billing_entrypoint: 'sdk-cli' } })
+      expect: { level: 'low', relay_mode: 'build', 'build_billing_sources.cc_version': 'client', 'build_attachment_sources.platform_name': 'client', build_billing_entrypoint: 'sdk-cli', first_party_shape: 'true' } })
     w.unmount()
 
     // Global at the default level, every kind of source changed.
@@ -224,7 +224,7 @@ describe('editor payloads for the core contract', () => {
     await toggle(w, 'injection-attachments-date')
     let body = await submit(w)
     expect(body.cc_feature_groups[3].overrides).toEqual({
-      build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'client', cc_entrypoint: 'worker' },
+      build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'client', cc_entrypoint: 'worker' }, first_party_shape: true,
       build_attachment_sources: { ...clientEverywhere, platform_name: 'worker' }, build_injection: { attachments: { environment: true, model: true, total_tokens: true, date: false } }
     })
     cases.push({ name: 'group-layers', layer: 'group', group_id: 3, saved: jsonCopy(saved), body,
@@ -278,7 +278,7 @@ describe('editor payloads for the core contract', () => {
     await editor.get('[data-testid="billing-entrypoint-select"]').setValue('5'); await settle()
     body = await submit(editor)
     expect(mocks.patch).toHaveBeenLastCalledWith('/accounts/9', expect.anything())
-    expect(body.cc_feature_policy.overrides).toEqual({ build_billing_entrypoint: 'claude-vscode', build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'client' } })
+    expect(body.cc_feature_policy.overrides).toEqual({ build_billing_entrypoint: 'claude-vscode', build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'client' }, first_party_shape: true })
     cases.push({ name: 'account-billing', layer: 'account', group_id: 3, saved: jsonCopy(saved), body: body.cc_feature_policy,
       expect: { 'build_billing_sources.cc_entrypoint': 'client', 'build_billing_sources.cc_version': 'worker', build_billing_entrypoint: 'claude-vscode' } })
     editor.unmount()
@@ -303,6 +303,49 @@ describe('editor payloads for the core contract', () => {
     expect(body.cc_feature_policy.overrides).toEqual({ build_injection: { system_prompt: true, tools: { Bash: false, Read: true, Edit: true, Write: true, Agent: false, ListAgents: false, ReportFindings: false, ScheduleWakeup: false, Skill: false, ToolSearch: false, Workflow: false, WebSearch: false, NotebookEdit: false } } })
     cases.push({ name: 'account-prompt', layer: 'account', group_id: 3, saved: jsonCopy(saved), body: body.cc_feature_policy,
       expect: { level: 'high', 'build_injection.system_prompt': 'true', 'build_injection.tools.Bash': 'false', 'build_injection.tools.Read': 'true' } })
+    editor.unmount()
+
+    // first_party_shape (2026-11-03, CONTRACTS §53.23): on by default, a
+    // switch of the billing layer. The core fixture also records each of
+    // these for a Worker without build_first_party_shape_v1 (no field).
+    // A policy saved before the setting: untouched, it stays on.
+    saved = savedConfig({}, { ...defaultRequestPolicy(), level: 'low' })
+    w = await remote('global')
+    expect(w.get<HTMLInputElement>('[data-testid="first-party-shape"]').element.checked).toBe(true)
+    body = await submit(w)
+    expect(body.request_policy).not.toHaveProperty('first_party_shape')
+    cases.push({ name: 'global-first-party-shape-default', layer: 'global', group_id: 0, saved: jsonCopy(saved), body,
+      expect: { level: 'low', first_party_shape: 'true' } })
+    w.unmount()
+    // Turned off globally.
+    saved = savedConfig({})
+    w = await remote('global')
+    await w.get('[data-testid="first-party-shape"]').setValue(false)
+    body = await submit(w)
+    expect(body.request_policy.first_party_shape).toBe(false)
+    cases.push({ name: 'global-first-party-shape-off', layer: 'global', group_id: 0, saved: jsonCopy(saved), body,
+      expect: { level: 'low', relay_mode: 'build', first_party_shape: 'false' } })
+    w.unmount()
+    // Group 3 turns it back on over a global that turned it off, at level 0.
+    saved = savedConfig({ 3: { enabled: true, allow_account_override: true, overrides: { level: 'none' } } }, { ...defaultRequestPolicy(), first_party_shape: false })
+    w = await remote('group')
+    await layerMode(w, 'billing', 'custom')
+    expect(w.get<HTMLInputElement>('[data-testid="first-party-shape"]').element.checked).toBe(false)
+    await w.get('[data-testid="first-party-shape"]').setValue(true)
+    body = await submit(w)
+    expect(body.cc_feature_groups[3].overrides).toEqual({ level: 'none', build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'client', cc_entrypoint: 'client' }, first_party_shape: true })
+    cases.push({ name: 'group-first-party-shape-on', layer: 'group', group_id: 3, saved: jsonCopy(saved), body,
+      expect: { level: 'none', relay_mode: 'direct', first_party_shape: 'true' } })
+    w.unmount()
+    // Account 9 turns it off under group 3.
+    saved = savedConfig({ 3: { enabled: true, allow_account_override: true, overrides: {} } })
+    editor = await accountEditor()
+    await layerMode(editor, 'billing', 'custom'); await settle()
+    await editor.get('[data-testid="first-party-shape"]').setValue(false); await settle()
+    body = await submit(editor)
+    expect(body.cc_feature_policy.overrides).toEqual({ build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'client', cc_entrypoint: 'client' }, first_party_shape: false })
+    cases.push({ name: 'account-first-party-shape-off', layer: 'account', group_id: 3, saved: jsonCopy(saved), body: body.cc_feature_policy,
+      expect: { level: 'low', first_party_shape: 'false' } })
 
     // No editor writes the retired identity lines any more.
     for (const c of cases) expect(JSON.stringify(c.body), c.name).not.toContain('build_identity_lines')
@@ -310,6 +353,6 @@ describe('editor payloads for the core contract', () => {
     const generated = JSON.stringify({ cases }, null, 2) + '\n'
     if (process.env.CCG_UPDATE_CONTRACT_FIXTURES) writeFileSync(fixturePath, generated)
     expect(JSON.parse(readFileSync(fixturePath, 'utf8')), 'editor payloads changed: regenerate with CCG_UPDATE_CONTRACT_FIXTURES=1 and run the core contract test').toEqual(JSON.parse(generated))
-  // Seventeen editor mounts in one test: past the 5 s default under a full parallel run.
+  // Twenty-one editor mounts in one test: past the 5 s default under a full parallel run.
   }, 60000)
 })

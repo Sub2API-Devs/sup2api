@@ -75,6 +75,9 @@ func matrixValue(p RequestPolicy, field string) string {
 	// Resolved policies carry the default entrypoint.
 	case "build_billing_entrypoint":
 		return p.BuildBillingEntrypoint
+	// Resolved policies carry it explicitly (on unless turned off).
+	case "first_party_shape":
+		return strconv.FormatBool(p.FirstPartyShape != nil && *p.FirstPartyShape)
 	// build_injection.system_prompt, build_injection.attachments.<name> and
 	// build_injection.tools.<name> read the resolved choice, "true" or "false";
 	// an unset choice reads "false", though within the level it is added by

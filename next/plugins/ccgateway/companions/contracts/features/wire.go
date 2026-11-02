@@ -44,6 +44,18 @@ type WorkerPolicy struct {
 	// BuildInjection is what the level adds to a request without a billing
 	// header, only the items added (BuildInjection.Effective); nil adds nothing.
 	BuildInjection *BuildInjection `json:"build_injection,omitempty"`
+	// FirstPartyShape says whether an official Claude Code client connected
+	// through a custom ANTHROPIC_BASE_URL (its "third-party shape") is
+	// converted to the first-party shape, what Claude Code sends to
+	// api.anthropic.com: the billing header's fields, the system blocks, the
+	// CC request headers and diagnostics (2026-11-03 user decision, CONTRACTS
+	// §53.23). nil is on (the default, FirstPartyShapeEnabled); false leaves
+	// the client's request as it is. The core resolves the setting global ->
+	// group -> account and sends it, explicitly true or false, only to a
+	// Worker whose health declares FirstPartyShapeCapability; a Worker without
+	// it (an account kept on an older CLI) never gets the field and is never
+	// refused for it. Every value is valid.
+	FirstPartyShape *bool `json:"first_party_shape,omitempty"`
 	// RequestLog is the request log level for this request, resolved by the
 	// core from the account's setting or the CCGateway default
 	// (REQUEST-LOG-POLICY-DESIGN.md); "" leaves the Worker's own level.
@@ -56,6 +68,18 @@ const (
 	RequestLogSummary = "summary"
 	RequestLogFull    = "full"
 )
+
+// FirstPartyShapeCapability: the Worker and its CLI convert an official
+// Claude Code client's third-party shape (custom ANTHROPIC_BASE_URL) to the
+// first-party shape as WorkerPolicy.FirstPartyShape says (CLI 2.1.316 v45 and
+// later, 2026-11-03). The core sends first_party_shape only to a Worker that
+// declares it, and never requires it.
+const FirstPartyShapeCapability = "build_first_party_shape_v1"
+
+// FirstPartyShapeEnabled is p's FirstPartyShape resolved: nil is on.
+func (p WorkerPolicy) FirstPartyShapeEnabled() bool {
+	return p.FirstPartyShape == nil || *p.FirstPartyShape
+}
 
 // RequestLogPolicyCapability: the Worker logs each request at the level its
 // policy names (WorkerPolicy.RequestLog).

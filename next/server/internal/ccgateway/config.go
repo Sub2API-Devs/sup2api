@@ -455,6 +455,10 @@ func mergeStoredPolicy(p *RequestPolicy, old RequestPolicy) {
 	if p.BuildBillingEntrypoint == "" {
 		p.BuildBillingEntrypoint = old.BuildBillingEntrypoint
 	}
+	// A console from before 2026-11-03 does not send first_party_shape.
+	if p.FirstPartyShape == nil {
+		p.FirstPartyShape = old.FirstPartyShape
+	}
 	p.BuildAttachmentSources = mergeSourceMap(p.BuildAttachmentSources, old.BuildAttachmentSources)
 	p.RequestIdentitySources = mergeSourceMap(p.RequestIdentitySources, old.RequestIdentitySources)
 	// A save without a level (a console from before levels) keeps the stored

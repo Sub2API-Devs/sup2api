@@ -196,6 +196,10 @@ export interface RequestPolicy {
   build_billing_entrypoint?: BillingEntrypoint
   // Absent choices take their level's default (injectionDefault).
   build_injection?: BuildInjection
+  // Convert an official Claude Code client on a custom base URL to the
+  // first-party shape (CONTRACTS §53.23, 2026-11-03); absent is on. Only a
+  // Worker that declares build_first_party_shape_v1 receives it.
+  first_party_shape?: boolean
   // Which layers apply; relay_mode follows from it (none is direct).
   level: RequestLevel
   request_identity_sources?: Partial<Record<IdentityField, IdentitySource>>
@@ -284,6 +288,7 @@ export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPoli
     build_billing_sources: { ...policy?.build_billing_sources },
     ...(policy?.build_billing_entrypoint === undefined ? {} : { build_billing_entrypoint: policy.build_billing_entrypoint }),
     ...(injection === undefined ? {} : { build_injection: injection }),
+    ...(typeof policy?.first_party_shape === 'boolean' ? { first_party_shape: policy.first_party_shape } : {}),
     request_identity_sources: { ...policy?.request_identity_sources },
     level,
     cli_version: policy?.cli_version || defaults.cli_version,
@@ -317,6 +322,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
       (billingFields as readonly string[]).includes(field) && (source === 'client' || source === 'worker')) &&
     (p.build_billing_entrypoint === undefined || (billingEntrypoints as readonly string[]).includes(p.build_billing_entrypoint)) &&
     validInjection(p.build_injection) &&
+    (p.first_party_shape === undefined || typeof p.first_party_shape === 'boolean') &&
     (!p.custom_tool_prefix || (/^[A-Za-z0-9_-]{1,32}$/.test(p.custom_tool_prefix) && !p.custom_tool_prefix.includes('__'))) &&
     (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:(0|[1-9][0-9]?|100)$/.test(p.tool_search)) &&
     ['reject', 'ignore'].includes(p.unknown_field) &&
@@ -331,7 +337,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
 
 // An absent key follows its parent; this also applies independently to nested
 // fields. relay_mode is only read: an override saved before levels.
-export type FeatureOverrides = Partial<Pick<RequestPolicy, 'level' | 'relay_mode' | 'unknown_field' | 'tool_search' | 'thinking_disabled_compat' | 'custom_tool_prefix' | 'build_attachment_sources' | 'build_billing_sources' | 'build_billing_entrypoint' | 'build_injection' | 'request_identity_sources'>>
+export type FeatureOverrides = Partial<Pick<RequestPolicy, 'level' | 'relay_mode' | 'unknown_field' | 'tool_search' | 'thinking_disabled_compat' | 'custom_tool_prefix' | 'build_attachment_sources' | 'build_billing_sources' | 'build_billing_entrypoint' | 'build_injection' | 'first_party_shape' | 'request_identity_sources'>>
 export interface FeatureGroup { enabled: boolean; allow_account_override: boolean; overrides: FeatureOverrides }
 export interface AccountFeaturePolicy { mode: 'follow' | 'custom'; overrides: FeatureOverrides; revision: number }
 export interface FeaturePreview {
@@ -391,6 +397,9 @@ export function featureDifferenceCount(parent: RequestPolicy, overrides: Feature
       }
     } else if (key === 'build_billing_entrypoint') {
       if ((parent.build_billing_entrypoint ?? defaultBillingEntrypoint) !== value) count++
+    } else if (key === 'first_party_shape') {
+      // Absent is on.
+      if ((parent.first_party_shape ?? true) !== value) count++
     } else if (parent[key as keyof RequestPolicy] !== value) count++
   }
   return count
@@ -406,7 +415,7 @@ export function savedOverrides(overrides: FeatureOverrides): FeatureOverrides {
 export function validFeatureOverrides(input: FeatureOverrides): boolean {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return false
   const value = savedOverrides(input)
-  const allowed = ['level', 'relay_mode', 'unknown_field', 'tool_search', 'thinking_disabled_compat', 'custom_tool_prefix', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_injection', 'request_identity_sources']
+  const allowed = ['level', 'relay_mode', 'unknown_field', 'tool_search', 'thinking_disabled_compat', 'custom_tool_prefix', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_injection', 'first_party_shape', 'request_identity_sources']
   if (Object.entries(value).some(([key, v]) => !allowed.includes(key) || v == null || v === '')) return false
   if (value.level !== undefined && !isLevel(value.level)) return false
   if (value.relay_mode !== undefined && !['direct', 'build'].includes(value.relay_mode)) return false
@@ -431,7 +440,7 @@ export function layerCustomized(overrides: FeatureOverrides, layer: FeatureLayer
   const injection = overrides.build_injection
   switch (layer) {
     case 'level': return present(overrides.level) || present(overrides.relay_mode)
-    case 'billing': return present(overrides.build_billing_entrypoint) || present(overrides.build_billing_sources)
+    case 'billing': return present(overrides.build_billing_entrypoint) || present(overrides.build_billing_sources) || overrides.first_party_shape !== undefined
     case 'environment': return present(overrides.build_attachment_sources) || present(injection?.attachments)
     case 'prompt': return injection?.system_prompt !== undefined || present(injection?.tools)
   }
@@ -441,7 +450,7 @@ export function followLayer(overrides: FeatureOverrides, layer: FeatureLayer): F
   const next: FeatureOverrides = JSON.parse(JSON.stringify(overrides))
   const injection = next.build_injection
   if (layer === 'level') { delete next.level; delete next.relay_mode }
-  if (layer === 'billing') { delete next.build_billing_entrypoint; delete next.build_billing_sources }
+  if (layer === 'billing') { delete next.build_billing_entrypoint; delete next.build_billing_sources; delete next.first_party_shape }
   if (layer === 'environment') { delete next.build_attachment_sources; delete injection?.attachments }
   if (layer === 'prompt') { delete injection?.system_prompt; delete injection?.tools }
   if (injection && !Object.keys(injection).length) delete next.build_injection
@@ -460,6 +469,7 @@ export function customizeLayer(overrides: FeatureOverrides, inherited: RequestPo
   if (layer === 'billing') {
     next.build_billing_entrypoint = inherited.build_billing_entrypoint ?? defaultBillingEntrypoint
     next.build_billing_sources = Object.fromEntries(billingFields.map(field => [field, inherited.build_billing_sources?.[field] ?? 'client']))
+    next.first_party_shape = inherited.first_party_shape ?? true
   }
   if (layer === 'environment') {
     next.build_attachment_sources = Object.fromEntries(buildAttachmentFields.map(field => [field, inherited.build_attachment_sources?.[field] ?? 'client']))

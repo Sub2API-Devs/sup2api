@@ -162,7 +162,7 @@ describe('account field payload matrix', () => {
     expect(picked(w, 'billing-cc_version')).toBe(0) // the inherited client
     await layerMode(w, 'billing', 'custom'); await settlePreview()
     expect((await submit(w)).cc_feature_policy.overrides).toEqual({ build_attachment_sources: allWorker().build_attachment_sources,
-      build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'client', cc_entrypoint: 'client' } })
+      build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'client', cc_entrypoint: 'client' }, first_party_shape: true })
     // The prompt layer starts at low (its system prompt); its tools wait for high.
     expect(w.get('[data-testid="layer-mode-prompt"] input').attributes('disabled')).toBeUndefined()
   })

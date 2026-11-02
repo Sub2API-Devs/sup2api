@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // Billing-header layer of the request policy (CONTRACTS §53): every level gives
 // a request without a billing header the main thread's full one; one with it
-// has its two fields converted.
+// has its two fields converted; an official client on a custom base URL may
+// be converted to the first-party shape (first_party_shape, 2026-11-03).
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SChip, SSegmented, SSelect, SSettingRow, SSettingsGroup } from '@sub2api/ui'
+import { SChip, SSegmented, SSelect, SSettingRow, SSettingsGroup, SSwitch } from '@sub2api/ui'
 import type { SelectOption } from '@sub2api/ui'
 import { billingEntrypoints, billingFields, defaultBillingEntrypoint, type BillingEntrypoint, type BillingField } from '../requestPolicy'
 import { usePolicyLayers } from '../usePolicyLayerContext'
@@ -17,6 +18,9 @@ const setEntrypoint = (value: unknown) => layers.edit(draft => { draft.build_bil
 const sourceOptions = computed<SelectOption[]>(() => (['client', 'worker'] as const).map(value => ({ value, label: t('ccgateway.layers.billingSources.' + value) })))
 const billingSource = (field: BillingField) => layers.view.build_billing_sources?.[field] ?? 'client'
 const setBillingSource = (field: BillingField, value: unknown) => layers.edit(draft => { draft.build_billing_sources = { ...draft.build_billing_sources, [field]: value as 'client' | 'worker' } })
+// Absent is on (the default, CONTRACTS §53.23).
+const firstPartyShape = computed(() => layers.view.first_party_shape ?? true)
+const setFirstPartyShape = (on: boolean) => layers.edit(draft => { draft.first_party_shape = on })
 </script>
 
 <template>
@@ -78,6 +82,19 @@ const setBillingSource = (field: BillingField, value: unknown) => layers.edit(dr
           @update:model-value="setBillingSource(field, $event)"
         />
       </template>
+    </SSettingRow>
+    <SSettingRow
+      :label="t('ccgateway.levels.firstPartyShape')"
+      :description="t('ccgateway.levels.firstPartyShapeHint')"
+      size="sm"
+      data-testid="billing-first-party-shape"
+    >
+      <SSwitch
+        :model-value="firstPartyShape"
+        :disabled="!layers.editable('billing')"
+        data-testid="first-party-shape"
+        @update:model-value="setFirstPartyShape"
+      />
     </SSettingRow>
   </SSettingsGroup>
 </template>

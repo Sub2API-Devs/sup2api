@@ -105,11 +105,11 @@ describe('CC feature layer contract', () => {
     expect(w.get('[data-testid="layer-mode-prompt"] input').attributes('disabled')).toBeUndefined()
     expect(w.get('[data-testid="injection-tools"]').attributes('data-locked')).toBe('true')
     await w.get('[data-testid="layer-mode-billing"] input[value="custom"]').setValue(true)
-    expect(w.emitted('update:overrides')?.at(-1)?.[0]).toEqual({ build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'client' } })
+    expect(w.emitted('update:overrides')?.at(-1)?.[0]).toEqual({ build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'client' }, first_party_shape: true })
     await w.setProps({ overrides: w.emitted('update:overrides')!.at(-1)![0] as FeatureOverrides })
     expect(mode('billing')).toBe('custom')
     await w.get('[data-testid="billing-cc_entrypoint"] input[value="worker"]').setValue(true)
-    expect(w.emitted('update:overrides')?.at(-1)?.[0]).toEqual({ build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'worker' } })
+    expect(w.emitted('update:overrides')?.at(-1)?.[0]).toEqual({ build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'worker' }, first_party_shape: true })
     await w.get('[data-testid="layer-mode-billing"] input[value="follow"]').setValue(true)
     expect(w.emitted('update:overrides')?.at(-1)?.[0]).toEqual({})
     // Customizing the environment writes all ten fields and all four attachments.

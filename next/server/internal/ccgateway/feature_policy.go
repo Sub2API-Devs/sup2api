@@ -31,6 +31,8 @@ type FeatureOverrides struct {
 	BuildIdentityLines     features.BuildIdentityLines     `json:"build_identity_lines,omitempty"`
 	BuildInjection         *features.BuildInjection        `json:"build_injection,omitempty"`
 	RequestIdentitySources features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
+	// FirstPartyShape overrides RequestPolicy.FirstPartyShape (2026-11-03).
+	FirstPartyShape *bool `json:"first_party_shape,omitempty"`
 }
 
 func featureRevisionConflict() error {
@@ -112,6 +114,9 @@ func copyPolicy(p RequestPolicy) RequestPolicy {
 	p.BuildBillingSources = cloneSourceMap(p.BuildBillingSources)
 	p.BuildIdentityLines = cloneSourceMap(p.BuildIdentityLines)
 	p.BuildInjection = p.BuildInjection.Merge(nil)
+	if p.FirstPartyShape != nil {
+		p.FirstPartyShape = firstPartyShapeOrDefault(p.FirstPartyShape)
+	}
 	p.RequestIdentitySources = cloneSourceMap(p.RequestIdentitySources)
 	return p
 }
@@ -175,6 +180,7 @@ var layerFields = []layerField{
 	sourceField("build_billing_sources", features.BuildBillingFields,
 		func(o FeatureOverrides) map[string]string { return o.BuildBillingSources },
 		func(p *RequestPolicy) *map[string]string { return (*map[string]string)(&p.BuildBillingSources) }),
+	boolField("first_party_shape", func(o FeatureOverrides) *bool { return o.FirstPartyShape }, func(p *RequestPolicy) **bool { return &p.FirstPartyShape }, true),
 	injectionField(),
 	{keys: []string{"level", "relay_mode"}, apply: applyLevelOverride},
 }
@@ -197,6 +203,26 @@ func scalarField(name string, from func(FeatureOverrides) *string, to func(*Requ
 		}
 	}
 	return f
+}
+
+// boolField is an on/off setting; an unset global value is def.
+func boolField(name string, from func(FeatureOverrides) *bool, to func(*RequestPolicy) **bool, def bool) layerField {
+	return layerField{keys: []string{name},
+		apply: func(p *RequestPolicy, o FeatureOverrides) []string {
+			v := from(o)
+			if v == nil {
+				return nil
+			}
+			value := *v
+			*to(p) = &value
+			return []string{name}
+		},
+		fill: func(p *RequestPolicy) {
+			if *to(p) == nil {
+				value := def
+				*to(p) = &value
+			}
+		}}
 }
 
 // sourceField is a map of sources overridden key by key; an unset key of
@@ -437,6 +463,10 @@ func workerPolicy(p RequestPolicy) features.WorkerPolicy {
 	// defaults unless chosen otherwise); adding nothing needs no Worker able
 	// to inject.
 	wire.BuildInjection = features.LevelInjection(level, p.BuildInjection)
+	// Explicit at every level, on unless turned off (2026-11-03, §53.23); the
+	// request path drops it for a Worker that does not declare the
+	// conversion (withConfirmedShape), so it is never a requirement.
+	wire.FirstPartyShape = firstPartyShapeOrDefault(p.FirstPartyShape)
 	return wire
 }
 

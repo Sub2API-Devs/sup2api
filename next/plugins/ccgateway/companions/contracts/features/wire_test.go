@@ -37,3 +37,37 @@ func TestParseWorkerPolicy(t *testing.T) {
 		t.Error("accepted an oversized header")
 	}
 }
+
+// first_party_shape (2026-11-03): absent is on, an explicit value is read as
+// given, and it never reaches the CLI envelope through CLI().
+func TestWorkerPolicyFirstPartyShape(t *testing.T) {
+	for raw, want := range map[string]bool{
+		`{"schema_version":1,"relay_mode":"build"}`:                            true,
+		`{"schema_version":1,"relay_mode":"build","first_party_shape":true}`:   true,
+		`{"schema_version":1,"relay_mode":"build","first_party_shape":false}`:  false,
+		`{"schema_version":1,"relay_mode":"direct","first_party_shape":false}`: false,
+	} {
+		p, err := ParseWorkerPolicy([]byte(raw))
+		if err != nil {
+			t.Fatalf("%s: %v", raw, err)
+		}
+		if p.FirstPartyShapeEnabled() != want {
+			t.Errorf("%s: enabled %v, want %v", raw, p.FirstPartyShapeEnabled(), want)
+		}
+		cli, _ := json.Marshal(p.CLI())
+		if string(cli) != `{"contract_version":2}` {
+			t.Errorf("%s: CLI policy %s", raw, cli)
+		}
+	}
+	off := false
+	out, _ := json.Marshal(WorkerPolicy{SchemaVersion: PolicySchemaVersion, RelayMode: "build", FirstPartyShape: &off})
+	if string(out) != `{"schema_version":1,"relay_mode":"build","first_party_shape":false}` {
+		t.Fatalf("explicit false must stay on the wire: %s", out)
+	}
+	if out, _ = json.Marshal(WorkerPolicy{SchemaVersion: PolicySchemaVersion, RelayMode: "build"}); string(out) != `{"schema_version":1,"relay_mode":"build"}` {
+		t.Fatalf("unset must be omitted: %s", out)
+	}
+	if _, err := ParseWorkerPolicy([]byte(`{"first_party_shape":"yes"}`)); err == nil {
+		t.Error("accepted a non-boolean first_party_shape")
+	}
+}

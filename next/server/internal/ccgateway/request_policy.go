@@ -34,6 +34,13 @@ type RequestPolicy struct {
 	// attachments and tools, each optional; nil adds nothing.
 	BuildInjection         *features.BuildInjection        `json:"build_injection,omitempty"`
 	BuildAttachmentSources features.BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
+	// FirstPartyShape: convert an official Claude Code client connected
+	// through a custom ANTHROPIC_BASE_URL to the first-party shape (2026-11-03
+	// user decision, CONTRACTS §53.23). nil is on (EffectiveRequestPolicy
+	// fills it); groups and accounts override it like the other settings.
+	// Sent as features.WorkerPolicy.FirstPartyShape, at every level, only to
+	// a Worker declaring features.FirstPartyShapeCapability.
+	FirstPartyShape *bool `json:"first_party_shape,omitempty"`
 	// RequestIdentitySources: stored only. The identity is mapped, not
 	// configurable (2026-10-21).
 	RequestIdentitySources features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
@@ -157,6 +164,7 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 		p.SchemaVersion = features.PolicySchemaVersion
 		migrateLegacyLevel(&p)
 		p.RelayMode = features.RelayModeForLevel(p.Level)
+		p.FirstPartyShape = firstPartyShapeOrDefault(nil)
 		return p
 	}
 	p := *c.RequestPolicy
@@ -182,8 +190,16 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 	if p.CLIVersion == "" {
 		p.CLIVersion = PinnedCLIVersion
 	}
+	p.FirstPartyShape = firstPartyShapeOrDefault(p.FirstPartyShape)
 	p.Betas = defaultRequestPolicy().Betas
 	return p
+}
+
+// firstPartyShapeOrDefault is v, or on (the default) when unset; always a
+// fresh pointer, so a resolved policy never shares the stored one.
+func firstPartyShapeOrDefault(v *bool) *bool {
+	on := v == nil || *v
+	return &on
 }
 
 func validateRequestPolicy(p RequestPolicy) error {

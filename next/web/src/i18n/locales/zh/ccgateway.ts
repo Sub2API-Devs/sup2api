@@ -52,6 +52,8 @@ export default {
     billingMissingHint: '请求没有计费头时补完整的主代理计费头，写这里的入口；入口选「服务端」时也用它',
     billingPresent: '已有时',
     billingPresentHint: '按来源换两个字段；选客户端而客户端没带该字段时用服务端',
+    firstPartyShape: '转换为第一方形状',
+    firstPartyShapeHint: '用于通过自定义 base URL 接入的 Claude Code 客户端：把计费头字段、system 分块、CC 请求头和 diagnostics 转成 CC 发往官方 API 时的样子。需要账号的 CLI 为 2.1.316 v45 或更新，CLI 较旧的账号不受影响',
     version: '版本',
     identityAdaptive: '自适应：请求没有身份行时按计费头里的入口补',
     identityRules: '查看规则',

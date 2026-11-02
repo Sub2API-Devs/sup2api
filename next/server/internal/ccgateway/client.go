@@ -335,7 +335,8 @@ func (a *attempt) attachPolicy(clone *http.Request, path string) *outcome {
 	// Every policy carries a request level (request_levels_v1), so each model
 	// request and probe confirms the Worker/CLI first, whatever the global,
 	// group or account settings resolved to. A path not confirmed never
-	// carries a tool its CLI may not render.
+	// carries a tool its CLI may not render, nor first_party_shape (a Worker
+	// that declares the conversion reads its absence as on).
 	switch path {
 	case "/v1/messages", "/v1/ccgateway/probe":
 		if policy, err = a.t.s.requireRequestPolicyCapabilities(a.ctx, a.client, a.base, a.modelKey, a.route, policy); err != nil {
@@ -348,7 +349,7 @@ func (a *attempt) attachPolicy(clone *http.Request, path string) *outcome {
 			return a.refuse("configuration_error", core.AsError(err).Message)
 		}
 	default:
-		policy = withConfirmedTools(policy, nil)
+		policy = withConfirmedCapabilities(policy, nil)
 	}
 	policyJSON, _ := json.Marshal(policy)
 	clone.Header.Set("X-CCGateway-Request-Policy", string(policyJSON))

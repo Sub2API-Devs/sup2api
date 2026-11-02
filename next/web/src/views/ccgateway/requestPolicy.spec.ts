@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { attachmentAction, attachmentGroups, setAttachmentAction, customizeLayer, defaultRequestPolicy, featureDifferenceCount, featureLayers, followLayer, injectionTools, layerCustomized, legacyLevel, levelHasEnvironment, levelHasIdentity, levelHasPrompt, levelHasTools, levelInjection, levelOf, mergeFeaturePolicy, normalizeRequestPolicy, relayModeForLevel, savedOverrides, validRequestPolicy, type BuildInjection, type FeatureOverrides, type RequestPolicy } from './requestPolicy'
+import { attachmentAction, attachmentGroups, setAttachmentAction, customizeLayer, defaultRequestPolicy, featureDifferenceCount, featureLayers, followLayer, injectionTools, layerCustomized, legacyLevel, levelHasEnvironment, levelHasIdentity, levelHasPrompt, levelHasTools, levelInjection, levelOf, mergeFeaturePolicy, normalizeRequestPolicy, relayModeForLevel, savedOverrides, validFeatureOverrides, validRequestPolicy, type BuildInjection, type FeatureOverrides, type RequestPolicy } from './requestPolicy'
 
 describe('CCGateway request policy', () => {
   it.each(Object.keys(attachmentGroups) as Array<keyof typeof attachmentGroups>)('customizes %s children without changing siblings or other groups', group => {
@@ -201,12 +201,30 @@ describe('CCGateway request levels mirror the contracts', () => {
     expect(mergeFeaturePolicy({ ...defaultRequestPolicy(), build_identity_lines: { cli: 'none' } } as never, legacy)).not.toHaveProperty('build_identity_lines')
   })
   // A group or an account follows or customizes each layer as a whole.
+  // first_party_shape (2026-11-03, CONTRACTS §53.23): absent is on; a switch
+  // of the billing layer, inherited global -> group -> account.
+  it('reads first_party_shape as on when absent and keeps it with the billing layer', () => {
+    expect(normalizeRequestPolicy(defaultRequestPolicy())).not.toHaveProperty('first_party_shape')
+    expect(normalizeRequestPolicy({ ...defaultRequestPolicy(), first_party_shape: false }).first_party_shape).toBe(false)
+    expect(validRequestPolicy({ ...defaultRequestPolicy(), first_party_shape: 'yes' as never })).toBe(false)
+    expect(validFeatureOverrides({ first_party_shape: false })).toBe(true)
+    expect(validFeatureOverrides({ first_party_shape: null as never })).toBe(false)
+    const parent = defaultRequestPolicy()
+    expect(featureDifferenceCount(parent, { first_party_shape: true })).toBe(0)
+    expect(featureDifferenceCount(parent, { first_party_shape: false })).toBe(1)
+    expect(featureDifferenceCount({ ...parent, first_party_shape: false }, { first_party_shape: true })).toBe(1)
+    expect(mergeFeaturePolicy({ ...parent, first_party_shape: false }, { first_party_shape: true }).first_party_shape).toBe(true)
+    expect(mergeFeaturePolicy({ ...parent, first_party_shape: false }, {}).first_party_shape).toBe(false)
+    expect(layerCustomized({ first_party_shape: false }, 'billing')).toBe(true)
+    expect(followLayer({ level: 'high', first_party_shape: false }, 'billing')).toEqual({ level: 'high' })
+    expect(customizeLayer({}, { ...parent, first_party_shape: false }, 'billing').first_party_shape).toBe(false)
+  })
   it('customizes a layer with every inherited value explicit and follows it again by deleting them', () => {
     const parent: RequestPolicy = { ...defaultRequestPolicy(), level: 'high', build_billing_sources: { cc_version: 'worker' }, build_attachment_sources: { platform_name: 'worker', shell: 'erase' }, build_injection: { attachments: { date: false }, tools: { Agent: true } } }
     const base: FeatureOverrides = { unknown_field: 'ignore' }
     for (const layer of featureLayers) expect(layerCustomized(base, layer)).toBe(false)
     expect(customizeLayer(base, parent, 'level')).toEqual({ unknown_field: 'ignore', level: 'high' })
-    expect(customizeLayer(base, parent, 'billing')).toEqual({ unknown_field: 'ignore', build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'client' } })
+    expect(customizeLayer(base, parent, 'billing')).toEqual({ unknown_field: 'ignore', build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'worker', cc_entrypoint: 'client' }, first_party_shape: true })
     const env = customizeLayer(base, parent, 'environment')
     expect(env.build_attachment_sources).toEqual({ platform_name: 'worker', os_version: 'client', shell: 'erase', primary_directory: 'client', additional_directories: 'client', git_repository: 'client', worktree: 'client', scratchpad_directory: 'client', github_cli: 'client', agent_proxy: 'client' })
     expect(env.build_injection).toEqual({ attachments: { environment: true, model: true, total_tokens: true, date: false } })
