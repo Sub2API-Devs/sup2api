@@ -13,6 +13,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { requestSessionID } from '../../../request-identity.js';
 import { pinned } from '../../artifacts.mjs';
+import { assertRuntimeEntries } from '../../runtime-native.mjs';
 const { restored, profile } = pinned('2.1.304');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -225,7 +226,10 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  assert.equal(patchManifest.extension, 'ccgateway-v40-session-state');
+  // The 2.1.304 profile names its patch ccgateway-v46-runtime-version (v40 the
+  // session state, before the patched entries reported the official runtime
+  // version and injected tools rendered amid CC's whole pool).
+  assert.equal(patchManifest.extension, 'ccgateway-v46-runtime-version');
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_capture_v1'));
   assert(patchManifest.capabilities.includes('request_levels_v1'));
@@ -366,4 +370,10 @@ test('the patched root session is the Worker identity, never a re-derived UUID',
     if (old === undefined) delete process.env.CCG_REQUEST_IDENTITY;
     else process.env.CCG_REQUEST_IDENTITY = old;
   }
+});
+
+// The compiled entries report the Node.js version the official ELF's Bun
+// reports (runtime-version.js; X-Stainless-Runtime-Version upstream).
+test('the patched entries install the official runtime version before anything else', () => {
+  assertRuntimeEntries({ output, baseline, manifest: patchManifest, profile, parser });
 });

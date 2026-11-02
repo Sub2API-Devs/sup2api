@@ -33,14 +33,14 @@ test('a billing header anywhere makes the request Claude Code\'s own', () => {
 
 // The probe is CC's own request for the chosen layers; its prompt blocks,
 // tools and attachment placement are taken around the client's request.
-async function fixture(probeBody, { captureHeader = false } = {}) {
+async function fixture(probeBody, { captureHeader = false, pool = ['Agent', 'Bash', 'Read'] } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ccg-304-injection-'));
   await installSupport(dir, ['request-input', 'request-options', 'request-policy', 'content-policy', 'request-parameters', 'request-build', 'native-tools']);
   const header = JSON.stringify(vocabulary.billingHeader + ' cc_version=2.1.304.abc; cc_entrypoint=sdk-cli;');
   for (const [name, source] of Object.entries({
     'package.json': '{"type":"module"}',
     'stub-core.js': `export const calls=[]; export const ccgatewaySystemRecord=content=>({type:'api_system',message:{role:'system',content},uuid:'fixture',timestamp:'fixture'}); export const renderAttachment=()=>({isKnownType:true,messages:[]}); export const ccgatewayEnvironment=()=>{throw Error('unexpected facts')}; export const ccgatewayEnvironmentVocabulary=()=>(${JSON.stringify(vocabulary)});
-      export const ccgatewayDefaultPrompt=async(tools,model,appended)=>['PROMPT for '+tools.map(t=>t.name).join(','),...appended.length?['APPEND '+appended.join('\\n\\n')]:[]]; export const ccgatewayPermissionContext=()=>({mode:'default'}); export const ccgatewayLayerAttachments=async(kinds)=>kinds.map(type=>({type})); export const ccgatewayMarkTurns=(records,interactive)=>{let n=0,last;for(const r of records){if(r.type!=='user'||(Array.isArray(r.message.content)&&r.message.content.some(b=>b.type==='tool_result')))continue;n++;r.turnOrigin=interactive?'human':'sdk';r.turnPosition={promptIndex:interactive?n:0,turnIndex:n};last=r}return last}; export const ccgatewayLayerVocabulary=()=>(${JSON.stringify(layers)});
+      export const ccgatewayDefaultPrompt=async(tools,model,appended)=>['PROMPT for '+tools.map(t=>t.name).join(','),...appended.length?['APPEND '+appended.join('\\n\\n')]:[]]; export const ccgatewayPermissionContext=()=>({mode:'default'}); export const ccgatewayBuiltInAgents=()=>[{agentType:'general-purpose'}]; export const ccgatewayLayerAttachments=async(kinds)=>kinds.map(type=>({type})); export const ccgatewayMarkTurns=(records,interactive)=>{let n=0,last;for(const r of records){if(r.type!=='user'||(Array.isArray(r.message.content)&&r.message.content.some(b=>b.type==='tool_result')))continue;n++;r.turnOrigin=interactive?'human':'sdk';r.turnPosition={promptIndex:interactive?n:0,turnIndex:n};last=r}return last}; export const ccgatewayLayerVocabulary=()=>(${JSON.stringify(layers)});
       export async function* queryModel(input){calls.push(input); const probe=input.options.ccgatewayNativeProbe===true;
         if(!probe&&${captureHeader})input.options.ccgatewayCaptureBilling?.(${header});
         input.options.ccgatewayCapturePrefix?.(input.options.recordedCliPrefix===undefined?null:input.options.recordedCliPrefix);
@@ -49,7 +49,7 @@ async function fixture(probeBody, { captureHeader = false } = {}) {
         yield {type:'ccgateway_request',body}}`,
     'stub-billing.js': `export const billingHeaderPrefix=${JSON.stringify(vocabulary.billingHeader)}; export const isBillingHeader=block=>typeof block?.text==='string'&&block.text.startsWith(billingHeaderPrefix);`,
     'stub-reminder.js': `export const reminderOpen=${JSON.stringify(vocabulary.reminder[0])},reminderClose=${JSON.stringify(vocabulary.reminder[1])};`,
-    'stub-tools.js': `export const toolPool=()=>[{name:'Agent'},{name:'Bash'},{name:'Read'}];`,
+    'stub-tools.js': `export const toolPool=()=>${JSON.stringify(pool.map(name => ({ name })))};`,
     'stub-identity.js': `export const isIdentityLine=text=>text==='LINE'; export const identityLine=options=>options?.recorded!==void 0?options.recorded:'LINE';`,
     'stub-context.js': 'export const mainAgentContext=()=>({});', 'stub-session.js': 'export const getRootSession=()=>({});export const entrypoints=[];export const setEntrypointOnRequests=e=>entrypoints.push(e);', 'stub-betas.js': 'export const betasAllowed=()=>true;',
   })) await fs.writeFile(path.join(dir, name), source);
@@ -72,9 +72,13 @@ test('a request without a billing header gets the probe\'s prompt, tools and att
   try {
     const out = await f.adapter.buildRequest(client([{ type: 'text', text: 'client system', cache_control: { type: 'ephemeral' } }, { type: 'text', text: 'more' }]), {}, signal());
     const probe = probeOf(f);
-    // CC's tools in CC's order, the prompt for every tool with the client's
-    // system as the appended prompt, the attachments, and CC's cache markers.
-    assert.deepEqual(probe.tools.map(t => t.name), ['Bash', 'Read']);
+    // CC renders its whole pool (as its own first turn does) with its
+    // built-in agents, every type allowed; the prompt is for the chosen tools
+    // with the client's system as the appended prompt; the attachments, and
+    // CC's cache markers.
+    assert.deepEqual(probe.tools.map(t => t.name), ['Agent', 'Bash', 'Read']);
+    assert.deepEqual(probe.options.agents, [{ agentType: 'general-purpose' }]);
+    assert.equal(probe.options.allowedAgentTypes, undefined);
     assert.deepEqual(probe.systemPrompt, ['PROMPT for Bash,Read,lookup', 'APPEND client system\n\nmore']);
     assert.deepEqual(probe.messages.filter(r => r.type === 'attachment').map(r => r.attachment.type), ['environment', 'date']);
     assert.equal(probe.options.enablePromptCaching, undefined);
@@ -91,6 +95,30 @@ test('a request without a billing header gets the probe\'s prompt, tools and att
   } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
 });
 
+// Only the chosen tools are taken from what CC sent, with what CC adds for
+// them (a name outside its pool: the deferred tool placeholder it pairs with
+// ToolSearch). Without ToolSearch chosen, CC renders without it.
+test('the chosen tools are taken from CC\'s whole pool, with what CC pairs with them', async () => {
+  const pool = ['Agent', 'Bash', 'NotebookEdit', 'Read', 'SendMessage', 'ToolSearch', 'WebSearch'];
+  const placeholder = { name: 'DeferredToolPlaceholder', description: 'P', input_schema: { type: 'object', properties: {} }, defer_loading: true };
+  const prompt = [{ role: 'user', content: 'CCGATEWAY_FIRST_PROMPT_7d3c1a' }];
+  const policy = tools => ({ contract_version: 2, build_injection: { tools } });
+  let f = await fixture({ system: [], tools: [{ name: 'Agent' }, { name: 'Bash' }, { name: 'Read' }, { name: 'ToolSearch' }, placeholder], messages: prompt }, { pool });
+  try {
+    const out = await f.adapter.buildRequest(client([{ type: 'text', text: 'mine' }], policy({ Bash: true, ToolSearch: true, Agent: false })), {}, signal());
+    assert.deepEqual(probeOf(f).tools.map(t => t.name), pool);
+    assert.deepEqual(out.body.tools.map(t => t.name), ['Bash', 'ToolSearch', 'DeferredToolPlaceholder', 'lookup']);
+    assert.deepEqual(out.body.tools[2], placeholder);
+  } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+  f = await fixture({ system: [], tools: [{ name: 'Agent' }, { name: 'Bash' }, { name: 'NotebookEdit' }, { name: 'WebSearch' }], messages: prompt }, { pool });
+  try {
+    const out = await f.adapter.buildRequest(client([{ type: 'text', text: 'mine' }], policy({ WebSearch: true, NotebookEdit: true })), {}, signal());
+    assert.deepEqual(probeOf(f).tools.map(t => t.name), pool.filter(name => name !== 'ToolSearch'));
+    assert.deepEqual(out.body.tools.map(t => t.name), ['NotebookEdit', 'WebSearch', 'lookup']);
+    await assert.rejects(f.adapter.buildRequest(client([{ type: 'text', text: 'mine' }], policy({ Skill: true })), {}, signal()), /Claude Code tool Skill is not available/);
+  } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+});
+
 test('a layer the request already carries is not added again', async () => {
   const f = await fixture({ system: [], tools: [{ name: 'Bash' }], messages: [{ role: 'user', content: 'CCGATEWAY_FIRST_PROMPT_7d3c1a' }] });
   try {
@@ -98,11 +126,13 @@ test('a layer the request already carries is not added again', async () => {
     const request = client([{ type: 'text', text: 'LINE' }, { type: 'text', text: 'mine\n' + layers.systemPrompt }]);
     request.tools.push({ name: 'Read', inputSchema: { type: 'object' } });
     request.messages.splice(1, 0, { role: 'system', content: environment });
-    await f.adapter.buildRequest(request, {}, signal());
+    const out = await f.adapter.buildRequest(request, {}, signal());
     const probe = probeOf(f);
-    // CC's prompt is there already; so are the environment and a client Read.
+    // CC's prompt is there already; so are the environment and a client Read
+    // (CC still renders its whole pool; only its Bash is taken).
     assert.deepEqual(probe.systemPrompt, []);
-    assert.deepEqual(probe.tools.map(t => t.name), ['Bash']);
+    assert.deepEqual(probe.tools.map(t => t.name), ['Agent', 'Bash', 'Read']);
+    assert.deepEqual(out.body.tools.map(t => t.name), ['Bash', 'lookup', 'Read']);
     assert.deepEqual(probe.messages.filter(r => r.type === 'attachment').map(r => r.attachment.type), ['date']);
     // An attachment's opening inside a prompt is the client's text, not a carrier.
     const prompt = client('s', { contract_version: 2, build_injection: { attachments: { date: true } } });

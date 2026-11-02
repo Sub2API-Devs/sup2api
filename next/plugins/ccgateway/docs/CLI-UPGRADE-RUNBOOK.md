@@ -26,7 +26,20 @@
 | 单测 `npm test`（`test/bun-version.test.mjs`） | 每个 profile 都有 `bunVersion`；有还原树时必须等于官方内嵌版本；上面四道关卡都还在 | 测试失败 |
 | 发布前 `test/e2e/tls-fingerprint.sh` | 官方 CLI 与定制 CLI 的 ClientHello 逐项比较（JA3/JA4、扩展、签名算法等） | 结果写进迁移记录，必须是 identical |
 
-换 Claude Code 版本时唯一要手工做的是：按补丁器的报错把新 profile 的 `bunVersion` 填成官方内嵌版本，用 `oven/bun:<该版本>` 镜像编译（ovh 上先 `docker pull oven/bun:<版本>`）。官方修订号（如 2.1.310 的 `2c2ae6246`）与 Docker 镜像的修订号（`38afee6c8`）不同不影响：只核对版本号，TLS 指纹已实测一致。
+换 Claude Code 版本时唯一要手工做的是：按补丁器的报错把新 profile 的 `bunVersion` 填成官方内嵌版本，用 `oven/bun:<该版本>` 镜像编译（ovh 上先 `docker pull oven/bun:<版本>`）。官方修订号（如 2.1.310 的 `2c2ae6246`）与 Docker 镜像的修订号（`38afee6c8`）不同不影响 TLS：只核对版本号，TLS 指纹已实测一致。
+
+**修订号不同会影响的一处：Node.js 兼容版本。** 同为 Bun 1.4.4，官方 2.1.312（`0ae49f8b6`）与 2.1.316（`71c9bf0ca`）内嵌的 Bun 报告 `process.version` = `v26.12.1`，公开的 `oven/bun:1.4.4` 报告 `v26.3.0`；SDK 把它作为 `X-Stainless-Runtime-Version` 发给上游。官方修订在公开仓库里没有（GitHub API "No commit found"），编不出同一个 Bun，所以 2026-11-02 起由 CLI 自己报告官方的值，规则同上，自动核对（2026-11-02 离线验证发现，v38–v42 一直发 `v26.3.0`）：
+
+| 步骤 | 自动检查 | 不一致时 |
+|---|---|---|
+| 还原 `restore-bun.cjs` | `tools/upgrade/elf-facts.cjs` 从官方 ELF 读出 Node.js 版本（Bun 写进 ELF 的 npm 用户代理串 `bun/<版本> npm/? node/<v> …` 与 `process.release.headersUrl` 两处，必须一致），写进 `reconstruction.json` 的 `runtimeVersion` | 读不到或两处不一致即失败 |
+| 补丁 `patch-cli.cjs` | profile 的 `runtimeVersion` 必须等于 `reconstruction.json` 的；两个编译入口（`cli.js`、hooks worker，profile 哈希绑定）的第一条语句导入 `ccgateway-runtime-version.js`（`runtime-version.js` 填入该值，只设 `process.version` 与 `process.versions.node`）；写进 `ccgateway-patch.json` | 报错并给出应填的值 |
+| 打包 `package-release.cjs` | 补丁清单与 profile 的 `runtimeVersion` 一致；运行编好的 CLI（`runtime-check.cjs`：`BUN_OPTIONS=--preload` 的探针在进程退出时读 `process.version`，入口已执行）必须报告该值 | 拒绝打包（因此打包要在 Linux x64 上做） |
+| Worker 镜像构建 | 同一个 `runtime-check.cjs` | 镜像构建失败 |
+| 单测 `npm test` | `test/runtime-version.test.mjs`（每个 profile 有 `runtimeVersion`，有还原树时等于官方值，旁边有官方 ELF 时再从 ELF 读一次；模块只改两个值；打包检查拒绝不符的 CLI；各关卡都在）；各版 `patch-wire-preservation`（入口第一条语句、模块值） | 测试失败 |
+| 发布前 | `test/e2e/tls-fingerprint.sh` 的请求头记录：定制 CLI 的 `x-stainless-*` 与官方逐项相同 | 写进迁移记录 |
+
+只改这两个值：其余随 Bun 修订而不同的运行时信息（`process.versions` 的 v8/uv 以外各项修订号、`Bun.revision`、`process.release.headersUrl`、ICU/Unicode 版本、官方编译时加的 `--zero-fill-buffers`、主模块名 `/$bunfs/root/cli`）在 2.1.316 的还原源码里没有会出网的读取者（2.1.316 迁移记录第 4 节）。新版本若出现新的读取者，在迁移时复查。
 
 ## 1. 选择版本，下载并校验
 
@@ -46,7 +59,7 @@ node cli-mods/tools/upgrade/restore-bun.cjs \
 ```
 
 - 第三个参数是版本：还原器核对入口 `cli.js` 里的 `VERSION:"<版本>"`，并写进输出的 `package.json`，补丁器靠这个字段选 profile。
-- 还原器同时从 ELF 读出内嵌的 Bun 版本写进 `reconstruction.json`（`bunVersion`、`bunRevision`），输出里也会打印；这就是新 profile `bunVersion` 应填的值（见上面的硬性规则）。
+- 还原器同时从 ELF 读出内嵌的 Bun 版本与它报告的 Node.js 版本写进 `reconstruction.json`（`bunVersion`、`bunRevision`、`runtimeVersion`），输出里也会打印；这就是新 profile `bunVersion`、`runtimeVersion` 应填的值（见上面的硬性规则）。
 - 输出目录必须不存在。
 - 目录名固定为 `artifacts/claude-<版本>/linux-restored`：cli-mods 的原生对账测试按这个路径找还原源码（`test/artifacts.mjs`）。
 
@@ -215,7 +228,7 @@ equiv 的配对靠规范形式与传播，可能把形状相同而语义不同�
 
 ## 6. 编译与打包
 
-**Bun 版本**：编译用的 Bun 必须等于官方 ELF 内嵌的版本（ELF 里的 `Bun v<版本> (<修订>)` 字样；2.1.304、2.1.310 都是 1.4.4）。Bun 的 TLS 栈就是上游看到的指纹：2026-10-27 实测（`test/e2e/tls-fingerprint.sh`），Bun 1.4.3 编译的 CLI 与官方 JA3 相同、JA4 不同（签名算法少 Ed25519 与 ECDSA P-521），同一源码用 Bun 1.4.4 编译后 ClientHello 与官方完全相同（v33 起）。版本写在 profile 的 `bunVersion`，`package-release.cjs` 拒绝不是这个 Bun 编出的 ELF。换 Claude Code 版本时先查新 ELF 的内嵌版本，`docker pull oven/bun:<版本>`，改 `bunVersion`，发布前跑一遍 TLS 指纹对比。
+**Bun 版本**：编译用的 Bun 必须等于官方 ELF 内嵌的版本（ELF 里的 `Bun v<版本> (<修订>)` 字样；2.1.304、2.1.310 都是 1.4.4）。Bun 的 TLS 栈就是上游看到的指纹：2026-10-27 实测（`test/e2e/tls-fingerprint.sh`），Bun 1.4.3 编译的 CLI 与官方 JA3 相同、JA4 不同（签名算法少 Ed25519 与 ECDSA P-521），同一源码用 Bun 1.4.4 编译后 ClientHello 与官方完全相同（v33 起）。版本写在 profile 的 `bunVersion`，`package-release.cjs` 拒绝不是这个 Bun 编出的 ELF。换 Claude Code 版本时先查新 ELF 的内嵌版本，`docker pull oven/bun:<版本>`，改 `bunVersion`，发布前跑一遍 TLS 指纹对比。同理 profile 的 `runtimeVersion` 填还原器读出的 Node.js 版本，profile 的 `modules` 要绑定 hooks worker 入口的哈希（补丁器改写两个编译入口的第一条语句，见“硬性规则”）。
 
 **为什么 `--compile --bytecode --format=esm`**（`build.sh`，v30 起，CONTRACTS §63.5）：官方构建的每个模块都是字节码，没有字节码时每个 CLI 进程都要解析整个包，而 Worker 每个请求启动一次 CLI。v30 只改了编译参数：`--version` 0.80 → 0.04 秒，请求命令启动到读输入 0.91 → 0.10 秒，常驻内存 135 → 139 MiB，ELF 157 → 293 MB（官方 288 MB）。还原出的模块是 ESM，单用 `--bytecode` 默认按 CJS 编译会失败。两个入口都必须给：`cli.js` 与 `src/plugins/functionHooks/hooks-worker/hooks-worker.js`，只编 `cli.js` 会漏掉 hooks worker。
 
@@ -234,9 +247,9 @@ sh /tmp/build.sh /abs/patched-v<NN> /abs/claude-linux-v<NN>     # 在 oven/bun:<
 bun package-release.cjs /abs/claude-linux-v<NN> /abs/patched-v<NN>/ccgateway-patch.json /abs/release-v<NN>
 ```
 
-产物：`<版本>/claude`、`<版本>/ccgateway-patch.json`、`manifest.json`（`{schema:1, versions:{<版本>:{path, sha256, patch, modes:["build","direct"]}}}`）。输出目录必须不存在；脚本只接受 ELF 魔数与 profile 一致的补丁标签。
+产物：`<版本>/claude`、`<版本>/ccgateway-patch.json`、`manifest.json`（`{schema:1, versions:{<版本>:{path, sha256, patch, modes:["build","direct"]}}}`）。输出目录必须不存在；脚本只接受 ELF 魔数与 profile 一致的补丁标签，并运行 ELF（`runtime-check.cjs`）核对它报告的 Node.js 版本等于 profile `runtimeVersion`，所以必须在 Linux x64 上打包（2026-11-02 起；ovh 上用 `node:22-bookworm-slim` 容器从 cli-mods 完整副本运行 `node package-release.cjs …`，脚本旁要有 `profiles/` 与 `runtime-check.cjs`）。
 
-**放进 Worker 镜像**：用新目录替换 `cli-mods/release/`（不进 Git，`UPSTREAM_LICENSE.md` 一并保留）。`package-release.cjs` 只写一个版本；同一镜像要带多个版本时手工合并 `manifest.json` 的 `versions`。`worker/Dockerfile` 安装到 `/opt/ccgateway/cli/`，按 `ARG CLAUDE_VERSION` 建 `/usr/local/bin/claude` 链接，核对该版本的 SHA-256 与 manifest 一致、补丁标签与 `profiles/linux-x64-<版本>.json` 一致，再整体去掉组写/他写权限。换版本时改 `ARG CLAUDE_VERSION` 的默认值（并留着新版的 profile）。发布镜像用 `next/deploy/docker/build-ccgateway-images.sh <插件版本> <输出目录>`，插件版本必须等于 `manifest.json` 的 `version`。
+**放进 Worker 镜像**：用新目录替换 `cli-mods/release/`（不进 Git，`UPSTREAM_LICENSE.md` 一并保留）。`package-release.cjs` 只写一个版本；同一镜像要带多个版本时手工合并 `manifest.json` 的 `versions`。`worker/Dockerfile` 安装到 `/opt/ccgateway/cli/`，按 `ARG CLAUDE_VERSION` 建 `/usr/local/bin/claude` 链接，核对该版本的 SHA-256 与 manifest 一致、补丁标签与 `profiles/linux-x64-<版本>.json` 一致、ELF 由 `bunVersion` 编出、运行它报告的 Node.js 版本等于 `runtimeVersion`，再整体去掉组写/他写权限。换版本时改 `ARG CLAUDE_VERSION` 的默认值（并留着新版的 profile）。发布镜像用 `next/deploy/docker/build-ccgateway-images.sh <插件版本> <输出目录>`，插件版本必须等于 `manifest.json` 的 `version`。
 
 ## 7. 发布与回滚
 
@@ -267,6 +280,7 @@ bun package-release.cjs /abs/claude-linux-v<NN> /abs/patched-v<NN>/ccgateway-pat
 
 - `build.sh` 带 CR 时在 Linux 上直接跑会失败（0.1.101 发布时遇到过），用去掉 CR 的副本。
 - `package-release.cjs` 要在旁边找到 `profiles/`，单独拷一个脚本出去跑会报 `Unsupported patch release`。
+- 编译用的 Bun 与官方"同版本"不等于运行时信息相同：官方内嵌的是私有修订，`process.version` 等可能不同（2.1.312/2.1.316 的 `v26.12.1` 对公开 1.4.4 的 `v26.3.0`，上游看得到 `X-Stainless-Runtime-Version`）。TLS identical 证明不了请求头值相同；`tls-fingerprint.sh` 的记录里有请求头值，迁移时逐项比较 `x-stainless-*`。官方 ELF 不认 `BUN_BE_BUN=1`（直接进 CC），读它的运行时信息用 `BUN_OPTIONS=--preload=<探针>`。
 - 还原器的第三个参数（版本）必须与 ELF 一致，否则还原器报错。
 - 补丁、打包的输出目录都必须不存在；补丁器只认 profile 里的模块哈希，还原目录被改过就失败。
 - 只编 `cli.js` 会漏掉 hooks worker；只加 `--bytecode` 不加 `--format=esm` 编译失败。

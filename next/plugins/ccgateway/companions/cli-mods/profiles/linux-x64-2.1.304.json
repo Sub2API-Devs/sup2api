@@ -1,8 +1,9 @@
 {
   "binarySHA256": "ea0f135784631619a7a409d07322ecec964f9cc4fd377508ed1ba3f141f27912",
   "version": "2.1.304",
-  "extension": "ccgateway-v40-session-state",
+  "extension": "ccgateway-v46-runtime-version",
   "bunVersion": "1.4.4",
+  "runtimeVersion": "v26.3.0",
   "capabilities": [
     "request_direct",
     "request_build",
@@ -109,6 +110,7 @@
       "ccgatewayLayerVocabulary": "chunk-rncrmfyt.js:ccgatewayLayerVocabulary",
       "ccgatewayMarkTurns": "chunk-rncrmfyt.js:ccgatewayMarkTurns",
       "ccgatewayPermissionContext": "chunk-rncrmfyt.js:ccgatewayPermissionContext",
+      "ccgatewayBuiltInAgents": "chunk-rncrmfyt.js:ccgatewayBuiltInAgents",
       "ccgatewaySystemRecord": "chunk-rncrmfyt.js:ccgatewaySystemRecord"
     },
     "management": {
@@ -146,6 +148,7 @@
     "withToolSections": "r1e",
     "defaultSystemPrompt": "wx",
     "permissionContext": "gd",
+    "builtInAgents": "eUe",
     "collectEnvironment": "Wkt",
     "modelIdentityAttachment": "eSt",
     "modelIdentityInput": "Jkt",
@@ -194,6 +197,7 @@
     "chunk-jkcb7qdd.js": "551733b64319a368040ebb3d7fc52d86be4695c3a9fccbaf8fd97f0b856d772a",
     "chunk-m5q1b1c4.js": "dcf74beba1900cad45be67b6a5c2b568c1042ffe9c3398c3f29f19548e33832c",
     "chunk-eanw7pgv.js": "9c4b43891227ffc79e943b51f1d173d8b438418a286cdbe7d150cf91207431ce",
-    "chunk-t2p0d04m.js": "14d280e183c86d4a22265ebabaf321d038e74ab4ebe12e19909df4f698b6a6f0"
+    "chunk-t2p0d04m.js": "14d280e183c86d4a22265ebabaf321d038e74ab4ebe12e19909df4f698b6a6f0",
+    "src/plugins/functionHooks/hooks-worker/hooks-worker.js": "7eea73e1e3b916b73ef8a08ad179b02fa3a18997f6940c140d6969a6f9a51d5b"
   }
 }

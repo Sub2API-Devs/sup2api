@@ -138,6 +138,11 @@ export const ccgatewayDefaultPrompt = async (tools, model, appended) => {
 };
 // The permission context a fresh non-interactive session starts with.
 export const ccgatewayPermissionContext = () => native_permissionContext();
+// The agents Claude Code has without any agent files or plugins: its built-in
+// ones (the base list of its agent loader), for the definitions of injected
+// tools (request-build.js): the Agent tool's text depends on whether the
+// general-purpose agent and forks are available, as in CC's own first turn.
+export const ccgatewayBuiltInAgents = () => native_builtInAgents();
 export async function ccgatewayLayerAttachments(kinds, { model, workingDirectory, additionalWorkingDirectories, records, session }) {
   const wanted = new Set(kinds), out = [];
   if (wanted.has('environment')) out.push({ type: 'environment', snapshot: await native_collectEnvironment({ cwd: workingDirectory, additionalWorkingDirectories }) });

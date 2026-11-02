@@ -2,11 +2,13 @@
 // standalone, bytecode build) into the source tree the patcher reads: every
 // module by its bundled name (cli.js the entry), JS modules with their bundler
 // references made relative and assets imported as files, plus package.json
-// (the version) and reconstruction.json (the binary SHA-256 and each module's
-// source SHA-256). Read only; the output directory must not exist.
+// (the version) and reconstruction.json (the binary SHA-256, the embedded Bun
+// and the Node.js version it reports, each module's source SHA-256). Read
+// only; the output directory must not exist.
 //   node restore-bun.cjs <official-ELF> <new-output-dir> <version>
 const fs=require('fs'), path=require('path'), crypto=require('crypto');
 const parser=require('@babel/parser');
+const {embeddedBun,embeddedRuntimeVersion}=require('./elf-facts.cjs');
 const [input,out,version]=process.argv.slice(2);
 if(!input||!out||!/^\d+\.\d+\.\d+$/.test(version??'')||fs.existsSync(out))throw Error('Usage: node restore-bun.cjs official-ELF new-output-dir version');
 const b=fs.readFileSync(input),tail=b.lastIndexOf('\n---- Bun! ----\n')-32;
@@ -70,9 +72,10 @@ for(const m of modules){
 if(!fs.readFileSync(path.join(out,'cli.js'),'utf8').includes('VERSION:"'+version+'"'))throw Error('The entry does not name version '+version);
 fs.writeFileSync(path.join(out,'package.json'),JSON.stringify({name:'claude-code-local-reconstruction',version,private:true,type:'module'},null,2));
 // The Bun the official ELF embeds: the patched CLI must be compiled by the
-// same version (profile bunVersion; patch-cli.cjs refuses a mismatch).
-const bun=/Bun v(\d+\.\d+\.\d+) \(([0-9a-f]+)\)/.exec(b.toString('latin1'));
-if(!bun)throw Error('The ELF names no Bun version');
-fs.writeFileSync(path.join(out,'reconstruction.json'),JSON.stringify({input,bunVersion:bun[1],bunRevision:bun[2],binarySha256:crypto.createHash('sha256').update(b).digest('hex'),entry:modules[b.readUInt32LE(tail+16)].file,moduleCount:modules.length,jsCount:report.length,unresolved,modules:report},null,2));
-console.log(JSON.stringify({out,modules:modules.length,js:report.length,unresolved,bunVersion:bun[1],bunRevision:bun[2]}));
+// same version (profile bunVersion; patch-cli.cjs refuses a mismatch) and
+// report the Node.js version that Bun reports (profile runtimeVersion; the
+// patched entries install it, runtime-version.js). Both read by elf-facts.cjs.
+const bun=embeddedBun(b),runtimeVersion=embeddedRuntimeVersion(b);
+fs.writeFileSync(path.join(out,'reconstruction.json'),JSON.stringify({input,bunVersion:bun.version,bunRevision:bun.revision,runtimeVersion,binarySha256:crypto.createHash('sha256').update(b).digest('hex'),entry:modules[b.readUInt32LE(tail+16)].file,moduleCount:modules.length,jsCount:report.length,unresolved,modules:report},null,2));
+console.log(JSON.stringify({out,modules:modules.length,js:report.length,unresolved,bunVersion:bun.version,bunRevision:bun.revision,runtimeVersion}));
 

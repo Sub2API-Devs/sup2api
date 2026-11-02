@@ -342,7 +342,7 @@ node test/e2e/official-diff.cjs <旧版重抓>.json test/fixtures/official-reque
 
 ### 4.4 换版本的验证关口
 
-**Bun 版本关口（自动）**：编译用的 Bun 必须等于官方 ELF 内嵌版本，还原、补丁、编译、打包、镜像构建和 `test/bun-version.test.mjs` 都会检查（CLI-UPGRADE-RUNBOOK“硬性规则”）；发布前再用 `test/e2e/tls-fingerprint.sh` 确认 ClientHello 与官方 identical。
+**Bun 版本关口（自动）**：编译用的 Bun 必须等于官方 ELF 内嵌版本，还原、补丁、编译、打包、镜像构建和 `test/bun-version.test.mjs` 都会检查（CLI-UPGRADE-RUNBOOK“硬性规则”）；发布前再用 `test/e2e/tls-fingerprint.sh` 确认 ClientHello 与官方 identical。同一组关口还核对 CLI 报告的 Node.js 版本等于官方 ELF 的（profile `runtimeVersion`，上游的 `X-Stainless-Runtime-Version`；`test/runtime-version.test.mjs`、`package-release.cjs`/镜像构建运行 `runtime-check.cjs`），`tls-fingerprint.sh` 的请求头记录里 `x-stainless-*` 也要与官方逐项相同（2026-11-02 起）。
 
 
 操作步骤见 RUNBOOK；每一步对应的验证：

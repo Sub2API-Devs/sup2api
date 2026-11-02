@@ -1,4 +1,4 @@
-import { queryModel, renderAttachment, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns, ccgatewayPermissionContext, ccgatewaySystemRecord,
+import { queryModel, renderAttachment, ccgatewayEnvironment, ccgatewayEnvironmentVocabulary, ccgatewayDefaultPrompt, ccgatewayLayerAttachments, ccgatewayLayerVocabulary, ccgatewayMarkTurns, ccgatewayPermissionContext, ccgatewayBuiltInAgents, ccgatewaySystemRecord,
   billingHeaderPrefix, isBillingHeader, reminderOpen, reminderClose, mainAgentContext, toolPool as nativeToolPool, identityLine, isIdentityLine,
   getRootSession, setEntrypointOnRequests } from './native-build.js';
 import { requestTool } from './ccgateway-native-tools.js';
@@ -64,6 +64,18 @@ async function injectLayers(injection, { model, context, clientSystem, clientToo
   const missing = names.filter(name => !pool.some(tool => tool.name === name));
   if (missing.length) throw Error(`Claude Code tool ${missing.join(', ')} is not available; this CLI has ${pool.map(tool => tool.name).join(', ')}`);
   const tools = pool.filter(tool => names.includes(tool.name));
+  // Their definitions are rendered as CC renders its own first turn: amid its
+  // whole pool and its built-in agents (a definition can depend on the rest:
+  // ListAgents and Agent on whether SendMessage is there, Agent on the
+  // general-purpose agent and forks, ToolSearch on deferred tools to search),
+  // and only the chosen ones, with what CC adds for them (the deferred tool
+  // placeholder it pairs with ToolSearch), are taken. Without ToolSearch chosen
+  // CC renders without it, so no tool is deferred and each chosen one is sent
+  // whole; with it, the tools CC defers (NotebookEdit, WebSearch, ...) are
+  // left to ToolSearch as in CC's first turn, and not sent.
+  const toolSearch = 'ToolSearch';
+  const rendered = names.includes(toolSearch) ? pool : pool.filter(tool => tool.name !== toolSearch);
+  const poolNames = new Set(pool.map(tool => tool.name));
   // An identity line in the client's system stays its own line, in front.
   const lines = prompt ? clientSystem.filter(block => isIdentityLine(block.text)) : [];
   const own = prompt ? clientSystem.filter(block => !isIdentityLine(block.text)).map(block => block.text) : [];
@@ -71,9 +83,11 @@ async function injectLayers(injection, { model, context, clientSystem, clientToo
   const probe = prepareBuildInput({ model, messages: [{ role: 'user', content: firstPrompt }] }, renderAttachment, { systemRecord: ccgatewaySystemRecord });
   const attachments = await ccgatewayLayerAttachments(kinds, { model, ...context, records: clientRecords, session });
   const records = [...probe.messages, ...attachments.map(attachment => ({ type: 'attachment', uuid: crypto.randomUUID(), timestamp: new Date().toISOString(), attachment }))];
-  const built = await collectBuilt({ messages: records, systemPrompt, thinkingConfig: { type: 'disabled', mechanical: true }, tools, signal,
-    // CC's cache markers on its prompt, as CC decides them.
-    options: { ...options, enablePromptCaching: prompt ? undefined : false, extraToolSchemas: [], toolChoice: undefined, ccgatewayNativeProbe: true, ccgatewayCaptureBilling: undefined, ccgatewayCapturePrefix: undefined, recordedCliPrefix: undefined } },
+  const built = await collectBuilt({ messages: records, systemPrompt, thinkingConfig: { type: 'disabled', mechanical: true }, tools: rendered, signal,
+    // CC's cache markers on its prompt, as CC decides them; CC's built-in
+    // agents, every agent type allowed, as in CC's own session.
+    options: { ...options, enablePromptCaching: prompt ? undefined : false, extraToolSchemas: [], toolChoice: undefined, agents: ccgatewayBuiltInAgents(), allowedAgentTypes: undefined,
+      ccgatewayNativeProbe: true, ccgatewayCaptureBilling: undefined, ccgatewayCapturePrefix: undefined, recordedCliPrefix: undefined } },
   signal, 'CC request builder did not produce the injected layers');
   // The billing header and the identity line are the other layers' (merged
   // after build), so only the prompt blocks are taken.
@@ -86,8 +100,10 @@ async function injectLayers(injection, { model, context, clientSystem, clientToo
     // With the prompt the client's system is in it (its own line in front),
     // as CC's appended prompt when it had any.
     system: prompt ? [...lines, ...system] : undefined, ownLines: lines.length, appended: own.length > 0,
-    // Every tool the probe sends is for the chosen ones.
-    tools: names.length ? built.tools ?? [] : [],
+    // The chosen tools CC sent, and what CC added for them (a name outside its
+    // pool: the deferred tool placeholder); a client tool of a name stays the
+    // client's.
+    tools: names.length ? (built.tools ?? []).filter(tool => names.includes(tool.name) || !poolNames.has(tool.name) && !clientToolNames.has(tool.name)) : [],
     betas: built.betas ?? [],
     before: built.messages.slice(0, at), after: built.messages.slice(at + 1),
     prepend: blocks.slice(0, mark), append: blocks.slice(mark + 1),

@@ -93,13 +93,14 @@ function firstPromptText(messages) {
 }
 // Native fingerprint facts per version, as the recovered source has them
 // (test/native/<version>/billing-fingerprint-oracle.cjs executes and checks
-// them: 2.1.304 iW/aW/Eg, 2.1.310 jL/GL/Tf, 2.1.312 mH/gH/ep; the salt and
+// them: 2.1.304 iW/aW/Eg, 2.1.310 jL/GL/Tf, 2.1.312 mH/gH/ep, 2.1.316 eF/tF/$f; the salt and
 // indexes did not change, only the version literal). A version without
 // reconciled facts is refused rather than guessed.
 const fingerprintFacts = {
   '2.1.304': { salt: '59cf53e54c78', indexes: [4, 7, 20] },
   '2.1.310': { salt: '59cf53e54c78', indexes: [4, 7, 20] },
   '2.1.312': { salt: '59cf53e54c78', indexes: [4, 7, 20] },
+  '2.1.316': { salt: '59cf53e54c78', indexes: [4, 7, 20] },
 };
 function nativeCCVersion(messages, version = ccVersion()) {
   const facts = fingerprintFacts[version];

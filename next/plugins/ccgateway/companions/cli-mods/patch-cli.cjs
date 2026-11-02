@@ -35,7 +35,15 @@ const reconstruction = JSON.parse(fs.readFileSync(path.join(source, 'reconstruct
 if (reconstruction.binarySha256 !== profile.binarySHA256) throw Error(`The restored tree is not the official ELF ${profile.binarySHA256}`);
 if (!reconstruction.bunVersion) throw Error('The restored tree records no embedded Bun version: restore it again with tools/upgrade/restore-bun.cjs');
 if (profile.bunVersion !== reconstruction.bunVersion) throw Error(`Profile bunVersion ${profile.bunVersion} is not the Bun ${reconstruction.bunVersion} the official ${version} ELF embeds: set bunVersion to ${reconstruction.bunVersion} and compile with oven/bun:${reconstruction.bunVersion}`);
+// The patched CLI reports the Node.js version the official ELF's Bun reports
+// (the SDK sends it as X-Stainless-Runtime-Version; runtime-version.js): the
+// restored tree records it, and the profile's runtimeVersion must be it.
+if (!reconstruction.runtimeVersion) throw Error('The restored tree records no Bun Node.js version: restore it again with tools/upgrade/restore-bun.cjs');
+if (profile.runtimeVersion !== reconstruction.runtimeVersion) throw Error(`Profile runtimeVersion ${profile.runtimeVersion} is not the Node.js version ${reconstruction.runtimeVersion} the official ${version} ELF's Bun reports: set runtimeVersion to ${reconstruction.runtimeVersion}`);
+if (!/^v\d+\.\d+\.\d+$/.test(profile.runtimeVersion)) throw Error(`Invalid profile runtimeVersion ${profile.runtimeVersion}`);
 const digest = data => crypto.createHash('sha256').update(data).digest('hex');
+// The modules build.sh compiles as entries (cli.js and the hooks worker).
+const buildEntries = ['cli.js', 'src/plugins/functionHooks/hooks-worker/hooks-worker.js'];
 const files = new Map();
 for (const [file, sha] of Object.entries(expected)) {
   const text = fs.readFileSync(path.join(source, file), 'utf8');
@@ -279,6 +287,20 @@ if (recordFile !== core || !moduleBindings(tree(core)).has(recordName)) throw Er
 surround(core, { imports: environment.imports + 'import {isNative as ccgIsNative} from "./ccgateway-native-tools.js";\n',
   code: '\n' + environment.code + '\n' + appendJoin() + `\nexport {${recordName} as ccgatewaySystemRecord};\n` });
 for (const [file, { head, tail }] of surroundings) { files.set(file, head + files.get(file) + tail); modified.add(file); }
+// Each compiled entry (build.sh compiles these two; the hooks worker runs on
+// its own thread, with its own process object) evaluates the runtime version
+// module before anything else: its import is the entry's first statement, so
+// ESM evaluates it ahead of every other import and nothing reads the
+// compiler's value first. The module is runtime-version.js with the profile's
+// runtimeVersion.
+const runtimeModule = 'ccgateway-runtime-version.js';
+for (const entry of buildEntries) {
+  if (!expected[entry]) throw Error(`The build entry ${entry} is not hash-bound by the profile`);
+  const text = files.get(entry), first = tree(entry).program.body[0];
+  if (!first) throw Error(`The build entry ${entry} is empty`);
+  const specifier = './' + path.posix.relative(path.posix.dirname(entry), runtimeModule);
+  files.set(entry, text.slice(0, first.start) + `import ${JSON.stringify(specifier)};` + text.slice(first.start)); modified.add(entry);
+}
 for (const file of modified) tree(file);
 // Support modules import each other by source name; installed, they carry the
 // ccgateway- prefix. The list is the profile's (test/support.mjs reads it too),
@@ -303,9 +325,11 @@ betaEntry.text = fillBetaModule(betaEntry.text, builderBetas);
 const modelEntry = support.get('ccgateway-model-request.js');
 if (!modelEntry) throw Error('Expected the request transport support module');
 modelEntry.text = fillMessagesPath(modelEntry.text, betaMessagesPath());
+// The runtime version module the entries import first (above).
+support.set(runtimeModule, { source: 'runtime-version.js', text: once(fs.readFileSync(path.join(__dirname, 'runtime-version.js'), 'utf8'), "/*CCGATEWAY_RUNTIME_VERSION*/ ''", '/*CCGATEWAY_RUNTIME_VERSION*/ ' + JSON.stringify(profile.runtimeVersion)) });
 checkImports();
 fs.cpSync(source, output, { recursive: true, errorOnExist: true });
-const manifest = { baseline: 'linux-x64-glibc/' + version, extension: profile.extension, bunVersion: profile.bunVersion, capabilities, files: {}, supportFiles: {} };
+const manifest = { baseline: 'linux-x64-glibc/' + version, extension: profile.extension, bunVersion: profile.bunVersion, runtimeVersion: profile.runtimeVersion, capabilities, files: {}, supportFiles: {} };
 for (const file of modified) {
   fs.writeFileSync(path.join(output, file), files.get(file));
   manifest.files[file] = { before: expected[file], after: digest(files.get(file)) };

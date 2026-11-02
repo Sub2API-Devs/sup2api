@@ -13,6 +13,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { requestSessionID } from '../../../request-identity.js';
 import { pinned } from '../../artifacts.mjs';
+import { assertRuntimeEntries } from '../../runtime-native.mjs';
 const { restored, profile } = pinned('2.1.312');
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -237,10 +238,11 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   assert(!Object.hasOwn(unknown, 'free_mem_mb'));
   assert(!Object.hasOwn(unknown, 'load_avg_1m'));
   assert(patchManifest.capabilities.includes('container_resource_reporting_v1'));
-  // The 2.1.312 profile names its patch ccgateway-v41-login-401 (v38 before CC's
-  // login refusals became 401s; 2.1.310: ccgateway-v39-session-state; 2.1.304:
-  // ccgateway-v40-session-state).
-  assert.equal(patchManifest.extension, 'ccgateway-v41-login-401');
+  // The 2.1.312 profile names its patch ccgateway-v44-runtime-version (v41 the
+  // released one, before the patched entries reported the official runtime
+  // version; v38 before CC's login refusals became 401s; 2.1.310:
+  // ccgateway-v45-runtime-version; 2.1.304: ccgateway-v46-runtime-version).
+  assert.equal(patchManifest.extension, 'ccgateway-v44-runtime-version');
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_capture_v1'));
   assert(patchManifest.capabilities.includes('request_levels_v1'));
@@ -391,4 +393,10 @@ test('the patched root session is the Worker identity, never a re-derived UUID',
     if (old === undefined) delete process.env.CCG_REQUEST_IDENTITY;
     else process.env.CCG_REQUEST_IDENTITY = old;
   }
+});
+
+// The compiled entries report the Node.js version the official ELF's Bun
+// reports (runtime-version.js; X-Stainless-Runtime-Version upstream).
+test('the patched entries install the official runtime version before anything else', () => {
+  assertRuntimeEntries({ output, baseline, manifest: patchManifest, profile, parser });
 });

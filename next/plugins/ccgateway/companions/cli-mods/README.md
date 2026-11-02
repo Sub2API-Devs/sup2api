@@ -4,18 +4,21 @@
 
 ## 当前版本
 
-**现行：Claude Code 2.1.312 / `ccgateway-v38-cc-2-1-312`**（2026-10-30 随插件 0.1.114 上线；ELF SHA-256 `c66a1f056a79c55226b026de197534c97995d543b5b6b08d8d22f7a1648e9ddb`，Bun 1.4.4 编译，TLS 指纹与官方 2.1.312 相同）。逻辑与线上 v36 相同，另加会话记忆（我们写的计费头带 `cc_prev_req`、续接时 turn 字段不回退，能力 `build_session_state_v1`；何时给记忆由 Worker 判定）。迁移记录见 [CLAUDE-CODE-2.1.312-MIGRATION](../../docs/CLAUDE-CODE-2.1.312-MIGRATION.md)。
+**现行（候选，已在 ovh 编译与离线验证，待发布）：Claude Code 2.1.316 / `ccgateway-v43-cc-2-1-316`**（官方 2026-10-30T23:47:48Z 构建，commit `cd7ceb45`，内嵌 Bun 1.4.4；定制 ELF SHA-256 `f8f9afa447be6ef132f87c6af7d1880fc822e68f4cf9249f2143a59fdfa163a0`，插件版本 TBD）。逻辑与 v41 相同，只换名字，另加一处锚点：2.1.316 的客户端工厂在代理认证之后重读登录凭证、重判 OAuth 与自定义头，API-key-only 路线跳过这一段（与前几步跳过的是同一组调用）。v43 另外两处（v42 未发布）：CLI 报告官方 ELF 的 Node.js 兼容版本（`X-Stainless-Runtime-Version: v26.12.1`，见下文“硬性规则”）；“高”等级可注入官方首轮带完整定义的全部工具（能力 `build_injection_tools_v2`）。迁移记录见 [CLAUDE-CODE-2.1.316-MIGRATION](../../docs/CLAUDE-CODE-2.1.316-MIGRATION.md)。
 
-**上一版：Claude Code 2.1.310 / `ccgateway-v36-content-guard`**（插件 0.1.109–0.1.113，ELF `06d428b6…19fe`）。仓库里 2.1.310 与 2.1.304 的 profile 与锚点仍在，测试照常覆盖（`CCG_CLI_VERSION=2.1.310|2.1.304 npm test`）；它们的标签随支持模块的变化升为 `ccgateway-v39-session-state`（2.1.310）与 `ccgateway-v40-session-state`（2.1.304），这两个版本不再单独发布。v33（`ccgateway-v33-bun-1-4-4`，插件 0.1.105，ELF `720f4645…2463`）起编译用的 Bun 等于官方内嵌版本（profile `bunVersion`，`package-release.cjs` 核对），TLS 指纹因此与官方相同（[CLI-TEST-PLAN](../../docs/CLI-TEST-PLAN.md) 缺口第 8 条）。
+**上一版：Claude Code 2.1.312 / `ccgateway-v41-login-401`**（插件 0.1.116 起，旧账号继续使用；仓库里 2.1.312 的 profile 已升为 `ccgateway-v44-runtime-version`，不单独发布；v38 `ccgateway-v38-cc-2-1-312` 于 0.1.114 上线，ELF `c66a1f05…9ddb`）：2.1.312 / v38 的逻辑加会话记忆（我们写的计费头带 `cc_prev_req`、续接时 turn 字段不回退，能力 `build_session_state_v1`），v41 起 CC 自己的登录拒绝回 401/403。迁移记录见 [CLAUDE-CODE-2.1.312-MIGRATION](../../docs/CLAUDE-CODE-2.1.312-MIGRATION.md)。
 
+**更早：Claude Code 2.1.310 / `ccgateway-v36-content-guard`**（插件 0.1.109–0.1.113，ELF `06d428b6…19fe`）。仓库里 2.1.312、2.1.310 与 2.1.304 的 profile 与锚点仍在，测试照常覆盖（`CCG_CLI_VERSION=2.1.312|2.1.310|2.1.304 npm test`）；它们的标签随支持模块的变化先后升为 `ccgateway-v39-session-state`/`v40-session-state`，2026-11-02 再升为 `ccgateway-v45-runtime-version`（2.1.310）与 `ccgateway-v46-runtime-version`（2.1.304），这两个版本不再单独发布。v33（`ccgateway-v33-bun-1-4-4`，插件 0.1.105，ELF `720f4645…2463`）起编译用的 Bun 等于官方内嵌版本（profile `bunVersion`，`package-release.cjs` 核对），TLS 指纹因此与官方相同（[CLI-TEST-PLAN](../../docs/CLI-TEST-PLAN.md) 缺口第 8 条）。
+
+- 2.1.312 → 2.1.316 的分析、迁移与验证：[CLAUDE-CODE-2.1.316-MIGRATION](../../docs/CLAUDE-CODE-2.1.316-MIGRATION.md)
 - 2.1.310 → 2.1.312 的分析、迁移与验证：[CLAUDE-CODE-2.1.312-MIGRATION](../../docs/CLAUDE-CODE-2.1.312-MIGRATION.md)
 - 2.1.304 → 2.1.310 的分析、迁移与验证：[CLAUDE-CODE-2.1.310-MIGRATION](../../docs/CLAUDE-CODE-2.1.310-MIGRATION.md)
 - 以后每次换版本的操作手册：[CLI-UPGRADE-RUNBOOK](../../docs/CLI-UPGRADE-RUNBOOK.md)
 - 测试体系与用例：[CLI-TEST-PLAN](../../docs/CLI-TEST-PLAN.md)
 
-CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力列表只有一处——各版 profile 的 `capabilities`（三版相同）：
+CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力列表只有一处——各版 profile 的 `capabilities`（四版相同，2.1.316 另有 `build_injection_tools_v2`）：
 
-`request_direct`、`request_build`、`request_oauth`、`request_error_stderr`、`request_raw_http_errors`、`request_policy_mode_v1`、`build_attachment_sources_v2`、`build_billing_sources_v1`、`build_content_preservation_v1`、`container_resource_reporting_v1`、`request_identity_v1`、`build_identity_line_v1`、`direct_billing_v1`、`request_agent_context_v1`、`build_injection_v1`、`request_levels_v1`、`client_user_agent_v1`、`request_capture_v1`、`management_http_v1`（v34 起）、`build_session_state_v1`（v38 起：`CCG_REQUEST_IDENTITY.previous` 与响应元数据 `session`，见 [计费头文档](../../docs/CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION.md) 第 5 节）。
+`request_direct`、`request_build`、`request_oauth`、`request_error_stderr`、`request_raw_http_errors`、`request_policy_mode_v1`、`build_attachment_sources_v2`、`build_billing_sources_v1`、`build_content_preservation_v1`、`container_resource_reporting_v1`、`request_identity_v1`、`build_identity_line_v1`、`direct_billing_v1`、`request_agent_context_v1`、`build_injection_v1`、`request_levels_v1`、`client_user_agent_v1`、`request_capture_v1`、`management_http_v1`（v34 起）、`build_session_state_v1`（v38 起：`CCG_REQUEST_IDENTITY.previous` 与响应元数据 `session`，见 [计费头文档](../../docs/CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION.md) 第 5 节）、`build_injection_tools_v2`（只有 2.1.316 / v43 起：build 能注入 `Skill`、`ToolSearch`、`ListAgents`、`ReportFindings`、`ScheduleWakeup`、`Workflow` 六个工具，定义与官方首轮逐字相同；旧 CLI 不认这些名字，核心按这项能力挑 CLI）。
 
 各能力的含义与核心、Worker 怎样要求它们，见 [build 设计](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §10。2.1.296 时期 mods 工具扩展的 `native_tools`、`mods_dispatch` 两项随该扩展在 v23 删除（见文末）。
 
@@ -34,13 +37,15 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 
 编译用的 Bun 必须等于官方 ELF 内嵌的版本（profile `bunVersion`，现为 1.4.4），否则上游看到的 TLS 指纹与官方 Claude Code 不同。这条规则由工具链自动保证，不靠人记：还原器从官方 ELF 读出版本写进 `reconstruction.json`，`patch-cli.cjs` 要求 profile 的 `bunVersion` 与之相等，`build.sh` 要求编译器版本相等，`package-release.cjs` 与 Worker 镜像构建要求 ELF 是该版本编出的，`npm test` 的 `test/bun-version.test.mjs` 也会检查。任何一步不一致都直接失败并给出应改成的版本。详见 [CLI-UPGRADE-RUNBOOK](../../docs/CLI-UPGRADE-RUNBOOK.md)“硬性规则”。
 
+同一条规则管 Bun 报告的 Node.js 兼容版本（profile `runtimeVersion`，2.1.312/2.1.316 为 `v26.12.1`，2.1.310/2.1.304 为 `v26.3.0`）：SDK 把 `process.version` 作为 `X-Stainless-Runtime-Version` 发给上游。官方 ELF 内嵌的是 Anthropic 自己的 Bun 1.4.4 修订（`0ae49f8b6`、`71c9bf0ca`，公开仓库里没有），公开的 `oven/bun:1.4.4`（`38afee6c8`）报告 `v26.3.0`，所以 v38–v42 一直发 `v26.3.0`、官方发 `v26.12.1`（TLS 指纹不受影响）。v43 起：还原器从官方 ELF 读出这个版本（`tools/upgrade/elf-facts.cjs`：npm 用户代理串与 `process.release.headersUrl` 两处必须一致）写进 `reconstruction.json` 的 `runtimeVersion`，`patch-cli.cjs` 要求 profile 的 `runtimeVersion` 与之相等，并让两个编译入口（`cli.js` 与 hooks worker）的第一条语句导入 `ccgateway-runtime-version.js`（`runtime-version.js` 填入该值，只改 `process.version` 与 `process.versions.node`），`package-release.cjs` 与 Worker 镜像构建运行编好的 CLI（`runtime-check.cjs`：`BUN_OPTIONS=--preload` 在进程退出时读值）并拒绝报告其他值的 ELF，`npm test` 的 `test/runtime-version.test.mjs` 与各版 `patch-wire-preservation` 也检查。
+
 ## 版本无关的结构（2026-10-27 起）
 
 补丁分成每版都一样的部分与每版各一份的部分，换 Claude Code 版本时只新增后者：
 
 | 每版一份 | 内容 |
 |---|---|
-| `profiles/linux-x64-<版本>.json` | 官方 ELF 的 SHA-256；补丁标签 `extension`；`bunVersion`（官方 ELF 内嵌的 Bun 版本，编译必须用它）；`capabilities`；`supportModules`；`core`（主查询所在模块）；`locate`（AST 定位：请求构建器与其 beta 列表变量、system 记录工厂、追加提示词拼接函数、beta Messages 端点所在模块）；`natives`（支持模块用到的原生绑定，分组 `entry`/`command`/`natives`/`build`，逻辑名 → `文件:原生名`）；`coreScope`（环境代码用到的核心作用域名，逻辑名 → 原生名）；`coreImports`（补丁新加到核心的导入）；`patchOnly`；`modules`（每个哈希绑定模块的 SHA-256） |
+| `profiles/linux-x64-<版本>.json` | 官方 ELF 的 SHA-256；补丁标签 `extension`；`bunVersion`（官方 ELF 内嵌的 Bun 版本，编译必须用它）；`runtimeVersion`（那个 Bun 报告的 Node.js 版本，CLI 报告它）；`capabilities`；`supportModules`；`core`（主查询所在模块）；`locate`（AST 定位：请求构建器与其 beta 列表变量、system 记录工厂、追加提示词拼接函数、beta Messages 端点所在模块）；`natives`（支持模块用到的原生绑定，分组 `entry`/`command`/`natives`/`build`，逻辑名 → `文件:原生名`）；`coreScope`（环境代码用到的核心作用域名，逻辑名 → 原生名）；`coreImports`（补丁新加到核心的导入）；`patchOnly`；`modules`（每个哈希绑定模块的 SHA-256） |
 | `patches/<版本>.cjs` | 锚点：在哈希绑定模块的唯一函数里，把恰好出现一次的文本换掉（`edit` + `once`），以及给模块加导入（`surround`） |
 | `test/native/<版本>/` | 该版的原生对账测试（在还原源码上执行原生函数或读原生 AST） |
 | `test/fixtures/*-<版本>.json` | 该版的原生夹具与官方抓包 |
@@ -52,9 +57,9 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 | 文件 | 作用 |
 |---|---|
 | `patch-cli.cjs` | 补丁器（版本无关，见上节）：校验 profile 里每个模块的 SHA-256，执行 `patches/<版本>.cjs` 的锚点，按 AST 从请求构建器收集 beta 顺序填入 `request-betas.js`、从 SDK 找 beta Messages 端点填入 `model-request.js`、复制追加提示词拼接函数为 `ccgatewayJoinAppend`、导出 system 记录工厂为 `ccgatewaySystemRecord`；替换文本按原文插入（不解释 `$` 模式）；写出 `ccgateway-patch.json`（补丁标签、能力、改前改后哈希） |
-| `patches/2.1.304.cjs`、`patches/2.1.310.cjs`、`patches/2.1.312.cjs` | 各版锚点（2.1.312 的由 `tools/upgrade/examples/derive-anchors-2.1.312.cjs` 生成） |
-| `profiles/linux-x64-2.1.304.json`、`profiles/linux-x64-2.1.310.json`、`profiles/linux-x64-2.1.312.json` | 各版 profile |
-| `request-entry.inc.js` | 插进 CLI 入口函数（2.1.304 `Ve`、2.1.310 `Ye`、2.1.312 `Ke`）的三行桩：`--ccgateway-info` 与加载 `request-entry.js` 的 `request` 分支；入口的参数列表与设置来源名由锚点给（`entryStub(<参数>, <设置>)`） |
+| `patches/2.1.304.cjs`、`patches/2.1.310.cjs`、`patches/2.1.312.cjs`、`patches/2.1.316.cjs` | 各版锚点（2.1.312、2.1.316 的分别由 `tools/upgrade/examples/derive-anchors-2.1.312.cjs`、`derive-anchors-2.1.316.cjs` 生成） |
+| `profiles/linux-x64-2.1.304.json`、`profiles/linux-x64-2.1.310.json`、`profiles/linux-x64-2.1.312.json`、`profiles/linux-x64-2.1.316.json` | 各版 profile |
+| `request-entry.inc.js` | 插进 CLI 入口函数（2.1.304 `Ve`、2.1.310 `Ye`、2.1.312 `Ke`、2.1.316 `qe`）的三行桩：`--ccgateway-info` 与加载 `request-entry.js` 的 `request` 分支；入口的参数列表与设置来源名由锚点给（`entryStub(<参数>, <设置>)`） |
 | `request-entry.js` | `claude request` 的入口支持模块：CC 的 fast-path 策略（拒绝时写 403 帧）、需要时才加载命令与原生绑定 |
 | `request-natives.js` | 请求用到的原生绑定组合（身份、计费头、登录 beta、指纹、query source、层词表），供 `request-entry.js` 传给命令 |
 | `request-command.js` | `claude request` 入口：读输入、direct 计费头、调 build、身份与身份行、beta 装配（一次）、发送、错误帧、请求记录 |
@@ -67,9 +72,11 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 | `request-input.js`、`request-parameters.js`、`request-policy.js`、`content-policy.js`、`direct-billing.js`、`request-identity.js`、`request-agent.js`、`request-options.js`、`request-output.js`、`request-error.js`、`container-resources.js` | 支持模块 |
 | `request-session.js` | 会话记忆（v38）：我们写计费头的请求，把 Worker 记住的上一次请求 ID 与 turn 放回 CC 自己读的位置（最后一条 assistant 记录的 `requestId`、prompt 记录的 `turnPosition`），由原生写 `cc_prev_req` 与 turn 字段；把本次用的 turn 报告给 Worker |
 | `native-environment.inc.js` | 拼进核心模块作用域的代码（原生环境读取与词表、注入层、轮次标记），原生名写作 `native_<逻辑名>` |
+| `runtime-version.js` | 两个编译入口最先执行的模块：把 `process.version`/`process.versions.node` 设为 profile `runtimeVersion`（补丁器填值、装成 `ccgateway-runtime-version.js`） |
+| `runtime-check.cjs` | 运行编好的 CLI，读它报告的 Node.js 版本，与 profile `runtimeVersion` 不符即失败（`package-release.cjs`、Worker 镜像构建调用；只能在 Linux x64 上跑） |
 | `build.sh` | 用 Bun 编译 ELF（`--compile --bytecode --format=esm`，两个入口） |
-| `package-release.cjs` | 把 ELF 和补丁清单打成 Worker 镜像用的 `release/` 目录 |
-| `tools/upgrade/` | 换版本用的分析工具：`restore-bun.cjs`（还原）、`seeds.cjs`、`equiv.cjs`（结构等价配对）、`unitdiff.cjs`、`lookup.cjs`、`inspect.cjs`、`carry-profile.cjs`（把 profile 名字带到新版）、`tokcmp.cjs`/`supcmp.cjs`（重构前后产物等价）、`anchor-hazards.cjs`（锚点替换文本逐字出现在产物里）。用法见 [CLI-UPGRADE-RUNBOOK](../../docs/CLI-UPGRADE-RUNBOOK.md) |
+| `package-release.cjs` | 把 ELF 和补丁清单打成 Worker 镜像用的 `release/` 目录；核对 Bun 版本与 `runtimeVersion` |
+| `tools/upgrade/` | 换版本用的分析工具：`restore-bun.cjs`（还原）、`elf-facts.cjs`（从官方 ELF 读内嵌 Bun 版本与 Node.js 版本）、`seeds.cjs`、`equiv.cjs`（结构等价配对）、`unitdiff.cjs`、`lookup.cjs`、`inspect.cjs`、`carry-profile.cjs`（把 profile 名字带到新版）、`tokcmp.cjs`/`supcmp.cjs`（重构前后产物等价）、`anchor-hazards.cjs`（锚点替换文本逐字出现在产物里）。用法见 [CLI-UPGRADE-RUNBOOK](../../docs/CLI-UPGRADE-RUNBOOK.md) |
 | `test/` | `npm test`（`test/run.mjs`：版本无关测试 + `test/native/<版本>/`）；`test/e2e/` 离线端到端回归套件与官方抓包工具（`capture-official.sh`、`official-diff.cjs`）；手动探针 `*.cjs` |
 
 ## 打包步骤
@@ -86,9 +93,16 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 
    复用已有 Babel 时可设 `CCG_BABEL_PACKAGE` 为该安装的 `package.json` 绝对路径。
 4. **编译**（**必须**用 profile `bunVersion` 指定的 Bun，即官方内嵌版本，`build.sh` 会拒绝其他版本；Linux x64/glibc；ovh 上用 `oven/bun:<bunVersion>` 容器，Windows 传过去的副本先去 CR）：`sh build.sh /absolute/path/patched /absolute/path/claude-linux-native`。两个入口（`cli.js` 与 hooks worker）都必须给。
-5. **打包**：`node package-release.cjs /absolute/path/claude-linux-native /absolute/path/patched/ccgateway-patch.json /absolute/path/new-release`（脚本旁要有 `profiles/`）。产物是 `<版本>/claude`、`<版本>/ccgateway-patch.json` 与 `manifest.json`。
+5. **打包**（Linux x64，会运行 ELF 核对 `runtimeVersion`；ovh 上用 `node:22-bookworm-slim` 容器）：`node package-release.cjs /absolute/path/claude-linux-native /absolute/path/patched/ccgateway-patch.json /absolute/path/new-release`（脚本旁要有 `profiles/` 与 `runtime-check.cjs`）。产物是 `<版本>/claude`、`<版本>/ccgateway-patch.json` 与 `manifest.json`。
 6. **放进 Worker 构建上下文**：用新目录替换 `cli-mods/release/`（不进 Git）。`companions/worker/Dockerfile` 按 `ARG CLAUDE_VERSION` 安装到 `/opt/ccgateway/cli/` 并核对 SHA 与补丁标签；控制器创建或配对更新账号容器时再按 manifest 校验，Worker 启动时校验固定版本、补丁标签与哈希。
 7. **测试**：`npm test`（默认最新 profile 的版本；`CCG_CLI_VERSION=<版本>` 指定）。原生对账测试在 `artifacts/claude-<版本>/linux-restored` 存在时必须真跑，缺失时跳过并打印 `CCG_NATIVE_TEST_SKIPPED`，`CCG_REQUIRE_ARTIFACTS=1` 时改为失败。原生夹具变化时用 `CCG_UPDATE_CONTRACT_FIXTURES=1` 重生成并逐项审查。离线端到端回归、组装对账等在 ovh 一次性容器里跑，见 [CLI-TEST-PLAN](../../docs/CLI-TEST-PLAN.md) 与 `test/e2e/README.md`。
+
+## 版本记录（2.1.316）
+
+| 版本 | 插件 | 内容 | 现状 |
+|---|---|---|---|
+| v43 `cc-2-1-316` | TBD | v42 加两处。① 运行时版本：两个编译入口最先执行 `ccgateway-runtime-version.js`，`process.version`/`versions.node` 报告官方 ELF 的 `v26.12.1`（profile `runtimeVersion`，还原器从官方 ELF 读出，补丁器、打包、镜像构建、`npm test` 逐级核对），上游的 `X-Stainless-Runtime-Version` 与官方相同（v38–v42 发 `v26.3.0`）。② 首轮工具注入：注入的工具在 CC 的整个工具池与内置 agent 里渲染（与官方首轮相同），只取选中的名字和 CC 为它们配的东西（`ToolSearch` 配 `DeferredToolPlaceholder`）；不选 `ToolSearch` 时不放它进池，所有选中的工具整段发出。官方 2.1.316 首轮带完整定义的 11 个工具（`Agent`、`Bash`、`Edit`、`ListAgents`、`Read`、`ReportFindings`、`ScheduleWakeup`、`Skill`、`ToolSearch`、`Workflow`、`Write`）与官方抓包逐字相同、顺序相同，唯一差别是 Bash 后台超时缺省值（官方抓包是 `-p` 单次会话的 600000，其他会话包括我们的是 1800000）；新能力 `build_injection_tools_v2`。原生对账：`test/native/2.1.316/injected-tools.test.mjs`（夹具 `injected-tools-2.1.316.json`，由 `test/injection-tools-probe.cjs` 对编好的 v43 录制）。ELF `f8f9afa4…63a0` | 候选 |
+| v42 `cc-2-1-316` | 未发布 | 移到 Claude Code 2.1.316（2026-10-30 构建，commit `cd7ceb45`，Bun 1.4.4），逻辑与 v41 相同：13 个被改写函数按新版重写锚点（入口 `qe`、会话 `Rt`（`chunk-ndmse9kj.js`）、资源 `BWi`/`Z`、核心 `gB`/`e_n`（构建器 `g5n`）/`Qyn`/`AT`/`YSr`/`Sio`、客户端 `MN`/`Fl`、计费 `JXs`），由 `tools/upgrade/examples/derive-anchors-2.1.316.cjs` 从 2.1.312 的锚点生成。另加一处：客户端工厂 `MN` 在代理认证之后新增的重读登录凭证/重判 OAuth/重读自定义头（必要时重建客户端）一段，API-key-only 路线跳过。新版里仍存在但含义不同的旧名（查询参数 `Q`、沙箱说明 `Kmn`、一方 URL 判定 `Ud`、头合并 `Ml`）由派生脚本与 `test/native/2.1.316/` 断言挡住。官方自己的变化：默认系统提示词（`original_games` 段、lean 模型 communication、described fable 的身份段，只影响"高"等级的原生默认提示词）、新的延迟工具 `SendToProject`/`SendToProjectContext`（受开关控制）、Bash/NotebookEdit 工具描述、压缩后的计费头可带 `cc_prev_msg`/`cc_prev_prompt_index`/`cc_prev_turn_index`（我们写的头不带）。ELF `3a1ca882…78a4`（未发布，被 v43 取代） | 未发布 |
 
 ## 版本记录（2.1.312）
 
@@ -96,7 +110,7 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 |---|---|---|---|
 | v38 `cc-2-1-312` | 插件 0.1.114 | 移到 Claude Code 2.1.312（2026-10-27 构建，commit `f375cd85`），逻辑与 v36 相同：13 个被改写函数按新版重写锚点（入口 `Ke`、会话 `Rt`、资源 `YOi`/`V`、核心 `YH`/`Qmn`/`Kmn`/`Kk`/`Xmr`/`boo`、客户端 `K$`/`Ml`、计费 `d2s`），另加一处：主查询里新出现的 thinking-token-count push 加 build 判断（2.1.312 把它从模型表挪了出来，否则非 CC 请求会多这个 beta）。新增会话记忆（`request-session.js`、能力 `build_session_state_v1`，Worker `engine/session_state.go`）：我们写的计费头带 `cc_prev_req`（上一次成功上游响应的 request-id，仅当消息续接上一次请求、最后一条 assistant 正是那次应答时），续接时客户端命名的会话的 turn 字段不回退；截断历史不给记忆（插件 0.1.114 起，Worker 侧判定，CLI 不变）。官方自己的变化：环境段 Shell 按 PATH 上的 shell 写（`unknown` → `bash`）、Bash 工具描述改写、客户端缺省 `output_config` 时 effort 跟随历史里的 system 轮。分析与验证见 [CLAUDE-CODE-2.1.312-MIGRATION](../../docs/CLAUDE-CODE-2.1.312-MIGRATION.md)。ELF `c66a1f05…9ddb` | 现行 |
 
-2.1.310 与 2.1.304 的 profile 随支持模块的变化升为 v39 / v40（`session-state`），不单独发布。
+2.1.310 与 2.1.304 的 profile 随支持模块的变化升为 v39 / v40（`session-state`），不单独发布。2026-11-02（v43 的两处变化：入口报告官方运行时版本、注入工具在整个工具池里渲染）补丁产物又变了，三个旧版本的标签随之升为 `ccgateway-v44-runtime-version`（2.1.312，`runtimeVersion` `v26.12.1`）、`ccgateway-v45-runtime-version`（2.1.310，`v26.3.0`）、`ccgateway-v46-runtime-version`（2.1.304，`v26.3.0`），能力不变，都不单独发布；线上旧账号按用户决定继续用 2.1.312 / v41（发 `v26.3.0`），不重编。
 
 ## 版本记录（2.1.310）
 

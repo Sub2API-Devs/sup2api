@@ -14,6 +14,11 @@ const bytes=fs.readFileSync(binary);if(bytes.subarray(0,4).toString('hex')!=='7f
 // upstream sees, so the ELF must come from the Bun the profile names.
 if(!profile.bunVersion||patch.bunVersion!==profile.bunVersion)throw Error('The patch manifest bunVersion '+patch.bunVersion+' is not the profile bunVersion '+profile.bunVersion);
 if(profile.bunVersion&&!bytes.includes(Buffer.from('Bun v'+profile.bunVersion+' (')))throw Error('The ELF was not built by Bun '+profile.bunVersion+' (profile bunVersion)');
+// The CLI reports the Node.js version the official ELF's Bun reports (the SDK
+// sends it upstream; runtime-version.js): the manifest carries the profile's
+// value and the compiled entry, run here, must report it.
+if(!profile.runtimeVersion||patch.runtimeVersion!==profile.runtimeVersion)throw Error('The patch manifest runtimeVersion '+patch.runtimeVersion+' is not the profile runtimeVersion '+profile.runtimeVersion);
+require('./runtime-check.cjs').checkRuntime(binary,profile.runtimeVersion);
 const sha256=crypto.createHash('sha256').update(bytes).digest('hex');
 fs.mkdirSync(path.join(output,version),{recursive:true});
 fs.writeFileSync(path.join(output,version,'claude'),bytes,{mode:0o755});
