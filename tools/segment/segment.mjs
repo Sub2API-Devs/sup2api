@@ -59,7 +59,11 @@ if (fs.existsSync(namingDir)) {
     const p = JSON.parse(fs.readFileSync(path.join(namingDir, f), 'utf8'));
     for (const [id, target] of Object.entries(p)) {
       const d = byId.get(id);
-      if (d) label[d.i] = { path: typeof target === 'string' ? target : target.path, kind: 'first-party', method: 'placement' };
+      if (d) {
+        const p = typeof target === 'string' ? target : target.path;
+        const kind = p.startsWith('vendor/') ? 'vendor' : p.startsWith('_misplaced/') ? 'unattributed' : 'first-party';
+        label[d.i] = { path: kind === 'vendor' ? p.slice('vendor/'.length) : p, kind, method: 'placement', by: f };
+      }
     }
   }
 }
