@@ -28,7 +28,7 @@ const seg = new Map(readJsonl('analysis/segments/decl-path.jsonl').map((m) => [m
 const names = new Map(); // file -> Map(offset -> {name, source, via})
 const nameFiles = [
   ...(fs.existsSync('analysis/names') ? fs.readdirSync('analysis/names').filter((f) => f.endsWith('.jsonl')).map((f) => path.join('analysis/names', f)) : []),
-  ...(fs.existsSync('naming') ? fs.readdirSync('naming').filter((f) => /^semantic-.*.jsonl$/.test(f)).map((f) => path.join('naming', f)) : []),
+  ...(fs.existsSync('naming') ? fs.readdirSync('naming').filter((f) => /^semantic-.*\.jsonl$/.test(f)).map((f) => path.join('naming', f)) : []),
 ];
 for (const nf of nameFiles) {
   const boost = nf.includes('semantic-') ? 10 : 0;
@@ -166,7 +166,7 @@ async function printBindings(d) {
   for (const b of bindingsCache.get(d.file)) {
     if (b.topDeclStart !== d.start) continue;
     const n = nm?.get(b.declStart);
-    const ctx = src.slice(b.declStart, b.declStart + 50).replace(/s+/g, ' ');
+    const ctx = src.slice(b.declStart, b.declStart + 50).replace(/\s+/g, ' ');
     console.log(`  ${d.file} ${b.key}	${b.scope}/${b.kind}	${b.name}	-> ${n ? n.name + ' (' + n.source + (n.via ? '/' + n.via : '') + ')' : '-'}	refs=${b.refs}${b.frozen ? ' FROZEN' : ''}	| ${ctx}`);
   }
 }

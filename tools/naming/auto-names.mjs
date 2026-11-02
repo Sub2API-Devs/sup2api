@@ -82,7 +82,7 @@ for (const file of files) {
   for (const n of ast.program.body) {
     if (n.type !== 'ImportDeclaration' || n.source.value.startsWith('.')) continue;
     for (const sp of n.specifiers) {
-      const base = n.source.value.replace(/^node:/, '').replace(/[^w]+(w)/g, (_, c) => c.toUpperCase());
+      const base = n.source.value.replace(/^node:/, '').replace(/[^\w]+(\w)/g, (_, c) => c.toUpperCase());
       const want = sp.type === 'ImportSpecifier' ? (sp.imported.name ?? sp.imported.value) : sp.type === 'ImportNamespaceSpecifier' ? base + 'Module' : base;
       if (want !== sp.local.name) emit(sp.local, want, 0.6, 'external-import');
     }

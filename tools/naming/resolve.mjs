@@ -133,7 +133,7 @@ for (const { file, b, c } of decided) {
   take(chunkScope, b.min);
   if (!modScope) continue;
   if (isTaken(modScope, b.min)) {
-    const tag = file.replace(/^chunk-|.m?js$/g, '').slice(0, 4);
+    const tag = file.replace(/^chunk-|\.m?js$/g, '').slice(0, 4);
     let name = `${b.min}_${tag}`, i = 2;
     while (isTaken(modScope, name) || isTaken(chunkScope, name)) name = `${b.min}_${tag}${i++}`;
     b.renameTo = name;
