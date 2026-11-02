@@ -24,10 +24,16 @@ const readJsonl = (p) => fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).
 const modules = JSON.parse(fs.readFileSync(path.join(A, 'scan/modules.json'), 'utf8'));
 const exportsOf = new Map(modules.map((m) => [m.file, m.exports ?? {}]));
 const D = readJsonl(path.join(A, 'scan/decls.jsonl'));
+// Third-party / runtime declarations (vendor role) never take part in
+// first-party matching: they share data shapes with first-party code and
+// otherwise produce confident false matches.
+const vendorPath = path.join(A, 'vendor/decl-vendor.jsonl');
+const vendorIds = new Set(fs.existsSync(vendorPath) ? readJsonl(vendorPath).map((v) => v.id) : []);
 const dByLocal = new Map(); // file#local -> decl index
 D.forEach((d, i) => {
   d.i = i;
   d.id = `${d.file}#${d.names[0] ?? '@' + d.start}`;
+  d.vendor = vendorIds.has(d.id);
   for (const n of d.names) dByLocal.set(`${d.file}#${n}`, i);
 });
 for (const d of D) {
@@ -120,7 +126,7 @@ const MIN_W = 4; // a declaration needs some distinctive features to be fingerpr
 const best316 = new Array(N).fill(null);
 const bestRef = new Array(R.length).fill(null);
 for (let i = 0; i < N; i++) {
-  if (dTot[i] < MIN_W) continue;
+  if (dTot[i] < MIN_W || D[i].vendor) continue;
   const acc = new Map();
   for (const [f, w] of dW[i]) for (const ri of inv.get(f) ?? []) acc.set(ri, (acc.get(ri) ?? 0) + w);
   let top = null, second = 0;
@@ -165,7 +171,7 @@ for (;;) {
   if (rounds++ > 15) break;
   const proposals = new Map();
   const propose = (a, b, witness) => {
-    if (!sameShape(D[a], R[b])) return;
+    if (D[a].vendor || !sameShape(D[a], R[b])) return;
     const k = a + ',' + b;
     let p = proposals.get(k);
     if (!p) proposals.set(k, (p = { a, b, witnesses: new Set(), s: score(a, b) }));
