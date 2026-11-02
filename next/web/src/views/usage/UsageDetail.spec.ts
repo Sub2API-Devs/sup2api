@@ -27,6 +27,20 @@ function render(value = row, path?: string) {
   } })
 }
 
+describe('CCGateway request log entry', () => {
+  it('follows request_log_account_id, not the account the caller may not see', async () => {
+    const ccg = { ...row, plugin_key: 'ccgateway', account_id: null } as unknown as UsageRow
+    get.mockResolvedValueOnce({ ...ccg, request_log_account_id: 12 })
+    const wrapper = render(ccg, '/usage/1')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="usage-request-log"]').exists()).toBe(true)
+    get.mockResolvedValueOnce({ ...ccg, account_id: 12 })
+    const hidden = render(ccg, '/usage/1')
+    await flushPromises()
+    expect(hidden.find('[data-testid="usage-request-log"]').exists()).toBe(false)
+  })
+})
+
 describe('known partial usage in failed request details', () => {
   it('shows client IP, client agent and upstream attempts from detail', async () => {
     get.mockResolvedValueOnce({ ...row, client_ip: '192.0.2.9', user_agent: 'fixture-client', attempts: 2, api_key_name: 'my-laptop', node_id: '' })

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -64,11 +65,14 @@ func (allowAll) VerifyAccessToken(_ context.Context, token string) (int64, error
 }
 func (allowAll) Can(context.Context, int64, string) (bool, error) { return true, nil }
 
-// denyAccounts holds every permission but account:read.
-type denyAccounts struct{ allowAll }
+// denyPerms holds every permission but the listed ones.
+type denyPerms struct {
+	allowAll
+	keys []string
+}
 
-func (denyAccounts) Can(_ context.Context, _ int64, perm string) (bool, error) {
-	return perm != "account:read", nil
+func (d denyPerms) Can(_ context.Context, _ int64, perm string) (bool, error) {
+	return !slices.Contains(d.keys, perm), nil
 }
 func (allowAll) PermissionSet(context.Context, int64) (core.PermissionSet, error) {
 	return core.PermissionSet{Superuser: true}, nil

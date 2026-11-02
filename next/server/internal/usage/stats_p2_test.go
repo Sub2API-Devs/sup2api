@@ -124,7 +124,7 @@ func TestUsageExport(t *testing.T) {
 
 	// An operator without account:read sees no account anywhere: not in the
 	// export, the list or the detail, and may not filter by account.
-	f.svc.Authz = denyAccounts{}
+	f.svc.Authz = denyPerms{keys: []string{"account:read"}}
 	noAcc := get("/usage/export?lang=en&from=2026-09-20T00:00:00Z")
 	require.NotContains(t, strings.SplitN(noAcc, "\n", 2)[0], "Account")
 	require.NotContains(t, noAcc, "Export Account")

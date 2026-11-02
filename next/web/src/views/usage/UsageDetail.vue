@@ -52,8 +52,11 @@ const knownRounds = computed(() => knownUsageRounds(u.value))
 const otherMetrics = computed(() => otherUsageMetrics(u.value.metrics))
 const componentCacheFacts = computed(() => componentCacheWriteMetrics(u.value.billing_detail).filter((item) => !knownRounds.value.length || item.kind !== 'replacement'))
 const hooks = computed(() => u.value.hook_decisions || [])
-// A CCGateway request's Worker log is named by this request ID (REQUEST-LOG-VIEWER-DESIGN.md §3).
-const canRequestLog = computed(() => u.value.plugin_key === 'ccgateway' && !!u.value.account_id && !!u.value.request_id && (auth.has('settings:read') || auth.has('account:read')))
+// A CCGateway request's Worker log is named by this request ID (REQUEST-LOG-VIEWER-DESIGN.md §3)
+// and filed under its account. The server sends that account as request_log_account_id to
+// whoever may read the log (settings:read or account:read), also when account_id is hidden.
+const requestLogAccount = computed(() => u.value.request_log_account_id)
+const canRequestLog = computed(() => u.value.plugin_key === 'ccgateway' && !!requestLogAccount.value && !!u.value.request_id)
 const requestLogOpen = ref(false)
 const failureDecisions = computed<FailureDecision[]>(() => {
   try {
@@ -203,6 +206,6 @@ const failureDecisions = computed<FailureDecision[]>(() => {
       </SDisclosure>
     </SCard>
     <SHint v-if="!u.success && u.billing_status === 'free'" size="xs">{{ t('usage.billing.freeNote') }}</SHint>
-    <RequestLogViewer v-if="requestLogOpen && u.account_id" v-model:open="requestLogOpen" :account-id="u.account_id" :account-name="u.account_name" :request-id="u.request_id" />
+    <RequestLogViewer v-if="requestLogOpen && requestLogAccount" v-model:open="requestLogOpen" :account-id="requestLogAccount" :account-name="u.account_name" :request-id="u.request_id" />
   </div>
 </template>
