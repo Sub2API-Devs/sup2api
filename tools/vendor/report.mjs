@@ -10,7 +10,8 @@
 //            {id, file, names, pkg, version, pkgFile, method, score, bytes,
 //             parts?: [{u, names, pkg, version, pkgFile, method, score, bytes}]}
 //            (`parts` only when the declarators of one statement differ)
-//          analysis/vendor/packages.json      package summary + coverage totals
+//          analysis/vendor/packages.json      package summary + coverage totals +
+//            resourceScripts (zstd browser bundles in original/, whole files)
 //          analysis/vendor/firstparty-conflicts.jsonl  decl-map rows with a
 //            reference file whose declaration is third-party here
 //
@@ -23,6 +24,7 @@
 // Pre-bundled npm dist files carry their own bundler runtime; those helpers get
 // the package of the surrounding code and method "embedded-runtime".
 import fs from 'node:fs';
+import zlib from 'node:zlib';
 import path from 'node:path';
 import { readJsonl, eachJsonl, jsonlWriter } from './lib/common.mjs';
 
@@ -201,7 +203,23 @@ const externals = {
   undici: 'kept as import.meta.require("undici"): Bun built-in',
   'node-fetch': 'dynamic import() left external',
 };
-fs.writeFileSync(path.join(V, 'packages.json'), JSON.stringify({ generatedBy: 'tools/vendor/report.mjs', bun: BUN_VERSION, totals, externals, packages }, null, 1));
+// Whole-file third-party assets: zstd-compressed browser bundles shipped as
+// resources (Babel cannot parse them; versions read from their banners).
+const resourceScripts = [];
+for (const r of JSON.parse(fs.readFileSync(path.join(IDX, 'orig-unparsed.json'), 'utf8'))) {
+  let text = '';
+  try {
+    text = zlib.zstdDecompressSync(fs.readFileSync(path.join('original', r.file))).toString('utf8');
+  } catch {}
+  const head = text.slice(0, 600);
+  const id =
+    head.match(/Chart\.js v(\d+\.\d+\.\d+)/) ? { pkg: 'chart.js', version: head.match(/Chart\.js v(\d+\.\d+\.\d+)/)[1], build: 'dist/chart.umd.min.js' } :
+    head.match(/highlight\.js (\d+\.\d+\.\d+)/) ? { pkg: 'highlight.js', version: head.match(/highlight\.js (\d+\.\d+\.\d+)/)[1], build: 'custom browser IIFE (scripts/generate-hljs-browser-bundle.ts)' } :
+    /mermaid/.test(head) ? { pkg: 'mermaid', version: '11.16.1', build: 'dist/mermaid.min.js', versionBasis: 'string "/_runtime/mermaid-11.16.1.min.js" in chunk-06y4szbn.js' } :
+    { pkg: null };
+  resourceScripts.push({ file: r.file, compressedBytes: r.bytes, bytes: text.length, encoding: 'zstd', ...id });
+}
+fs.writeFileSync(path.join(V, 'packages.json'), JSON.stringify({ generatedBy: 'tools/vendor/report.mjs', bun: BUN_VERSION, totals, externals, resourceScripts, packages }, null, 1));
 
 // ---------- conflicts with the first-party matcher ----------
 const conf = jsonlWriter(path.join(V, 'firstparty-conflicts.jsonl'));
