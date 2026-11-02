@@ -4,6 +4,11 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-03 ccgateway **0.1.123** + 核心 **0.1.233**（`e03e44a9c`，北京时间 2026-11-02 23:55–00:03；插件包 `a0e35e74…5954`，核心 manifest `cf511c0f…9c95`，计划 `49c764fe9527ad7c8745311f70c76fca` completed/13，58 秒，迁移 0075，Host API 8，内置插件为 0.1.232 的一套把 ccgateway 换成 0.1.123）：
+- 内容：定制 CLI 2.1.316 升为 `ccgateway-v44-stored-login`（ELF `76b11ddd…f99b`，只给新账号）：2.1.316 新增的 `StoredLoginHeldBackError` 按原因回 403 `stored_login_refused_admin` / 401 `stored_login_refused_restart_needed`，`settings_unloaded` 保持可重试的 5xx（此前一律 502 `cli_transport_error`）。迁移 0075 给已发布失败策略的 `login-invalid`、`account-on-hold` 追加这两个关键词（线上策略 revision 2→3，两条规则各 1 个），否则 401/403 只会被降为冷却。旧账号仍是 2.1.312 v41，不受影响。
+- 核验：两节点 0.1.233、`/readyz` 200，api.prophey.ai 200；账号容器只有控制器换了，`up_to_date: true`；核心 0 条 ERROR。升级窗口内 4 条失败：控制器重启时 2×502、1×503 runtime not ready，核心切换后 1×503 Worker 健康检查未应答（16:00:46 UTC，计划进行中），之后恢复。
+- 脚本 `stage/ccgateway-0.1.123/`、`stage/0.1.233/`（build 改为"schema 必须变化"）；v44 release 在 `~/sup2api/checks/cli-releases/release-v44-2.1.316`；备份 `backups/ccgateway-0.1.123`（`179d54d7…`）、`backups/core-0.1.233`（`8da3fe05…`）。release.sh 第一次跑时 V/COMMIT 还是 0.1.232 的值（复制后没替换），在签名时因 `v0.1.232.digests` 已存在而停下，未导入任何东西；修正后重跑。顺带多出的 `backups/core-0.1.232/database.dump` 被这次覆盖为发布前的新备份（`245bcc3b…`）。
+
 2026-11-02 ccgateway **0.1.122** + 核心 **0.1.232**（`502fbc27f`，北京时间 22:40–22:50；插件包 `c8f24182…fe32`，核心 manifest `45d6a998…256c`，计划 `b05b3a312b629a03e99fc9b0aa0b6911` completed/13，67 秒，无迁移、schema 不变 `45c3a343…`，Host API 8，内置插件为 0.1.231 的一套把 ccgateway 换成 0.1.122）：
 - 内容：
   - 定制 CLI 升到 Claude Code 2.1.316 / `ccgateway-v43-cc-2-1-316`（ELF `f8f9afa4…3a0`，迁移记录 `plugins/ccgateway/docs/CLAUDE-CODE-2.1.316-MIGRATION.md`）。CLI 启动时报官方的运行时版本 `v26.12.1`（`x-stainless-runtime-version`，v38–v41 一直发 `v26.3.0`）。
