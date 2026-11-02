@@ -41,6 +41,40 @@ describe('CCGateway request log entry', () => {
   })
 })
 
+describe('model availability trace', () => {
+  const rejected = { ...row, status_code: 429, error_type: 'model_availability', billing_status: 'free', billing_detail: {},
+    error_message: 'the requested model is unavailable for these accounts, please retry later' } as unknown as UsageRow
+  const trace = JSON.stringify({ v: 1, outcome: 'blocked_all', candidates: 1, admitted: 0, counts: { 'unavailable:quota_rejected:7d_fable': 1 },
+    samples: [{ account_id: 25, decision: 'block', reason: 'unavailable:quota_rejected:7d_fable' }] })
+
+  it('shows the trace from the detailed record before the failure decisions and points the error at it', async () => {
+    get.mockResolvedValueOnce({ ...rejected, anomalies: { availability: trace, failure_policy: '[{"action":"retry"}]' } })
+    const wrapper = render(rejected, '/usage/1')
+    expect(wrapper.find('[data-testid="usage-availability"]').exists()).toBe(false)
+    await flushPromises()
+    const card = wrapper.get('[data-testid="usage-availability"]')
+    expect(card.text()).toContain('额度窗口 7d_fable 已耗尽')
+    expect(wrapper.get('[data-testid="usage-availability-hint"]').text()).toContain('原因见下方')
+    const html = wrapper.html()
+    expect(html.indexOf('data-testid="usage-availability"')).toBeLessThan(html.indexOf('data-testid="failure-decisions"'))
+  })
+
+  it('shows neither the card nor the hint without a trace', () => {
+    for (const anomalies of [undefined, {}, { availability: '{broken' }]) {
+      const wrapper = render({ ...rejected, anomalies } as unknown as UsageRow)
+      expect(wrapper.find('[data-testid="usage-availability"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="usage-availability-hint"]').exists()).toBe(false)
+      expect(wrapper.text()).toContain('the requested model is unavailable')
+    }
+  })
+
+  it('does not point other errors at the trace', () => {
+    const wrapper = render({ ...rejected, error_type: 'upstream_overloaded', anomalies: { availability: trace } } as unknown as UsageRow)
+    expect(wrapper.find('[data-testid="usage-availability"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="usage-availability-hint"]').exists()).toBe(false)
+  })
+})
+
 describe('known partial usage in failed request details', () => {
   it('shows client IP, client agent and upstream attempts from detail', async () => {
     get.mockResolvedValueOnce({ ...row, client_ip: '192.0.2.9', user_agent: 'fixture-client', attempts: 2, api_key_name: 'my-laptop', node_id: '' })

@@ -8,7 +8,8 @@ import { ACCOUNT_PAGE_PERMS } from '@/composables/useOwnership'
 import { formatMoney, formatNumber } from '@/utils/format'
 import { errorMessage } from '@/utils/errors'
 import { useAccountTypes } from '@/views/accounts/accountTypes'
-import { accountLabel, factText, hookTone, isConverted, knownUsageRounds, type UsageRow } from './usage'
+import { accountLabel, availabilityTrace, factText, hookTone, isConverted, knownUsageRounds, type UsageRow } from './usage'
+import UsageAvailabilityTrace from './UsageAvailabilityTrace.vue'
 import UsageBillingFacts from './UsageBillingFacts.vue'
 import UsageStatus from './UsageStatus.vue'
 import UsageTokenFacts from './UsageTokenFacts.vue'
@@ -64,6 +65,8 @@ const failureDecisions = computed<FailureDecision[]>(() => {
     return Array.isArray(value) ? value.filter(v => v && typeof v.action === 'string').slice(0, 10) : []
   } catch { return [] }
 })
+// A model availability rejection's message is the generic client text; the recorded trace has the reasons.
+const availabilityHint = computed(() => u.value.error_type === 'model_availability' && !!availabilityTrace(u.value))
 </script>
 
 <template>
@@ -90,6 +93,7 @@ const failureDecisions = computed<FailureDecision[]>(() => {
     <SAlert v-if="!u.success && (u.error_type || u.error_message)" tone="danger" :title="t('usage.request.error')" dense>
       <span class="break-all font-mono text-xs">{{ u.error_type }}</span>
       <p v-if="u.error_message" class="mt-1 break-words text-sm">{{ u.error_message }}</p>
+      <p v-if="availabilityHint" class="mt-1 text-sm" data-testid="usage-availability-hint">{{ t('usage.availability.seeBelow') }}</p>
     </SAlert>
 
     <SGrid :cols="1" :lg-cols="knownRounds.length ? 1 : 2" :gap="4" class="items-start" data-testid="usage-detail-primary">
@@ -200,6 +204,7 @@ const failureDecisions = computed<FailureDecision[]>(() => {
         </SDisclosure>
       </SCard>
     </SGrid>
+    <UsageAvailabilityTrace :row="u" />
     <SCard v-if="failureDecisions.length" variant="flat" data-testid="failure-decisions">
       <SDisclosure variant="section" :label="t('failurePolicy.decisions')" default-open>
         <FailureDecisionDetails v-for="(decision, index) in failureDecisions" :key="index" :decision="decision" />

@@ -159,6 +159,49 @@ export default {
   hooks: {
     title: '钩子决策'
   },
+  availability: {
+    title: '模型可用性预检',
+    seeBelow: '原因见下方"模型可用性预检"。',
+    outcomes: {
+      blocked_all: '全部拦截',
+      partial: '部分拦截',
+      fail_open: '检查失败，已放行'
+    },
+    candidates: '候选账号',
+    admitted: '放行账号',
+    retryAt: '最早可重试',
+    sampleRetry: '可重试',
+    afterRequest: '请求后 {time}',
+    counts: '按原因',
+    samples: '账号样例',
+    omitted: '另有 {n} 个账号未列出',
+    guard: '发送前复查',
+    attempt: '第 {n} 次尝试',
+    hiddenAccount: '无账号查看权限',
+    batch: '插件 {plugin} 整批',
+    reasonWithDetail: '{reason}：{detail}',
+    decisions: {
+      block: '拦截',
+      fail_open: '放行'
+    },
+    reasons: {
+      snapshot_unavailable: '额度快照不可用',
+      plugin_error: '插件调用出错',
+      plugin_timeout: '插件调用超时',
+      plugin_bad_response: '插件返回无效结果',
+      plugin_unknown: '插件无法判断',
+      unavailable: '不可用',
+      guard_identity_changed: '账号已重新授权',
+      guard_models_changed: '账号模型列表已变化',
+      upstream_model_mismatch: '上游请求的模型与检查的模型不一致'
+    },
+    pluginReasons: {
+      quota_rejected: '额度窗口 {window} 已耗尽',
+      invalid_candidate: '候选无效',
+      duplicate_candidate: '候选重复',
+      unsupported_account_type: '不支持的账号类型'
+    }
+  },
   sticky: {
     title: '粘性会话',
     rule: '规则',
