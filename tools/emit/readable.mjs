@@ -51,8 +51,10 @@ for (const f of fs.existsSync('naming') ? fs.readdirSync('naming') : []) {
   if (/^docs-.*.jsonl$/.test(f)) for (const x of readJsonl(path.join('naming', f))) if (x.id && x.doc) declDocs.set(x.id, x.doc);
   if (/^modules-.*.json$/.test(f)) for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(path.join('naming', f), 'utf8')))) moduleDocs.set(k, v);
 }
-const jsdoc = (text) => ['/**', ...String(text).split(/?
-/).map((l) => ' * ' + l.replaceAll('*/', '*/')), ' */'].join(String.fromCharCode(10));
+const docLines = (text) => String(text).split(/?
+/).map((l) => ' * ' + l.replaceAll('*/', '*\/'));
+const jsdoc = (text) => ['/**', ...docLines(text), ' */'].join('
+');
 const idOf = (d) => `${d.file}#${d.names[0] ?? '@' + d.start}`;
 const byId = new Map(D.map((d) => [idOf(d), d]));
 const declByLocal = new Map();
