@@ -1,5 +1,7 @@
 # OVH当前部署入口
 
+> 2026-11-02 再次清理：ovh `~/sup2api-managed/stage/` 只留 `0.1.229`、`0.1.230`、`ccgateway-0.1.120`、`ccgateway-0.1.121`、`gateway-0.1.130`，`~/sup2api/` 的 worktree 只留 `src` 与同名的五个 `release-*`；下文更早版本的 `stage/…` 脚本路径只作出处（能从会话记录还原的放在 `stage/_scripts/`），旧定制 CLI 二进制归档在 `~/sup2api/checks/cli-releases/`。
+>
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
 2026-11-02 网关（外壳）**0.1.130**（`6384710fd`，镜像 `ca0640ac…`，两个节点都已更新）：核心启动成功后自动清理旧核心发布包，只留 current / previous 及 6 小时内准备过的；sup2api-1 删 74 个（65 GB → 2 GB），sup2api-ccp 删 1 个。详见 [clicodeplus/README.md](../clicodeplus/README.md)。

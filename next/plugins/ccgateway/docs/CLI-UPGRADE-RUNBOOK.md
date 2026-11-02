@@ -242,7 +242,7 @@ bun package-release.cjs /abs/claude-linux-v<NN> /abs/patched-v<NN>/ccgateway-pat
 
 **发布**（ovh 发布记录的固定顺序，[ovh README](../../../deploy/gateway/ovh/README.md) 顶部几条；先插件后核心）：
 
-1. 升插件 `manifest.json` 版本（镜像与插件版本一起变），构建镜像与插件包；ovh 已关插件验签，插件包用一次性密钥签名（脚本样板现为 ovh 的 `~/sup2api-managed/stage/ccgateway-0.1.106/{build.sh,rollout.py}`，复制到新版本的 `stage/ccgateway-<版本>/` 再改版本号）。
+1. 升插件 `manifest.json` 版本（镜像与插件版本一起变），构建镜像与插件包；ovh 已关插件验签，插件包用一次性密钥签名（脚本样板现为 ovh 的 `~/sup2api-managed/stage/ccgateway-0.1.121/{prepare-src.sh,build.sh,rollout.py}`，复制到新版本的 `stage/ccgateway-<版本>/` 再改版本号；插件包现在用固定密钥 `sup2api-plugins-2026` 签名）。
 2. 数据库备份到 `~/sup2api-managed/backups/ccgateway-<版本>/`（每次发布新建；现存的是 `ccgateway-0.1.105`、`ccgateway-0.1.106`）。
 3. 插件上传、升级（权限不变时同意沿用）。
 4. `POST /system/ccgateway/runtime/bundled {"roles":["controller","egress"]}`。

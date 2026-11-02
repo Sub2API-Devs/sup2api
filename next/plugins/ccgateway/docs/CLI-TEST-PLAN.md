@@ -402,8 +402,8 @@ node test/e2e/official-diff.cjs <旧版重抓>.json test/fixtures/official-reque
 |---|---|
 | 本机 `artifacts/claude-2.1.304/` | 官方 ELF `claude-linux-x64`、`official-manifest.json`、还原源码 `linux-restored/`、下载样板 `acquire.py`、组装分析结果 `assembly-audit/`、`hardware-privacy-{inventory,evidence}.json` |
 | 本机 `artifacts/claude-2.1.310/` | 官方 ELF、`official-manifest.json`、`linux-restored/`、补丁源码 `patched-v33/`、审查报告 `review/`、官方重抓 `captures/`、规范化 diff `diffs/`、REA 交叉验证草稿 `scratch-rea/`、`equiv-304-310.json`、`equiv.out`、`config-matrix-policies-2.1.310.json`、`client-combination-unit-report.json` |
-| ovh `~/sup2api/` | 源码工作区 `src`；干净构建工作区 `release-0.1.206`、`release-0.1.207`、`release-ccgateway-0.1.105`、`release-ccgateway-0.1.106`；官方未改的 CLI `checks/ccg-304-v12/claude-official-304`、`checks/ccg-310/claude-official-310` |
-| ovh `~/sup2api-managed/stage/` | `0.1.206`、`0.1.207`（核心构建模板 `0.1.207/build.sh`；日志策略核对 `0.1.206/verify-logpolicy.py`）、`ccgateway-0.1.105`（生产日志核对 `verify-v33.py`）、`ccgateway-0.1.106`（插件构建/发布模板 `build.sh`、`rollout.py`） |
+| ovh `~/sup2api/` | 源码工作区 `src`；干净构建工作区（2026-11-02 清理后）`release-0.1.229`、`release-0.1.230`、`release-ccgateway-0.1.120`、`release-ccgateway-0.1.121`（含线上定制 CLI v41 `2.1.312/claude`，下次插件发布从这里复制）、`release-gateway-0.1.130`；官方未改的 CLI `checks/ccg-304-v12/claude-official-304`、`checks/ccg-310/claude-official-310`；旧定制 CLI 归档 `checks/cli-releases/<版本>-<补丁>/`（v33、v34、v36 的 2.1.310 与 v38 的 2.1.312） |
+| ovh `~/sup2api-managed/stage/` | （2026-11-02 清理后）`0.1.229`、`0.1.230`（核心构建/发布模板 `build.sh`、`release.sh`，下次内置插件从 `0.1.230/payload/builtin` 复制）、`ccgateway-0.1.120`、`ccgateway-0.1.121`（插件构建/发布模板 `prepare-src.sh`、`build.sh`、`rollout.py`）、`gateway-0.1.130`；`_scripts/<旧目录>/` 是从会话记录还原的旧脚本，含日志策略核对 `0.1.206/verify-logpolicy.py`、生产日志核对 `ccgateway-0.1.105/verify-v33.py`（其余旧版本的 build/release 脚本已删，未能还原） |
 | ovh `~/sup2api-managed/{backups,publish,ccgateway-images}/` | 只有核心 0.1.206/0.1.207 与插件 0.1.105/0.1.106 两版 |
 | 仓库 | 离线回归套件、官方抓包与 TLS 指纹工具：`cli-mods/test/e2e/`；跨版本分析工具：`cli-mods/tools/upgrade/`（锚点推导样板 `tools/upgrade/examples/derive-anchors-2.1.310.cjs`） |
 
