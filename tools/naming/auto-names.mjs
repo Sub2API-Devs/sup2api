@@ -6,6 +6,7 @@
 //     class with `this.name = "FooError"` / static name            -> FooError      [0.5]
 //     const bound to a short identifier-like string "foo-bar"       -> FOO_BAR       [0.3]
 //     var bound to `process.env.FOO_BAR` / env lookups               -> envFooBar     [0.3]
+//     import { join as u } from "path"                          -> join          [0.6]
 //   locals and top-level
 //     destructuring `{foo: a}` / `{foo: a = 1}`                       -> foo           [0.45]
 //     catch (e)                                                       -> error         [0.4]
@@ -77,6 +78,15 @@ for (const file of files) {
       if (init.type === 'NewExpression' && c.type === 'Identifier' && c.name.length > 3) return emit(id, lowerFirst(c.name), 0.3, 'new');
     }
   };
+  // imports from outside the bundle (node builtins, bun:*): local = imported name
+  for (const n of ast.program.body) {
+    if (n.type !== 'ImportDeclaration' || n.source.value.startsWith('.')) continue;
+    for (const sp of n.specifiers) {
+      const base = n.source.value.replace(/^node:/, '').replace(/[^w]+(w)/g, (_, c) => c.toUpperCase());
+      const want = sp.type === 'ImportSpecifier' ? (sp.imported.name ?? sp.imported.value) : sp.type === 'ImportNamespaceSpecifier' ? base + 'Module' : base;
+      if (want !== sp.local.name) emit(sp.local, want, 0.6, 'external-import');
+    }
+  }
   traverse(ast, {
     ClassDeclaration(p) {
       let nm = null;

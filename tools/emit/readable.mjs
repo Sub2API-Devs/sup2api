@@ -27,9 +27,9 @@ const ONLY = opt('--only', null);
 const FORMAT = !argv.includes('--no-format');
 const readJsonl = (p) => fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
-let renameModule = null;
-try { ({ renameModule } = await import('../rename/lib/index.mjs')); } catch {}
-if (!renameModule) console.warn('[emit] tools/rename/lib/index.mjs not available: emitting minified names');
+import { renameModule } from '../rename/lib/rename.mjs';
+import { loadNaming } from '../rename/lib/naming.mjs';
+import { planFromTree } from '../rename/lib/global.mjs';
 
 const D = readJsonl('analysis/scan/decls.jsonl');
 const scanMods = JSON.parse(fs.readFileSync('analysis/scan/modules.json', 'utf8'));
@@ -46,6 +46,14 @@ for (const l of readJsonl('naming/final/locals.jsonl')) {
 }
 const idOf = (d) => `${d.file}#${d.names[0] ?? '@' + d.start}`;
 const byId = new Map(D.map((d) => [idOf(d), d]));
+const declByLocal = new Map();
+const declsByFile = new Map();
+for (const d of D) {
+  for (const n of d.names) declByLocal.set(`${d.file}#${n}`, d);
+  let a = declsByFile.get(d.file);
+  if (!a) declsByFile.set(d.file, (a = []));
+  a.push(d);
+}
 
 // binding lookup per chunk: minified name -> {off, rec}
 const topByMin = new Map(); // file -> Map(min -> {off, rec})
@@ -71,19 +79,30 @@ function outPath(p, kind) {
 const wanted = Object.entries(segMods).filter(([p]) => !ONLY || p.startsWith(ONLY));
 const chunks = new Set();
 for (const [, m] of wanted) for (const c of Object.keys(m.chunks)) chunks.add(c);
+// Imports of contributing chunks name bindings of other chunks: rename those too
+// so every top-level name used below is the engine's final one.
+const naming = loadNaming('naming/final');
+console.time('[emit] global plan');
+const { plan } = planFromTree('original', naming.modules);
+console.timeEnd('[emit] global plan');
 const declText = new Map();
-for (const file of chunks) {
+const finalName = new Map(); // file -> Map(original offset -> final name), top-level and imports
+let conflicts = 0;
+for (const file of fs.readdirSync('original').filter((f) => f === 'cli.js' || /^chunk-.*.js$/.test(f))) {
   const source = fs.readFileSync(path.join('original', file), 'utf8');
-  let code = source, map = (x) => x;
-  if (renameModule) {
-    const names = new Map();
-    for (const [k, r] of Object.entries(top[file] ?? {})) if (r.name !== r.min) names.set(+k.slice(1), r.name);
-    for (const [off, n] of localsByFile.get(file) ?? []) names.set(off, n);
-    const r = renameModule(file, source, names);
-    code = r.code;
-    map = r.offsetMap;
-  }
-  for (const d of D) if (d.file === file) declText.set(idOf(d), code.slice(map(d.start), map(d.end)));
+  const r = renameModule(file, source, naming.modules.get(file), plan);
+  conflicts += r.conflicts.length;
+  const fm = new Map();
+  for (const x of r.renamed) if (x.key?.startsWith('@')) fm.set(+x.key.slice(1), x.to);
+  finalName.set(file, fm);
+  if (!chunks.has(file)) continue;
+  for (const d of declsByFile.get(file) ?? []) declText.set(idOf(d), r.code.slice(r.offsetMap(d.start), r.offsetMap(d.end)));
+}
+// patch the name records used for import synthesis with the engine's decisions
+for (const [file, recs] of Object.entries(top)) {
+  const fm = finalName.get(file);
+  if (!fm) continue;
+  for (const [k, r] of Object.entries(recs)) r.name = fm.get(+k.slice(1)) ?? r.min;
 }
 
 // ---------- assemble ----------
@@ -102,7 +121,7 @@ for (const [p, m] of wanted) {
     for (const r of d.refs) {
       if (r.startsWith('=')) {
         const t = topByMin.get(d.file)?.get(r.slice(1));
-        const tDecl = D.find((x) => x.file === d.file && x.names.includes(r.slice(1)));
+        const tDecl = declByLocal.get(`${d.file}#${r.slice(1)}`);
         if (!t || !tDecl) continue;
         const tp = pathOfDecl(idOf(tDecl));
         if (tp && tp !== file) addImport(imports, rel(file, tp), t.rec.name, t.rec.name);
@@ -118,7 +137,7 @@ for (const [p, m] of wanted) {
         continue;
       }
       const tLocal = exportsOf.get(from)?.[imported];
-      const tDecl = tLocal && D.find((x) => x.file === from && x.names.includes(tLocal));
+      const tDecl = tLocal && declByLocal.get(`${from}#${tLocal}`);
       if (!tDecl) continue;
       const tName = topByMin.get(from)?.get(tLocal)?.rec.name ?? tLocal;
       const tp = pathOfDecl(idOf(tDecl));
@@ -182,7 +201,7 @@ for (const r of resources) {
   if (fs.existsSync(path.join('original', r))) fs.copyFileSync(path.join('original', r), dest);
 }
 fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 1));
-console.log({ written, formatFailures, resources: resources.size, renamer: !!renameModule });
+console.log({ written, formatFailures, resources: resources.size, renameConflicts: conflicts });
 
 function addImport(map, spec, imported, local) {
   let m = map.get(spec);

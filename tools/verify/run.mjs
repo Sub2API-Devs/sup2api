@@ -7,6 +7,7 @@
 //     --no-upstream      不启动假上游（也不设 ANTHROPIC_BASE_URL / 代理）
 //     --keep             保留沙箱目录（默认跑完删除）
 //     --trace            预加载 trace-preload.js，打印 process.exit 调用栈与未捕获异常（诊断用）
+//     --shim-ant         预加载 bun-ant-shim.js（验证环境补丁：用公开 API 实现 Bun.ant.CellSegmenter，让 Ink 命令能在公版 Bun 上渲染）
 //     --env-trace        预加载 env-trace-preload.js，记录 CLI 读取过的环境变量名（结果在 envReads，非 --json 时打印）
 //     --json             输出完整结果 JSON（含假上游收到的请求）
 //     --timeout <ms>     超时，默认 60000
@@ -16,7 +17,7 @@
 //
 // 用法（库）：import { runCli, runScenario, pool } from './run.mjs'
 //   const r = await runCli({ tree, args | sequence: [{args, stdin}], script, firstParty, upstream, setup, collect,
-//                            timeoutMs, stdin, env, keep, trace, envTrace })
+//                            timeoutMs, stdin, env, keep, trace, envTrace, shimAnt, tty })
 //   r = { exitCode, signal, timedOut, stdout, stderr, durationMs, steps?, requests, files, collected, envReads?,
 //         sandbox: {root, home, work, tmp, …}, leaks, hostWarnings }
 //   runScenario(tree, scenario) 按 scenarios.mjs 的场景对象调用 runCli；pool(items, n, fn) 并发 n 路。
@@ -39,6 +40,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { startFakeUpstream } from './fake-upstream.mjs';
+import { renderScreen } from './vt-screen.mjs';
 
 export const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const FAKE_API_KEY = 'sk-ant-api03-verify-fake-key-not-a-real-credential-0000000000000000000000000000000000000000000000-AAAAAA';
@@ -152,7 +154,8 @@ function killTree(child) {
 // 按场景对象运行（scenarios.mjs 的字段）
 export async function runScenario(tree, s) {
   return runCli({ tree, args: s.args, sequence: s.sequence, script: s.script, upstream: s.upstream !== false,
-    firstParty: !!s.firstParty, setup: s.setup, collect: s.collect, stdin: s.stdin, env: s.env, timeoutMs: s.timeoutMs || 60000 });
+    firstParty: !!s.firstParty, setup: s.setup, collect: s.collect, stdin: s.stdin, env: s.env, timeoutMs: s.timeoutMs || 60000,
+    shimAnt: !!s.shimAnt, tty: s.tty });
 }
 
 export async function pool(items, n, fn) {
@@ -163,13 +166,23 @@ export async function pool(items, n, fn) {
 }
 
 // 一次 CLI 调用：spawn bun，收集输出，超时按 PID 杀进程树
-async function spawnOnce({ entry, args, sb, env, stdin, timeoutMs, trace, envTrace }) {
+async function spawnOnce({ entry, args, sb, env, stdin, timeoutMs, trace, envTrace, shimAnt, tty }) {
   const t0 = Date.now();
   const pre = [];
   if (trace) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'trace-preload.js'));
   if (envTrace) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'env-trace-preload.js'));
-  const child = spawn(bunPath(), ['--no-install', ...pre, entry, ...args], {
-    cwd: sb.work, env, stdio: [stdin === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+  if (shimAnt) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'bun-ant-shim.js'));
+  const cliArgv = ['--no-install', ...pre, entry, ...args];
+  // tty：经 pty-driver.js 在伪终端（Windows 上是 ConPTY）里运行，stdout 收到的是终端字节流
+  let cmdArgv = cliArgv, cmdEnv = env;
+  if (tty) {
+    cmdArgv = [path.join(projectRoot, 'tools', 'verify', 'pty-driver.js')];
+    cmdEnv = { ...env, VERIFY_PTY_CONFIG: JSON.stringify({ argv: [bunPath(), ...cliArgv], cols: tty.cols || 100, rows: tty.rows || 30,
+      steps: tty.steps || [], idleMs: tty.idleMs ?? 1500, expectExit: !!tty.expectExit, exitWaitMs: tty.exitWaitMs,
+      maxMs: Math.max(5000, timeoutMs - 5000) }) };
+  }
+  const child = spawn(bunPath(), cmdArgv, {
+    cwd: sb.work, env: cmdEnv, stdio: [stdin === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
     windowsHide: true, detached: process.platform !== 'win32',
   });
   if (stdin !== undefined) { child.stdin.on('error', () => {}); child.stdin.end(stdin); }
@@ -184,15 +197,24 @@ async function spawnOnce({ entry, args, sb, env, stdin, timeoutMs, trace, envTra
   });
   clearTimeout(timer);
   killTree(child); // 收掉可能残留的孙进程（bash、MCP 服务器等）
-  return { args, exitCode, signal, timedOut, durationMs: Date.now() - t0,
+  const res = { args, exitCode, signal, timedOut, durationMs: Date.now() - t0,
     stdout: Buffer.concat(out).toString('utf8'), stderr: Buffer.concat(err).toString('utf8') };
+  if (tty) {
+    const lines = res.stderr.trimEnd().split('\n');
+    try { res.pty = JSON.parse(lines.at(-1)); res.stderr = lines.slice(0, -1).join('\n'); } catch { res.pty = null; }
+    res.exitCode = res.pty?.ptyExit ?? null;
+    res.snapshots = (res.pty?.steps || []).filter((s) => s.snapshot).map((s) => s.snapshot);
+    for (const s of res.pty?.steps || []) delete s.snapshot;
+    res.screen = renderScreen(res.stdout, { cols: tty.cols || 100, rows: tty.rows || 30 }).lines;
+  }
+  return res;
 }
 
 // sequence: [{ args, stdin }, ...] 在同一沙箱、同一假上游里依次运行（例如 mcp add → mcp remove）。
 // 结果的 exitCode/stdout/stderr 取自最后一步，每一步的完整结果在 steps 里。
 // collect(ctx) 在删除沙箱前调用，返回值放进 result.collected（例如读取 MCP 服务器日志）。
 export async function runCli({ tree, args = [], sequence, script, upstream = true, firstParty = false, setup, collect,
-  timeoutMs = 60000, stdin, env: extraEnv = {}, keep = false, trace = false, envTrace = false } = {}) {
+  timeoutMs = 60000, stdin, env: extraEnv = {}, keep = false, trace = false, envTrace = false, shimAnt = false, tty } = {}) {
   const treeDir = path.resolve(projectRoot, tree);
   const entry = path.join(treeDir, 'cli.js');
   if (!fs.existsSync(entry)) throw new Error(`找不到 ${entry}`);
@@ -208,7 +230,7 @@ export async function runCli({ tree, args = [], sequence, script, upstream = tru
     const steps = [];
     for (const st of plan) {
       const a = typeof st.args === 'function' ? st.args(ctx) : st.args;
-      steps.push(await spawnOnce({ entry, args: a, sb, env, stdin: st.stdin, timeoutMs, trace, envTrace }));
+      steps.push(await spawnOnce({ entry, args: a, sb, env, stdin: st.stdin, timeoutMs, trace, envTrace, shimAnt, tty: st.tty ?? tty }));
     }
     const last = steps.at(-1);
     const result = {
@@ -291,7 +313,7 @@ if (isMain) {
   const env = {};
   own.forEach((a, i) => { if (a === '--env') { const [k, ...v] = own[i + 1].split('='); env[k] = v.length ? v.join('=') : undefined; } });
   const r = await runCli({ tree, args: cliArgs, firstParty: flag('--first-party'), upstream: !flag('--no-upstream'),
-    keep: flag('--keep'), trace: flag('--trace'), envTrace: flag('--env-trace'), env, timeoutMs: timeoutIdx >= 0 ? Number(own[timeoutIdx + 1]) : 60000 });
+    keep: flag('--keep'), trace: flag('--trace'), envTrace: flag('--env-trace'), shimAnt: flag('--shim-ant'), env, timeoutMs: timeoutIdx >= 0 ? Number(own[timeoutIdx + 1]) : 60000 });
   if (flag('--json')) {
     console.log(JSON.stringify(r, null, 2));
   } else {

@@ -125,10 +125,26 @@ for (const [file, bindings] of top) for (const b of bindings.values()) if (b.kin
 }
 decided.sort((x, y) => ((PRIORITY[y.c?.source] ?? 0) - (PRIORITY[x.c?.source] ?? 0)) || ((y.c?.confidence ?? 0) - (x.c?.confidence ?? 0)));
 // reserve kept minified names first so new names never collide with them
-for (const { file, b, c } of decided) if (!c) for (const k of scopesOf(file, b)) take(k, b.min);
+// A kept minified name can still clash inside a reconstructed module that
+// gathers declarations from several chunks; the later one gets a chunk tag.
+for (const { file, b, c } of decided) {
+  if (c) continue;
+  const [chunkScope, modScope] = scopesOf(file, b);
+  take(chunkScope, b.min);
+  if (!modScope) continue;
+  if (isTaken(modScope, b.min)) {
+    const tag = file.replace(/^chunk-|.m?js$/g, '').slice(0, 4);
+    let name = `${b.min}_${tag}`, i = 2;
+    while (isTaken(modScope, name) || isTaken(chunkScope, name)) name = `${b.min}_${tag}${i++}`;
+    b.renameTo = name;
+    take(chunkScope, name);
+    take(modScope, name);
+    stats.moduleClashes = (stats.moduleClashes ?? 0) + 1;
+  } else take(modScope, b.min);
+}
 for (const { file, b, c } of decided) {
   let rec;
-  if (!c) { rec = { name: b.min, min: b.min, source: 'minified', confidence: 0, declId: b.declId, kind: 'decl' }; stats.kept++; }
+  if (!c) { rec = b.renameTo ? { name: b.renameTo, min: b.min, source: 'auto', confidence: 0.1, declId: b.declId, kind: 'decl', via: 'module-clash' } : { name: b.min, min: b.min, source: 'minified', confidence: 0, declId: b.declId, kind: 'decl' }; stats.kept++; }
   else {
     const scopes = scopesOf(file, b);
     let name = c.name, i = 2;
@@ -151,10 +167,11 @@ for (const [file, im] of importsOf) {
     const exOff = exportsOf.get(b.from)?.get(b.imported);
     const target = exOff !== undefined ? final.get(b.from)?.get(exOff) : null;
     if (target) want = target.name;
+    else if (cands.get(file)?.get(b.off)) want = cands.get(file).get(b.off).name;
     let name = want, i = 2;
     while (isTaken(`chunk:${file}`, name)) name = `${want}_${i++}`;
     take(`chunk:${file}`, name);
-    m.set(b.off, { name, min: b.min, source: target ? 'import' : 'minified', kind: 'import', from: b.from, imported: b.imported });
+    m.set(b.off, { name, min: b.min, source: target ? 'import' : want !== b.min ? 'auto' : 'minified', kind: 'import', from: b.from, imported: b.imported });
     stats.imports++;
   }
 }
