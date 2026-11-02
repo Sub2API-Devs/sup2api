@@ -67,6 +67,13 @@ func (s *availabilitySource) AccountQuotaSnapshots(_ context.Context, ids []int6
 	}
 	return out, s.err
 }
+func (s *availabilitySource) AccountQuotaView(ctx context.Context, ids []int64) (core.QuotaView, error) {
+	snapshots, err := s.AccountQuotaSnapshots(ctx, ids)
+	if err != nil {
+		return core.QuotaView{Missing: append([]int64(nil), ids...)}, err
+	}
+	return core.QuotaView{Snapshots: snapshots}, nil
+}
 func (s *availabilitySource) ApplyAccountQuotaObservation(_ context.Context, id, generation int64, q *pluginv1.QuotaResult) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -370,6 +370,17 @@ func (s *Service) AccountQuotaSnapshots(ctx context.Context, ids []int64) (map[i
 	return out, nil
 }
 
+// AccountQuotaView reads the snapshots of ids for the availability precheck.
+// Placeholder until the in-memory mirror (MODEL-AVAILABILITY-PRECHECK-DESIGN
+// §4): a failed read reports every id as missing.
+func (s *Service) AccountQuotaView(ctx context.Context, ids []int64) (core.QuotaView, error) {
+	snapshots, err := s.AccountQuotaSnapshots(ctx, ids)
+	if err != nil {
+		return core.QuotaView{Missing: append([]int64(nil), ids...)}, err
+	}
+	return core.QuotaView{Snapshots: snapshots}, nil
+}
+
 func (s *Service) ApplyAccountQuotaObservation(ctx context.Context, id, expectedGeneration int64, res *pluginv1.QuotaResult) error {
 	if expectedGeneration <= 0 {
 		return nil
