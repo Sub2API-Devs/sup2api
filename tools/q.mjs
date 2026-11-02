@@ -5,6 +5,9 @@
 //   node tools/q.mjs callees <id|name>    declarations it uses
 //   node tools/q.mjs module <path>        declarations of a reconstructed module (analysis/segments)
 //   node tools/q.mjs where <chunk.js>     reconstructed modules a chunk contributes to
+//   node tools/q.mjs bindings <id|name>   every binding inside a declaration: naming key (@offset),
+//                                         minified name, current best name and its source
+//   node tools/q.mjs module-bindings <path>  same, for every declaration of a reconstructed module
 // <id> is "chunk-xxx.js#minName"; <name> is a reference/semantic name or a minified name.
 // When readable names exist (analysis/names/*.jsonl, naming/semantic-*.jsonl —
 // the latter win), `show` prints the
@@ -15,6 +18,7 @@ import { parse } from '@babel/parser';
 import prettier from 'prettier';
 
 const [cmd, ...args] = process.argv.slice(2);
+const bindingsCache = new Map();
 const arg = args.join(' ');
 const readJsonl = (p) => (fs.existsSync(p) ? fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 const D = readJsonl('analysis/scan/decls.jsonl');
@@ -139,6 +143,30 @@ switch (cmd) {
     for (const [p, m] of Object.entries(mods)) if (m.chunks[arg]) console.log(`${m.chunks[arg]}\t${p}`);
     break;
   }
+  case 'bindings':
+    for (const d of resolve(arg).slice(0, 5)) await printBindings(d);
+    break;
+  case 'module-bindings': {
+    const mods = JSON.parse(fs.readFileSync('analysis/segments/modules.json', 'utf8'));
+    const m = mods[arg];
+    if (!m) { console.log('no such module'); break; }
+    for (const id of m.decls) await printBindings(byId.get(id));
+    break;
+  }
   default:
     console.log(fs.readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(0, 10).join('\n'));
+}
+
+async function printBindings(d) {
+  const { bindingsOf } = await import('./rename/lib/rename.mjs');
+  const src = fs.readFileSync(path.join('original', d.file), 'utf8');
+  bindingsCache.get(d.file) ?? bindingsCache.set(d.file, bindingsOf(d.file, src));
+  const nm = names.get(d.file);
+  console.log('# ' + label(d));
+  for (const b of bindingsCache.get(d.file)) {
+    if (b.topDeclStart !== d.start) continue;
+    const n = nm?.get(b.declStart);
+    const ctx = src.slice(b.declStart, b.declStart + 50).replace(/s+/g, ' ');
+    console.log(`  ${d.file} ${b.key}	${b.scope}/${b.kind}	${b.name}	-> ${n ? n.name + ' (' + n.source + (n.via ? '/' + n.via : '') + ')' : '-'}	refs=${b.refs}${b.frozen ? ' FROZEN' : ''}	| ${ctx}`);
+  }
 }

@@ -15,8 +15,8 @@
 //   - versions whose exact string appears in the code matched to the package
 //   - round 1: newest patch of each of the newest 8 minor lines, plus the
 //     newest of each older major (max 2)
-//   - round 2: every patch of the minor lines that matched best in round 1
-//     (needs a match run in between; reads analysis/vendor/packages.json)
+//   - round 2: every patch of the minor line chosen in round 1 and of the next
+//     minor line (needs a match run in between; reads index/versions.json)
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync, execFile } from 'node:child_process';
@@ -89,7 +89,7 @@ const cmp = (a, b) => {
     y = parse(b);
   return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
 };
-const prev = fs.existsSync('analysis/vendor/packages.json') ? JSON.parse(fs.readFileSync('analysis/vendor/packages.json', 'utf8')).packages ?? {} : {};
+const prev = fs.existsSync(path.join(IDX, 'versions.json')) ? JSON.parse(fs.readFileSync(path.join(IDX, 'versions.json'), 'utf8')) : {};
 const want = [];
 for (const p of pkgs) {
   const time = metas.get(p) ?? {};
@@ -106,11 +106,15 @@ for (const p of pkgs) {
     for (const v of minors.slice(0, -8)) byMajor.set(v.split('.')[0], v);
     for (const v of [...byMajor.values()].slice(-2)) pick.add(v);
   } else {
-    // every patch of the best minor line(s) found so far
-    for (const v of prev[p]?.versionCandidates ?? []) {
-      const mm = v.split('.').slice(0, 2).join('.');
-      for (const w of all) if (w.startsWith(mm + '.')) pick.add(w);
-    }
+    // every patch of the minor line(s) chosen so far and of the next minor
+    // line (round 1 only had the newest patch of each line)
+    const minors = [...new Set(all.map((v) => v.split('.').slice(0, 2).join('.')))];
+    for (const c of prev[p]?.chosen ?? [])
+      for (const v of c.versions) {
+        const mm = v.split('.').slice(0, 2).join('.');
+        const next = minors[minors.indexOf(mm) + 1];
+        for (const w of all) if (w.startsWith(mm + '.') || (next && w.startsWith(next + '.'))) pick.add(w);
+      }
   }
   for (const v of pick) if (!fs.existsSync(path.join(VERS, `${p.replace('/', '__')}@${v}`, 'package', 'package.json'))) want.push([p, v]);
 }

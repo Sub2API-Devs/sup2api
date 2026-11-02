@@ -13,14 +13,15 @@ export const DOMAINS = [
   ['tools', /^(Tool\.ts|tools\.ts|tools\/|services\/tools|utils\/(toolSearch|toolPool|file|fileRead|readFile|fileHistory|diff|glob|ripgrep|notebook|imageResizer|pdf|webFetch|todo|tasks\.ts|filePersistence|treeify|truncate|codeIndexing))/],
   ['permissions', /^(types\/permissions|utils\/(permissions|sandbox|bash|shell|powershell|Shell|execFileNoThrow|execSyncWrapper|promptShellExecution|classifierApprovals|autoMode|yoloClassifier|secureStorage))/],
   ['extensions', /^(services\/(mcp|plugins|lsp|oauth\/mcp|mcpServerApproval)|plugins\/|skills\/|outputStyles\/|utils\/(plugins|skills|hooks|mcp|claudeInChrome|computerUse|deepLink|frontmatter|markdownConfigLoader|lsp|dxt))|schemas\//],
-  ['ui', /^(ink\/|ink\.ts|components\/|screens\/|hooks\/|keybindings\/|vim\/|native-ts\/|outputStyles|utils\/(theme|terminal|ansi|render|format|highlight|cliHighlight|markdown|fullscreen|log\.ts|stringWidth|sliceAnsi|textHighlighting|hyperlink|statusNotice|treeify|fpsTracker|terminalPanel|editor|clipboard|imagePaste|asciicast|figures|keyboardShortcuts))/],
+  ['ink', /^(ink\/|ink\.ts|native-ts\/|keybindings\/|vim\/)/],
+  ['ui', /^(components\/|screens\/|hooks\/|outputStyles|utils\/(theme|terminal|ansi|render|format|highlight|cliHighlight|markdown|fullscreen|log\.ts|stringWidth|sliceAnsi|textHighlighting|hyperlink|statusNotice|treeify|fpsTracker|terminalPanel|editor|clipboard|imagePaste|asciicast|figures|keyboardShortcuts))/],
   ['state', /^(state\/|history\.ts|memdir\/|services\/(SessionMemory|extractMemories|teamMemorySync|analytics|oauth|settingsSync|remoteManagedSettings|policyLimits|diagnosticTracking|internalLogging|notifier|preventSleep|autoDream|MagicDocs|tips)|utils\/(settings|config|sessionStorage|session|auth|telemetry|secureStorage|env|envUtils|cwd|git|github|gitDiff|worktree|cache|memoize|errors|debug|log|json|path|platform|fsOperations|lockfile|signal|sleep|uuid|hash|crypto|http|proxy|mtls|user|billing|privacyLevel|managedEnv|undercover|commitAttribution|teleport|preflight|heapdump|perf|startupProfiler))/],
   ['agents', /^(coordinator\/|tasks\/|Task\.ts|tasks\.ts|assistant\/|bridge\/|remote\/|server\/|buddy\/|voice\/|moreright\/|entrypoints\/sdk|utils\/(swarm|teammate|agent|forkedAgent|standaloneAgent|background|sessionIngress|ultraplan|remote|bridge|cron|scheduled|inProcessTeammate)|services\/(voice|remote|bridge))/],
   ['commands', /^(commands\.ts|commands\/)/],
 ];
 export function domainOf(p) {
   for (const [d, re] of DOMAINS) if (re.test(p)) return d;
-  return p.startsWith('services/') ? 'state' : p.startsWith('utils/') ? 'state' : 'misc';
+  return p.startsWith('services/') || p.startsWith('utils/') || p.startsWith('types/') ? 'state' : 'misc';
 }
 if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}` || process.argv[1]?.endsWith('domains.mjs')) {
   const out = {};

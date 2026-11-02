@@ -18,12 +18,11 @@ import { walk } from '../../ast/lib/features.mjs';
 
 export { walk };
 
-export const readJsonl = (p) =>
-  fs
-    .readFileSync(p, 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .map((l) => JSON.parse(l));
+export const readJsonl = (p) => {
+  const out = [];
+  eachJsonl(p, (r) => out.push(r));
+  return out;
+};
 
 export function parseJs(src, { module = 'unambiguous' } = {}) {
   const opts = {
@@ -173,6 +172,43 @@ export const BUILTINS = new Set(
 );
 export const isBuiltin = (s) => s.startsWith('node:') || s.startsWith('bun:') || BUILTINS.has(s);
 
+// Streaming JSONL writer (files can exceed the V8 string limit).
+export function jsonlWriter(p) {
+  const fd = fs.openSync(p, "w");
+  let buf = "";
+  let n = 0;
+  return {
+    write(r) {
+      buf += JSON.stringify(r) + '\n';
+      n++;
+      if (buf.length > 1 << 22) {
+        fs.writeSync(fd, buf);
+        buf = "";
+      }
+    },
+    close() {
+      if (buf) fs.writeSync(fd, buf);
+      fs.closeSync(fd);
+      return n;
+    },
+  };
+}
+// Streaming JSONL reader: calls fn(row) for every line.
+export function eachJsonl(p, fn) {
+  const fd = fs.openSync(p, "r");
+  const chunk = Buffer.alloc(1 << 24);
+  let rest = "";
+  for (;;) {
+    const n = fs.readSync(fd, chunk, 0, chunk.length, null);
+    if (!n) break;
+    const s = rest + chunk.toString("utf8", 0, n);
+    const lines = s.split('\n');
+    rest = lines.pop();
+    for (const l of lines) if (l) fn(JSON.parse(l));
+  }
+  if (rest) fn(JSON.parse(rest));
+  fs.closeSync(fd);
+}
 export function writeJsonl(p, rows) {
   const fd = fs.openSync(p, 'w');
   let buf = '';

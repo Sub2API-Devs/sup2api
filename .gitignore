@@ -8,3 +8,4 @@ analysis/vendor/index/
 *.log
 .rn-tmp/
 runnable/
+build/

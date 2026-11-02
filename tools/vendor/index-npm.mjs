@@ -20,7 +20,7 @@
 // fid = "<name>@<version>/<path inside package>", did = fid + "#" + idx[.u].
 import fs from 'node:fs';
 import path from 'node:path';
-import { parseJs, collect, collectJson, declaredNames, shapeOf, isBuiltin, writeJsonl, rel } from './lib/common.mjs';
+import { parseJs, collect, collectJson, declaredNames, shapeOf, isBuiltin, jsonlWriter, rel } from './lib/common.mjs';
 
 const [root = 'vendor-ref/node_modules', out = 'analysis/vendor/index'] = process.argv.slice(2);
 fs.mkdirSync(out, { recursive: true });
@@ -164,8 +164,10 @@ function resolveSpec(spec, fromAbs, kind) {
 }
 
 // ---------- scan ----------
-const fileRows = [];
-const declRows = [];
+const fileOut = jsonlWriter(path.join(out, 'npm-files.jsonl'));
+const declOut = jsonlWriter(path.join(out, 'npm-decls.jsonl'));
+const fileRows = { push: (r) => fileOut.write(r) };
+const declRows = { push: (r) => declOut.write(r) };
 let parseFail = 0;
 let n = 0;
 for (const f of files) {
@@ -268,9 +270,9 @@ function pkgOfAbs(abs) {
   }
 }
 
-writeJsonl(path.join(out, 'npm-files.jsonl'), fileRows);
-writeJsonl(path.join(out, 'npm-decls.jsonl'), declRows);
+const nFiles = fileOut.close();
+const nDecls = declOut.close();
 const pk = {};
 for (const [dir, p] of pkgs) pk[rel(path.relative(ROOT, dir))] = { name: p.name, version: p.version, deps: Object.keys({ ...p.json.dependencies, ...p.json.optionalDependencies, ...p.json.peerDependencies }) };
 fs.writeFileSync(path.join(out, 'packages.json'), JSON.stringify(pk, null, 1));
-console.log(JSON.stringify({ packages: pkgs.size, files: fileRows.length, decls: declRows.length, parseFail }));
+console.log(JSON.stringify({ packages: pkgs.size, files: nFiles, decls: nDecls, parseFail }));
