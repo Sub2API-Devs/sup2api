@@ -7,3 +7,4 @@ analysis/reference/
 analysis/vendor/index/
 *.log
 .rn-tmp/
+runnable/

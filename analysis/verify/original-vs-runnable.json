@@ -1,0 +1,186 @@
+{
+  "name": "original-vs-runnable",
+  "baseline": "original",
+  "candidate": "runnable",
+  "date": "2026-11-02T21:25:33.015Z",
+  "wallMs": 3883,
+  "bun": "1.4.4+38afee6c8",
+  "node": "v24.20.0",
+  "platform": "win32-x64",
+  "rules": [
+    {
+      "rule": "path:cwd",
+      "desc": "沙箱工作目录（含 / 、\\\\ 转义和 ~/.claude/projects 的 \"-\" 编码形式）→ <CWD>"
+    },
+    {
+      "rule": "path:home",
+      "desc": "沙箱 HOME → <HOME>"
+    },
+    {
+      "rule": "path:tmp",
+      "desc": "沙箱 TMP → <TMP>"
+    },
+    {
+      "rule": "path:sandbox",
+      "desc": "沙箱根目录 → <SANDBOX>，单独出现的 run-XXXXXX → <RUNID>"
+    },
+    {
+      "rule": "path:tree",
+      "desc": "被测树目录（original / runnable 的绝对路径）→ <TREE>"
+    },
+    {
+      "rule": "path:bun",
+      "desc": "bun.exe 所在目录 → <BUNDIR>"
+    },
+    {
+      "rule": "path:project",
+      "desc": "项目根目录 → <PROJECT>"
+    },
+    {
+      "rule": "port",
+      "desc": "假上游端口 127.0.0.1:<port> → 127.0.0.1:<PORT>"
+    },
+    {
+      "rule": "uuid",
+      "desc": "UUID（session_id、prompt id、x-client-request-id、uuid 字段…）→ <UUID-n>，按首次出现编号，保留\"同值\"关系"
+    },
+    {
+      "rule": "iso-ts",
+      "desc": "ISO 时间戳 → <ISO-TS>"
+    },
+    {
+      "rule": "hex64",
+      "desc": "64 位十六进制（metadata.user_id 里的 device_id 等）→ <HEX64-n>"
+    },
+    {
+      "rule": "epoch-ms",
+      "desc": "13 位毫秒时间戳（快照文件名等）→ <EPOCH-MS>"
+    },
+    {
+      "rule": "cch",
+      "desc": "计费头 cch=xxxxx → cch=<CCH>"
+    },
+    {
+      "rule": "cwd-file",
+      "desc": "Bash 工具的 cwd 记录文件 claude-<4hex>-cwd → claude-<HEX4>-cwd"
+    },
+    {
+      "rule": "tmp-file",
+      "desc": "原子写临时文件 .tmp.<pid>.<12hex> → .tmp.<PID>.<HEX>"
+    },
+    {
+      "rule": "date",
+      "desc": "\"Today's date is YYYY-MM-DD\" 与 currentDate 之类的日期 → <DATE>"
+    },
+    {
+      "rule": "duration",
+      "desc": "JSON 里名字含 duration / _ms / Ms / ttft 的数值字段 → \"<N>\""
+    },
+    {
+      "rule": "cost",
+      "desc": "total_cost_usd / costUSD 数值不归一（假上游 usage 固定，成本应稳定）"
+    },
+    {
+      "rule": "header:content-length",
+      "desc": "请求头 Content-Length → <LEN>（body 本身逐字段比较）"
+    },
+    {
+      "rule": "request:t",
+      "desc": "请求到达时间 t、seq 不参与比较"
+    },
+    {
+      "rule": "parallel-tool-results",
+      "desc": "同一条 user 消息里连续的 tool_result 块（以及 stream-json 里连续的 tool_result user 事件行）按 tool_use_id 排序：并行工具按完成先后回传，顺序不确定"
+    }
+  ],
+  "totals": {
+    "scenarios": 1,
+    "equal": 1,
+    "baselinePass": 1,
+    "candidatePass": 1,
+    "ruleHits": {},
+    "scenariosNeedingNormalization": []
+  },
+  "scenarios": [
+    {
+      "name": "update-offline",
+      "desc": "update：查询 npm registry 被黑洞代理拒绝（2 次 CONNECT registry.npmjs.org:443），打印失败说明，退出 1。",
+      "equal": true,
+      "baseline": {
+        "exitCode": 1,
+        "timedOut": false,
+        "durationMs": 3135,
+        "apiRequests": 0,
+        "externalRequests": [
+          "CONNECT registry.npmjs.org:443",
+          "CONNECT registry.npmjs.org:443"
+        ],
+        "leaks": [
+          {
+            "what": "external-request",
+            "value": "CONNECT registry.npmjs.org:443"
+          },
+          {
+            "what": "external-request",
+            "value": "CONNECT registry.npmjs.org:443"
+          }
+        ],
+        "hostWarnings": [],
+        "problems": []
+      },
+      "candidate": {
+        "exitCode": 1,
+        "timedOut": false,
+        "durationMs": 3715,
+        "apiRequests": 0,
+        "externalRequests": [
+          "CONNECT registry.npmjs.org:443",
+          "CONNECT registry.npmjs.org:443"
+        ],
+        "leaks": [
+          {
+            "what": "external-request",
+            "value": "CONNECT registry.npmjs.org:443"
+          },
+          {
+            "what": "external-request",
+            "value": "CONNECT registry.npmjs.org:443"
+          }
+        ],
+        "hostWarnings": [],
+        "problems": []
+      },
+      "diffs": [],
+      "rawDiffCount": 0,
+      "normalizationHits": {},
+      "shape": [
+        {
+          "kind": "proxy-connect",
+          "method": "CONNECT",
+          "url": "registry.npmjs.org:443",
+          "status": 403,
+          "headers": [
+            "Host: registry.npmjs.org:443",
+            "Proxy-Connection: Keep-Alive"
+          ],
+          "bodyKeys": null,
+          "bodySha": null
+        },
+        {
+          "kind": "proxy-connect",
+          "method": "CONNECT",
+          "url": "registry.npmjs.org:443",
+          "status": 403,
+          "headers": [
+            "Host: registry.npmjs.org:443",
+            "Proxy-Connection: Keep-Alive"
+          ],
+          "bodyKeys": null,
+          "bodySha": null
+        }
+      ],
+      "stdoutHead": "Current version: 2.1.316\nChecking for updates to latest version...\n\nUpdating configuration to track installation method...\nInstallation method set to: unknown\n",
+      "stderrHead": "Failed to check for updates\nUnable to fetch latest version from npm registry\n\nPossible causes:\n  • Network connectivity issues\n  • npm registry is unreachable\n  • Corporate proxy/firewall blocking npm\n\nTry:\n  • Check your internet connection\n  • Run with --debug flag for more details\n  • Manually check: npm view @anthropic-ai/claude-code version\n  • Check if you need to login: npm whoami\n"
+    }
+  ]
+}
