@@ -20,3 +20,4 @@
 - 04:30 `tools/emit/readable.mjs`：阅读树生成（模块头、每个声明前的出处行 `//@ chunk:start-end 方法 = 旧版名`、按使用边合成 import/export、prettier 格式化）；改名统一调用 rename 成员的库（放弃了自写的第二套改名器，避免两套实现）。
 - 04:33 `tools/ast/match-local.mjs`：文件内二次匹配 529 对；旧版命名合计顶层 8,353、参数 5,824、局部 17,816。
 - 05:05 runtime：`tools/verify/`（隔离运行 run.mjs、假 Messages API fake-upstream.mjs、stdio MCP 假服务器、42 个场景、对拍 compare.mjs）+ 开发依赖 `bun@1.4.4`（公版，修订 38afee6c8）。original 自对拍两轮 42/42 一致（16 个场景需归一化），负对照能抓出一字之差；rename 测试输出 `.rn-tmp/out-full`、`out-final` 对拍 42/42 一致。已知限制：Ink 命令需要内部 Bun 的 `Bun.ant.CellSegmenter`，公版跑不了。细节见 `docs/process/verify.md`。
+- 05:17 rename：`tools/rename/`（apply.mjs、alpha-check.mjs、lib/、test/）作用域安全改名引擎 + α 等价校验，基于偏移的文本替换（空表逐字节相同）；导出改名跨模块同步，`import()`/`require("./x.js")`/未被静态导入的 1,041 个模块导出名冻结。全语料（2,650 模块、674,774 绑定）全量随机改名、冲突压力两种表 α 0 差异，各约 10–20 秒；分析器与 Babel 作用域差分 271 万标识符 0 差异；Bun 对拍一致；46 个测试通过。格式见 `naming/README.md`，细节见 `docs/process/rename.md`。
