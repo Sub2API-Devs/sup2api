@@ -27,7 +27,7 @@ type QuotaWindow struct {
 }
 
 // QuotaSnapshot is one account_quota_snapshots row. The JSON form is the one
-// the account service caches in Redis (CONTRACTS §44.9).
+// the account service caches in Redis (CONTRACTS §51.3).
 type QuotaSnapshot struct {
 	AccountID int64                  `json:"account_id"`
 	Windows   map[string]QuotaWindow `json:"windows"`
@@ -98,7 +98,7 @@ func (d *DB) AccountQuotas(ctx context.Context, accountIDs []int64) (map[int64]*
 // AccountQuotasAt is AccountQuotas plus the time the read began
 // (statement_timestamp of the one statement, on the database clock): the
 // result reflects at least every write committed before it. Caches order
-// their entries by it (CONTRACTS §44.9).
+// their entries by it (CONTRACTS §51.3).
 func (d *DB) AccountQuotasAt(ctx context.Context, accountIDs []int64) (map[int64]*QuotaSnapshot, time.Time, error) {
 	out := map[int64]*QuotaSnapshot{}
 	var at time.Time
@@ -129,6 +129,85 @@ func (d *DB) AccountQuotasAt(ctx context.Context, accountIDs []int64) (map[int64
 		out[q.AccountID] = &q
 	}
 	return out, at, rows.Err()
+}
+
+// QuotaRead is a read of account quota snapshots for the core's in-memory
+// quota mirror (MODEL-AVAILABILITY-PRECHECK-DESIGN §4). A row that cannot be
+// decoded fails only itself.
+type QuotaRead struct {
+	// At is when the read began (statement_timestamp of the one statement,
+	// on the database clock): the read reflects every write committed before.
+	At time.Time
+	// Accounts lists every account the read covered, with or without a
+	// snapshot row; only ReadAccountQuotasOfTypes fills it.
+	Accounts []int64
+	// Snapshots holds the decoded rows by account id.
+	Snapshots map[int64]*QuotaSnapshot
+	// Invalid holds the rows whose windows document could not be decoded.
+	Invalid map[int64]error
+}
+
+const selectQuotaRead = `statement_timestamp(), q.account_id, q.windows, COALESCE(q.source, ''), COALESCE(q.error, ''),
+		q.updated_at, q.last_passive_at, q.last_active_at, COALESCE(q.revision,0), q.next_check_at, COALESCE(q.refresh_status,'pending'), COALESCE(q.generation,0)`
+
+// ReadAccountQuotas reads the snapshot rows of accountIDs; accounts without
+// one are absent from Snapshots and Invalid.
+func (d *DB) ReadAccountQuotas(ctx context.Context, accountIDs []int64) (*QuotaRead, error) {
+	rows, err := d.Pool.Query(ctx, `SELECT NULL::bigint, `+selectQuotaRead+`
+		FROM (SELECT statement_timestamp()) t LEFT JOIN account_quota_snapshots q ON q.account_id = ANY($1)`, accountIDs)
+	if err != nil {
+		return nil, err
+	}
+	return readQuotaRows(rows, false)
+}
+
+// ReadAccountQuotasOfTypes reads the snapshot rows of every account not
+// deleted whose "plugin_key/type" is in keys; Accounts lists them all.
+func (d *DB) ReadAccountQuotasOfTypes(ctx context.Context, keys []string) (*QuotaRead, error) {
+	rows, err := d.Pool.Query(ctx, `SELECT a.id, `+selectQuotaRead+`
+		FROM (SELECT statement_timestamp()) t LEFT JOIN (accounts a LEFT JOIN account_quota_snapshots q ON q.account_id = a.id)
+			ON a.deleted_at IS NULL AND a.plugin_key||'/'||a.type = ANY($1)`, keys)
+	if err != nil {
+		return nil, err
+	}
+	return readQuotaRows(rows, true)
+}
+
+func readQuotaRows(rows interface {
+	Next() bool
+	Scan(...any) error
+	Close()
+	Err() error
+}, accounts bool) (*QuotaRead, error) {
+	defer rows.Close()
+	out := &QuotaRead{Snapshots: map[int64]*QuotaSnapshot{}, Invalid: map[int64]error{}}
+	if accounts {
+		out.Accounts = []int64{}
+	}
+	for rows.Next() {
+		var account, id *int64
+		var q QuotaSnapshot
+		var raw []byte
+		if err := rows.Scan(&account, &out.At, &id, &raw, &q.Source, &q.Error, &q.UpdatedAt, &q.LastPassiveAt, &q.LastActiveAt, &q.Revision, &q.NextCheckAt, &q.RefreshStatus, &q.Generation); err != nil {
+			return nil, err
+		}
+		if account != nil {
+			out.Accounts = append(out.Accounts, *account)
+		}
+		if id == nil {
+			continue // no snapshot: the row only carries the time or the account
+		}
+		q.AccountID = *id
+		q.Windows = map[string]QuotaWindow{}
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &q.Windows); err != nil {
+				out.Invalid[q.AccountID] = err
+				continue
+			}
+		}
+		out.Snapshots[q.AccountID] = &q
+	}
+	return out, rows.Err()
 }
 
 // SaveAccountQuota merges windows into the account's snapshot (a window
@@ -211,8 +290,12 @@ type QuotaClaim struct {
 	Initial                                bool
 }
 
-func EnsureAccountQuota(ctx context.Context, q Querier, id int64, pluginRevision string, automatic bool) error {
-	_, err := q.Exec(ctx, `INSERT INTO account_quota_snapshots(account_id,plugin_revision,auto_refresh,next_check_at)
+// EnsureAccountQuota creates the account's snapshot row, or aligns its plugin
+// revision (a new one starts a new generation) and auto_refresh. It reports
+// whether a row was written (inserted, or updated with a new revision): the
+// caller announces the change so quota mirrors read it again.
+func EnsureAccountQuota(ctx context.Context, q Querier, id int64, pluginRevision string, automatic bool) (bool, error) {
+	tag, err := q.Exec(ctx, `INSERT INTO account_quota_snapshots(account_id,plugin_revision,auto_refresh,next_check_at)
 		SELECT id,$2,$3,CASE WHEN $3 THEN now() END FROM accounts WHERE id=$1 AND deleted_at IS NULL
 		ON CONFLICT(account_id) DO UPDATE SET plugin_revision=$2,auto_refresh=$3,
 		generation=CASE WHEN account_quota_snapshots.plugin_revision<>$2 THEN nextval('account_quota_generation_seq') ELSE account_quota_snapshots.generation END,
@@ -220,7 +303,10 @@ func EnsureAccountQuota(ctx context.Context, q Querier, id int64, pluginRevision
 		revision=account_quota_snapshots.revision+1,
 		next_check_at=CASE WHEN NOT $3 THEN NULL WHEN account_quota_snapshots.plugin_revision<>$2 THEN now() ELSE COALESCE(account_quota_snapshots.next_check_at,now()) END
 		WHERE account_quota_snapshots.plugin_revision<>$2 OR account_quota_snapshots.auto_refresh<>$3`, id, pluginRevision, automatic)
-	return err
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
 }
 
 func ResetAccountQuota(ctx context.Context, q Querier, id int64) error {

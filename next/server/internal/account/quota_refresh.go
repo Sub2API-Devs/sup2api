@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"sort"
 	"sync"
 	"time"
 
@@ -28,10 +27,14 @@ func quotaPluginRevision(bt core.AccountTypeBinding) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func (s *Service) initializeQuota(ctx context.Context, q store.Querier, id int64, bt core.AccountTypeBinding) error {
+// initializeQuota creates the quota snapshot row of an account whose type
+// queries its quota automatically, in q. It reports whether a row was written;
+// a caller outside a transaction announces it (quotaChanged), one inside
+// announces the account change after committing.
+func (s *Service) initializeQuota(ctx context.Context, q store.Querier, id int64, bt core.AccountTypeBinding) (bool, error) {
 	decl := bt.Type.Quota
 	if decl == nil || !decl.Query || !decl.AutoRefresh {
-		return nil
+		return false, nil
 	}
 	return store.EnsureAccountQuota(ctx, q, id, quotaPluginRevision(bt), true)
 }
@@ -104,8 +107,12 @@ func (s *Service) executeQuotaQuery(ctx context.Context, bt core.AccountTypeBind
 	if !ok || quotaPluginRevision(current) != revision {
 		return s.d.DB.AccountQuota(ctx, a.ID)
 	}
-	if err := store.EnsureAccountQuota(ctx, s.d.DB.Pool, a.ID, revision, bt.Type.Quota.AutoRefresh); err != nil {
+	created, err := store.EnsureAccountQuota(ctx, s.d.DB.Pool, a.ID, revision, bt.Type.Quota.AutoRefresh)
+	if err != nil {
 		return nil, err
+	}
+	if created {
+		s.quotaChanged(ctx, a.ID)
 	}
 	claim, err := s.d.DB.LeaseAccountQuota(ctx, a.ID, revision, floor, quotaQueryTimeout+10*time.Second, manual)
 	if err != nil {
@@ -183,7 +190,7 @@ func (s *Service) executeQuotaQuery(ctx context.Context, bt core.AccountTypeBind
 	}
 	if applied {
 		s.evictQuotaCache(ctx, a.ID)
-		s.changed(ctx, a.ID)
+		s.quotaChanged(ctx, a.ID)
 	}
 	return s.d.DB.AccountQuota(ctx, a.ID)
 }
@@ -267,8 +274,12 @@ func (s *Service) initializeQuotaPage(ctx context.Context, keys []string) error 
 	for _, e := range entries {
 		bt, ok := s.accountType(e.plugin, e.typ)
 		if ok {
-			if err := s.initializeQuota(ctx, s.d.DB.Pool, e.id, bt); err != nil {
+			created, err := s.initializeQuota(ctx, s.d.DB.Pool, e.id, bt)
+			if err != nil {
 				return err
+			}
+			if created {
+				s.quotaChanged(ctx, e.id)
 			}
 		}
 		s.quotaSweepAfter = e.id
@@ -343,44 +354,6 @@ func (s *Service) queryDueQuotas(ctx context.Context, ids []int64) error {
 	return ctx.Err()
 }
 
-func (s *Service) AccountQuotaSnapshots(ctx context.Context, ids []int64) (map[int64]*pluginv1.AccountQuotaSnapshot, error) {
-	snapshots, err := s.d.DB.AccountQuotas(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[int64]*pluginv1.AccountQuotaSnapshot, len(snapshots))
-	for id, snap := range snapshots {
-		if snap.Generation <= 0 || snap.Windows == nil {
-			return nil, errors.New("invalid stored quota snapshot")
-		}
-		q := &pluginv1.AccountQuotaSnapshot{Revision: snap.Revision, Generation: snap.Generation, Error: snap.Error}
-		if snap.UpdatedAt != nil {
-			q.UpdatedAtUnix = snap.UpdatedAt.Unix()
-		}
-		for key, w := range snap.Windows {
-			window := &pluginv1.QuotaWindow{Key: key, Utilization: w.Utilization, UtilizationUnknown: w.UtilizationUnknown, Status: w.Status, Used: w.Used, Limit: w.Limit}
-			if w.ResetsAt != nil {
-				window.ResetsAtUnix = w.ResetsAt.Unix()
-			}
-			q.Windows = append(q.Windows, window)
-		}
-		sort.Slice(q.Windows, func(i, j int) bool { return q.Windows[i].Key < q.Windows[j].Key })
-		out[id] = q
-	}
-	return out, nil
-}
-
-// AccountQuotaView reads the snapshots of ids for the availability precheck.
-// Placeholder until the in-memory mirror (MODEL-AVAILABILITY-PRECHECK-DESIGN
-// §4): a failed read reports every id as missing.
-func (s *Service) AccountQuotaView(ctx context.Context, ids []int64) (core.QuotaView, error) {
-	snapshots, err := s.AccountQuotaSnapshots(ctx, ids)
-	if err != nil {
-		return core.QuotaView{Missing: append([]int64(nil), ids...)}, err
-	}
-	return core.QuotaView{Snapshots: snapshots}, nil
-}
-
 func (s *Service) ApplyAccountQuotaObservation(ctx context.Context, id, expectedGeneration int64, res *pluginv1.QuotaResult) error {
 	if expectedGeneration <= 0 {
 		return nil
@@ -411,7 +384,7 @@ func (s *Service) ApplyAccountQuotaObservation(ctx context.Context, id, expected
 		return err
 	}
 	s.evictQuotaCache(ctx, id)
-	s.changed(ctx, id)
+	s.quotaChanged(ctx, id)
 	return nil
 }
 

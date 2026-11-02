@@ -256,6 +256,18 @@ func TestConfigChangedReachesOtherNodes(t *testing.T) {
 	if other.cache.cfg == nil || len(other.cache.desired) != 1 {
 		t.Fatal("account change dropped the wrong entries")
 	}
+	// A written quota snapshot is not part of the request cache, with or
+	// without an account id.
+	gen := other.cache.gen
+	other.onAccountChanged([]byte(`{"account_id":8,"kind":"quota"}`))
+	other.onAccountChanged([]byte(`{"kind":"quota"}`))
+	if other.cache.cfg == nil || len(other.cache.desired) != 1 || other.cache.gen != gen {
+		t.Fatal("a quota write dropped the request cache")
+	}
+	other.onAccountChanged([]byte(`{}`))
+	if other.cache.cfg == nil || other.cache.desired != nil {
+		t.Fatal("a change of every account kept the account entries")
+	}
 }
 
 // TestBlockedRuntimeIsNotRewrittenEveryPass: the controller reports a

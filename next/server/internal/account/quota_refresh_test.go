@@ -52,7 +52,7 @@ func TestQuotaOptionalReaderAbsentPreservesObservations(t *testing.T) {
 					e.gen.types[0].Client = p
 					e.svc.d.LifecycleResources = map[string]core.AccountLifecycleResource{"anthropic": &quotaRuntimeFixture{}}
 					id := e.mkRawAccount("anthropic", "apikey", "optional", "sk-good-key-123", true)
-					require.NoError(t, store.EnsureAccountQuota(t.Context(), e.db.Pool, id, quotaPluginRevision(e.gen.types[0]), automatic))
+					e.ensureQuotaRow(id, quotaPluginRevision(e.gen.types[0]), automatic)
 					if observed {
 						require.NoError(t, e.db.SaveAccountQuota(t.Context(), id, store.QuotaPassive, map[string]store.QuotaWindow{"daily": {Utilization: 100, Status: "rejected"}}))
 						require.NoError(t, e.db.SetAccountQuotaError(t.Context(), id, "previous error"))
@@ -381,7 +381,7 @@ func quotaObservationGeneration(t *testing.T, e *env, id int64) int64 {
 	binding := e.gen.types[0]
 	_, err := e.db.Pool.Exec(t.Context(), `INSERT INTO plugins(key,name,status,active_version) VALUES($1,'{"en":"Fixture"}','enabled',$2) ON CONFLICT(key) DO NOTHING`, binding.Plugin.Key, binding.Plugin.Version)
 	require.NoError(t, err)
-	require.NoError(t, store.EnsureAccountQuota(t.Context(), e.db.Pool, id, quotaPluginRevision(binding), false))
+	e.ensureQuotaRow(id, quotaPluginRevision(binding), false)
 	snapshot, err := e.svc.AccountQuotaSnapshots(t.Context(), []int64{id})
 	require.NoError(t, err)
 	require.Positive(t, snapshot[id].Generation)
@@ -425,6 +425,8 @@ func TestQuotaUnknownScopedObservationRoundTrip(t *testing.T) {
 	id := e.mkRawAccount("anthropic", "apikey", "unknown", "sk-good-key-123", true)
 	generation := quotaObservationGeneration(t, e, id)
 	require.NoError(t, e.db.SaveAccountQuota(t.Context(), id, store.QuotaActive, map[string]store.QuotaWindow{"shared": {Utilization: 20, Status: "allowed"}, "scoped": {Utilization: 60}}))
+	// Written straight to the database: announce it to the quota mirror.
+	e.svc.invalidateQuota(id)
 	before, err := e.db.AccountQuota(t.Context(), id)
 	require.NoError(t, err)
 	result := &pluginv1.QuotaResult{Windows: []*pluginv1.QuotaWindow{{Key: "scoped", Status: "rejected", UtilizationUnknown: true}}}
@@ -503,6 +505,11 @@ func TestQuotaUnknownValidationKeepsLegacyScalars(t *testing.T) {
 	require.Zero(t, windows["unknown"].Limit)
 }
 
+// TestQuotaSourceGenerationAndReadFailures (rewritten for the quota mirror,
+// MODEL-AVAILABILITY-PRECHECK-DESIGN §8): a write straight to the database is
+// read once announced; observations under any other generation change
+// nothing; a cancelled read of an id the mirror does not hold reports it
+// missing; a bad row is skipped without failing the others.
 func TestQuotaSourceGenerationAndReadFailures(t *testing.T) {
 	e := setup(t)
 	id := e.mkRawAccount("anthropic", "apikey", "source-generation", "sk-good-key-123", true)
@@ -510,6 +517,10 @@ func TestQuotaSourceGenerationAndReadFailures(t *testing.T) {
 	require.NoError(t, e.db.SaveAccountQuota(t.Context(), id, store.QuotaActive, map[string]store.QuotaWindow{"daily": {Utilization: 70, Status: "allowed"}}))
 	require.NoError(t, store.ResetAccountQuota(t.Context(), e.db.Pool, id))
 	require.NoError(t, e.db.SaveAccountQuota(t.Context(), id, store.QuotaActive, map[string]store.QuotaWindow{"daily": {Utilization: 40, Status: "allowed"}}))
+	cached, err := e.svc.AccountQuotaSnapshots(t.Context(), []int64{id})
+	require.NoError(t, err)
+	require.Equal(t, generation, cached[id].Generation, "not announced: the mirror keeps what it read")
+	e.svc.invalidateQuota(id)
 	fresh, err := e.svc.AccountQuotaSnapshots(t.Context(), []int64{id})
 	require.NoError(t, err)
 	require.NotEqual(t, generation, fresh[id].Generation)
@@ -518,20 +529,33 @@ func TestQuotaSourceGenerationAndReadFailures(t *testing.T) {
 			require.NoError(t, e.svc.ApplyAccountQuotaObservation(t.Context(), id, expected, &pluginv1.QuotaResult{Windows: []*pluginv1.QuotaWindow{window}}))
 		}
 	}
+	e.svc.invalidateQuota(id)
 	after, err := e.svc.AccountQuotaSnapshots(t.Context(), []int64{id})
 	require.NoError(t, err)
 	require.Equal(t, fresh, after)
+
+	other := e.mkRawAccount("anthropic", "apikey", "source-other", "sk-good-key-123", true)
+	e.ensureQuotaRow(other, quotaPluginRevision(e.gen.types[0]), false)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	failed, err := e.svc.AccountQuotaSnapshots(ctx, []int64{id})
+	view, err := e.svc.AccountQuotaView(ctx, []int64{id, other})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, []int64{other}, view.Missing, "an id the mirror holds is answered, the other is missing")
+	require.NotNil(t, view.Snapshots[id])
+	failed, err := e.svc.AccountQuotaSnapshots(ctx, []int64{other})
 	require.Error(t, err)
 	require.Nil(t, failed)
+	// The read goes on in the background.
+	waitUntil(t, "background read", func() bool { has, _ := entryState(e.svc.quotas(), other); return has })
+
 	for _, raw := range []string{`{"daily":"invalid"}`, `null`} {
 		_, err = e.db.Pool.Exec(t.Context(), `UPDATE account_quota_snapshots SET windows=$2::jsonb WHERE account_id=$1`, id, raw)
 		require.NoError(t, err)
-		failed, err = e.svc.AccountQuotaSnapshots(t.Context(), []int64{id})
-		require.Error(t, err)
-		require.Nil(t, failed)
+		e.svc.invalidateQuota(0)
+		snapshots, err := e.svc.AccountQuotaSnapshots(t.Context(), []int64{id, other})
+		require.NoError(t, err, raw)
+		require.NotContains(t, snapshots, id, "the bad row is skipped: %s", raw)
+		require.NotNil(t, snapshots[other], "the other rows are read: %s", raw)
 	}
 }
 
@@ -685,7 +709,7 @@ func TestQuotaClaimAcrossNodesAndPassiveWins(t *testing.T) {
 	e := setup(t)
 	id := e.mkRawAccount("anthropic", "apikey", "nodes", "sk-good-key-123", true)
 	quotaObservationGeneration(t, e, id)
-	require.NoError(t, store.EnsureAccountQuota(t.Context(), e.db.Pool, id, "v1", true))
+	e.ensureQuotaRow(id, "v1", true)
 	var wins atomic.Int32
 	var winner *store.QuotaClaim
 	var wg sync.WaitGroup

@@ -324,7 +324,7 @@ func (s *Service) resetForReauth(ctx context.Context, tx pgx.Tx, a *row) (bool, 
 		return false, err
 	}
 	if binding, ok := s.accountType(a.PluginKey, a.Type); ok {
-		if err := s.initializeQuota(ctx, tx, a.ID, binding); err != nil {
+		if _, err := s.initializeQuota(ctx, tx, a.ID, binding); err != nil {
 			return false, err
 		}
 	}

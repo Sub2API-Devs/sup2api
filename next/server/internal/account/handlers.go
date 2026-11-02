@@ -1151,7 +1151,7 @@ func (s *Service) create(c *gin.Context) {
 		if err := setGroups(ctx, tx, id, groupIDs); err != nil {
 			return err
 		}
-		if err := s.initializeQuota(ctx, tx, id, bt); err != nil {
+		if _, err := s.initializeQuota(ctx, tx, id, bt); err != nil {
 			return err
 		}
 		if preparation != nil {

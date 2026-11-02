@@ -121,6 +121,49 @@ func PublishAccountChanged(ctx context.Context, bus Bus, id int64) error {
 	return bus.Publish(ctx, ChannelAccountChanged, payload)
 }
 
+// AccountChangeQuota is the kind of an account:changed message that only
+// announces a written quota snapshot: subscribers drop what they keep of the
+// account's quota and nothing else (MODEL-AVAILABILITY-PRECHECK-DESIGN §7).
+// Older nodes ignore the kind and drop everything, which is only slower.
+const AccountChangeQuota = "quota"
+
+// PublishAccountQuotaChanged announces on account:changed that the quota
+// snapshot of account id was written ({"account_id": id, "kind": "quota"});
+// a nil bus announces nothing.
+func PublishAccountQuotaChanged(ctx context.Context, bus Bus, id int64) error {
+	if bus == nil {
+		return nil
+	}
+	payload, _ := json.Marshal(struct {
+		AccountID int64  `json:"account_id"`
+		Kind      string `json:"kind"`
+	}{id, AccountChangeQuota})
+	return bus.Publish(ctx, ChannelAccountChanged, payload)
+}
+
+// ParseAccountChanged reads an account:changed payload: the account id (0
+// when absent or unreadable, meaning every account) and the kind ("" for a
+// change of the account itself).
+func ParseAccountChanged(payload []byte) (id int64, kind string) {
+	var m struct {
+		AccountID int64  `json:"account_id"`
+		Kind      string `json:"kind"`
+	}
+	if json.Unmarshal(payload, &m) != nil || m.AccountID < 0 {
+		return 0, ""
+	}
+	return m.AccountID, m.Kind
+}
+
+// BusReconnects is implemented by a Bus that can tell when its subscription
+// was re-established after a lost connection: messages published in between
+// are lost, so caches kept up to date by the bus must be dropped.
+type BusReconnects interface {
+	// OnReconnect registers fn, called on the bus's receive goroutine after
+	// every re-subscription; it must not block.
+	OnReconnect(fn func()) (cancel func())
+}
+
 // Slots is the distributed concurrency limiter. Members are prefixed with
 // the boot id so slots of dead nodes can be reclaimed safely.
 type Slots interface {

@@ -88,6 +88,11 @@ type Service struct {
 	quotaSweepMu    sync.Mutex
 	quotaSweepAfter int64
 
+	// quotaMirror is this node's copy of the quota snapshots the model
+	// availability precheck reads (quota_mirror.go); built on first use.
+	quotaMirrorOnce sync.Once
+	quotaMirror     *quotaMirror
+
 	// refreshLocal serialises credential refreshes of one account on this
 	// node when there is no cluster Locker (CONTRACTS §48).
 	refreshLocal sync.Map // account id -> *sync.Mutex
@@ -125,7 +130,7 @@ func New(d Deps) *Service {
 			return err
 		}
 		s.evictQuotaCache(ctx, id)
-		s.changed(ctx, id)
+		s.quotaChanged(ctx, id)
 		return nil
 	})
 	return s
@@ -176,20 +181,18 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("POST", "/accounts/:id/actions/:plugin_key/:action_id", s.executeAccountAction, "account:update", "account:own:update")
 }
 
-// Run subscribes to account:changed, flushes last_used_at every 10 s and
-// writes passive quota samples until ctx is done.
+// Run subscribes to account:changed, flushes last_used_at every 10 s, writes
+// passive quota samples and keeps the quota mirror loaded until ctx is done.
 func (s *Service) Run(ctx context.Context) {
 	go s.quota.run(ctx)
+	go s.quotas().run(ctx)
 	go s.runQuotaSweep(ctx)
 	go s.runRefreshSweep(ctx)
 	go s.runAutomaticStateSweep(ctx)
 	go s.runUsageLimitsLoop(ctx)
 	go s.runPreparationSweep(ctx)
 	go s.runLifecycleStatusSweep(ctx)
-	if s.d.Bus != nil {
-		cancel := s.d.Bus.Subscribe(core.ChannelAccountChanged, func([]byte) { s.invalidate() })
-		defer cancel()
-	}
+	defer s.watchChanges(ctx)()
 	tk := time.NewTicker(flushInterval)
 	defer tk.Stop()
 	for {
@@ -209,6 +212,61 @@ func (s *Service) Run(ctx context.Context) {
 	}
 }
 
+// watchChanges subscribes to what invalidates this node's caches:
+// account:changed, a reconnected bus (the messages published meanwhile are
+// lost) and plugin generation switches. The returned func unsubscribes.
+func (s *Service) watchChanges(ctx context.Context) (cancel func()) {
+	var cancels []func()
+	if s.d.Bus != nil {
+		cancels = append(cancels, s.d.Bus.Subscribe(core.ChannelAccountChanged, s.onAccountChanged))
+		if r, ok := s.d.Bus.(core.BusReconnects); ok {
+			cancels = append(cancels, r.OnReconnect(func() { s.invalidateQuota(0) }))
+		}
+	}
+	if s.d.Registry != nil {
+		cancels = append(cancels, s.d.Registry.OnChange(func(core.Generation) { s.pluginsChanged(ctx) }))
+	}
+	return func() {
+		for _, c := range cancels {
+			c()
+		}
+	}
+}
+
+// onAccountChanged serves account:changed: the directory snapshots are
+// dropped and the account's (without an id, every account's) mirrored quota
+// snapshot is read again. A written quota snapshot (kind "quota") leaves the
+// directory snapshots alone: they hold no quota data.
+func (s *Service) onAccountChanged(payload []byte) {
+	id, kind := core.ParseAccountChanged(payload)
+	if kind != core.AccountChangeQuota {
+		s.invalidate()
+	}
+	s.invalidateQuota(id)
+}
+
+// pluginsDelay is when a plugin generation switch invalidates the quota
+// mirror a second time: the switch may be announced before the plugins row
+// whose trigger starts new quota generations is committed.
+var pluginsDelay = 2 * time.Second
+
+// pluginsChanged follows a plugin generation switch: the quota generations
+// of the accounts of a plugin whose status or version changed are replaced
+// by a trigger, without an account:changed message; and the account types
+// declaring modelAvailability may have changed (plugins start after Run, so
+// this is also what loads the mirror at boot).
+func (s *Service) pluginsChanged(ctx context.Context) {
+	m := s.quotas()
+	m.invalidate(0)
+	m.reloadSoon()
+	time.AfterFunc(pluginsDelay, func() {
+		if ctx.Err() == nil {
+			m.invalidate(0)
+			m.reloadSoon()
+		}
+	})
+}
+
 // invalidate drops every cached snapshot on this node.
 func (s *Service) invalidate() {
 	s.cacheMu.Lock()
@@ -226,12 +284,24 @@ func (s *Service) changed(ctx context.Context, id int64) {
 	}
 }
 
+// quotaChanged follows a written quota snapshot of account id: only the
+// quota mirrors are told (account:changed of kind "quota"); the directory
+// snapshots and CCGateway's request cache hold no quota data.
+func (s *Service) quotaChanged(ctx context.Context, id int64) {
+	s.invalidateQuota(id)
+	if err := core.PublishAccountQuotaChanged(ctx, s.d.Bus, id); err != nil {
+		slog.WarnContext(ctx, "account: publish account:changed", "err", err)
+	}
+}
+
 // invalidateNode drops what this node keeps of account id (0: of every
 // account), so the node that changed it does not depend on receiving its
-// own account:changed: the directory snapshots, and what CCGateway's request
-// path read (the desired state and CC feature policy).
+// own account:changed: the directory snapshots, the mirrored quota snapshot,
+// and what CCGateway's request path read (the desired state and CC feature
+// policy).
 func (s *Service) invalidateNode(id int64) {
 	s.invalidate()
+	s.invalidateQuota(id)
 	s.d.CCGateway.AccountChanged(id)
 }
 

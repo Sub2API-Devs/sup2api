@@ -18,19 +18,37 @@ type Bus struct {
 	log *slog.Logger
 	ps  *redis.PubSub
 
-	mu       sync.Mutex
-	nextID   uint64
-	handlers map[string]map[uint64]func([]byte)
+	mu         sync.Mutex
+	nextID     uint64
+	handlers   map[string]map[uint64]func([]byte)
+	reconnects map[uint64]func()
 }
 
 // NewBus builds a bus. Subscribe may be called before Run; messages are
 // delivered once Run is running.
 func NewBus(rdb redis.UniversalClient, logger *slog.Logger) *Bus {
 	return &Bus{
-		rdb:      rdb,
-		log:      orDefault(logger),
-		ps:       rdb.Subscribe(context.Background()),
-		handlers: map[string]map[uint64]func([]byte){},
+		rdb:        rdb,
+		log:        orDefault(logger),
+		ps:         rdb.Subscribe(context.Background()),
+		handlers:   map[string]map[uint64]func([]byte){},
+		reconnects: map[uint64]func(){},
+	}
+}
+
+// OnReconnect registers fn, called on the receive goroutine once the
+// subscription works again after a lost connection (messages published in
+// between are lost). cancel is idempotent.
+func (b *Bus) OnReconnect(fn func()) (cancel func()) {
+	b.mu.Lock()
+	b.nextID++
+	id := b.nextID
+	b.reconnects[id] = fn
+	b.mu.Unlock()
+	return func() {
+		b.mu.Lock()
+		delete(b.reconnects, id)
+		b.mu.Unlock()
 	}
 }
 
@@ -82,10 +100,14 @@ func (b *Bus) Subscribe(channel string, handler func(payload []byte)) (cancel fu
 }
 
 // Run receives messages until ctx is done, then closes the subscription.
+// After a failed receive or ping, go-redis dials again and re-subscribes on
+// the next receive; the first message received after that (normally the
+// subscription confirmation) runs the OnReconnect callbacks.
 func (b *Bus) Run(ctx context.Context) {
 	stop := context.AfterFunc(ctx, func() { _ = b.ps.Close() })
 	defer stop()
 	backoff := 100 * time.Millisecond
+	lost := false
 	for ctx.Err() == nil {
 		msg, err := b.ps.ReceiveTimeout(ctx, 30*time.Second)
 		if err != nil {
@@ -95,9 +117,12 @@ func (b *Bus) Run(ctx context.Context) {
 			var ne interface{ Timeout() bool }
 			if errors.As(err, &ne) && ne.Timeout() {
 				// Idle: ping so a dead connection is detected and replaced.
-				_ = b.ps.Ping(ctx)
+				if b.ps.Ping(ctx) != nil && ctx.Err() == nil {
+					lost = true
+				}
 				continue
 			}
+			lost = true
 			b.log.Warn("bus receive failed, reconnecting", "err", err)
 			select {
 			case <-ctx.Done():
@@ -108,9 +133,32 @@ func (b *Bus) Run(ctx context.Context) {
 			continue
 		}
 		backoff = 100 * time.Millisecond
+		if lost {
+			lost = false
+			b.reconnected()
+		}
 		if m, ok := msg.(*redis.Message); ok {
 			b.dispatch(m.Channel, []byte(m.Payload))
 		}
+	}
+}
+
+func (b *Bus) reconnected() {
+	b.mu.Lock()
+	fns := make([]func(), 0, len(b.reconnects))
+	for _, fn := range b.reconnects {
+		fns = append(fns, fn)
+	}
+	b.mu.Unlock()
+	for _, fn := range fns {
+		func() {
+			defer func() {
+				if p := recover(); p != nil {
+					b.log.Error("bus reconnect handler panic", "panic", p)
+				}
+			}()
+			fn()
+		}()
 	}
 }
 

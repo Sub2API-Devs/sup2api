@@ -11,14 +11,16 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
-// Quota cache layer (CONTRACTS §44.9). Snapshots are written to PG (the
+// Quota cache layer (CONTRACTS §51.3). Snapshots are written to PG (the
 // source of truth) and Redis (a short-TTL read cache, 10 minutes); reads hit
 // Redis first and fall back to PG when the key is missing or Redis is down.
 // Anything that deletes a snapshot or changes an account's identity (reset-
 // status, reauthorize, delete) also deletes the Redis key. Multiple nodes
 // share Redis; the cache time (AccountQuotasAt + json mtime) orders entries
 // so the freshest PG read always wins. Redis unavailability degrades to PG
-// reads; it is never an error.
+// reads; it is never an error. Only the console's account views read it: the
+// model availability precheck reads the in-memory quota mirror
+// (quota_mirror.go), straight from PG.
 
 const (
 	quotaCachePrefix = "account:quota:"
@@ -74,7 +76,7 @@ func (s *Service) cachedAccountQuotas(ctx context.Context, ids []int64) map[int6
 		return out
 	}
 	// The PG read is at a known database time; entries cached before it are
-	// stale (CONTRACTS §44.9 mtime ordering). Write the fresh ones back.
+	// stale (CONTRACTS §51.3 mtime ordering). Write the fresh ones back.
 	pgSnaps, at, err := s.d.DB.AccountQuotasAt(ctx, pgIDs)
 	if err != nil {
 		slog.WarnContext(ctx, "account: read quota snapshots", "err", err)

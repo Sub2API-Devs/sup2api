@@ -88,10 +88,11 @@ type Cluster struct {
 }
 
 var (
-	_ core.NodeRegistry = (*Registry)(nil)
-	_ core.Locker       = (*Locker)(nil)
-	_ core.Bus          = (*Bus)(nil)
-	_ core.Slots        = (*Slots)(nil)
+	_ core.NodeRegistry  = (*Registry)(nil)
+	_ core.Locker        = (*Locker)(nil)
+	_ core.Bus           = (*Bus)(nil)
+	_ core.BusReconnects = (*Bus)(nil)
+	_ core.Slots         = (*Slots)(nil)
 )
 
 // New builds all cluster services. pool may be nil (no PG health tracking).

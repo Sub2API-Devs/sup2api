@@ -424,17 +424,18 @@ func (s *Service) onConfigChanged(payload []byte) {
 
 // onAccountChanged serves account:changed: the account (or, without an id,
 // every account) is read again. The node that changed a CCGateway account
-// reconciles its runtime (kickCCGateway).
+// reconciles its runtime (kickCCGateway). A written quota snapshot
+// (kind "quota") is not part of the request cache: the routes and their
+// blocked marks stay.
 func (s *Service) onAccountChanged(payload []byte) {
-	var m struct {
-		AccountID int64 `json:"account_id"`
-	}
-	_ = json.Unmarshal(payload, &m)
-	if m.AccountID <= 0 {
+	id, kind := core.ParseAccountChanged(payload)
+	switch {
+	case kind == core.AccountChangeQuota:
+	case id <= 0:
 		s.invalidateRequests(true)
-		return
+	default:
+		s.forgetAccount(id, "")
 	}
-	s.forgetAccount(m.AccountID, "")
 }
 
 // sweepSoon starts a reconcile pass of every runtime now.

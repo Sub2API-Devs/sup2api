@@ -196,6 +196,9 @@ func TestBusPublishSubscribeReconnect(t *testing.T) {
 	c2 := bus.Subscribe("config:changed", func(p []byte) { h2.Add(1) })
 	panicky := bus.Subscribe("other", func([]byte) { panic("boom") })
 	defer panicky()
+	var reconnects atomic.Int32
+	stopReconnects := bus.OnReconnect(func() { reconnects.Add(1) })
+	defer stopReconnects()
 	done := make(chan struct{})
 	go func() { bus.Run(ctx); close(done) }()
 
@@ -206,13 +209,20 @@ func TestBusPublishSubscribeReconnect(t *testing.T) {
 	if last.Load() != "v1" {
 		t.Fatal("payload")
 	}
+	if reconnects.Load() != 0 {
+		t.Fatal("reconnect reported without a lost connection")
+	}
 	_ = bus.Publish(ctx, "other", []byte("x")) // panic is recovered
 	c2()
 	c2()
 	n2 := h2.Load()
 
-	// Redis restarts: the bus must reconnect and resubscribe.
-	mr.Restart()
+	// Redis restarts: the bus must reconnect and resubscribe. (Restart alone
+	// does not drop the connections of a running server.)
+	mr.Close()
+	if err := mr.Restart(); err != nil {
+		t.Fatal(err)
+	}
 	h1.Store(0)
 	waitFor(t, 10*time.Second, func() bool {
 		_ = bus.Publish(ctx, "config:changed", []byte("v2"))
@@ -223,6 +233,10 @@ func TestBusPublishSubscribeReconnect(t *testing.T) {
 	}
 	if h2.Load() != n2 {
 		t.Fatal("cancelled handler still called")
+	}
+	// Messages published while disconnected are lost: subscribers are told.
+	if reconnects.Load() == 0 {
+		t.Fatal("reconnect not reported")
 	}
 	c1()
 	cancel()
