@@ -44,6 +44,15 @@ for (const l of readJsonl('naming/final/locals.jsonl')) {
   if (!m) localsByFile.set(l.file, (m = new Map()));
   m.set(+l.key.slice(1), l.name);
 }
+// Domain members' documentation: per-declaration JSDoc and per-module summaries.
+const declDocs = new Map();
+const moduleDocs = new Map();
+for (const f of fs.existsSync('naming') ? fs.readdirSync('naming') : []) {
+  if (/^docs-.*.jsonl$/.test(f)) for (const x of readJsonl(path.join('naming', f))) if (x.id && x.doc) declDocs.set(x.id, x.doc);
+  if (/^modules-.*.json$/.test(f)) for (const [k, v] of Object.entries(JSON.parse(fs.readFileSync(path.join('naming', f), 'utf8')))) moduleDocs.set(k, v);
+}
+const jsdoc = (text) => ['/**', ...String(text).split(/?
+/).map((l) => ' * ' + l.replaceAll('*/', '*/')), ' */'].join(String.fromCharCode(10));
 const idOf = (d) => `${d.file}#${d.names[0] ?? '@' + d.start}`;
 const byId = new Map(D.map((d) => [idOf(d), d]));
 const declByLocal = new Map();
@@ -147,6 +156,7 @@ for (const [p, m] of wanted) {
     }
     const dp = declPath.get(id);
     const mm = match.get(id);
+    if (declDocs.has(id)) body.push(jsdoc(declDocs.get(id)));
     body.push(`//@ ${d.file}:${d.start}-${d.end} ${dp?.method ?? ''}${mm ? ' = ' + mm.refName + (mm.score !== undefined ? ` (${mm.score})` : '') : ''}`);
     body.push(declText.get(id) ?? '/* missing */');
   }
@@ -168,6 +178,7 @@ for (const [file, info] of Object.entries(manifest)) {
   const head = [
     '/**',
     ` * ${info.from}`,
+    ...(moduleDocs.has(info.from) ? [' *', ...docLines(moduleDocs.get(info.from)), ' *'] : []),
     ` * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).`,
     ` * kind: ${info.kind}${info.kind === 'first-party' ? `   reference path: src/${info.from}` : ''}`,
     ` * pieces: ${Object.entries(info.chunks).map(([c, n]) => `${c} (${n})`).join(', ')}`,
