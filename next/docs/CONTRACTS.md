@@ -4363,6 +4363,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - 换号支持同一代理、仅代理账号或各账号原配置三种出口约束；默认同一代理，后续规则不能放宽已生效限制。没有合格账号即失败，不修改代理或增加直连兜底。
 - 响应已提交、WebSocket 已升级、任务/辅助操作不可重放、传输结果不确定、账号资源硬绑定、预算或期限耗尽时不自动重放。内层 SDK/CLI 请求不属于核心尝试计数。
 - 决策记录保存到 `usage_logs.anomalies.failure_policy`，用量详情显示，统计时不把该过程记录本身算作异常。界面复用公共设置卡片、保存条、表格、菜单、弹窗和描述组件。详见 [设计与实现](GATEWAY-FAILURE-POLICY-DESIGN.md)。
+- 默认账号规则（`loginAccountRules`，迁移草稿与迁移 0072/0074 写入的同一组）：`login-invalid` = 401 + 登录失效关键词，`account-on-hold` = 403 + 账号被暂停关键词，动作都是自动禁用。插件把 401/403 判为禁用，但没有命中关键词时核心只冷却（§42、§69），所以 CLI 新增的登录错误码必须同时加进这两条规则。**2026-11-02（用户要求，配合 CLI v44（ccgateway 0.1.123）把 2.1.316 的 `StoredLoginHeldBackError` 按 `errorClass` 映射）**：`login-invalid` 加 `stored_login_refused_restart_needed`（CC 要求重启才能完成登录；每个请求都是新进程，只能重新授权，401），`account-on-hold` 加 `stored_login_refused_admin`（组织的受管设置不允许这个登录，403）；`stored_login_refused_settings_unloaded`（设置没加载到，提示检查网络）仍是可重试的 5xx，不进任何账号规则，由 `http-transient` 换号重试。已发布的策略由迁移 0075 补上：按规则 id 找到这两条（位置不限），只在规则还在、已有关键词（只按状态码匹配的规则加关键词会变窄，不动）、关键词少于 100 条、且还没有这个关键词（不分大小写）时追加；有改动才把旧策略写进历史并让 revision +1，重复执行不变。
 
 ## 59. 账号订阅类型与保存前插件调整（2026-10-19，用户要求）
 

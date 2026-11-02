@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -42,7 +43,7 @@ func TestMigrationSplitsTheMigratedAutoDisableRule(t *testing.T) {
 	for i, r := range want {
 		require.Equal(t, r.ID, p.AccountRules[i].ID)
 		require.Equal(t, r.Match.StatusCodes, p.AccountRules[i].Match.StatusCodes)
-		require.Equal(t, r.Match.Keywords, p.AccountRules[i].Match.Keywords, "migration 0072 and loginAccountRules must agree")
+		require.Equal(t, keywordsBefore0075(r), p.AccountRules[i].Match.Keywords, "migration 0072 and loginAccountRules must agree")
 	}
 	require.Equal(t, "migrated-disable", p.AccountRules[2].ID)
 	require.Empty(t, p.AccountRules[2].Match.StatusCodes)
@@ -137,7 +138,7 @@ func TestMigrationSplitsTheMigratedRuleNextToOtherRules(t *testing.T) {
 	require.Empty(t, p.AccountRules[3].Match.StatusCodes)
 	want := loginAccountRules()
 	for i, r := range want {
-		require.Equal(t, r.Match.Keywords, p.AccountRules[1+i].Match.Keywords, "migration 0074 and loginAccountRules must agree")
+		require.Equal(t, keywordsBefore0075(r), p.AccountRules[1+i].Match.Keywords, "migration 0074 and loginAccountRules must agree")
 	}
 	d := p.decide(FailureFacts{Source: "upstream", Status: 401,
 		Text: `{"type":"error","error":{"type":"authentication_error","message":"OAuth access token has been revoked."}}`})
@@ -164,4 +165,144 @@ func TestMigrationSplitsTheMigratedRuleNextToOtherRules(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(2), p.Revision)
 	require.Equal(t, []string{"login-invalid", "account-on-hold", "migrated-disable"}, ids(p))
+}
+
+// keywordsBefore0075 are a login rule's keywords as 0072 and 0074 write
+// them: without the one 0075 appends afterwards.
+func keywordsBefore0075(r FailureRule) []string {
+	out := []string{}
+	for _, k := range r.Match.Keywords {
+		if k != storedLoginKeywords[r.ID] {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// The codes CLI v44 answers StoredLoginHeldBackError with disable the account
+// under the default rules; the transient kind stays a retry (2026-11-02).
+func TestDefaultLoginRulesNameStoredLoginRefusals(t *testing.T) {
+	p := migrationDraft(defaultGatewaySettings(), defaultAutoDisableSettings())
+	require.Empty(t, p.validate(t.Context()))
+	for _, tc := range []struct {
+		status        int
+		text, rule, k string
+	}{
+		{401, `{"type":"error","error":{"type":"authentication_error","code":"stored_login_refused_restart_needed","message":"Restart Claude Code to finish signing in."}}`, "login-invalid", "stored_login_refused_restart_needed"},
+		{403, `{"type":"error","error":{"type":"permission_error","code":"stored_login_refused_admin","message":"Your organization's settings need an update. Ask your administrator to fix the API key helper configuration."}}`, "account-on-hold", "stored_login_refused_admin"},
+		// The code alone at another status is not a login verdict.
+		{502, `{"type":"error","error":{"type":"api_error","code":"stored_login_refused_settings_unloaded","message":"Couldn't load your organization's settings. Check your connection, then restart Claude Code."}}`, "", ""},
+		{400, `{"type":"error","error":{"type":"invalid_request_error","code":"stored_login_refused_restart_needed","message":"x"}}`, "", ""},
+	} {
+		d := p.decide(FailureFacts{Source: "upstream", Status: tc.status, Text: tc.text})
+		require.Equal(t, tc.rule, d.AccountRule, tc.text)
+		require.Equal(t, tc.k, d.AccountKeyword, tc.text)
+		if tc.status == 502 {
+			require.Equal(t, "http-transient", d.RetryRule)
+		}
+	}
+}
+
+// Migration 0075 appends each stored-login code to its rule, wherever the
+// rule is; a rule without keywords, one that has the code already (in any
+// case), one without room and a policy without the rules are left alone, and
+// a second run changes nothing.
+func TestMigrationAppendsStoredLoginKeywords(t *testing.T) {
+	db := testutil.DB(t)
+	ctx := t.Context()
+	raw72, err := migrations.FS.ReadFile("0072_failure_policy_split_auto_disable.sql")
+	require.NoError(t, err)
+	raw75, err := migrations.FS.ReadFile("0075_failure_policy_stored_login_keywords.sql")
+	require.NoError(t, err)
+	store := func(policy string) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, `INSERT INTO settings(key,value) VALUES('failure_policy',$1)
+			ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value`, policy)
+		require.NoError(t, err)
+		_, err = db.Pool.Exec(ctx, `DELETE FROM settings WHERE key='failure_policy_history'`)
+		require.NoError(t, err)
+	}
+	run := func(raw []byte) {
+		t.Helper()
+		_, err := db.Pool.Exec(ctx, string(raw))
+		require.NoError(t, err)
+	}
+	current := func() string {
+		t.Helper()
+		var v string
+		require.NoError(t, db.Pool.QueryRow(ctx, `SELECT value::text FROM settings WHERE key='failure_policy'`).Scan(&v))
+		return v
+	}
+
+	// The live shape: 0072's split, then 0075 (twice).
+	store(migratedPolicy)
+	run(raw72)
+	for range 2 {
+		run(raw75)
+	}
+	p, err := loadFailurePolicy(ctx, db.Pool)
+	require.NoError(t, err)
+	require.Equal(t, int64(3), p.Revision)
+	want := loginAccountRules()
+	for i, r := range want {
+		require.Equal(t, r.ID, p.AccountRules[i].ID)
+		require.Equal(t, r.Match.Keywords, p.AccountRules[i].Match.Keywords, "migration 0075 and loginAccountRules must agree")
+	}
+	require.Equal(t, migratedPolicyKeywords(t), p.AccountRules[2].Match.Keywords, "other rules are not touched")
+	d := p.decide(FailureFacts{Source: "upstream", Status: 401,
+		Text: `{"type":"error","error":{"type":"authentication_error","code":"stored_login_refused_restart_needed","message":"Restart Claude Code to finish signing in."}}`})
+	require.Equal(t, "login-invalid", d.AccountRule)
+	require.Equal(t, "stored_login_refused_restart_needed", d.AccountKeyword)
+	d = p.decide(FailureFacts{Source: "upstream", Status: 403,
+		Text: `{"type":"error","error":{"type":"permission_error","code":"stored_login_refused_admin","message":"x"}}`})
+	require.Equal(t, "account-on-hold", d.AccountRule)
+	var history string
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT value::text FROM settings WHERE key='failure_policy_history'`).Scan(&history))
+	require.Equal(t, 1, strings.Count(history, `"revision": 2`), history)
+	require.NotContains(t, history, `"revision": 3`)
+
+	// The rules moved behind another one: still found by id.
+	var policy string
+	custom := `{"id":"quota-cooldown","name":"Quota","match":{"mode":"all","groups":[],"models":[],"source":"upstream","keywords":[],"protocols":[],"status_codes":"402"},"action":"cooldown","egress":"","enabled":true,"cooldown_seconds":60,"exhausted_action":"","same_account_retries":0}`
+	store(migratedPolicy)
+	run(raw72)
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT jsonb_set($1::jsonb, '{account_rules}',
+		jsonb_build_array($2::jsonb) || ($1::jsonb->'account_rules'))::text`, current(), custom).Scan(&policy))
+	store(policy)
+	run(raw75)
+	p, err = loadFailurePolicy(ctx, db.Pool)
+	require.NoError(t, err)
+	require.Equal(t, int64(3), p.Revision)
+	require.Empty(t, p.AccountRules[0].Match.Keywords)
+	require.Equal(t, want[0].Match.Keywords, p.AccountRules[1].Match.Keywords)
+	require.Equal(t, want[1].Match.Keywords, p.AccountRules[2].Match.Keywords)
+
+	// Left alone: login-invalid on its status alone, account-on-hold that
+	// already names the code (in upper case).
+	store(migratedPolicy)
+	run(raw72)
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT jsonb_set(jsonb_set($1::jsonb, '{account_rules,0,match,keywords}', '[]'),
+		'{account_rules,1,match,keywords}', ($1::jsonb #> '{account_rules,1,match,keywords}') || '["STORED_LOGIN_REFUSED_ADMIN"]')::text`, current()).Scan(&policy))
+	store(policy)
+	run(raw75)
+	require.JSONEq(t, policy, current())
+
+	// Left alone: a rule with 100 keywords already.
+	require.NoError(t, db.Pool.QueryRow(ctx, `SELECT jsonb_set($1::jsonb, '{account_rules,0,match,keywords}',
+		(SELECT jsonb_agg('k' || n) FROM generate_series(1, 100) n))::text`, policy).Scan(&policy))
+	store(policy)
+	run(raw75)
+	require.JSONEq(t, policy, current())
+
+	// Left alone: a policy without the two rules.
+	store(migratedPolicy)
+	run(raw75)
+	require.JSONEq(t, migratedPolicy, current())
+}
+
+func migratedPolicyKeywords(t *testing.T) []string {
+	t.Helper()
+	var p FailurePolicy
+	require.NoError(t, json.Unmarshal([]byte(migratedPolicy), &p))
+	return p.AccountRules[0].Match.Keywords
 }
