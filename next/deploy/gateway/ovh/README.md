@@ -2,6 +2,13 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-02 ccgateway **0.1.121** + 核心 **0.1.230**（`63a5b36d2`，北京时间 15:23–15:52；核心 manifest `7dc3168f…64a0`，计划 `9d36fca8a252bcc504a06905cbfd42a6` completed/13，66 秒，无迁移、schema 不变，Host API 8）：
+- 内容：CLI 版本由镜像决定（控制器 `cli-from-image-v1`，删 `CCG_DEFAULT_CLI_VERSION`；核心不再下发 `cli` / 策略头 `cli_version`，保存配置不再询问各账号版本），新 app 镜像只给新建账号（`update_existing` 默认 false，74a41ba87），账号页"更新此账号的 Worker / Worker + CLI"（CONTRACTS §53.7 两条 2026-11-02 更新）。
+- 顺序：插件上传/升级（rollout 223）→ `runtime/bundled {"roles":["controller"]}`（控制器自升级到 0.1.121）→ 核心 0.1.230 → `runtime/bundled {"roles":["egress","app"]}`（新核心默认只换新建容器镜像，返回无 `workers`）。
+- **sup2api-ccp 磁盘满**：插件同步写包时 `no space left on device`（clicodeplus `/` 158G 用满，节点 rollout 状态 failed）。原因之一是外壳 `release.Manager.GC` 没有调用方，旧核心发布包从不清理（ccp 数据卷 28G，其中 23 个 release 12G、blobs 9.7G）。按 GC 的规则手工清理：只留 current `98eb84c0…`（0.1.229）与 previous `602a399e…`（0.1.228）的 release、manifest 及其 bundle blob，释放约 19G（剩 20G）；节点 30 秒重试后于 07:47 起来 0.1.121。机器上其余约 120G 是同机其他服务，未动。ovh 剩 979G。
+- 核验：控制器升级、核心升级与全量对账、推送 app/egress 之后，33 个账号容器的 ID 与镜像都与发布前快照一致（`stage/ccgateway-0.1.121/containers-before.txt`），无重建；推送后 `up_to_date: true`，旧账号仍跑 0.1.115 / 0.1.118 镜像与 CLI 2.1.312。`testall`：2×200、13×401（OAuth 失效/吊销）、12×429（上游限额），无 `configuration_error` / `cli_profile_unavailable`；24 个 auto_disabled 都在发布前（最晚 06:00），测试未改账号状态。升级窗口探测 503 共 143 个，都在主节点 maintenance→admit 的 14 秒内（0.1.229 为 153 个）。
+- 脚本 `stage/ccgateway-0.1.121/{prepare-src.sh,build.sh,rollout.py}`、`stage/0.1.230/{build.sh,release.sh}`；内置插件为 0.1.229 的一套把 ccgateway 换成 0.1.121。备份 `backups/ccgateway-0.1.121`（`f8e752b9…`）、`backups/core-0.1.230`。
+
 2026-11-02 核心 **0.1.229**（`fc7ab36ca`，manifest `98eb84c0…e1a4`，计划 `8b6f07a944a1dd6e4372275226baf71a` completed/13，81 秒，北京时间 13:05，迁移 0073/0074，Host API 8，UI SDK 3.4）：
 - 内容：PR #4–#13（插件页面懒加载、侧栏重组/面包屑/设置侧导航、共享组件、删分组保留 API Key、#12 审核修复、定时自动禁用到期即可调度）。
 - 迁移 0073（`api_keys.group_id` 可空、删分组置空）已执行，110 个 Key 都仍有分组；0074 在本库是空操作（0072 已拆分，规则仍是 login-invalid / account-on-hold / migrated-disable，revision 2 未变）。升级前后 20 个 auto_disabled 账号状态与解除时间不变（5 个登录失效无解除时间，15 个限流按 `auto_disabled_until` 到期）。
