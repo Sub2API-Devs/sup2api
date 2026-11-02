@@ -1,0 +1,26 @@
+{
+ "modules": 7005,
+ "decls": 81667,
+ "bytes": 38921647,
+ "byKind": {
+  "unattributed": {
+   "modules": 5293,
+   "decls": 62321,
+   "bytes": 28415635
+  },
+  "first-party": {
+   "modules": 1712,
+   "decls": 19346,
+   "bytes": 10506012
+  }
+ },
+ "byMethod": {
+  "leftover": 62321,
+  "fingerprint": 6297,
+  "affinity": 2912,
+  "fingerprint-shared": 1820,
+  "callgraph-witnessed": 311,
+  "layout": 7569,
+  "callgraph-fingerprint": 437
+ }
+}

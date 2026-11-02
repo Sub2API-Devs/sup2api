@@ -140,7 +140,12 @@ for (let i = 0; i < N; i++) {
   const b = best316[i];
   if (!b || b.s < 0.3) continue;
   const mutual = bestRef[b.ri]?.di === i;
-  if (mutual || b.s >= 0.75) {
+  // Shape check only for one-to-many ("shared") matches of single-binding
+  // statements; Bun merges constants into multi-declarator var statements, so
+  // the function/value category is unreliable otherwise.
+  const cat = (x) => (x.names.length !== 1 ? null : /Function|Class/.test(x.kind) || x.params != null ? "fn" : "value");
+  const shapeOk = cat(D[i]) === null || cat(R[b.ri]) === null || cat(D[i]) === cat(R[b.ri]);
+  if (mutual || (b.s >= 0.75 && shapeOk)) {
     match.set(i, { ri: b.ri, s: +b.s.toFixed(3), margin: +(b.s - b.second).toFixed(3), method: mutual ? 'fingerprint' : 'fingerprint-shared' });
     if (!matchedRef.has(b.ri)) matchedRef.set(b.ri, i);
   }

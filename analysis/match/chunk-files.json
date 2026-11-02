@@ -104,7 +104,7 @@
    "utils/sessionStorage.ts": 283,
    "utils/status.tsx": 112,
    "services/api/errorUtils.ts": 407,
-   "constants/xml.ts": 8617,
+   "constants/xml.ts": 174,
    "utils/errors.ts": 131,
    "services/api/errors.ts": 147
   }
@@ -143,7 +143,6 @@
    "components/messages/UserTextMessage.tsx": 677,
    "bridge/bridgeApi.ts": 90,
    "entrypoints/sdk/controlSchemas.ts": 154,
-   "components/permissions/PermissionExplanation.tsx": 67,
    "assistant/sessionHistory.ts": 325
   }
  },
@@ -165,7 +164,6 @@
    "components/wizard/WizardProvider.tsx": 1961,
    "components/wizard/useWizard.ts": 104,
    "components/wizard/WizardDialogLayout.tsx": 985,
-   "utils/model/agent.ts": 41,
    "utils/model/model.ts": 53,
    "services/lsp/manager.ts": 956
   }
@@ -702,7 +700,7 @@
    "hooks/useGlobalKeybindings.tsx": 1837,
    "ink/hooks/use-search-highlight.ts": 272,
    "screens/REPL.tsx": 44156,
-   "types/permissions.ts": 191,
+   "types/permissions.ts": 65,
    "components/EffortIndicator.ts": 156,
    "utils/treeify.ts": 223,
    "components/PromptInput/PromptInput.tsx": 38312,
@@ -737,7 +735,7 @@
    "components/MessageSelector.tsx": 14325,
    "components/messages/AssistantToolUseMessage.tsx": 151,
    "hooks/notifs/usePluginInstallationStatus.tsx": 226,
-   "components/Spinner/SpinnerAnimationRow.tsx": 677,
+   "components/Spinner/SpinnerAnimationRow.tsx": 83,
    "utils/task/diskOutput.ts": 53,
    "hooks/useBackgroundTaskNavigation.ts": 636,
    "tasks/LocalMainSessionTask.ts": 172,
@@ -768,7 +766,7 @@
    "hooks/useTypeahead.tsx": 25864,
    "components/PromptInput/PromptInputFooterSuggestions.tsx": 232,
    "utils/directMemberMessage.ts": 560,
-   "utils/messageQueueManager.ts": 255,
+   "utils/messageQueueManager.ts": 6401,
    "commands/bridge/bridge.tsx": 373,
    "components/BridgeDialog.tsx": 6002,
    "screens/ResumeConversation.tsx": 326,
@@ -853,7 +851,6 @@
    "components/ClaudeCodeHint/PluginHintMenu.tsx": 924,
    "components/CostThresholdDialog.tsx": 532,
    "utils/formatBriefTimestamp.ts": 130,
-   "utils/permissions/yoloClassifier.ts": 145,
    "components/IdeOnboardingDialog.tsx": 2176,
    "components/LspRecommendation/LspRecommendationMenu.tsx": 1021,
    "components/RemoteCallout.tsx": 1349,
@@ -865,7 +862,6 @@
    "ink/events/input-event.ts": 254,
    "components/permissions/ComputerUseApproval/ComputerUseApproval.tsx": 9019,
    "components/diff/DiffFileList.tsx": 753,
-   "utils/permissions/permissions.ts": 120,
    "components/permissions/SandboxPermissionRequest.tsx": 3557,
    "components/agents/AgentDetail.tsx": 4840,
    "utils/swarm/It2SetupPrompt.tsx": 1622,
@@ -879,6 +875,7 @@
    "components/permissions/AskUserQuestionPermissionRequest/SubmitQuestionsView.tsx": 1973,
    "services/SessionMemory/prompts.ts": 296,
    "tools/BashTool/utils.ts": 166,
+   "utils/permissions/yoloClassifier.ts": 132,
    "components/permissions/BashPermissionRequest/bashToolUseOptions.tsx": 746,
    "components/permissions/PowerShellPermissionRequest/powershellToolUseOptions.tsx": 2345,
    "components/permissions/BashPermissionRequest/BashPermissionRequest.tsx": 5491,
@@ -979,7 +976,6 @@
   "bytes": 18318,
   "files": {
    "components/teams/TeamsDialog.tsx": 617,
-   "commands/copy/copy.tsx": 132,
    "components/EffortCallout.tsx": 128,
    "commands/mobile/mobile.tsx": 762
   }
@@ -1181,10 +1177,8 @@
    "utils/powershell/parser.ts": 315,
    "utils/proxy.ts": 72,
    "utils/mtls.ts": 77,
-   "services/analytics/datadog.ts": 326,
    "utils/permissions/permissionExplainer.ts": 96,
    "tools/RemoteTriggerTool/UI.tsx": 135,
-   "utils/modelCost.ts": 588,
    "services/api/claude.ts": 615,
    "utils/swarm/permissionSync.ts": 174,
    "services/PromptSuggestion/promptSuggestion.ts": 106,
@@ -1276,8 +1270,7 @@
    "components/Onboarding.tsx": 155,
    "tools/FileReadTool/imageProcessor.ts": 133,
    "utils/computerUse/computerUseLock.ts": 103,
-   "utils/lockfile.ts": 27,
-   "utils/debug.ts": 177
+   "utils/lockfile.ts": 27
   }
  },
  "chunk-1w450km7.js": {
@@ -1301,7 +1294,6 @@
    "bridge/sessionIdCompat.ts": 989,
    "services/mcp/xaaIdpLogin.ts": 133,
    "tools/WebFetchTool/utils.ts": 122,
-   "skills/bundled/scheduleRemoteAgents.ts": 45,
    "services/mcp/utils.ts": 191
   }
  },
@@ -1384,7 +1376,6 @@
   "decls": 92,
   "bytes": 32191,
   "files": {
-   "services/analytics/datadog.ts": 490,
    "utils/nativeInstaller/download.ts": 991,
    "services/mcp/types.ts": 79
   }
@@ -1652,7 +1643,6 @@
   "bytes": 3069,
   "files": {
    "utils/settings/pluginOnlyPolicy.ts": 216,
-   "utils/commitAttribution.ts": 12,
    "utils/hooks/hooksConfigSnapshot.ts": 673,
    "utils/managedEnv.ts": 55,
    "components/hooks/HooksConfigMenu.tsx": 139,
@@ -1896,8 +1886,7 @@
   "decls": 5,
   "bytes": 1089,
   "files": {
-   "components/PromptInput/useSwarmBanner.ts": 32,
-   "utils/ink.ts": 70
+   "utils/ink.ts": 102
   }
  },
  "chunk-32qjrk8h.js": {
@@ -1919,8 +1908,7 @@
   "decls": 11,
   "bytes": 1068,
   "files": {
-   "utils/systemTheme.ts": 726,
-   "components/LogoV2/AnimatedAsterisk.tsx": 283
+   "utils/systemTheme.ts": 1068
   }
  },
  "chunk-369n4ea8.js": {
@@ -1951,7 +1939,7 @@
   "files": {
    "utils/bash/ast.ts": 337,
    "utils/bash/shellQuote.ts": 125,
-   "utils/bash/parser.ts": 2143,
+   "utils/bash/parser.ts": 212,
    "utils/bash/commands.ts": 2402
   }
  },
@@ -2115,9 +2103,7 @@
  "chunk-3kqfccv7.js": {
   "decls": 16,
   "bytes": 4299,
-  "files": {
-   "services/analytics/datadog.ts": 100
-  }
+  "files": {}
  },
  "chunk-3m7t4vj8.js": {
   "decls": 1,
@@ -2131,7 +2117,7 @@
    "components/LogoV2/AnimatedAsterisk.tsx": 25,
    "components/Spinner/GlimmerMessage.tsx": 3995,
    "components/Spinner/useStalledAnimation.ts": 577,
-   "components/Spinner/SpinnerAnimationRow.tsx": 7685,
+   "components/Spinner/SpinnerAnimationRow.tsx": 7228,
    "components/Spinner/TeammateSpinnerTree.tsx": 45,
    "components/Spinner.tsx": 8345
   }
@@ -2156,7 +2142,6 @@
    "cli/handlers/autoMode.ts": 242,
    "utils/teleport/api.ts": 460,
    "bridge/bridgeApi.ts": 35,
-   "constants/xml.ts": 59,
    "commands/remote-setup/api.ts": 9090,
    "context/stats.tsx": 77
   }
@@ -2293,9 +2278,7 @@
  "chunk-3w426tt0.js": {
   "decls": 9,
   "bytes": 2855,
-  "files": {
-   "utils/claudeInChrome/setup.ts": 40
-  }
+  "files": {}
  },
  "chunk-3wek6r2k.js": {
   "decls": 299,
@@ -2356,9 +2339,7 @@
  "chunk-3z29138t.js": {
   "decls": 13,
   "bytes": 1415,
-  "files": {
-   "services/analytics/datadog.ts": 68
-  }
+  "files": {}
  },
  "chunk-3z3sb58b.js": {
   "decls": 2,
@@ -2370,7 +2351,7 @@
   "bytes": 17448,
   "files": {
    "utils/subprocessEnv.ts": 55,
-   "constants/xml.ts": 437
+   "constants/xml.ts": 104
   }
  },
  "chunk-409rw9nn.js": {
@@ -2392,7 +2373,6 @@
    "ink/ink.tsx": 333,
    "bridge/capacityWake.ts": 201,
    "tools/shared/spawnMultiAgent.ts": 183,
-   "utils/memory/types.ts": 340,
    "utils/plugins/installedPluginsManager.ts": 88,
    "utils/claudemd.ts": 592,
    "ink/styles.ts": 1699,
@@ -2403,7 +2383,7 @@
    "utils/imageStore.ts": 36,
    "utils/computerUse/executor.ts": 89,
    "components/CustomSelect/select-input-option.tsx": 52,
-   "utils/tokens.ts": 16141,
+   "utils/tokens.ts": 15685,
    "utils/generators.ts": 2283,
    "bootstrap/state.ts": 88,
    "utils/plugins/pluginStartupCheck.ts": 14,
@@ -2427,7 +2407,6 @@
   "bytes": 104989,
   "files": {
    "skills/bundledSkills.ts": 74,
-   "services/analytics/datadog.ts": 489,
    "components/FullscreenLayout.tsx": 76,
    "components/agents/AgentsList.tsx": 43
   }
@@ -2639,7 +2618,6 @@
   "bytes": 6778,
   "files": {
    "utils/model/agent.ts": 129,
-   "utils/modelCost.ts": 66,
    "utils/secureStorage/fallbackStorage.ts": 163
   }
  },
@@ -2740,8 +2718,6 @@
   "bytes": 18267,
   "files": {
    "utils/settings/settings.ts": 95,
-   "utils/settings/constants.ts": 230,
-   "utils/managedEnv.ts": 167,
    "services/analytics/metadata.ts": 93,
    "utils/auth.ts": 81
   }
@@ -2755,7 +2731,6 @@
   "decls": 14,
   "bytes": 5229,
   "files": {
-   "components/Spinner/SpinnerAnimationRow.tsx": 398,
    "components/mcp/McpParsingWarnings.tsx": 4160
   }
  },
@@ -2869,7 +2844,6 @@
   "decls": 165,
   "bytes": 37299,
   "files": {
-   "services/analytics/datadog.ts": 71,
    "hooks/useTasksV2.ts": 66,
    "services/policyLimits/index.ts": 6856,
    "entrypoints/sdk/coreSchemas.ts": 93,
@@ -2940,7 +2914,6 @@
    "utils/plugins/pluginLoader.ts": 405,
    "utils/plugins/mcpbHandler.ts": 994,
    "bootstrap/state.ts": 191,
-   "utils/claudeInChrome/setup.ts": 119,
    "services/mcp/types.ts": 340
   }
  },
@@ -3043,8 +3016,7 @@
   "decls": 23,
   "bytes": 5591,
   "files": {
-   "utils/settings/constants.ts": 1467,
-   "memdir/paths.ts": 238,
+   "utils/settings/constants.ts": 2262,
    "utils/permissions/PermissionUpdate.ts": 90
   }
  },
@@ -3092,9 +3064,7 @@
  "chunk-5nrcp6t7.js": {
   "decls": 35,
   "bytes": 11589,
-  "files": {
-   "constants/xml.ts": 226
-  }
+  "files": {}
  },
  "chunk-5nte8cwj.js": {
   "decls": 19,
@@ -3379,8 +3349,7 @@
   "bytes": 71642,
   "files": {
    "buddy/sprites.ts": 26,
-   "utils/attachments.ts": 153,
-   "services/analytics/datadog.ts": 113
+   "utils/attachments.ts": 153
   }
  },
  "chunk-6j594vm1.js": {
@@ -3419,8 +3388,8 @@
   "bytes": 21719,
   "files": {
    "services/SessionMemory/sessionMemory.ts": 203,
-   "skills/bundled/scheduleRemoteAgents.ts": 382,
    "utils/taggedId.ts": 132,
+   "skills/bundled/scheduleRemoteAgents.ts": 193,
    "utils/detectRepository.ts": 383,
    "utils/shell/readOnlyCommandValidation.ts": 267,
    "services/mcp/mcpStringUtils.ts": 1421,
@@ -3449,9 +3418,7 @@
  "chunk-6p9kc8f6.js": {
   "decls": 7,
   "bytes": 2336,
-  "files": {
-   "utils/settings/schemaOutput.ts": 13
-  }
+  "files": {}
  },
  "chunk-6qdkmygq.js": {
   "decls": 1,
@@ -3586,8 +3553,7 @@
   "bytes": 29574,
   "files": {
    "commands/plugin/ManagePlugins.tsx": 36,
-   "commands/copy/copy.tsx": 37,
-   "utils/localInstaller.ts": 1915,
+   "utils/localInstaller.ts": 1952,
    "utils/shellConfig.ts": 1627,
    "utils/autoUpdater.ts": 17848,
    "utils/listSessionsImpl.ts": 195
@@ -3623,8 +3589,8 @@
   "files": {
    "bridge/bridgeEnabled.ts": 1775,
    "bridge/bridgeConfig.ts": 105,
-   "utils/auth.ts": 96,
-   "commands/bridge/bridge.tsx": 131
+   "commands/bridge/bridge.tsx": 131,
+   "utils/auth.ts": 56
   }
  },
  "chunk-71rdrfpa.js": {
@@ -3735,8 +3701,6 @@
   "decls": 24,
   "bytes": 2663,
   "files": {
-   "utils/settings/constants.ts": 58,
-   "utils/permissions/permissionsLoader.ts": 169,
    "utils/hooks.ts": 57
   }
  },
@@ -3829,8 +3793,7 @@
   "decls": 41,
   "bytes": 4877,
   "files": {
-   "components/tasks/BackgroundTasksDialog.tsx": 56,
-   "services/analytics/datadog.ts": 160
+   "components/tasks/BackgroundTasksDialog.tsx": 56
   }
  },
  "chunk-7k75rpzj.js": {
@@ -3902,8 +3865,7 @@
   "decls": 68,
   "bytes": 52526,
   "files": {
-   "commands/terminalSetup/terminalSetup.tsx": 12856,
-   "utils/theme.ts": 157,
+   "commands/terminalSetup/terminalSetup.tsx": 13013,
    "utils/completionCache.ts": 1110,
    "ink/tabstops.ts": 258,
    "utils/Cursor.ts": 17818,
@@ -4067,15 +4029,12 @@
   "files": {
    "utils/markdownConfigLoader.ts": 167,
    "utils/plugins/zipCache.ts": 75,
-   "utils/settings/changeDetector.ts": 11822,
-   "utils/settings/settings.ts": 123,
+   "utils/settings/changeDetector.ts": 11958,
    "components/teams/TeamsDialog.tsx": 46,
    "utils/model/modelCapabilities.ts": 41,
    "main.tsx": 44,
    "services/api/withRetry.ts": 215,
    "services/teamMemorySync/watcher.ts": 120,
-   "components/Spinner/SpinnerAnimationRow.tsx": 212,
-   "services/analytics/datadog.ts": 108,
    "utils/fileStateCache.ts": 503,
    "utils/yaml.ts": 40,
    "utils/frontmatterParser.ts": 4839,
@@ -4083,7 +4042,6 @@
    "memdir/memoryTypes.ts": 20544,
    "services/extractMemories/prompts.ts": 6371,
    "screens/REPL.tsx": 45,
-   "memdir/paths.ts": 101,
    "memdir/teamMemPaths.ts": 2327,
    "bootstrap/state.ts": 55,
    "memdir/teamMemPrompts.ts": 3765,
@@ -4100,12 +4058,10 @@
    "utils/permissions/permissions.ts": 197,
    "utils/permissions/PermissionUpdate.ts": 8720,
    "components/permissions/FilePermissionDialog/permissionOptions.tsx": 278,
-   "utils/claudeInChrome/setup.ts": 77,
    "utils/commitAttribution.ts": 112,
    "utils/settings/managedPath.ts": 84,
    "utils/plugins/addDirPluginSettings.ts": 83,
    "coordinator/coordinatorMode.ts": 130,
-   "types/permissions.ts": 92,
    "components/agents/AgentsMenu.tsx": 133,
    "skills/loadSkillsDir.ts": 140,
    "utils/attachments.ts": 451,
@@ -4227,8 +4183,7 @@
   "decls": 42,
   "bytes": 68989,
   "files": {
-   "utils/sessionStorage.ts": 231,
-   "utils/fastMode.ts": 133
+   "utils/sessionStorage.ts": 231
   }
  },
  "chunk-89f54s6c.js": {
@@ -4454,11 +4409,9 @@
    "tools/AgentTool/loadAgentsDir.ts": 57,
    "services/mcp/config.ts": 104,
    "services/api/errors.ts": 182,
-   "utils/secureStorage/macOsKeychainHelpers.ts": 207,
    "history.ts": 61,
    "services/api/claude.ts": 109,
-   "services/SessionMemory/sessionMemory.ts": 96,
-   "services/voice.ts": 75
+   "services/SessionMemory/sessionMemory.ts": 96
   }
  },
  "chunk-8t9z960d.js": {
@@ -4487,7 +4440,6 @@
   "decls": 27,
   "bytes": 5542,
   "files": {
-   "memdir/teamMemPaths.ts": 43,
    "commands/reload-plugins/reload-plugins.ts": 2692
   }
  },
@@ -4556,7 +4508,6 @@
   "files": {
    "tasks/LocalAgentTask/LocalAgentTask.tsx": 211,
    "utils/fastMode.ts": 180,
-   "constants/xml.ts": 140,
    "utils/imageStore.ts": 247,
    "components/PromptInput/inputModes.ts": 214,
    "components/agents/utils.ts": 39,
@@ -4688,11 +4639,9 @@
   "decls": 212,
   "bytes": 23563,
   "files": {
-   "memdir/teamMemPaths.ts": 43,
    "tools/GrepTool/GrepTool.ts": 48,
    "components/agents/AgentsMenu.tsx": 129,
    "services/api/overageCreditGrant.ts": 64,
-   "constants/xml.ts": 668,
    "utils/swarm/permissionSync.ts": 122,
    "services/analytics/datadog.ts": 58,
    "tools/LSPTool/formatters.ts": 101
@@ -4734,9 +4683,7 @@
  "chunk-9gakhe7s.js": {
   "decls": 14,
   "bytes": 6566,
-  "files": {
-   "constants/xml.ts": 111
-  }
+  "files": {}
  },
  "chunk-9h8dr0qb.js": {
   "decls": 167,
@@ -5010,7 +4957,6 @@
    "services/teamMemorySync/teamMemSecretGuard.ts": 363,
    "utils/permissions/filesystem.ts": 394,
    "utils/markdownConfigLoader.ts": 365,
-   "services/analytics/datadog.ts": 83,
    "utils/bash/bashPipeCommand.ts": 111
   }
  },
@@ -5076,7 +5022,6 @@
    "components/Spinner/TeammateSpinnerLine.tsx": 529,
    "utils/frontmatterParser.ts": 113,
    "utils/permissions/permissions.ts": 254,
-   "utils/fastMode.ts": 101,
    "services/mcp/mcpStringUtils.ts": 105
   }
  },
@@ -5112,8 +5057,7 @@
   "bytes": 21240,
   "files": {
    "utils/telemetry/events.ts": 142,
-   "utils/telemetry/betaSessionTracing.ts": 4730,
-   "services/analytics/datadog.ts": 70,
+   "utils/telemetry/betaSessionTracing.ts": 4800,
    "utils/telemetry/perfettoTracing.ts": 116,
    "utils/telemetry/sessionTracing.ts": 13224
   }
@@ -5151,8 +5095,7 @@
   "decls": 6,
   "bytes": 592,
   "files": {
-   "utils/tasks.ts": 88,
-   "services/analytics/datadog.ts": 116
+   "utils/tasks.ts": 88
   }
  },
  "chunk-ad2e1aj6.js": {
@@ -5186,36 +5129,31 @@
   "decls": 3236,
   "bytes": 902870,
   "files": {
-   "state/AppStateStore.ts": 146,
+   "state/AppStateStore.ts": 67,
    "tools/AskUserQuestionTool/prompt.ts": 194,
    "utils/settings/validation.ts": 180,
-   "services/analytics/growthbook.ts": 10527,
+   "services/analytics/growthbook.ts": 10500,
    "utils/toolErrors.ts": 63,
-   "memdir/paths.ts": 2338,
+   "memdir/paths.ts": 2711,
    "utils/claudemd.ts": 65,
-   "utils/settings/constants.ts": 885,
    "utils/plugins/pluginDirectories.ts": 99,
    "utils/config.ts": 40468,
    "utils/sessionStorage.ts": 204,
    "projectOnboardingState.ts": 406,
-   "utils/auth.ts": 55224,
+   "utils/auth.ts": 59676,
    "services/settingsSync/index.ts": 116,
    "skills/bundled/scheduleRemoteAgents.ts": 67,
    "utils/model/bedrock.ts": 3586,
    "services/tokenEstimation.ts": 240,
    "utils/model/modelAllowlist.ts": 798,
-   "utils/model/agent.ts": 469,
-   "commands/copy/copy.tsx": 68,
    "utils/permissions/yoloClassifier.ts": 3228,
    "utils/messages.ts": 311,
-   "utils/betas.ts": 4011,
+   "utils/betas.ts": 3791,
    "utils/semver.ts": 273,
-   "utils/model/modelStrings.ts": 2080,
+   "utils/model/modelStrings.ts": 2309,
    "bridge/workSecret.ts": 144,
-   "services/analytics/datadog.ts": 266,
    "tools/WebFetchTool/utils.ts": 289,
    "bridge/jwtUtils.ts": 3532,
-   "services/api/errors.ts": 98,
    "services/mockRateLimits.ts": 8696,
    "services/lsp/manager.ts": 252,
    "services/oauth/getOauthProfile.ts": 1371,
@@ -5230,17 +5168,18 @@
    "utils/commitAttribution.ts": 30,
    "utils/fastMode.ts": 10099,
    "commands/fast/fast.tsx": 126,
-   "utils/modelCost.ts": 8186,
+   "utils/modelCost.ts": 8044,
    "services/api/withRetry.ts": 540,
    "utils/shell/readOnlyCommandValidation.ts": 194,
    "utils/model/modelCapabilities.ts": 2969,
    "utils/model/deprecation.ts": 3206,
    "services/analytics/firstPartyEventLogger.ts": 6735,
-   "utils/generators.ts": 135,
+   "utils/generators.ts": 277,
    "utils/model/check1mAccess.ts": 499,
    "utils/model/model.ts": 5812,
    "tools/AgentTool/agentDisplay.ts": 157,
    "commands/ultraplan.tsx": 383,
+   "utils/model/agent.ts": 435,
    "utils/model/modelOptions.ts": 54,
    "services/api/promptCacheBreakDetection.ts": 108,
    "tools/ConfigTool/UI.tsx": 35,
@@ -5266,6 +5205,7 @@
    "utils/tasks.ts": 62,
    "commands/extra-usage/index.ts": 93,
    "utils/billing.ts": 124,
+   "services/api/errors.ts": 85,
    "entrypoints/sdk/coreSchemas.ts": 185,
    "utils/workloadContext.ts": 357,
    "utils/http.ts": 2900,
@@ -5284,7 +5224,7 @@
    "components/DevBar.tsx": 216,
    "utils/env.ts": 263,
    "utils/envDynamic.ts": 1005,
-   "utils/telemetry/pluginTelemetry.ts": 36,
+   "utils/telemetry/pluginTelemetry.ts": 111,
    "commands/remote-setup/api.ts": 69,
    "services/api/adminRequests.ts": 440,
    "services/api/grove.ts": 51,
@@ -5297,8 +5237,7 @@
    "services/mcp/config.ts": 493,
    "services/analytics/metadata.ts": 13352,
    "bridge/sessionIdCompat.ts": 110,
-   "utils/concurrentSessions.ts": 4704,
-   "utils/claudeInChrome/setup.ts": 55,
+   "utils/concurrentSessions.ts": 6329,
    "cli/handlers/autoMode.ts": 255,
    "utils/agentContext.ts": 1811,
    "utils/cwd.ts": 125,
@@ -5349,7 +5288,6 @@
    "components/LogoV2/EmergencyTip.tsx": 706,
    "components/LogoV2/GuestPassesUpsell.tsx": 863,
    "components/LogoV2/AnimatedAsterisk.tsx": 934,
-   "utils/managedEnv.ts": 154,
    "components/CustomSelect/select.tsx": 386,
    "hooks/notifs/useCanSwitchToExistingSubscription.tsx": 411,
    "hooks/useMainLoopModel.ts": 79,
@@ -5382,7 +5320,6 @@
   "decls": 40,
   "bytes": 6481,
   "files": {
-   "types/permissions.ts": 218,
    "dialogLaunchers.tsx": 70,
    "commands/agents/agents.tsx": 61,
    "services/api/claude.ts": 92,
@@ -5637,7 +5574,6 @@
    "utils/exampleCommands.ts": 67,
    "upstreamproxy/relay.ts": 23127,
    "utils/file.ts": 196,
-   "services/analytics/datadog.ts": 945,
    "utils/fsOperations.ts": 271,
    "utils/deepLink/terminalLauncher.ts": 52,
    "services/oauth/crypto.ts": 97
@@ -5664,7 +5600,7 @@
    "utils/model/antModels.ts": 91,
    "components/GlobalSearchDialog.tsx": 108,
    "components/LogoV2/CondensedLogo.tsx": 112,
-   "components/agents/AgentsMenu.tsx": 390
+   "components/agents/AgentsMenu.tsx": 85
   }
  },
  "chunk-axp7p75e.js": {
@@ -5684,7 +5620,6 @@
   "decls": 15,
   "bytes": 4279,
   "files": {
-   "services/analytics/datadog.ts": 91,
    "utils/swarm/permissionSync.ts": 3775,
    "components/teams/TeamStatus.tsx": 74
   }
@@ -5724,8 +5659,7 @@
   "decls": 103,
   "bytes": 36571,
   "files": {
-   "utils/cronTasks.ts": 2257,
-   "constants/xml.ts": 181
+   "utils/cronTasks.ts": 2257
   }
  },
  "chunk-b272vy9d.js": {
@@ -5739,7 +5673,6 @@
   "files": {
    "utils/secureStorage/macOsKeychainStorage.ts": 186,
    "utils/secureStorage/plainTextStorage.ts": 3127,
-   "utils/env.ts": 127,
    "utils/secureStorage/index.ts": 37
   }
  },
@@ -5748,8 +5681,7 @@
   "bytes": 15282,
   "files": {
    "bridge/bridgeApi.ts": 10240,
-   "bridge/bridgeMain.ts": 171,
-   "constants/xml.ts": 201
+   "bridge/bridgeMain.ts": 171
   }
  },
  "chunk-b3265t9j.js": {
@@ -5891,7 +5823,6 @@
    "components/MarkdownTable.tsx": 3526,
    "utils/sliceAnsi.ts": 34,
    "services/analytics/metadata.ts": 169,
-   "utils/detectRepository.ts": 41,
    "utils/processUserInput/processSlashCommand.tsx": 41,
    "context/modalContext.tsx": 186
   }
@@ -5919,7 +5850,6 @@
    "tools/PowerShellTool/gitSafety.ts": 72,
    "utils/json.ts": 149,
    "utils/streamlinedTransform.ts": 198,
-   "components/agents/AgentsMenu.tsx": 16,
    "utils/plugins/loadPluginAgents.ts": 17,
    "plugins/builtinPlugins.ts": 671,
    "utils/plugins/managedPlugins.ts": 113
@@ -5937,7 +5867,6 @@
   "decls": 121,
   "bytes": 89040,
   "files": {
-   "utils/sessionStoragePortable.ts": 26,
    "utils/computerUse/appNames.ts": 143,
    "bootstrap/state.ts": 36
   }
@@ -5989,7 +5918,9 @@
  "chunk-bk3xs38h.js": {
   "decls": 4,
   "bytes": 699,
-  "files": {}
+  "files": {
+   "services/mcp/utils.ts": 484
+  }
  },
  "chunk-bk5ntezz.js": {
   "decls": 11,
@@ -6083,7 +6014,6 @@
    "components/PressEnterToContinue.tsx": 50,
    "utils/tokens.ts": 39,
    "utils/semanticNumber.ts": 199,
-   "utils/envUtils.ts": 31,
    "utils/computerUse/escHotkey.ts": 160,
    "utils/sessionStorage.ts": 27
   }
@@ -6108,7 +6038,7 @@
   "bytes": 781871,
   "files": {
    "hooks/useUpdateNotification.ts": 163,
-   "utils/sessionStoragePortable.ts": 10797,
+   "utils/sessionStoragePortable.ts": 96,
    "utils/envUtils.ts": 66,
    "components/permissions/AskUserQuestionPermissionRequest/QuestionNavigationBar.tsx": 56,
    "utils/betas.ts": 140,
@@ -6136,8 +6066,7 @@
   "decls": 29,
   "bytes": 9648,
   "files": {
-   "services/api/client.ts": 224,
-   "constants/xml.ts": 121
+   "services/api/client.ts": 224
   }
  },
  "chunk-bxv8ns7f.js": {
@@ -6277,9 +6206,7 @@
  "chunk-c1qgdbhd.js": {
   "decls": 14,
   "bytes": 2432,
-  "files": {
-   "services/analytics/datadog.ts": 136
-  }
+  "files": {}
  },
  "chunk-c2tx3syd.js": {
   "decls": 5,
@@ -6486,8 +6413,7 @@
   "decls": 43,
   "bytes": 4705,
   "files": {
-   "utils/envUtils.ts": 3363,
-   "utils/markdownConfigLoader.ts": 61
+   "utils/envUtils.ts": 3878
   }
  },
  "chunk-cgr0tezp.js": {
@@ -6498,7 +6424,7 @@
    "utils/xml.ts": 233,
    "utils/sanitization.ts": 214,
    "utils/bufferedWriter.ts": 781,
-   "utils/debugFilter.ts": 994,
+   "utils/debugFilter.ts": 831,
    "utils/slowOperations.ts": 585,
    "utils/generators.ts": 273,
    "utils/swarm/permissionSync.ts": 60,
@@ -6533,8 +6459,7 @@
   "decls": 15,
   "bytes": 3510,
   "files": {
-   "utils/nativeInstaller/installer.ts": 105,
-   "utils/deepLink/registerProtocol.ts": 871
+   "utils/nativeInstaller/installer.ts": 105
   }
  },
  "chunk-chabsk0s.js": {
@@ -6581,7 +6506,6 @@
    "hooks/notifs/useCanSwitchToExistingSubscription.tsx": 298,
    "main.tsx": 32719,
    "utils/claudemd.ts": 300,
-   "bridge/sessionIdCompat.ts": 27,
    "bridge/bridgeDebug.ts": 64
   }
  },
@@ -6669,9 +6593,7 @@
  "chunk-crrjgh95.js": {
   "decls": 21,
   "bytes": 5964,
-  "files": {
-   "services/analytics/datadog.ts": 430
-  }
+  "files": {}
  },
  "chunk-cshk0jw3.js": {
   "decls": 1,
@@ -6881,9 +6803,7 @@
   "bytes": 510846,
   "files": {
    "entrypoints/sdk/coreSchemas.ts": 628,
-   "utils/plugins/dependencyResolver.ts": 35,
    "utils/worktree.ts": 537,
-   "commands/copy/copy.tsx": 81,
    "bootstrap/state.ts": 316,
    "skills/bundled/scheduleRemoteAgents.ts": 172,
    "hooks/fileSuggestions.ts": 257,
@@ -6904,13 +6824,12 @@
    "services/mcp/channelAllowlist.ts": 220,
    "services/policyLimits/index.ts": 89,
    "components/ui/OrderedList.tsx": 67,
-   "components/EffortIndicator.ts": 45,
+   "utils/effort.ts": 45,
    "tools/shared/gitOperationTracking.ts": 196,
    "keybindings/reservedShortcuts.ts": 354,
    "constants/figures.ts": 248,
    "utils/computerUse/common.ts": 455,
    "utils/computerUse/toolRendering.tsx": 781,
-   "types/permissions.ts": 90,
    "utils/permissions/PermissionMode.ts": 1384,
    "utils/permissions/shellRuleMatching.ts": 1139,
    "tools/PowerShellTool/powershellPermissions.ts": 147,
@@ -6919,7 +6838,6 @@
    "utils/settings/permissionValidation.ts": 5406,
    "utils/settings/types.ts": 115648,
    "utils/platform.ts": 41,
-   "keybindings/parser.ts": 32,
    "ink/log-update.ts": 58,
    "utils/managedEnvConstants.ts": 16337,
    "utils/plugins/marketplaceManager.ts": 178,
@@ -6936,9 +6854,8 @@
    "utils/settings/schemaOutput.ts": 98,
    "utils/settings/validationTips.ts": 3937,
    "utils/settings/validation.ts": 5707,
-   "utils/settings/constants.ts": 751,
-   "utils/settings/settings.ts": 13668,
-   "utils/claudeInChrome/setup.ts": 63,
+   "utils/settings/constants.ts": 126,
+   "utils/settings/settings.ts": 14047,
    "utils/settings/mdm/settings.ts": 303,
    "utils/auth.ts": 88,
    "components/permissions/FilePermissionDialog/permissionOptions.tsx": 51
@@ -7163,11 +7080,9 @@
    "utils/sessionStorage.ts": 278,
    "components/Stats.tsx": 82,
    "commands/ide/ide.tsx": 50,
-   "services/mcp/normalization.ts": 48,
    "services/mcp/client.ts": 75,
    "utils/agenticSessionSearch.ts": 1247,
-   "services/MagicDocs/magicDocs.ts": 73,
-   "constants/xml.ts": 109
+   "services/MagicDocs/magicDocs.ts": 73
   }
  },
  "chunk-e1dn1jmn.js": {
@@ -7229,9 +7144,7 @@
  "chunk-e4vyc04t.js": {
   "decls": 4,
   "bytes": 600,
-  "files": {
-   "utils/managedEnv.ts": 203
-  }
+  "files": {}
  },
  "chunk-e4xept39.js": {
   "decls": 3,
@@ -7261,13 +7174,11 @@
   "decls": 12589,
   "bytes": 4991125,
   "files": {
-   "entrypoints/sdk/coreSchemas.ts": 2835,
+   "entrypoints/sdk/coreSchemas.ts": 1675,
    "components/permissions/PermissionDecisionDebugInfo.tsx": 2311,
-   "utils/plugins/installedPluginsManager.ts": 28513,
    "components/permissions/FileEditPermissionRequest/FileEditPermissionRequest.tsx": 151,
-   "constants/xml.ts": 217,
    "components/agents/AgentsList.tsx": 498,
-   "services/mcp/mcpStringUtils.ts": 2337,
+   "services/mcp/mcpStringUtils.ts": 2634,
    "components/teams/TeamsDialog.tsx": 390,
    "bootstrap/state.ts": 6512,
    "ink/Ansi.tsx": 368,
@@ -7283,26 +7194,25 @@
    "utils/authPortable.ts": 95,
    "constants/systemPromptSections.ts": 57,
    "utils/messages.ts": 110047,
-   "utils/memory/types.ts": 248,
+   "utils/memory/types.ts": 55,
    "memdir/memoryAge.ts": 367,
-   "utils/attachments.ts": 65860,
+   "utils/attachments.ts": 66047,
    "components/messages/nullRenderingAttachments.ts": 1651,
    "services/api/errors.ts": 43779,
    "utils/imageValidation.ts": 464,
    "utils/sessionStorage.ts": 171611,
    "services/PromptSuggestion/speculation.ts": 803,
    "bridge/inboundAttachments.ts": 4167,
-   "services/api/claude.ts": 157993,
+   "services/api/claude.ts": 158633,
    "tools/AgentTool/built-in/exploreAgent.ts": 3593,
    "tools/AgentTool/built-in/planAgent.ts": 2997,
    "utils/proxy.ts": 142,
-   "services/analytics/datadog.ts": 1598,
    "components/PromptInput/PromptInputQueuedCommands.tsx": 260,
    "services/api/sessionIngress.ts": 9279,
    "services/api/adminRequests.ts": 195,
    "utils/getWorktreePaths.ts": 605,
    "utils/gracefulShutdown.ts": 161,
-   "utils/errors.ts": 422,
+   "utils/errors.ts": 680,
    "screens/Doctor.tsx": 50,
    "utils/effort.ts": 65,
    "utils/CircularBuffer.ts": 663,
@@ -7320,53 +7230,51 @@
    "utils/messageQueueManager.ts": 2812,
    "components/FullscreenLayout.tsx": 116,
    "utils/errorLogSink.ts": 380,
-   "tasks/RemoteAgentTask/RemoteAgentTask.tsx": 20169,
+   "tasks/RemoteAgentTask/RemoteAgentTask.tsx": 21200,
    "utils/json.ts": 375,
    "utils/permissions/yoloClassifier.ts": 48184,
    "utils/fsOperations.ts": 1739,
-   "utils/fastMode.ts": 328,
+   "utils/fastMode.ts": 21,
    "utils/conversationRecovery.ts": 6668,
    "components/LogSelector.tsx": 222,
    "components/PromptInput/inputModes.ts": 1417,
    "cli/print.ts": 177,
    "services/diagnosticTracking.ts": 3616,
    "tools/LSPTool/formatters.ts": 146,
-   "services/lsp/LSPDiagnosticRegistry.ts": 4062,
+   "services/lsp/LSPDiagnosticRegistry.ts": 3977,
    "utils/markdownConfigLoader.ts": 5929,
    "utils/plugins/lspPluginIntegration.ts": 3803,
    "utils/plugins/mcpPluginIntegration.ts": 10723,
    "utils/plugins/marketplaceHelpers.ts": 4984,
-   "utils/plugins/zipCache.ts": 3887,
+   "utils/plugins/zipCache.ts": 3901,
    "utils/plugins/pluginDirectories.ts": 90,
-   "utils/commitAttribution.ts": 14,
    "utils/dxt/zip.ts": 76,
    "utils/plugins/marketplaceManager.ts": 65611,
    "utils/suggestions/directoryCompletion.ts": 299,
    "utils/nativeInstaller/installer.ts": 96,
-   "commands/thinkback/thinkback.tsx": 136,
    "utils/computerUse/computerUseLock.ts": 320,
    "services/teamMemorySync/index.ts": 996,
    "utils/plugins/pluginAutoupdate.ts": 176,
    "utils/bash/commands.ts": 1093,
-   "utils/plugins/pluginLoader.ts": 86205,
+   "utils/plugins/pluginLoader.ts": 95296,
    "services/preventSleep.ts": 117,
    "utils/file.ts": 70,
-   "utils/hooks.ts": 133908,
+   "utils/hooks.ts": 138770,
    "utils/managedEnv.ts": 40,
    "utils/plugins/pluginOptionsStorage.ts": 88,
    "utils/plugins/fetchTelemetry.ts": 587,
    "commands/compact/index.ts": 318,
    "utils/classifierApprovals.ts": 359,
    "components/permissions/FilePermissionDialog/permissionOptions.tsx": 214,
-   "utils/plugins/loadPluginOutputStyles.ts": 2049,
    "outputStyles/loadOutputStylesDir.ts": 827,
    "utils/plugins/walkPluginMarkdown.ts": 921,
    "utils/permissions/pathValidation.ts": 190,
+   "utils/plugins/loadPluginOutputStyles.ts": 2025,
    "constants/outputStyles.ts": 11079,
    "tools/PowerShellTool/pathValidation.ts": 164,
    "utils/sessionEnvironment.ts": 3159,
    "utils/xdg.ts": 82,
-   "utils/powershell/parser.ts": 23122,
+   "utils/powershell/parser.ts": 23036,
    "utils/shell/powershellProvider.ts": 1233,
    "utils/api.ts": 4149,
    "utils/hooks/hooksConfigSnapshot.ts": 64,
@@ -7405,7 +7313,7 @@
    "utils/bash/ParsedCommand.ts": 2036,
    "tools/BashTool/sedValidation.ts": 5170,
    "tools/BashTool/sedEditParser.ts": 515,
-   "utils/bash/ast.ts": 1263,
+   "utils/bash/ast.ts": 1224,
    "utils/agentContext.ts": 220,
    "tools/BashTool/pathValidation.ts": 34932,
    "utils/tokenBudget.ts": 971,
@@ -7418,29 +7326,26 @@
    "tools/BashTool/BashTool.tsx": 35932,
    "tools/PowerShellTool/gitSafety.ts": 262,
    "tools/PowerShellTool/readOnlyValidation.ts": 2630,
-   "utils/frontmatterParser.ts": 1646,
-   "utils/git.ts": 4574,
+   "utils/git.ts": 3458,
    "services/api/logging.ts": 19878,
    "tools/BashTool/shouldUseSandbox.ts": 881,
    "tools/PowerShellTool/powershellPermissions.ts": 684,
    "tools/PowerShellTool/destructiveCommandWarning.ts": 2196,
-   "utils/permissions/permissions.ts": 57446,
-   "utils/permissions/PermissionUpdate.ts": 271,
    "utils/telemetry/perfettoTracing.ts": 122,
    "utils/permissions/denialTracking.ts": 1327,
    "utils/auth.ts": 704,
-   "utils/claudemd.ts": 19666,
+   "utils/claudemd.ts": 19519,
    "keybindings/reservedShortcuts.ts": 159,
-   "utils/config.ts": 30,
    "utils/computerUse/appNames.ts": 320,
+   "utils/permissions/permissions.ts": 57316,
    "components/memory/MemoryFileSelector.tsx": 288,
    "components/ClaudeMdExternalIncludesDialog.tsx": 157,
    "context.ts": 6862,
    "utils/gitSettings.ts": 122,
    "tools/FileEditTool/UI.tsx": 294,
-   "utils/fileHistory.ts": 25915,
+   "utils/fileHistory.ts": 26126,
+   "utils/fileOperationAnalytics.ts": 554,
    "skills/bundled/simplify.ts": 174,
-   "utils/fileOperationAnalytics.ts": 412,
    "tools/FileEditTool/types.ts": 1278,
    "tools/FileWriteTool/UI.tsx": 221,
    "tools/FileWriteTool/FileWriteTool.ts": 7191,
@@ -7466,13 +7371,12 @@
    "commands/btw/btw.tsx": 311,
    "services/compact/apiMicrocompact.ts": 171,
    "components/messages/SystemTextMessage.tsx": 277,
-   "types/permissions.ts": 224,
    "services/compact/autoCompact.ts": 2718,
    "utils/context.ts": 244,
    "services/api/withRetry.ts": 25331,
    "hooks/useCanUseTool.tsx": 101,
    "tools/LSPTool/LSPTool.ts": 159,
-   "tools/WebFetchTool/utils.ts": 9684,
+   "tools/WebFetchTool/utils.ts": 9640,
    "tools/ToolSearchTool/ToolSearchTool.ts": 11336,
    "utils/contextAnalysis.ts": 3497,
    "utils/plugins/loadPluginCommands.ts": 14277,
@@ -7520,7 +7424,7 @@
    "components/Message.tsx": 4058,
    "services/api/referral.ts": 218,
    "utils/sandbox/sandbox-adapter.ts": 92,
-   "utils/settings/constants.ts": 262,
+   "utils/settings/constants.ts": 77,
    "utils/teleport.tsx": 65671,
    "utils/teleport/api.ts": 865,
    "utils/ultraplan/ccrSession.ts": 3955,
@@ -7571,7 +7475,6 @@
    "components/permissions/WebFetchPermissionRequest/WebFetchPermissionRequest.tsx": 191,
    "components/agents/agentFileUtils.ts": 74,
    "utils/forkedAgent.ts": 13721,
-   "utils/permissions/permissionSetup.ts": 768,
    "tools/AgentTool/forkSubagent.ts": 1703,
    "commands/output-style/index.ts": 82,
    "utils/swarm/permissionSync.ts": 43,
@@ -7586,6 +7489,7 @@
    "tools/AgentTool/built-in/statuslineSetup.ts": 13311,
    "tools/AgentTool/built-in/verificationAgent.ts": 2307,
    "tools/AgentTool/builtInAgents.ts": 424,
+   "constants/xml.ts": 69,
    "tools/AgentTool/loadAgentsDir.ts": 10915,
    "utils/systemPrompt.ts": 924,
    "utils/analyzeContext.ts": 15407,
@@ -7593,12 +7497,9 @@
    "utils/modelCost.ts": 621,
    "utils/model/modelCapabilities.ts": 163,
    "utils/queryProfiler.ts": 2748,
-   "utils/claudeInChrome/setup.ts": 46,
-   "utils/telemetry/betaSessionTracing.ts": 15,
    "components/Stats.tsx": 103,
    "vim/motions.ts": 66,
    "ink/styles.ts": 155,
-   "utils/plugins/validatePlugin.ts": 15,
    "services/api/dumpPrompts.ts": 285,
    "utils/mcp/elicitationValidation.ts": 118,
    "commands/copy/copy.tsx": 143,
@@ -7625,6 +7526,7 @@
    "tools/BashTool/utils.ts": 4014,
    "utils/promptShellExecution.ts": 3933,
    "skills/bundledSkills.ts": 62,
+   "commands/thinkback/thinkback.tsx": 97,
    "utils/notebook.ts": 2718,
    "services/settingsSync/index.ts": 331,
    "tools/FileReadTool/FileReadTool.ts": 33280,
@@ -7636,9 +7538,10 @@
    "utils/editor.ts": 83,
    "hooks/useIdeConnectionStatus.ts": 317,
    "components/IdeOnboardingDialog.tsx": 96,
+   "utils/permissions/permissionSetup.ts": 681,
    "tools/AgentTool/prompt.ts": 20805,
    "services/mcp/client.ts": 462,
-   "components/CustomSelect/select-input-option.tsx": 100,
+   "components/CustomSelect/select-input-option.tsx": 73,
    "hooks/fileSuggestions.ts": 134,
    "memdir/findRelevantMemories.ts": 1770,
    "utils/inProcessTeammateHelpers.ts": 334,
@@ -7671,17 +7574,19 @@
    "components/CoordinatorAgentStatus.tsx": 376,
    "utils/plugins/dependencyResolver.ts": 189,
    "utils/autoUpdater.ts": 129,
-   "utils/plugins/loadPluginHooks.ts": 11797,
+   "utils/plugins/loadPluginHooks.ts": 17153,
    "commands/plugin/PluginSettings.tsx": 322,
    "utils/plugins/cacheUtils.ts": 4346,
    "utils/plugins/officialMarketplaceGcs.ts": 2547,
    "utils/plugins/installCounts.ts": 2772,
    "services/plugins/PluginInstallationManager.ts": 204,
    "tools/MCPTool/UI.tsx": 500,
+   "utils/permissions/PermissionUpdate.ts": 134,
    "utils/shell/readOnlyCommandValidation.ts": 238,
    "projectOnboardingState.ts": 100,
    "utils/cron.ts": 96,
    "utils/plugins/pluginVersioning.ts": 1699,
+   "utils/plugins/installedPluginsManager.ts": 28496,
    "utils/plugins/pluginInstallationHelpers.ts": 22766,
    "upstreamproxy/relay.ts": 292,
    "services/plugins/pluginOperations.ts": 214,
@@ -7742,7 +7647,6 @@
   "bytes": 13852,
   "files": {
    "utils/concurrentSessions.ts": 41,
-   "services/analytics/datadog.ts": 88,
    "services/autoDream/consolidationLock.ts": 275,
    "bridge/bridgeApi.ts": 77
   }
@@ -8035,7 +7939,6 @@
   "decls": 14,
   "bytes": 3285,
   "files": {
-   "utils/commitAttribution.ts": 12,
    "utils/managedEnv.ts": 91
   }
  },
@@ -8047,8 +7950,6 @@
    "utils/toolResultStorage.ts": 116,
    "utils/toolSearch.ts": 583,
    "services/SessionMemory/sessionMemory.ts": 1052,
-   "bridge/inboundAttachments.ts": 59,
-   "components/agents/AgentsMenu.tsx": 23,
    "utils/managedEnv.ts": 56,
    "utils/teleport/environmentSelection.ts": 305,
    "utils/teleport/environments.ts": 2279,
@@ -8090,7 +7991,6 @@
    "utils/markdownConfigLoader.ts": 304,
    "services/mcp/config.ts": 147,
    "bootstrap/state.ts": 86,
-   "utils/claudeInChrome/setup.ts": 89,
    "utils/plugins/managedPlugins.ts": 102,
    "utils/plugins/marketplaceHelpers.ts": 8545,
    "utils/nativeInstaller/installer.ts": 178,
@@ -8143,8 +8043,7 @@
   "decls": 12,
   "bytes": 622,
   "files": {
-   "bridge/inboundAttachments.ts": 40,
-   "services/analytics/datadog.ts": 84
+   "bridge/inboundAttachments.ts": 40
   }
  },
  "chunk-f8r3h98t.js": {
@@ -8214,7 +8113,6 @@
   "decls": 203,
   "bytes": 157655,
   "files": {
-   "services/mcp/types.ts": 192,
    "services/mcp/config.ts": 178,
    "bridge/bridgeApi.ts": 228,
    "services/mcp/utils.ts": 110,
@@ -8319,7 +8217,6 @@
   "decls": 39,
   "bytes": 3370,
   "files": {
-   "bootstrap/state.ts": 26,
    "cli/exit.ts": 65,
    "utils/cwd.ts": 84,
    "utils/agentContext.ts": 36
@@ -8369,7 +8266,6 @@
   "decls": 21,
   "bytes": 13488,
   "files": {
-   "utils/permissions/permissionSetup.ts": 178,
    "services/mcp/client.ts": 72
   }
  },
@@ -8383,7 +8279,6 @@
    "utils/stats.ts": 64,
    "cli/transports/HybridTransport.ts": 250,
    "services/mcp/channelPermissions.ts": 188,
-   "services/analytics/datadog.ts": 59,
    "services/oauth/crypto.ts": 65,
    "services/api/withRetry.ts": 65,
    "components/FullscreenLayout.tsx": 15,
@@ -8396,10 +8291,9 @@
    "utils/shell/powershellProvider.ts": 495,
    "memdir/teamMemPaths.ts": 181,
    "keybindings/parser.ts": 186,
-   "utils/sandbox/sandbox-adapter.ts": 40803,
+   "utils/sandbox/sandbox-adapter.ts": 46472,
    "utils/cronTasksLock.ts": 136,
    "utils/ide.ts": 670,
-   "utils/managedEnv.ts": 240,
    "components/agents/AgentsMenu.tsx": 304,
    "utils/ansiToPng.ts": 83,
    "tools/PowerShellTool/gitSafety.ts": 85,
@@ -8414,7 +8308,6 @@
    "utils/permissions/PermissionUpdate.ts": 118,
    "commands/ide/ide.tsx": 207,
    "components/permissions/FilePermissionDialog/permissionOptions.tsx": 41,
-   "utils/platform.ts": 67,
    "utils/settings/constants.ts": 96,
    "tools/PowerShellTool/pathValidation.ts": 3051,
    "utils/permissions/pathValidation.ts": 2791,
@@ -8430,8 +8323,7 @@
   "decls": 10,
   "bytes": 3451,
   "files": {
-   "screens/Doctor.tsx": 103,
-   "utils/fastMode.ts": 61
+   "screens/Doctor.tsx": 103
   }
  },
  "chunk-fra6697p.js": {
@@ -8542,9 +8434,7 @@
  "chunk-fznepy1n.js": {
   "decls": 8,
   "bytes": 1147,
-  "files": {
-   "services/analytics/datadog.ts": 78
-  }
+  "files": {}
  },
  "chunk-fzty8e18.js": {
   "decls": 23,
@@ -8576,7 +8466,6 @@
   "bytes": 10440,
   "files": {
    "tools/AgentTool/agentDisplay.ts": 246,
-   "services/mcp/types.ts": 181,
    "services/mcp/headersHelper.ts": 1798,
    "services/mcp/envExpansion.ts": 233
   }
@@ -8650,7 +8539,6 @@
    "tools/GrepTool/prompt.ts": 1544,
    "tools/WebFetchTool/prompt.ts": 397,
    "utils/shell/shellToolUtils.ts": 169,
-   "utils/frontmatterParser.ts": 46,
    "services/compact/compactWarningState.ts": 37,
    "services/compact/microCompact.ts": 6711,
    "services/SessionMemory/sessionMemory.ts": 197,
@@ -8681,7 +8569,6 @@
   "files": {
    "services/oauth/crypto.ts": 317,
    "utils/plugins/pluginLoader.ts": 201,
-   "services/analytics/datadog.ts": 71,
    "services/teamMemorySync/index.ts": 534,
    "bridge/bridgeMain.ts": 138
   }
@@ -8826,7 +8713,6 @@
    "services/internalLogging.ts": 215,
    "utils/json.ts": 255,
    "utils/markdownConfigLoader.ts": 70,
-   "services/analytics/datadog.ts": 95,
    "memdir/teamMemPaths.ts": 127,
    "utils/plugins/zipCache.ts": 250,
    "utils/fsOperations.ts": 423,
@@ -8852,9 +8738,7 @@
  "chunk-gppkhxdv.js": {
   "decls": 4,
   "bytes": 648,
-  "files": {
-   "utils/messageQueueManager.ts": 15
-  }
+  "files": {}
  },
  "chunk-gptvg45j.js": {
   "decls": 1,
@@ -9043,9 +8927,7 @@
  "chunk-h4jqyaw4.js": {
   "decls": 7,
   "bytes": 614,
-  "files": {
-   "utils/fastMode.ts": 101
-  }
+  "files": {}
  },
  "chunk-h52ct3be.js": {
   "decls": 17,
@@ -9142,7 +9024,6 @@
    "skills/bundled/loop.ts": 163,
    "skills/bundled/batch.ts": 6013,
    "skills/bundled/claudeInChrome.ts": 859,
-   "utils/settings/mdm/constants.ts": 144,
    "components/tasks/RemoteSessionDetailDialog.tsx": 77,
    "commands/commit.ts": 656,
    "skills/bundled/verify.ts": 290,
@@ -9301,7 +9182,6 @@
   "files": {
    "entrypoints/sdk/controlSchemas.ts": 43,
    "utils/errors.ts": 71,
-   "utils/git.ts": 71,
    "utils/computerUse/mcpServer.ts": 216,
    "utils/bash/commands.ts": 122,
    "upstreamproxy/upstreamproxy.ts": 103,
@@ -9331,9 +9211,7 @@
  "chunk-hnwmw0ks.js": {
   "decls": 18,
   "bytes": 7298,
-  "files": {
-   "services/analytics/datadog.ts": 59
-  }
+  "files": {}
  },
  "chunk-hnwnzznd.js": {
   "decls": 3,
@@ -9469,24 +9347,20 @@
    "services/analytics/firstPartyEventLogger.ts": 55,
    "components/StatusLine.tsx": 307,
    "services/mockRateLimits.ts": 179,
-   "utils/fastMode.ts": 1479,
    "components/Feedback.tsx": 72,
    "utils/model/modelOptions.ts": 9688,
    "constants/prompts.ts": 65,
    "tools/ConfigTool/prompt.ts": 240,
-   "utils/model/agent.ts": 1468,
-   "bootstrap/state.ts": 34,
-   "utils/permissions/permissionSetup.ts": 207,
+   "utils/fastMode.ts": 171,
+   "utils/model/agent.ts": 4833,
    "services/api/promptCacheBreakDetection.ts": 110,
    "utils/model/modelAllowlist.ts": 71,
    "commands/plugin/PluginOptionsFlow.tsx": 304,
    "services/api/client.ts": 16510,
    "tools/WebSearchTool/WebSearchTool.ts": 279,
    "components/mcp/ElicitationDialog.tsx": 46,
-   "services/analytics/datadog.ts": 94,
    "utils/sessionStoragePortable.ts": 89,
    "hooks/useIssueFlagBanner.ts": 77,
-   "utils/betas.ts": 49,
    "services/mcp/config.ts": 95
   }
  },
@@ -9809,9 +9683,7 @@
  "chunk-jnt55rm1.js": {
   "decls": 6,
   "bytes": 2445,
-  "files": {
-   "services/mcp/headersHelper.ts": 33
-  }
+  "files": {}
  },
  "chunk-jp3mzxnv.js": {
   "decls": 37,
@@ -9871,7 +9743,6 @@
   "decls": 20,
   "bytes": 5056,
   "files": {
-   "ink/useTerminalNotification.ts": 154,
    "context/notifications.tsx": 3514
   }
  },
@@ -9953,7 +9824,6 @@
   "decls": 5,
   "bytes": 410,
   "files": {
-   "components/Spinner/SpinnerAnimationRow.tsx": 103,
    "components/design-system/Byline.tsx": 271
   }
  },
@@ -10044,9 +9914,7 @@
  "chunk-karvvxmx.js": {
   "decls": 8,
   "bytes": 1468,
-  "files": {
-   "utils/claudeInChrome/setup.ts": 40
-  }
+  "files": {}
  },
  "chunk-kavwfxwg.js": {
   "decls": 3,
@@ -10272,7 +10140,6 @@
   "decls": 121,
   "bytes": 65326,
   "files": {
-   "commands/copy/copy.tsx": 72,
    "services/preventSleep.ts": 477,
    "native-ts/color-diff/index.ts": 151,
    "ink/termio/parser.ts": 335,
@@ -10287,12 +10154,12 @@
    "utils/permissions/permissionSetup.ts": 7183,
    "utils/settings/changeDetector.ts": 270,
    "utils/effort.ts": 2268,
-   "components/ModelPicker.tsx": 133,
    "services/api/errors.ts": 205,
    "tools/AgentTool/agentDisplay.ts": 75,
    "utils/settings/constants.ts": 63,
    "commands/model/model.tsx": 381,
-   "components/agents/AgentsMenu.tsx": 68
+   "components/agents/AgentsMenu.tsx": 68,
+   "components/ModelPicker.tsx": 118
   }
  },
  "chunk-ksxq075c.js": {
@@ -10306,7 +10173,6 @@
   "decls": 10,
   "bytes": 1028,
   "files": {
-   "hooks/useTurnDiffs.ts": 35,
    "bridge/bridgeApi.ts": 211
   }
  },
@@ -10554,9 +10420,7 @@
  "chunk-m8rdsjv5.js": {
   "decls": 4,
   "bytes": 803,
-  "files": {
-   "utils/telemetry/instrumentation.ts": 28
-  }
+  "files": {}
  },
  "chunk-m8whhcc1.js": {
   "decls": 5,
@@ -10681,9 +10545,7 @@
  "chunk-mmq58n27.js": {
   "decls": 6,
   "bytes": 231,
-  "files": {
-   "ink/useTerminalNotification.ts": 129
-  }
+  "files": {}
  },
  "chunk-mp7v59a0.js": {
   "decls": 29,
@@ -10698,7 +10560,7 @@
   "files": {
    "utils/abortController.ts": 1564,
    "bridge/capacityWake.ts": 210,
-   "utils/errors.ts": 122,
+   "utils/errors.ts": 83,
    "utils/teammateMailbox.ts": 58
   }
  },
@@ -10733,7 +10595,6 @@
   "decls": 6,
   "bytes": 948,
   "files": {
-   "ink/useTerminalNotification.ts": 129,
    "components/CtrlOToExpand.tsx": 300
   }
  },
@@ -10794,16 +10655,13 @@
  "chunk-mw789w2b.js": {
   "decls": 11,
   "bytes": 629,
-  "files": {
-   "utils/userPromptKeywords.ts": 19
-  }
+  "files": {}
  },
  "chunk-mww2ey7m.js": {
   "decls": 11,
   "bytes": 1162,
   "files": {
-   "components/Spinner/utils.ts": 446,
-   "components/LogoV2/AnimatedAsterisk.tsx": 268
+   "components/Spinner/utils.ts": 914
   }
  },
  "chunk-mww7agq2.js": {
@@ -10899,9 +10757,7 @@
  "chunk-n2x174m4.js": {
   "decls": 21,
   "bytes": 8744,
-  "files": {
-   "services/analytics/datadog.ts": 112
-  }
+  "files": {}
  },
  "chunk-n30mmv2p.js": {
   "decls": 6,
@@ -11048,11 +10904,9 @@
   "bytes": 123333,
   "files": {
    "utils/sessionUrl.ts": 349,
-   "utils/permissions/yoloClassifier.ts": 89,
    "constants/messages.ts": 683,
    "utils/messages.ts": 69,
    "utils/messagePredicates.ts": 196,
-   "utils/settings/constants.ts": 103,
    "bootstrap/state.ts": 56887
   }
  },
@@ -11155,10 +11009,7 @@
  "chunk-nt75hmzb.js": {
   "decls": 59,
   "bytes": 6955,
-  "files": {
-   "services/analytics/datadog.ts": 73,
-   "utils/claudeInChrome/setup.ts": 44
-  }
+  "files": {}
  },
  "chunk-nt81pzj6.js": {
   "decls": 1,
@@ -11187,10 +11038,9 @@
   "bytes": 48550,
   "files": {
    "utils/abortController.ts": 95,
+   "utils/tasks.ts": 14047,
    "tools/TaskListTool/TaskListTool.ts": 296,
-   "utils/tasks.ts": 10109,
    "utils/task/diskOutput.ts": 45,
-   "utils/claudeInChrome/setup.ts": 330,
    "utils/teammateMailbox.ts": 19613,
    "bridge/bridgeApi.ts": 511,
    "components/messages/UserTeammateMessage.tsx": 186,
@@ -11253,10 +11103,9 @@
    "components/permissions/rules/RecentDenialsTab.tsx": 745,
    "components/permissions/rules/RemoveWorkspaceDirectory.tsx": 860,
    "components/permissions/rules/WorkspaceTab.tsx": 1802,
-   "components/agents/AgentsMenu.tsx": 5543,
-   "utils/managedEnv.ts": 182,
+   "components/agents/AgentsMenu.tsx": 7503,
    "commands/review/UltrareviewOverageDialog.tsx": 692,
-   "components/permissions/rules/PermissionRuleList.tsx": 26443,
+   "components/permissions/rules/PermissionRuleList.tsx": 26165,
    "commands/permissions/permissions.tsx": 369
   }
  },
@@ -11283,7 +11132,6 @@
   "files": {
    "utils/telemetryAttributes.ts": 1586,
    "utils/imageStore.ts": 125,
-   "services/analytics/datadog.ts": 263,
    "utils/telemetry/events.ts": 1358
   }
  },
@@ -11376,7 +11224,6 @@
   "decls": 23,
   "bytes": 6244,
   "files": {
-   "services/mcp/client.ts": 412,
    "utils/imageResizer.ts": 131
   }
  },
@@ -11563,6 +11410,7 @@
    "services/mcp/headersHelper.ts": 62,
    "utils/format.ts": 160,
    "utils/settings/constants.ts": 197,
+   "utils/permissions/permissionsLoader.ts": 294,
    "components/agents/AgentsMenu.tsx": 59
   }
  },
@@ -11706,9 +11554,7 @@
  "chunk-q3kq8hyf.js": {
   "decls": 8,
   "bytes": 758,
-  "files": {
-   "utils/permissions/filesystem.ts": 36
-  }
+  "files": {}
  },
  "chunk-q40vccff.js": {
   "decls": 53,
@@ -11822,7 +11668,7 @@
    "utils/permissions/PermissionUpdate.ts": 93,
    "components/agents/AgentsMenu.tsx": 571,
    "utils/settings/settings.ts": 6971,
-   "utils/permissions/permissionsLoader.ts": 180,
+   "utils/permissions/permissionsLoader.ts": 518,
    "services/mcp/config.ts": 66,
    "utils/settings/constants.ts": 212,
    "utils/managedEnv.ts": 57
@@ -11888,7 +11734,6 @@
   "bytes": 301111,
   "files": {
    "utils/shell/prefix.ts": 637,
-   "services/analytics/datadog.ts": 16954,
    "tools/BashTool/BashTool.tsx": 157,
    "services/mcp/config.ts": 128,
    "memdir/teamMemPaths.ts": 61,
@@ -11949,7 +11794,6 @@
    "utils/genericProcessUtils.ts": 697,
    "utils/tmuxSocket.ts": 59,
    "utils/swarm/constants.ts": 280,
-   "services/analytics/datadog.ts": 76,
    "utils/peerAddress.ts": 295,
    "keybindings/reservedShortcuts.ts": 193,
    "bootstrap/state.ts": 57
@@ -12011,9 +11855,7 @@
  "chunk-qkycbme9.js": {
   "decls": 92,
   "bytes": 18022,
-  "files": {
-   "services/analytics/datadog.ts": 57
-  }
+  "files": {}
  },
  "chunk-qmbda0jr.js": {
   "decls": 9,
@@ -12072,9 +11914,7 @@
  "chunk-qr2y97px.js": {
   "decls": 34,
   "bytes": 26244,
-  "files": {
-   "utils/terminalPanel.ts": 55
-  }
+  "files": {}
  },
  "chunk-qrf13zdh.js": {
   "decls": 2,
@@ -12093,7 +11933,7 @@
   "decls": 7,
   "bytes": 907,
   "files": {
-   "commands/copy/copy.tsx": 39
+   "utils/deepLink/registerProtocol.ts": 39
   }
  },
  "chunk-qsdkv90t.js": {
@@ -12150,8 +11990,7 @@
    "services/SessionMemory/sessionMemory.ts": 596,
    "tools/AgentTool/agentToolUtils.ts": 155,
    "utils/model/configs.ts": 138,
-   "tools/BashTool/utils.ts": 338,
-   "tools/BriefTool/upload.ts": 33,
+   "tools/BashTool/utils.ts": 784,
    "services/api/claude.ts": 94
   }
  },
@@ -12229,8 +12068,7 @@
   "decls": 2,
   "bytes": 166,
   "files": {
-   "tools/FileReadTool/FileReadTool.ts": 79,
-   "utils/pdfUtils.ts": 87
+   "tools/FileReadTool/FileReadTool.ts": 79
   }
  },
  "chunk-r2w21sc3.js": {
@@ -12270,7 +12108,6 @@
   "files": {
    "ink/selection.ts": 77,
    "components/CustomSelect/select.tsx": 48,
-   "components/Spinner/SpinnerAnimationRow.tsx": 105,
    "components/ui/OrderedList.tsx": 35
   }
  },
@@ -12298,7 +12135,7 @@
   "bytes": 9134,
   "files": {
    "commands/rewind/rewind.ts": 21,
-   "utils/plugins/validatePlugin.ts": 47
+   "utils/plugins/validatePlugin.ts": 32
   }
  },
  "chunk-rbtj21yz.js": {
@@ -12401,7 +12238,7 @@
   "decls": 11,
   "bytes": 3202,
   "files": {
-   "utils/frontmatterParser.ts": 156
+   "utils/shell/resolveDefaultShell.ts": 156
   }
  },
  "chunk-rqan0pc1.js": {
@@ -12412,9 +12249,7 @@
  "chunk-rqh5c9eg.js": {
   "decls": 13,
   "bytes": 1204,
-  "files": {
-   "services/analytics/datadog.ts": 62
-  }
+  "files": {}
  },
  "chunk-rqnncghm.js": {
   "decls": 1,
@@ -12495,7 +12330,6 @@
   "decls": 30,
   "bytes": 11555,
   "files": {
-   "utils/sessionStoragePortable.ts": 25,
    "memdir/teamMemPaths.ts": 49
   }
  },
@@ -12595,7 +12429,6 @@
   "decls": 13,
   "bytes": 1370,
   "files": {
-   "ink/useTerminalNotification.ts": 129,
    "components/ValidationErrorsList.tsx": 192,
    "components/shell/OutputLine.tsx": 597
   }
@@ -12651,7 +12484,6 @@
    "components/agents/AgentEditor.tsx": 1011,
    "utils/autoRunIssue.tsx": 463,
    "components/permissions/PermissionExplanation.tsx": 530,
-   "components/Spinner/SpinnerAnimationRow.tsx": 117,
    "components/ConsoleOAuthFlow.tsx": 11405,
    "commands/plugin/plugin.tsx": 507
   }
@@ -12662,8 +12494,7 @@
   "files": {
    "types/command.ts": 51,
    "commands.ts": 514,
-   "utils/pasteStore.ts": 1482,
-   "services/analytics/datadog.ts": 205,
+   "utils/pasteStore.ts": 2626,
    "utils/ultraplan/keyword.ts": 108,
    "utils/sideQuestion.ts": 778,
    "commands/ultraplan.tsx": 40,
@@ -12678,11 +12509,11 @@
    "tools/MCPTool/classifyForCollapse.ts": 256,
    "skills/mcpSkillBuilders.ts": 149,
    "utils/plugins/marketplaceHelpers.ts": 109,
-   "utils/auth.ts": 614,
+   "utils/auth.ts": 571,
    "utils/agentContext.ts": 26,
    "components/agents/AgentsMenu.tsx": 76,
    "utils/plugins/pluginAutoupdate.ts": 231,
-   "utils/commitAttribution.ts": 7586,
+   "utils/commitAttribution.ts": 7661,
    "utils/plugins/reconciler.ts": 583,
    "components/FullscreenLayout.tsx": 69,
    "utils/git/gitFilesystem.ts": 141,
@@ -12692,7 +12523,6 @@
    "keybindings/reservedShortcuts.ts": 259,
    "memdir/teamMemPaths.ts": 1328,
    "utils/markdownConfigLoader.ts": 2272,
-   "commands/copy/copy.tsx": 75,
    "utils/hooks/sessionHooks.ts": 305,
    "types/hooks.ts": 6324,
    "hooks/toolPermission/permissionLogging.ts": 66,
@@ -12702,7 +12532,7 @@
    "utils/permissions/filesystem.ts": 236,
    "memdir/memoryScan.ts": 1403,
    "utils/deepLink/terminalLauncher.ts": 132,
-   "utils/fingerprint.ts": 22,
+   "utils/fingerprint.ts": 389,
    "tools/ToolSearchTool/ToolSearchTool.ts": 3071,
    "services/mcp/client.ts": 116,
    "hooks/useVoiceEnabled.ts": 62,
@@ -12712,7 +12542,6 @@
    "components/TeleportError.tsx": 190,
    "utils/messages.ts": 52,
    "utils/tmuxSocket.ts": 46,
-   "utils/platform.ts": 121,
    "components/Spinner.tsx": 210,
    "components/TrustDialog/utils.ts": 63,
    "bridge/codeSessionApi.ts": 55,
@@ -12726,8 +12555,7 @@
    "utils/claudeInChrome/setupPortable.ts": 2240,
    "utils/claudeInChrome/setup.ts": 4224,
    "cli/print.ts": 74,
-   "utils/model/agent.ts": 150,
-   "utils/modelCost.ts": 87,
+   "utils/model/agent.ts": 2759,
    "utils/execFileNoThrow.ts": 229,
    "utils/plugins/marketplaceManager.ts": 238,
    "utils/ghPrStatus.ts": 6228,
@@ -12738,9 +12566,8 @@
    "utils/tasks.ts": 146,
    "utils/autoUpdater.ts": 403,
    "utils/ide.ts": 3355,
-   "services/mcp/mcpStringUtils.ts": 399,
+   "services/mcp/mcpStringUtils.ts": 8241,
    "components/RemoteEnvironmentDialog.tsx": 236,
-   "utils/fastMode.ts": 71,
    "utils/settings/allErrors.ts": 233,
    "skills/loadSkillsDir.ts": 105,
    "tools/AgentTool/UI.tsx": 260
@@ -12860,7 +12687,6 @@
   "decls": 10,
   "bytes": 3604,
   "files": {
-   "constants/xml.ts": 169,
    "commands/remote-setup/api.ts": 28
   }
  },
@@ -13077,7 +12903,6 @@
   "files": {
    "components/agents/new-agent-creation/wizard-steps/GenerateStep.tsx": 1330,
    "components/ResumeTask.tsx": 112,
-   "utils/betas.ts": 60,
    "components/agents/new-agent-creation/wizard-steps/MethodStep.tsx": 3050,
    "components/agents/new-agent-creation/wizard-steps/DescriptionStep.tsx": 1357,
    "components/agents/new-agent-creation/CreateAgentWizard.tsx": 391
@@ -13099,9 +12924,7 @@
  "chunk-sycr1qkz.js": {
   "decls": 17,
   "bytes": 11923,
-  "files": {
-   "utils/permissions/permissions.ts": 29
-  }
+  "files": {}
  },
  "chunk-szfapcvd.js": {
   "decls": 1,
@@ -13124,8 +12947,7 @@
    "keybindings/parser.ts": 49,
    "keybindings/reservedShortcuts.ts": 107,
    "utils/markdownConfigLoader.ts": 147,
-   "services/mcp/headersHelper.ts": 122,
-   "utils/claudeInChrome/setup.ts": 38,
+   "services/mcp/headersHelper.ts": 2914,
    "utils/sessionStorage.ts": 61,
    "utils/toolResultStorage.ts": 23,
    "bootstrap/state.ts": 63,
@@ -13210,9 +13032,9 @@
   "decls": 20,
   "bytes": 19536,
   "files": {
-   "components/LogoV2/AnimatedAsterisk.tsx": 1540,
-   "utils/ansiToSvg.ts": 915,
-   "utils/ansiToPng.ts": 1306
+   "components/LogoV2/AnimatedAsterisk.tsx": 398,
+   "utils/ansiToSvg.ts": 1395,
+   "utils/ansiToPng.ts": 2538
   }
  },
  "chunk-t7zrjgp6.js": {
@@ -13558,14 +13380,12 @@
    "utils/bash/bashPipeCommand.ts": 89,
    "utils/permissions/yoloClassifier.ts": 531,
    "services/SessionMemory/sessionMemory.ts": 281,
-   "utils/claudeInChrome/setup.ts": 66,
-   "utils/messages.ts": 206,
    "utils/sessionStorage.ts": 174,
-   "services/analytics/datadog.ts": 147,
    "hooks/usePromptsFromClaudeInChrome.tsx": 269,
    "utils/markdownConfigLoader.ts": 102,
    "utils/permissions/PermissionUpdate.ts": 62,
    "commands/plugin/PluginSettings.tsx": 91,
+   "utils/messages.ts": 136,
    "hooks/useMergedClients.ts": 45
   }
  },
@@ -13699,9 +13519,7 @@
  "chunk-v80cqab4.js": {
   "decls": 20,
   "bytes": 4006,
-  "files": {
-   "utils/model/modelCapabilities.ts": 16
-  }
+  "files": {}
  },
  "chunk-v8425tx0.js": {
   "decls": 26,
@@ -13714,7 +13532,6 @@
   "decls": 77,
   "bytes": 10578,
   "files": {
-   "types/permissions.ts": 62,
    "utils/stringUtils.ts": 164
   }
  },
@@ -13735,7 +13552,6 @@
   "decls": 16,
   "bytes": 3734,
   "files": {
-   "ink/useTerminalNotification.ts": 291,
    "components/design-system/ThemeProvider.tsx": 2963
   }
  },
@@ -13846,9 +13662,7 @@
  "chunk-vjd99kgw.js": {
   "decls": 1,
   "bytes": 88,
-  "files": {
-   "utils/debug.ts": 88
-  }
+  "files": {}
  },
  "chunk-vjr65ep9.js": {
   "decls": 12,
@@ -14004,7 +13818,6 @@
   "decls": 85,
   "bytes": 47459,
   "files": {
-   "utils/claudeInChrome/setup.ts": 135,
    "utils/sessionStoragePortable.ts": 15683
   }
  },
@@ -14307,8 +14120,7 @@
   "bytes": 9098,
   "files": {
    "utils/bash/parser.ts": 182,
-   "bridge/bridgeMain.ts": 161,
-   "utils/powershell/parser.ts": 481
+   "bridge/bridgeMain.ts": 161
   }
  },
  "chunk-wj577vf9.js": {
@@ -14378,8 +14190,7 @@
   "decls": 6,
   "bytes": 853,
   "files": {
-   "components/MessageResponse.tsx": 677,
-   "ink/useTerminalNotification.ts": 127
+   "components/MessageResponse.tsx": 677
   }
  },
  "chunk-wr5gyt6x.js": {
@@ -14427,7 +14238,6 @@
    "ink/bidi.ts": 509,
    "services/mcp/utils.ts": 75,
    "services/mcp/config.ts": 84,
-   "utils/plugins/pluginDirectories.ts": 46,
    "skills/bundledSkills.ts": 73
   }
  },
@@ -14436,7 +14246,7 @@
   "bytes": 60170,
   "files": {
    "utils/tasks.ts": 88,
-   "utils/gitDiff.ts": 243,
+   "utils/gitDiff.ts": 55,
    "utils/git.ts": 200,
    "utils/diff.ts": 392,
    "utils/generatedFiles.ts": 924,
@@ -14484,8 +14294,7 @@
    "keybindings/validate.ts": 5934,
    "utils/keyboardShortcuts.ts": 41,
    "keybindings/match.ts": 462,
-   "keybindings/resolver.ts": 1541,
-   "hooks/useVoiceIntegration.tsx": 424,
+   "keybindings/resolver.ts": 2386,
    "keybindings/shortcutFormat.ts": 113
   }
  },
@@ -14572,7 +14381,6 @@
   "decls": 123,
   "bytes": 27488,
   "files": {
-   "ink/useTerminalNotification.ts": 703,
    "utils/gracefulShutdown.ts": 338,
    "ink/root.ts": 1163,
    "components/design-system/ThemedBox.tsx": 620,
@@ -14589,8 +14397,7 @@
    "ink/hooks/use-animation-frame.ts": 429,
    "utils/task/diskOutput.ts": 286,
    "ink/hooks/use-selection.ts": 823,
-   "ink/hooks/use-tab-status.ts": 272,
-   "state/AppStateStore.ts": 236,
+   "ink/hooks/use-tab-status.ts": 508,
    "ink/termio/osc.ts": 110,
    "ink/measure-element.ts": 104,
    "ink/render-node-to-output.ts": 121,
@@ -14697,7 +14504,6 @@
    "context/stats.tsx": 1423,
    "keybindings/KeybindingProviderSetup.tsx": 5829,
    "utils/mailbox.ts": 673,
-   "ink/useTerminalNotification.ts": 178,
    "context/mailbox.tsx": 108,
    "hooks/useTasksV2.ts": 80,
    "state/AppState.tsx": 3903,
@@ -14713,7 +14519,6 @@
   "decls": 77,
   "bytes": 19850,
   "files": {
-   "services/analytics/datadog.ts": 91,
    "tools/AgentTool/agentDisplay.ts": 55,
    "tasks/InProcessTeammateTask/InProcessTeammateTask.tsx": 111,
    "components/PromptInput/PromptInputQueuedCommands.tsx": 81
@@ -14881,7 +14686,6 @@
   "bytes": 84679,
   "files": {
    "utils/task/diskOutput.ts": 276,
-   "utils/permissions/permissionSetup.ts": 85,
    "components/Feedback.tsx": 1800,
    "services/analytics/firstPartyEventLogger.ts": 61,
    "services/teamMemorySync/secretScanner.ts": 88,
@@ -14899,9 +14703,7 @@
  "chunk-xzrznswy.js": {
   "decls": 9,
   "bytes": 1691,
-  "files": {
-   "ink/useTerminalNotification.ts": 467
-  }
+  "files": {}
  },
  "chunk-y12tyg2v.js": {
   "decls": 8,
@@ -14919,8 +14721,7 @@
    "services/mcp/client.ts": 261,
    "utils/concurrentSessions.ts": 255,
    "history.ts": 288,
-   "utils/plugins/installCounts.ts": 122,
-   "utils/fastMode.ts": 54
+   "utils/plugins/installCounts.ts": 122
   }
  },
  "chunk-y1dxgk9v.js": {
@@ -14936,7 +14737,6 @@
   "decls": 78,
   "bytes": 59186,
   "files": {
-   "constants/xml.ts": 71,
    "commands/extra-usage/extra-usage-noninteractive.ts": 28
   }
  },
@@ -15134,7 +14934,6 @@
   "files": {
    "context/voice.tsx": 281,
    "utils/git/gitFilesystem.ts": 83,
-   "ink/useTerminalNotification.ts": 154,
    "state/AppState.tsx": 148
   }
  },
@@ -15251,9 +15050,7 @@
  "chunk-ytava78w.js": {
   "decls": 3,
   "bytes": 633,
-  "files": {
-   "services/analytics/datadog.ts": 244
-  }
+  "files": {}
  },
  "chunk-yxcx2jtr.js": {
   "decls": 14,
@@ -15277,7 +15074,6 @@
    "services/policyLimits/index.ts": 197,
    "utils/messages.ts": 4459,
    "bridge/bridgeApi.ts": 202,
-   "skills/bundled/scheduleRemoteAgents.ts": 503,
    "constants/product.ts": 76,
    "utils/shell/readOnlyCommandValidation.ts": 156
   }
@@ -15319,8 +15115,7 @@
    "hooks/useIdeAtMentioned.ts": 89,
    "history.ts": 61,
    "services/api/claude.ts": 109,
-   "services/SessionMemory/sessionMemory.ts": 96,
-   "services/voice.ts": 74
+   "services/SessionMemory/sessionMemory.ts": 96
   }
  },
  "chunk-z21je308.js": {
@@ -15399,9 +15194,7 @@
  "chunk-z7wtv7tg.js": {
   "decls": 116,
   "bytes": 41086,
-  "files": {
-   "components/Spinner/SpinnerAnimationRow.tsx": 177
-  }
+  "files": {}
  },
  "chunk-z85fjzh5.js": {
   "decls": 2,
@@ -15472,13 +15265,10 @@
   "decls": 79,
   "bytes": 26602,
   "files": {
-   "services/analytics/datadog.ts": 69,
-   "utils/permissions/permissionSetup.ts": 19336,
-   "utils/permissions/permissions.ts": 66,
+   "utils/permissions/permissionSetup.ts": 19427,
    "components/messages/AssistantToolUseMessage.tsx": 65,
    "cli/print.ts": 602,
-   "components/agents/AgentsMenu.tsx": 140,
-   "types/permissions.ts": 46
+   "components/agents/AgentsMenu.tsx": 140
   }
  },
  "chunk-zfhed5fp.js": {
@@ -15617,9 +15407,8 @@
   "bytes": 48621,
   "files": {
    "utils/nativeInstaller/installer.ts": 31121,
-   "utils/nativeInstaller/download.ts": 4722,
+   "utils/nativeInstaller/download.ts": 5802,
    "utils/format.ts": 56,
-   "services/analytics/datadog.ts": 81,
    "utils/nativeInstaller/pidLock.ts": 2072
   }
  },
@@ -15688,9 +15477,6 @@
  "runner-scaffold-q2rf9gg9.mjs": {
   "decls": 31,
   "bytes": 24450,
-  "files": {
-   "constants/prompts.ts": 41,
-   "services/analytics/datadog.ts": 640
-  }
+  "files": {}
  }
 }
