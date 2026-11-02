@@ -2,6 +2,8 @@
 
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-02 网关（外壳）**0.1.130**（`6384710fd`，镜像 `ca0640ac…`，两个节点都已更新）：核心启动成功后自动清理旧核心发布包，只留 current / previous 及 6 小时内准备过的；sup2api-1 删 74 个（65 GB → 2 GB），sup2api-ccp 删 1 个。详见 [clicodeplus/README.md](../clicodeplus/README.md)。
+
 2026-11-02 ccgateway **0.1.121** + 核心 **0.1.230**（`63a5b36d2`，北京时间 15:23–15:52；核心 manifest `7dc3168f…64a0`，计划 `9d36fca8a252bcc504a06905cbfd42a6` completed/13，66 秒，无迁移、schema 不变，Host API 8）：
 - 内容：CLI 版本由镜像决定（控制器 `cli-from-image-v1`，删 `CCG_DEFAULT_CLI_VERSION`；核心不再下发 `cli` / 策略头 `cli_version`，保存配置不再询问各账号版本），新 app 镜像只给新建账号（`update_existing` 默认 false，74a41ba87），账号页"更新此账号的 Worker / Worker + CLI"（CONTRACTS §53.7 两条 2026-11-02 更新）。
 - 顺序：插件上传/升级（rollout 223）→ `runtime/bundled {"roles":["controller"]}`（控制器自升级到 0.1.121）→ 核心 0.1.230 → `runtime/bundled {"roles":["egress","app"]}`（新核心默认只换新建容器镜像，返回无 `workers`）。

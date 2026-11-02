@@ -115,7 +115,13 @@
 
 **上线顺序**：同 0.1.128。先更新 ovh 的 sup2api-1（6 秒就绪）；再从 Caddy 摘下 3140（`Caddyfile.bak-gw129`），重建 sup2api-ccp（15 秒就绪），恢复 Caddy。全程 api.prophey.ai `/readyz` 200。随后发布核心 0.1.222（`v0.1.222-r2`）。
 
+## 网关 0.1.130：自动清理旧核心发布包（2026-11-02）
+
+源码 `6384710fd`，镜像 `sup2api-gateway:0.1.130`（ID `ca0640ac…`），在 ovh 干净 worktree `~/sup2api/release-gateway-0.1.130` 构建，经本机复制到 clicodeplus（gzip 44 MB）。外壳在核心启动成功后（含外壳自身启动时）运行 `release.Manager.GC`：只保留 current、previous 和 6 小时内准备过的发布包及其 bundle blob。此前 GC 没有调用方，ccp 的磁盘因此在 2026-11-02 被占满。两边 `.env` 的 `GATEWAY_IMAGE` 都已改成这个版本，备份为 `.env.bak-gw130`。
+
+**上线顺序**：同 0.1.128。16:16 更新 ovh 的 sup2api-1（10 秒就绪），日志 `release cleanup removed=74`，releases + blobs 由 65 GB 降到 2 GB（ovh `/` 剩 1.1 TB）。从 Caddy 摘下 3140（`Caddyfile.bak-gw130`），16:17:45 重建 sup2api-ccp（9 秒就绪），`removed=1`（发核心 0.1.230 后变旧的 0.1.228），恢复 Caddy。两节点都只剩 0.1.230（current）与 0.1.229（previous）；clicodeplus `/` 剩 20 GB。全程 api.prophey.ai `/readyz` 200，两节点无 ERROR，核心仍是 0.1.230。
+
 ## 已知问题
 
-- **资源余量小**：clicodeplus 6 核、7.7 GB 内存，节点约用 1.8 GB，可用约 3.6 GB，磁盘剩 27 GB。
+- **资源余量小**：clicodeplus 6 核、7.7 GB 内存，节点约用 1.8 GB，可用约 3.6 GB；磁盘 158 GB 剩约 20 GB（2026-11-02 曾被占满，大头是同机其他服务；外壳 0.1.130 起旧核心发布包会自动清理）。
 - **业务查询仍比 ovh 慢**：clicodeplus 离数据库约 30 ms，需要多次查库的接口（例如仪表盘概览约 0.5 秒）仍比 ovh 节点慢。这是距离造成的，不是就绪检查的问题。
