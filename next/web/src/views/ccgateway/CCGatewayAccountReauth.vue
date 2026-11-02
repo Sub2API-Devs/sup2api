@@ -1,11 +1,14 @@
 <script setup lang="ts">
 // Re-authorize in the existing account container. Cancelling only closes the login session.
+// Settings administrators can also update this account's worker in place to the
+// image of new containers (a new image never reaches existing accounts on its own).
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
-import { SAlert, SButton, SCard, SDescItem, SDescriptions, SHint, toast } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SDescItem, SDescriptions, SHint, confirm, toast, type Tone } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
-import type { Account, CcgDraft, CcgRuntimeHealth, CcgRuntimeStatus, CcgSyncResult } from '@/api/types'
+import { useOptionalT } from '@/composables/optionalText'
+import type { Account, CcgDraft, CcgRuntimeHealth, CcgRuntimeStatus, CcgSyncResult, CcgWorkerResult, CcgWorkersReport } from '@/api/types'
 import BusyText from '@/components/BusyText.vue'
 import CCGatewayAccountAuth from './CCGatewayAccountAuth.vue'
 import CcgAuthHeader from './CcgAuthHeader.vue'
@@ -93,6 +96,35 @@ function tick() {
   if (!alive || document.hidden || syncing.value || loadError.value) return
   const c = summary.value.container
   if (c === 'preparing' || (c === 'ready' && !health.value)) void load()
+}
+
+// ---------------------------------------------------------------- worker update of this account (§53.7)
+/** One runtime: the controller waits up to 2 minutes for an idle container, then restarts it (the core allows 5 minutes). */
+const WORKER_TIMEOUT_MS = 6 * 60_000
+const WORKER_TONES: Record<string, Tone> = { updated: 'success', unchanged: 'gray', busy: 'warning', not_running: 'warning', rolled_back: 'danger', failed: 'danger' }
+const tr = useOptionalT()
+const canUpdateWorker = computed(() => auth.has('settings:manage') && !!status.value?.key && !!status.value?.current_image)
+const updatingWorker = ref(false)
+const workerResult = ref<CcgWorkerResult | null>(null)
+const workerError = ref<CcgFailure | null>(null)
+
+async function updateWorker() {
+  const key = status.value?.key
+  if (!key || updatingWorker.value) return
+  const ok = await confirm({ title: t('ccgateway.reauth.workerConfirmTitle'), message: t('ccgateway.reauth.workerConfirmMessage'), confirmText: t('ccgateway.reauth.updateWorker') })
+  if (!ok || updatingWorker.value) return
+  updatingWorker.value = true
+  workerResult.value = null
+  workerError.value = null
+  try {
+    const report = await api.post<CcgWorkersReport>(`/system/ccgateway/runtimes/${encodeURIComponent(key)}/worker`, {}, { signal: AbortSignal.timeout(WORKER_TIMEOUT_MS) })
+    workerResult.value = report.results?.[0] ?? null
+  } catch (e) {
+    if (alive) workerError.value = failureOf(e)
+  } finally {
+    updatingWorker.value = false
+  }
+  if (workerResult.value) await load()
 }
 
 // ---------------------------------------------------------------- re-authorization
@@ -294,6 +326,14 @@ onBeforeUnmount(() => {
         </SDescriptions>
         <SHint v-if="status.image_update_available" size="xs">{{ t('ccgateway.reauth.imageMismatch') }}</SHint>
       </div>
+      <div v-if="canUpdateWorker" class="flex flex-wrap items-center gap-2" data-testid="ccgateway-account-worker">
+        <SButton size="sm" icon="refresh" :variant="status?.image_update_available ? 'primary' : 'secondary'" :loading="updatingWorker" :disabled="starting" data-testid="ccgateway-account-worker-update" @click="updateWorker">{{ t('ccgateway.reauth.updateWorker') }}</SButton>
+        <template v-if="workerResult">
+          <SBadge :tone="WORKER_TONES[workerResult.status] || 'gray'" data-testid="ccgateway-account-worker-status" :data-status="workerResult.status">{{ tr(`ccgateway.workers.statuses.${workerResult.status}`, undefined, workerResult.status) }}</SBadge>
+          <span v-if="workerResult.reason" class="break-all text-xs text-fg-muted">{{ tr(`ccgateway.workers.reasons.${workerResult.reason}`, undefined, workerResult.reason) }}</span>
+        </template>
+      </div>
+      <CcgErrorAlert v-if="workerError" :title="t('ccgateway.reauth.workerFailed')" :detail="workerError.detail" data-testid="ccgateway-account-worker-error" :data-reason="workerError.reason" />
       <div v-if="canManage" class="flex flex-wrap items-center gap-2">
         <SButton size="sm" icon="refresh" :variant="summary.login === 'notAuthorized' ? 'primary' : 'secondary'" :loading="starting" data-testid="ccgateway-reauth-start" @click="askReauth">{{ t('ccgateway.reauth.replaceTitle') }}</SButton>
       </div>

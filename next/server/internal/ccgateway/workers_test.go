@@ -379,3 +379,76 @@ func TestRuntimeWorkersOverSSH(t *testing.T) {
 		t.Fatalf("outdated: %d %v", code, out)
 	}
 }
+
+// The manual update of one runtime: only that container is touched, the
+// others keep running what they run.
+func TestRuntimeWorkerUpdatesOneRuntime(t *testing.T) {
+	ctl := &fakeWorkers{answers: map[string]string{}, slow: map[string]time.Duration{}, keys: []string{"21", "22"}}
+	f := newRuntimeFixture(t, ctl.ServeHTTP)
+	admin := f.user("admin@x")
+	ctx := context.Background()
+	draft, owner := "d00000000000000a1", f.account(true)
+	_, err := f.db.Pool.Exec(ctx, `INSERT INTO ccgateway_runtimes(key, proxy_id, account_id) VALUES($1, $2, $3)`, draft, f.proxy(nil), owner)
+	require.NoError(t, err)
+
+	code, out := f.request(admin, "POST", "/system/ccgateway/runtimes/22/worker", ``)
+	require.Equal(t, 200, code, "%v", out)
+	require.Equal(t, AppImage, data(out)["image"])
+	require.Equal(t, "22", data(out)["key"])
+	results := workerResults(t, out)
+	require.Len(t, results, 1)
+	require.Equal(t, "updated", results["22"]["status"])
+	require.Equal(t, float64(22), results["22"]["account_id"])
+	calls, _ := ctl.seen()
+	require.Equal(t, []string{"22 " + AppImage}, calls)
+
+	// A draft key reports the account that adopted it; a paired update and
+	// an explicit image pass through as in runtime/workers.
+	code, out = f.request(admin, "POST", "/system/ccgateway/runtimes/"+draft+"/worker", `{"image":"ccgateway:22cfdb5"}`)
+	require.Equal(t, 200, code, "%v", out)
+	require.Equal(t, float64(owner), workerResults(t, out)[draft]["account_id"])
+	var n int
+	require.NoError(t, f.db.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs WHERE action='ccgateway.runtime.workers'
+	  AND detail->>'key'=$1 AND detail->>'image'='ccgateway:22cfdb5'`, draft).Scan(&n))
+	require.Equal(t, 1, n)
+
+	// A missing container is that runtime's failed result, not an error.
+	ctl.answers["23"] = `404 {"error":"not_found"}`
+	code, out = f.request(admin, "POST", "/system/ccgateway/runtimes/23/worker", `{}`)
+	require.Equal(t, 200, code, "%v", out)
+	require.Equal(t, "not_found", workerResults(t, out)["23"]["reason"])
+
+	// Refusals reach no controller.
+	before, _ := ctl.seen()
+	for name, tc := range map[string]struct {
+		path, body string
+		code       int
+		reason     string
+	}{
+		"bad key":       {"/system/ccgateway/runtimes/x1/worker", `{}`, 404, ""},
+		"invalid image": {"/system/ccgateway/runtimes/21/worker", `{"image":"ccgateway tag"}`, 400, "invalid_image"},
+		"bad options":   {"/system/ccgateway/runtimes/21/worker", `{"components":["cli"]}`, 400, "invalid_request"},
+	} {
+		code, out := f.request(admin, "POST", tc.path, tc.body)
+		require.Equal(t, tc.code, code, "%s: %v", name, out)
+		if tc.reason != "" {
+			require.Equal(t, tc.reason, reason(out), name)
+		}
+	}
+	f.s.installMu.Lock()
+	code, out = f.request(admin, "POST", "/system/ccgateway/runtimes/21/worker", `{}`)
+	f.s.installMu.Unlock()
+	require.Equal(t, 409, code)
+	require.Equal(t, "install_in_progress", reason(out))
+	f.auth.keys[2] = []string{"settings:read", "account:update"}
+	code, _ = f.request(2, "POST", "/system/ccgateway/runtimes/21/worker", `{}`)
+	require.Equal(t, 403, code)
+	ctl.mu.Lock()
+	ctl.outdated = true
+	ctl.mu.Unlock()
+	code, out = f.request(admin, "POST", "/system/ccgateway/runtimes/21/worker", `{}`)
+	require.Equal(t, 503, code)
+	require.Equal(t, "controller_outdated", reason(out))
+	after, _ := ctl.seen()
+	require.Equal(t, before, after)
+}

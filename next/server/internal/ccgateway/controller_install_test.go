@@ -952,8 +952,25 @@ func TestControllerUploadLoadUpdatesWorkers(t *testing.T) {
 	if n != 0 {
 		t.Fatalf("workers updated without an app image: %v", panel.workers)
 	}
-	// App applied: the target image first, then every worker in place.
-	code, out := load(`{"role":"app","apply":true}`)
+	// update_existing belongs to an applied app image only.
+	for _, body := range []string{`{"role":"app","update_existing":true}`, `{"role":"egress","apply":true,"update_existing":true}`} {
+		if code, out := load(body); code != 400 || reason(out) != "invalid_request" {
+			t.Fatalf("%s: %d %v", body, code, out)
+		}
+	}
+	// App applied: the target of new runtimes only, existing workers stay.
+	if code, out := load(`{"role":"app","apply":true}`); code != 200 || data(out)["workers"] != nil {
+		t.Fatalf("apply app: %d %v", code, out)
+	}
+	panel.mu.Lock()
+	n = len(panel.workers)
+	panel.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("existing workers updated without update_existing: %v", panel.workers)
+	}
+	// App applied with update_existing: the target image first, then every
+	// worker in place.
+	code, out := load(`{"role":"app","apply":true,"update_existing":true}`)
 	workers, _ := data(out)["workers"].(map[string]any)
 	results, _ := workers["results"].([]any)
 	if code != 200 || workers["image"] != "ccgateway:up1" || len(results) != 2 {
@@ -980,7 +997,7 @@ func TestControllerUploadLoadUpdatesWorkers(t *testing.T) {
 	panel.mu.Lock()
 	panel.listFail = true
 	panel.mu.Unlock()
-	code, out = load(`{"role":"app","apply":true}`)
+	code, out = load(`{"role":"app","apply":true,"update_existing":true}`)
 	workers, _ = data(out)["workers"].(map[string]any)
 	results, _ = workers["results"].([]any)
 	if code != 200 || workers["reason"] != "controller_unhealthy" || results == nil || len(results) != 0 {
@@ -993,7 +1010,7 @@ func TestControllerUploadLoadUpdatesWorkers(t *testing.T) {
 	panel.workers = nil
 	panel.health.Features = []string{"tunnel", "uploads"}
 	panel.mu.Unlock()
-	code, out = load(`{"role":"app","apply":true}`)
+	code, out = load(`{"role":"app","apply":true,"update_existing":true}`)
 	workers, _ = data(out)["workers"].(map[string]any)
 	panel.mu.Lock()
 	touched := len(panel.workers)

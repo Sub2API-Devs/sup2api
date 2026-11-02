@@ -55,7 +55,7 @@ describe('chunked image upload', () => {
     expect(t.put.mock.calls.map(c => [c[1], (c[2] as Blob).size])).toEqual([[0, 4], [4, 4], [8, 2]])
     expect(progress).toEqual([0, 4, 8, 10])
     expect(phases).toEqual(['upload', 'load'])
-    expect(t.load).toHaveBeenCalledWith(ID, 'egress')
+    expect(t.load).toHaveBeenCalledWith(ID, 'egress', false)
     expect(t.remove).not.toHaveBeenCalled()
   })
 
@@ -69,6 +69,16 @@ describe('chunked image upload', () => {
     })
     await uploadImage(source, 'app', t, { chunkSize: 4, sleep: noSleep })
     expect(got).toEqual([...new Uint8Array(await source.arrayBuffer())])
+  })
+
+  it('updates the existing workers only for an app image asked to', async () => {
+    const t = fakeTransport(4)
+    await uploadImage(blob(4), 'app', t, { sleep: noSleep })
+    expect(t.load).toHaveBeenLastCalledWith(ID, 'app', false)
+    await uploadImage(blob(4), 'app', t, { sleep: noSleep, updateExisting: true })
+    expect(t.load).toHaveBeenLastCalledWith(ID, 'app', true)
+    await uploadImage(blob(4), 'egress', t, { sleep: noSleep, updateExisting: true })
+    expect(t.load).toHaveBeenLastCalledWith(ID, 'egress', false)
   })
 
   it('uses 16 MiB chunks by default', () => {
@@ -241,8 +251,10 @@ describe('upload transport', () => {
     const t = createUploadTransport(vi.fn() as unknown as typeof fetch)
     await t.create(123)
     expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/uploads', { size: 123 }, expect.anything())
-    await t.load(ID, 'controller')
+    await t.load(ID, 'controller', false)
     expect(mocks.post).toHaveBeenLastCalledWith(`/system/ccgateway/runtime/uploads/${ID}/load`, { role: 'controller', apply: true }, expect.anything())
+    await t.load(ID, 'app', true)
+    expect(mocks.post).toHaveBeenLastCalledWith(`/system/ccgateway/runtime/uploads/${ID}/load`, { role: 'app', apply: true, update_existing: true }, expect.anything())
     await t.remove(ID)
     expect(mocks.del).toHaveBeenCalledWith(`/system/ccgateway/runtime/uploads/${ID}`, undefined, expect.anything())
   })

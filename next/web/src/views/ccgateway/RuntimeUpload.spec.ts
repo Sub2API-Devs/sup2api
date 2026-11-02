@@ -81,7 +81,7 @@ describe('CCGateway runtime card in control panel mode', () => {
     const t = mocks.transport as ReturnType<typeof transport>
     expect(mocks.confirm.mock.calls[0]![0].message).toContain('自升级')
     expect(t.create).toHaveBeenCalledWith(10, expect.any(AbortSignal))
-    expect(t.load).toHaveBeenCalledWith(ID, 'controller')
+    expect(t.load).toHaveBeenCalledWith(ID, 'controller', false)
     const result = w.get('[data-testid="image-upload-result"]').text()
     expect(result).toContain('ccgateway-worker:0.2.0')
     expect(result).toContain('f'.repeat(64))

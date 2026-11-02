@@ -32,8 +32,8 @@ var (
 )
 
 // pushRoles are the roles the panel takes, in the order they are switched:
-// the controller first (the newest controller then updates the workers),
-// the gateway never (§53.10).
+// the controller first (the newest controller then updates the workers when
+// asked to), the gateway never (§53.10).
 var pushRoles = []string{"controller", "egress", "app"}
 
 // pushBundled uploads the archive of role to the controller and loads it
@@ -172,17 +172,21 @@ func (s *Service) sendChunk(ctx context.Context, cfg Config, id string, offset i
 
 // switchImage makes ref the controller's image of role (the apply of
 // §53.6): app / egress through PUT /runtime/images, the controller by its
-// self-upgrade (waiting for it). For app the workers of the existing
-// runtimes are then replaced in place (§53.7); a failure to list them is
-// the report's reason, not an error. The caller holds the install lock.
-func (s *Service) switchImage(ctx context.Context, cfg Config, role, ref string) (*workersReport, *core.Error) {
+// self-upgrade (waiting for it). A new app image is only the target of the
+// containers created from now on: the workers of the existing runtimes are
+// replaced in place (§53.7) only with updateExisting, otherwise they keep
+// their program until an administrator updates them (all through
+// runtime/workers, one through runtimes/:key/worker). A failure to list
+// them is the report's reason, not an error. The caller holds the install
+// lock.
+func (s *Service) switchImage(ctx context.Context, cfg Config, role, ref string, updateExisting bool) (*workersReport, *core.Error) {
 	var err *core.Error
 	if role == "controller" {
 		err = s.upgradeController(ctx, cfg, ref)
 	} else {
 		err = s.controllerJSON(ctx, cfg, "PUT", "/runtime/images", map[string]string{role: ref}, nil)
 	}
-	if err != nil || role != "app" {
+	if err != nil || role != "app" || !updateExisting {
 		return nil, err
 	}
 	report, werr := s.updateWorkers(ctx, cfg, ref)
@@ -202,12 +206,14 @@ type bundledResult struct {
 }
 
 // runtimeBundled serves POST /system/ccgateway/runtime/bundled
-// {"roles"?: [...]}: every role the controller does not run yet is uploaded
-// from the plugin package, loaded and switched to. It runs to its end when
-// the caller disconnects.
+// {"roles"?: [...], "update_existing"?: bool}: every role the controller does
+// not run yet is uploaded from the plugin package, loaded and switched to. A
+// new app image goes to new runtimes only, unless update_existing also
+// replaces the workers of the existing ones. It runs to its end when the
+// caller disconnects.
 func (s *Service) runtimeBundled(c *gin.Context) {
 	httpapi.NoStore(c)
-	wanted, ok := bundledRoles(c)
+	in, ok := decodeBundledRequest(c)
 	if !ok {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_request"))
 		return
@@ -235,7 +241,7 @@ func (s *Service) runtimeBundled(c *gin.Context) {
 	}
 	current := map[string]string{"app": h.AppImage, "egress": h.EgressImage, "controller": h.ControllerImage}
 	uid, _ := core.UserID(ctx)
-	results, workers, cfg, switched := s.pushRolesAndSwitch(ctx, cfg, b, uid, wanted, current, h.has(guardAPIFeature))
+	results, workers, cfg, switched := s.pushRolesAndSwitch(ctx, cfg, b, uid, in, current, h.has(guardAPIFeature))
 	// The worker updates may have used up the time: what follows still runs
 	// (bounded on its own).
 	tail, cancelTail := tailContext(ctx)
@@ -243,7 +249,7 @@ func (s *Service) runtimeBundled(c *gin.Context) {
 	if switched {
 		s.kickAll(tail)
 	}
-	if e := audit.Audit(tail, s.DB.Pool, uid, "ccgateway.runtime.bundled", "system", "ccgateway", map[string]any{"version": b.version, "results": results}); e != nil {
+	if e := audit.Audit(tail, s.DB.Pool, uid, "ccgateway.runtime.bundled", "system", "ccgateway", map[string]any{"version": b.version, "results": results, "update_existing": in.updateExisting}); e != nil {
 		slog.Error("CCGateway audit failed", "action", "runtime.bundled")
 	}
 	out := gin.H{"results": results, "runtime": s.runtimeState(tail, cfg)}
@@ -256,15 +262,15 @@ func (s *Service) runtimeBundled(c *gin.Context) {
 // pushRolesAndSwitch uploads, loads and switches every wanted role in order
 // and returns the per-role results, the last worker report of an app switch,
 // the configuration after the last save, and whether anything was switched.
-func (s *Service) pushRolesAndSwitch(ctx context.Context, cfg Config, b *bundle, uid int64, wanted map[string]bool, current map[string]string, guarded bool) ([]bundledResult, *workersReport, Config, bool) {
+func (s *Service) pushRolesAndSwitch(ctx context.Context, cfg Config, b *bundle, uid int64, in bundledRequest, current map[string]string, guarded bool) ([]bundledResult, *workersReport, Config, bool) {
 	results := []bundledResult{}
 	var workers *workersReport
 	switched := false
 	for _, role := range pushRoles {
-		if !wanted[role] {
+		if !in.roles[role] {
 			continue
 		}
-		r, report, saved := s.pushBundledRole(ctx, cfg, b, uid, role, current[role], guarded)
+		r, report, saved := s.pushBundledRole(ctx, cfg, b, uid, role, current[role], guarded, in.updateExisting)
 		if saved != nil {
 			cfg = *saved
 		}
@@ -279,42 +285,52 @@ func (s *Service) pushRolesAndSwitch(ctx context.Context, cfg Config, b *bundle,
 	return results, workers, cfg, switched
 }
 
-// bundledRoles reads the optional {"roles":[...]} body. Like every other
-// console endpoint of this module it rejects unknown fields and trailing
-// JSON; an absent (or empty) body means "every role".
-func bundledRoles(c *gin.Context) (map[string]bool, bool) {
+// bundledRequest is the body of POST /system/ccgateway/runtime/bundled.
+type bundledRequest struct {
+	roles          map[string]bool
+	updateExisting bool
+}
+
+// decodeBundledRequest reads the optional {"roles":[...], "update_existing":
+// bool} body. Like every other console endpoint of this module it rejects
+// unknown fields and trailing JSON; absent (or empty) roles mean "every
+// role", an absent update_existing leaves the existing runtimes alone.
+func decodeBundledRequest(c *gin.Context) (bundledRequest, bool) {
 	raw, e := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 4096))
 	var in struct {
-		Roles *[]string `json:"roles"`
+		Roles          *[]string `json:"roles"`
+		UpdateExisting bool      `json:"update_existing"`
 	}
 	if e != nil {
-		return nil, false
+		return bundledRequest{}, false
 	}
 	if trimmed := bytes.TrimSpace(raw); len(trimmed) > 0 && !bytes.Equal(trimmed, []byte("null")) {
 		if decodeStrictJSON(raw, &in) != nil {
-			return nil, false
+			return bundledRequest{}, false
 		}
 	}
+	out := bundledRequest{updateExisting: in.UpdateExisting}
 	if in.Roles == nil {
-		return map[string]bool{"app": true, "egress": true, "controller": true}, true
+		out.roles = map[string]bool{"app": true, "egress": true, "controller": true}
+		return out, true
 	}
-	wanted := map[string]bool{}
+	out.roles = map[string]bool{}
 	for _, r := range *in.Roles {
 		if r != "app" && r != "egress" && r != "controller" {
-			return nil, false
+			return bundledRequest{}, false
 		}
-		wanted[r] = true
+		out.roles[r] = true
 	}
-	return wanted, len(wanted) > 0
+	return out, len(out.roles) > 0
 }
 
 // pushBundledRole uploads, loads and switches to the bundled image of role
 // unless the controller runs it already (current). saved is the
 // configuration after the switch was saved (nil before); report the worker
-// updates an app switch ran. guarded: the controller reports guard-api-v1
+// updates an app switch ran (only with updateExisting). guarded: the controller reports guard-api-v1
 // (the guard adopted it), without which a guard-only controller image is
 // refused before anything is sent.
-func (s *Service) pushBundledRole(ctx context.Context, cfg Config, b *bundle, uid int64, role, current string, guarded bool) (r bundledResult, report *workersReport, saved *Config) {
+func (s *Service) pushBundledRole(ctx context.Context, cfg Config, b *bundle, uid int64, role, current string, guarded, updateExisting bool) (r bundledResult, report *workersReport, saved *Config) {
 	ref := b.ref(role)
 	r = bundledResult{Role: role, Ref: ref, Status: "loaded"}
 	fail := func(err *core.Error) bundledResult {
@@ -345,7 +361,7 @@ func (s *Service) pushBundledRole(ctx context.Context, cfg Config, b *bundle, ui
 	if err != nil {
 		return fail(err), nil, nil
 	}
-	report, err = s.switchImage(ctx, next, role, ref)
+	report, err = s.switchImage(ctx, next, role, ref, updateExisting)
 	if err != nil {
 		return fail(err), nil, &next
 	}

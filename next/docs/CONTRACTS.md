@@ -3910,7 +3910,13 @@ GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的�
 
 **核心** `POST /system/ccgateway/runtime/workers` `{"image"?: ref}`（`settings:manage`，SSH 与控制面板两种模式都可用；审计 `ccgateway.runtime.workers`；与安装共用锁，409 `install_in_progress`；不随调用方断开取消，上限 25 分钟）：`image` 缺省为生效的 app 镜像；按控制器 `GET /accounts` 的运行环境逐个、串行调用上面的接口（每个上限 5 分钟），返回 `{"image", "results": [{"key", "account_id"?, "status", "sha256"?, "previous_sha256"?, "reason"?}]}`；单个失败不影响其他，`status: "failed"` + `reason`（控制器 error 码；连不上 `unreachable`；超时或总上限用完 `timeout`；200 但无法识别 `invalid_response`）。前置错误：未开启一账号一容器 400 `runtimes_disabled`；列不出运行环境 503 `controller_unhealthy`；控制器不支持 503 `controller_outdated`。状态为 `updated` / `rolled_back` 的账号随后 Kick 一次。load+apply 里列表失败或控制器过旧不让整个请求失败，`workers` 为 `{"image", "results": [], "reason"}`。
 
-`POST .../runtime/uploads/:id/load` 的 `role: "app"` 且 `apply: true`：设置目标镜像后，同样对所有现有运行环境做原地更新，结果放在返回的 `workers` 字段。界面在部署页显示每个账号的结果，并提供"更新现有账号的 worker"按钮（即 `runtime/workers`，用于重试 `busy` / `not_running`）。
+`POST .../runtime/uploads/:id/load` 的 `role: "app"` 且 `apply: true`：设置目标镜像；只有同时带 `update_existing: true` 时才对所有现有运行环境做原地更新，结果放在返回的 `workers` 字段（2026-11-02 起，见下）。界面在部署页显示每个账号的结果，并提供"更新现有账号的 worker"按钮（即 `runtime/workers`，用于手动更新全部账号，或重试 `busy` / `not_running`）。
+
+> **2026-11-02 更新（用户要求：新 worker 只自动用于新建账号，旧账号手动更新）**：
+> - 启用新的 app 镜像（`uploads/:id/load` 的 `apply`、`runtime/bundled`）**默认只设置控制器的目标镜像**：之后新建的账号容器用新镜像，现有账号容器与其中的 worker 不变，也不会因此被 Kick 以外的任何动作改动。请求体新增可选的 `update_existing`（布尔，缺省 `false`）：为 `true` 时才在切换后按上文对所有现有运行环境原地更新并返回 `workers`。`uploads/:id/load` 只接受 `role: "app"` 且 `apply: true` 时带 `update_existing: true`，否则 400 `invalid_request`；`runtime/bundled` 的请求体为 `{"roles"?: [...], "update_existing"?: bool}`。两者的审计详情记录 `update_existing`。
+> - 新接口 **`POST /system/ccgateway/runtimes/:key/worker`**（`settings:manage`；请求体与 `runtime/workers` 相同：`{"image"?, "components"?, "cli_version"?}`；与安装共用锁，409 `install_in_progress`；不随调用方断开取消，上限约 6 分钟）：只对这一个运行环境（账号 id 键或草稿键，其他键 404）调用控制器 `POST /accounts/<key>/worker`。前置检查同 `runtime/workers`（`controller_unhealthy` / `controller_outdated` / `runtimes_disabled` 等，均不触碰任何容器）；返回 `{"image", "key", "results": [<该运行环境的一条结果>]}`，容器不存在等是该条结果的 `failed` + `reason`，不是请求错误。`updated` / `rolled_back` 之后同样清掉请求路由缓存并 Kick 该运行环境；审计 `ccgateway.runtime.workers`，详情带 `key`。
+> - 界面：上传与推送内置镜像各加一个默认不勾选的"同时更新现有账号的 worker"；账号编辑页（`settings:manage`）在当前容器镜像旁提供"更新此账号的 Worker"，镜像与新建容器镜像不同时高亮。`GET .../accounts/:id/status` 返回的 `key` 就是该接口的 `:key`。
+> - 控制器行为不变：`PUT /runtime/images` 本来就只影响新建容器；`PUT config` 对已有容器的三种结果见本节开头的 2026-10-24 补充（CLI 版本单独变化回 409，不重建）。
 
 ### 53.8 已知限制
 
@@ -3999,7 +4005,7 @@ images/gateway.tar.gz      # Caddy 网关
 - 核心从本节点当前启用的 ccgateway 插件包读取 `images/images.json` 与镜像文件（实现自定：已解包目录或插件存储），按 sha256 校验后流式发送，不整份读进内存（如插件存储只提供整包字节，可接受一次读取）。
 - 生效镜像（`EffectiveImages`）：配置覆盖值 > 包内 ref > 旧的固定 GHCR 引用。
 - **安装**（§53.9，本机或 SSH）：脚本里对每个角色先 `docker image inspect <ref>`，主机上没有就把包内对应文件经 stdin 流给 `docker load`（SSH 用会话 stdin，本机用进程 stdin）；之后照常启动控制器与网关。没有包内镜像时退回原逻辑（`docker pull`）。
-- **已连接后**：新接口 `POST /system/ccgateway/runtime/bundled`（`settings:manage`，审计 `ccgateway.runtime.bundled`，共用安装锁，不随断开取消，上限 25 分钟），请求 `{"roles"?: ["app","egress","controller"]}`（缺省三者，`gateway` 不经面板推送），对每个角色：控制器上已有该 ref（`GET /runtime/images` / `/health` 判断）则跳过，否则经 §53.6 的分块上传接口把文件传给控制器、`load`，再按 §53.6 / §53.7 的 apply 逻辑启用（app 会对现有账号做 worker 原地更新，controller 走自升级）。返回 `{"results": [{"role","ref","status": "loaded"|"present"|"failed","reason"?}], "workers"?: …, "runtime": <GET runtime>}`。
+- **已连接后**：新接口 `POST /system/ccgateway/runtime/bundled`（`settings:manage`，审计 `ccgateway.runtime.bundled`，共用安装锁，不随断开取消，上限 25 分钟），请求 `{"roles"?: ["app","egress","controller"]}`（缺省三者，`gateway` 不经面板推送），对每个角色：控制器上已有该 ref（`GET /runtime/images` / `/health` 判断）则跳过，否则经 §53.6 的分块上传接口把文件传给控制器、`load`，再按 §53.6 / §53.7 的 apply 逻辑启用（app 默认只作为新建容器的镜像，请求带 `update_existing: true` 时才对现有账号做 worker 原地更新，见 §53.7 的 2026-11-02 更新；controller 走自升级）。返回 `{"results": [{"role","ref","status": "loaded"|"present"|"failed","reason"?}], "workers"?: …, "runtime": <GET runtime>}`。
 - `GET /system/ccgateway/runtime` 增加 `bundled: {"version", "images": {role: ref}} | null`。
 - 一键升级（`POST runtime/install`）在控制器缺少目标镜像时先自动推送包内镜像。
 

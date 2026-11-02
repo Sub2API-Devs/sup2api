@@ -615,16 +615,13 @@ func TestRuntimeBundled(t *testing.T) {
 		t.Fatalf("controller: %+v, %d uploads left", health, left)
 	}
 	calls := panel.seen()
-	if strings.Index(calls, "POST /runtime/controller") > strings.Index(calls, "PUT /runtime/images") ||
-		strings.Index(calls, "PUT /runtime/images") > strings.Index(calls, "POST /accounts/5/worker") {
+	if strings.Index(calls, "POST /runtime/controller") > strings.Index(calls, "PUT /runtime/images") {
 		t.Fatalf("order: %s", calls)
 	}
-	if workers != "5 "+testBundleRefs["app"] {
-		t.Fatalf("workers: %s", workers)
-	}
-	w, _ := data(out)["workers"].(map[string]any)
-	if w["image"] != testBundleRefs["app"] {
-		t.Fatalf("workers report: %v", out)
+	// Without update_existing the new app image is for new runtimes only:
+	// the existing runtime keeps its worker.
+	if workers != "" || strings.Contains(calls, "/worker") || data(out)["workers"] != nil {
+		t.Fatalf("existing workers touched: %q %v", workers, out)
 	}
 	rt, _ := data(out)["runtime"].(map[string]any)
 	if rt["up_to_date"] != true || rt["bundled"] == nil {

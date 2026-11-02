@@ -216,7 +216,9 @@ type loadedImage struct {
 
 // uploadLoad serves POST /system/ccgateway/runtime/uploads/:id/load: the
 // controller loads the upload; with apply the image becomes the role's
-// image (configuration first, then the controller).
+// image (configuration first, then the controller). An applied app image is
+// used by new runtimes only, unless update_existing also replaces the
+// workers of the existing ones in place (§53.7).
 func (s *Service) uploadLoad(c *gin.Context) {
 	httpapi.NoStore(c)
 	id, ok := uploadID(c)
@@ -262,7 +264,7 @@ func (s *Service) uploadLoad(c *gin.Context) {
 	uid, _ := core.UserID(ctx)
 	var workers *workersReport
 	if in.Apply {
-		if cfg, workers, ok = s.applyLoadedImage(c, ctx, uid, in.Role, ref); !ok {
+		if cfg, workers, ok = s.applyLoadedImage(c, ctx, uid, in.Role, ref, in.UpdateExisting); !ok {
 			return
 		}
 		if workers != nil {
@@ -274,7 +276,7 @@ func (s *Service) uploadLoad(c *gin.Context) {
 		}
 		s.kickAll(ctx)
 	}
-	if e := audit.Audit(ctx, s.DB.Pool, uid, "ccgateway.runtime.upload", "system", "ccgateway", map[string]any{"role": in.Role, "apply": in.Apply, "ref": ref}); e != nil {
+	if e := audit.Audit(ctx, s.DB.Pool, uid, "ccgateway.runtime.upload", "system", "ccgateway", map[string]any{"role": in.Role, "apply": in.Apply, "update_existing": in.UpdateExisting, "ref": ref}); e != nil {
 		slog.Error("CCGateway audit failed", "action", "runtime.upload")
 	}
 	out := gin.H{"sha256": loaded.SHA256, "images": images, "ref": ref, "runtime": s.runtimeState(ctx, cfg)}
@@ -295,13 +297,21 @@ func decodeLoadRequest(c *gin.Context) (loadRequest, bool) {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_request"))
 		return in, false
 	}
+	if in.UpdateExisting && (!in.Apply || in.Role != "app") {
+		// Only an applied app image has workers to hand to existing runtimes.
+		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_request"))
+		return in, false
+	}
 	return in, true
 }
 
 // loadRequest is the body of POST /system/ccgateway/runtime/uploads/:id/load.
+// UpdateExisting (app with apply only) also replaces the workers of the
+// existing runtimes; without it they keep running what they run.
 type loadRequest struct {
-	Role  string `json:"role"`
-	Apply bool   `json:"apply"`
+	Role           string `json:"role"`
+	Apply          bool   `json:"apply"`
+	UpdateExisting bool   `json:"update_existing"`
 }
 
 // tailContext bounds the work that still runs after a long controller
@@ -338,7 +348,7 @@ func sanitizeLoadedImages(c *gin.Context, sha string, loaded []loadedImage) ([]l
 // controller switch. ok=false means the response was already written. The
 // caller keeps its own ctx: a tail context for the audit and the runtime read
 // is its business (tailContext).
-func (s *Service) applyLoadedImage(c *gin.Context, ctx context.Context, uid int64, role, ref string) (Config, *workersReport, bool) {
+func (s *Service) applyLoadedImage(c *gin.Context, ctx context.Context, uid int64, role, ref string, updateExisting bool) (Config, *workersReport, bool) {
 	if role == "controller" {
 		cfg, e := s.Load(ctx)
 		if e != nil {
@@ -377,7 +387,7 @@ func (s *Service) applyLoadedImage(c *gin.Context, ctx context.Context, uid int6
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "install_failed"))
 		return Config{}, nil, false
 	}
-	report, err := s.switchImage(ctx, saved, role, ref)
+	report, err := s.switchImage(ctx, saved, role, ref, updateExisting)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return Config{}, nil, false

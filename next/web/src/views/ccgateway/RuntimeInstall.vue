@@ -7,9 +7,12 @@
 // also be uploaded (RuntimeImageUpload). Images show their short digest;
 // states and failure reasons are codes translated here. The account editor
 // links here (#ccgateway-runtime) when a runtime is not_configured.
-// Existing account containers are never recreated for a new app image: their
-// worker program is replaced in place (POST .../runtime/workers, and the
-// `workers` of an applied app upload, §53.7); the per-account results show here.
+// Existing account containers are never recreated for a new app image, and a
+// new app image is for new accounts only: existing accounts keep their worker
+// until an administrator updates it in place (POST .../runtime/workers for all,
+// the account editor for one, or "also update existing accounts" when a
+// bundled or uploaded app image is applied, §53.7); the per-account results
+// show here.
 // The runtime images also ship inside the ccgateway plugin package (§53.10):
 // in controller mode the card shows them (GET runtime `bundled`) and pushes the
 // ones the controller lacks (POST .../runtime/bundled); the manual upload stays
@@ -19,7 +22,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SBadge, SButton, SCard, SHint, SSettingsGroup, STable, confirm, toast, type TableColumn, type Tone } from '@sub2api/ui'
+import { SAlert, SBadge, SButton, SCard, SCheckbox, SHint, SSettingsGroup, STable, confirm, toast, type TableColumn, type Tone } from '@sub2api/ui'
 import type { CcgBundledReport, CcgRuntimeImages, CcgWorkersReport } from '@/api/types'
 import { useAuthStore } from '@/stores/auth'
 import { useOptionalT } from '@/composables/optionalText'
@@ -193,17 +196,20 @@ async function updateWorkers(paired = false) {
 
 const bundledError = ref('')
 const bundledReport = ref<CcgBundledReport | null>(null)
+/** A pushed app image also replaces the workers of the existing accounts (off: new accounts only). */
+const bundledUpdateExisting = ref(false)
 
 async function pushBundled() {
   if (pushing.value) return
-  const ok = await confirm({ title: t('ccgateway.bundled.confirmTitle'), message: t('ccgateway.bundled.confirmMessage'), confirmText: t('ccgateway.bundled.push') })
+  const updateExisting = bundledUpdateExisting.value
+  const ok = await confirm({ title: t('ccgateway.bundled.confirmTitle'), message: t(updateExisting ? 'ccgateway.bundled.confirmMessageUpdateExisting' : 'ccgateway.bundled.confirmMessage'), confirmText: t('ccgateway.bundled.push') })
   if (!ok || pushing.value) return
   pushing.value = true
   bundledError.value = ''
   bundledReport.value = null
   try {
-    // One synchronous request (upload, load and apply per role, the worker update and a controller self-upgrade); the core keeps going if this tab gives up.
-    const report = await api.post<CcgBundledReport>('/system/ccgateway/runtime/bundled', {}, { signal: AbortSignal.timeout(BUNDLED_TIMEOUT_MS) })
+    // One synchronous request (upload, load and apply per role, the asked-for worker update and a controller self-upgrade); the core keeps going if this tab gives up.
+    const report = await api.post<CcgBundledReport>('/system/ccgateway/runtime/bundled', updateExisting ? { update_existing: true } : {}, { signal: AbortSignal.timeout(BUNDLED_TIMEOUT_MS) })
     bundledReport.value = report
     const failed = (report.results || []).some(r => r.status === 'failed')
     toast(t(failed ? 'ccgateway.bundled.partial' : 'ccgateway.bundled.done'), failed ? 'warning' : 'success')
@@ -271,6 +277,7 @@ onMounted(async () => {
                 <SHint v-if="pushing" inline size="xs">{{ t('ccgateway.bundled.pushing') }}</SHint>
                 <SHint v-else-if="bundledAllEnabled(info)" inline size="xs" data-testid="ccgateway-bundled-current">{{ t('ccgateway.bundled.allEnabled') }}</SHint>
               </div>
+              <SCheckbox v-if="manage" v-model="bundledUpdateExisting" size="xs" :disabled="locked || loading" data-testid="ccgateway-bundled-update-existing">{{ t('ccgateway.bundled.updateExisting') }}</SCheckbox>
             </template>
             <SHint v-else tone="warning" data-testid="ccgateway-bundled-none">{{ t('ccgateway.bundled.none') }}</SHint>
             <SAlert v-if="bundledError" tone="danger" dense data-testid="ccgateway-bundled-error"><span class="break-all">{{ bundledError }}</span></SAlert>

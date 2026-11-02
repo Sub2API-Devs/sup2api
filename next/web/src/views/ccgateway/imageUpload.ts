@@ -5,7 +5,7 @@
 //   POST   /system/ccgateway/runtime/uploads {size}         → {upload_id, offset, size}
 //   PUT    /system/ccgateway/runtime/uploads/:id  (X-CCG-Offset, raw bytes) → {offset, size}
 //          409 details.reason = offset_mismatch, details.offset = where the controller is
-//   POST   /system/ccgateway/runtime/uploads/:id/load {role, apply: true}
+//   POST   /system/ccgateway/runtime/uploads/:id/load {role, apply: true, update_existing?: true}
 //   DELETE /system/ccgateway/runtime/uploads/:id            (cancel / give up)
 //
 // The chunk loop is a pure function over an injectable transport, so the
@@ -21,8 +21,9 @@ export const MAX_RETRIES = 3
 /** Largest archive the controller accepts (§53.5). */
 export const MAX_IMAGE_SIZE = 4 * 1024 * 1024 * 1024
 /**
- * Loading (docker load + switching the image, up to 90 s for the controller; for an app image also the
- * in-place worker update of every runtime, §53.7) is one synchronous request; the core gives it 25 minutes.
+ * Loading (docker load + switching the image, up to 90 s for the controller; for an app image applied with
+ * update_existing also the in-place worker update of every runtime, §53.7) is one synchronous request; the
+ * core gives it 25 minutes.
  */
 export const LOAD_TIMEOUT_MS = 26 * 60_000
 /** POST /system/ccgateway/runtime/workers: the core gives the whole run 25 minutes. */
@@ -38,14 +39,15 @@ export interface ImageLoadResult {
   images: Array<{ id: string; tags: string[] }>
   ref: string
   runtime?: CcgRuntimeImages
-  /** An applied app image: the in-place worker update of the existing runtimes (§53.7). */
+  /** An app image applied with update_existing: the in-place worker update of the existing runtimes (§53.7). */
   workers?: CcgWorkersReport
 }
 
 export interface UploadTransport {
   create(size: number, signal?: AbortSignal): Promise<UploadCreated>
   put(id: string, offset: number, chunk: Blob, signal?: AbortSignal): Promise<UploadPosition>
-  load(id: string, role: ImageRole): Promise<ImageLoadResult>
+  /** updateExisting (app only): also replace the workers of the existing runtimes; otherwise only new runtimes use the image. */
+  load(id: string, role: ImageRole, updateExisting: boolean): Promise<ImageLoadResult>
   remove(id: string): Promise<void>
 }
 
@@ -54,6 +56,8 @@ export interface UploadOptions {
   signal?: AbortSignal
   onProgress?: (p: UploadPosition) => void
   onPhase?: (phase: UploadPhase) => void
+  /** An app image also updates the workers of the existing runtimes (default: new runtimes only). */
+  updateExisting?: boolean
   chunkSize?: number
   retries?: number
   /** Delay before the n-th retry (1-based); injectable for tests. */
@@ -172,7 +176,7 @@ export async function uploadImage(file: Blob, role: ImageRole, transport: Upload
     throw abortError()
   }
   onPhase?.('load')
-  return transport.load(id, role)
+  return transport.load(id, role, role === 'app' && opts.updateExisting === true)
 }
 
 // ---------------------------------------------------------------- transport over the console API
@@ -219,7 +223,7 @@ export function createUploadTransport(fetchImpl: typeof fetch = (...args) => fet
   return {
     create: (size, signal) => api.post<UploadCreated>(UPLOADS, { size }, { signal: timeoutSignal(60_000, signal) }),
     put,
-    load: (id, role) => api.post<ImageLoadResult>(`${path(id)}/load`, { role, apply: true }, { signal: AbortSignal.timeout(LOAD_TIMEOUT_MS) }),
+    load: (id, role, updateExisting) => api.post<ImageLoadResult>(`${path(id)}/load`, updateExisting ? { role, apply: true, update_existing: true } : { role, apply: true }, { signal: AbortSignal.timeout(LOAD_TIMEOUT_MS) }),
     remove: async id => { await api.del(path(id), undefined, { signal: AbortSignal.timeout(30_000) }) }
   }
 }

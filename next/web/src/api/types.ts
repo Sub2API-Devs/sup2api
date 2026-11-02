@@ -576,6 +576,8 @@ export interface CcgDraft {
 
 /** GET .../status of a draft or account runtime; status and reason are English codes (ccgateway.status.* / ccgateway.reason.*). */
 export interface CcgRuntimeStatus {
+  /** Runtime key (the account id, or the draft key it adopted): POST /system/ccgateway/runtimes/:key/worker updates its worker. */
+  key?: string
 	current_image?: string
 	target_image?: string
 	image_update_available?: boolean
@@ -653,7 +655,7 @@ export interface CcgBundledResult {
 /** POST /system/ccgateway/runtime/bundled (CONTRACTS §53.10). */
 export interface CcgBundledReport {
   results: CcgBundledResult[]
-  /** An applied app image: the in-place worker update of the existing runtimes (§53.7). */
+  /** An app image applied with update_existing: the in-place worker update of the existing runtimes (§53.7). */
   workers?: CcgWorkersReport
   runtime?: CcgRuntimeImages
 }
@@ -673,9 +675,11 @@ export interface CcgWorkerResult {
   cli_sha256?: string
   online?: boolean
 }
-/** POST /system/ccgateway/runtime/workers, and `workers` of an applied app upload; `reason` set (results empty) when the runtimes could not be listed. */
+/** POST /system/ccgateway/runtime/workers, POST .../runtimes/:key/worker (one runtime), and `workers` of an app image applied with update_existing; `reason` set (results empty) when the runtimes could not be listed. */
 export interface CcgWorkersReport {
   image: string
+  /** Set for the update of one runtime (POST /system/ccgateway/runtimes/:key/worker). */
+  key?: string
   results: CcgWorkerResult[]
   reason?: string
   components?: string[]

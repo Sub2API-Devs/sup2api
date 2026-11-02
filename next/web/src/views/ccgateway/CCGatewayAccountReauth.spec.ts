@@ -5,7 +5,7 @@ import Reauth from './CCGatewayAccountReauth.vue'
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), del: vi.fn(), cancel: vi.fn() }))
 vi.mock('@sub2api/host', () => ({ api: mocks, isApiError: () => false }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => true }) }))
-vi.mock('@sub2api/ui', async (original) => ({ ...await original<object>(), toast: vi.fn() }))
+vi.mock('@sub2api/ui', async (original) => ({ ...await original<object>(), toast: vi.fn(), confirm: vi.fn(async () => true) }))
 const key = '22'
 const Flow = { name: 'CCGatewayAccountAuth', props: ['reauthAccountId', 'reauthKey'], template: '<div />', emits: ['state', 'authorized'], methods: { cancelAuthorization: () => mocks.cancel() } }
 
@@ -37,6 +37,19 @@ describe('in-place account authorization', () => {
   expect(mocks.cancel).toHaveBeenCalledTimes(1)
   expect(mocks.del).not.toHaveBeenCalled()
   expect(mocks.post).toHaveBeenCalledTimes(1)
+  w.unmount()
+ })
+ it('updates only this account\'s worker, by hand', async () => {
+  mocks.post.mockResolvedValue({ image: 'new', key, results: [{ key, account_id: 22, status: 'busy' }] })
+  const w = render(); await flushPromises()
+  // A different image is shown, never applied on its own.
+  expect(mocks.post).not.toHaveBeenCalled()
+  await w.get('[data-testid="ccgateway-account-worker-update"]').trigger('click'); await flushPromises()
+  expect(mocks.post).toHaveBeenCalledTimes(1)
+  expect(mocks.post.mock.calls[0][0]).toBe('/system/ccgateway/runtimes/22/worker')
+  expect(mocks.post.mock.calls[0][1]).toEqual({})
+  expect(w.get('[data-testid="ccgateway-account-worker-status"]').attributes('data-status')).toBe('busy')
+  expect(w.get('[data-testid="ccgateway-account-worker-status"]').text()).toBe('Handling a request (retry later)')
   w.unmount()
  })
  it('does not resume an old replacement draft as the current runtime', async () => {

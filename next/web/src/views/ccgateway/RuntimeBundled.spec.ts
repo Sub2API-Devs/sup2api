@@ -107,8 +107,8 @@ describe('CCGateway images bundled in the plugin package', () => {
     await w.get('[data-testid="ccgateway-bundled-push"]').trigger('click')
     await flushPromises()
     const asked = mocks.confirm.mock.calls[0]![0]
-    expect(asked.message).toContain('不会重建')
-    expect(asked.message).toContain('原地替换')
+    expect(asked.message).toContain('只用于新建账号')
+    expect(asked.message).not.toContain('原地更新')
     expect(asked.message).toContain('自升级')
     expect(asked.message).toContain('短暂中断')
     expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/bundled', {}, { signal: expect.any(AbortSignal) })
@@ -125,6 +125,20 @@ describe('CCGateway images bundled in the plugin package', () => {
     for (const role of ['app', 'egress', 'controller']) expect(stateOf(w, role).attributes('data-state')).toBe('enabled')
     expect(w.get('[data-testid="ccgateway-bundled-current"]').text()).toBe('控制器已在使用全部内置镜像')
     expect(mocks.get).toHaveBeenCalledTimes(1)
+    w.unmount()
+  })
+
+  it('updates the existing workers only when asked to', async () => {
+    mocks.post.mockResolvedValue(report())
+    const w = await render()
+    expect(w.get<HTMLInputElement>('[data-testid="ccgateway-bundled-update-existing"]').element.checked).toBe(false)
+    await w.get('[data-testid="ccgateway-bundled-update-existing"]').setValue(true)
+    await w.get('[data-testid="ccgateway-bundled-push"]').trigger('click')
+    await flushPromises()
+    const asked = mocks.confirm.mock.calls[0]![0]
+    expect(asked.message).toContain('原地更新现有账号的 worker')
+    expect(asked.message).toContain('不重建容器')
+    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/runtime/bundled', { update_existing: true }, { signal: expect.any(AbortSignal) })
     w.unmount()
   })
 

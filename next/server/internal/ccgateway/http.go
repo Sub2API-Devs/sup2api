@@ -69,6 +69,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm("POST", "/system/ccgateway/runtime/bundled", "settings:manage", s.runtimeBundled)
 	// Worker update in place, never recreating account containers (§53.7).
 	r.Perm("POST", "/system/ccgateway/runtime/workers", "settings:manage", s.runtimeWorkers)
+	r.Perm("POST", "/system/ccgateway/runtimes/:key/worker", "settings:manage", s.runtimeWorker)
 	r.Perm("POST", "/system/ccgateway/runtime/cleanup", "settings:manage", s.runtimeCleanup)
 	// Runtimes of deleted accounts kept for their retention period.
 	r.Perm("GET", "/system/ccgateway/runtimes/retained", "settings:read", s.retainedRuntimes)

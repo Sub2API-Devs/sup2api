@@ -139,7 +139,7 @@ export default {
   },
   reauth: {
     replaceTitle: "Re-authorize in place", switchNow: "Confirm authorization",
-    currentImage: 'Current container image ID', targetImage: 'Image for new containers', imageMismatch: 'Image mismatch is informational. Saving settings, syncing and ordinary restarts do not replace this container because of an image change.',
+    currentImage: 'Current container image ID', targetImage: 'Image for new containers', imageMismatch: 'This container runs another image than new containers. A new image is for new accounts only: saving settings, syncing and ordinary restarts never replace this container; use "Update this account\'s worker" to update it in place when you want to.', updateWorker: 'Update this account\'s worker', workerConfirmTitle: 'Update this account\'s worker?', workerConfirmMessage: 'The worker program inside this account\'s container is replaced in place with the one of the image for new containers, and only that container restarts; it is not recreated and sign-ins are kept. The restart briefly interrupts requests in progress on this account; while it handles a request it is waited for at most 2 minutes, then skipped (retry later).', workerFailed: 'Updating the worker failed',
     container: 'Container', login: 'Claude login', checking: 'Checking…',
     loginState: { authorized: 'Credentials saved', notAuthorized: 'No saved credentials', unknown: 'Unknown (container not ready)' },
     hint: "Sign in again in the current container. Keep its volume and conversation history, then refresh account state.",
@@ -187,7 +187,9 @@ export default {
     pushing: 'Uploading, loading and applying the images; the controller may upgrade itself. This can take over ten minutes…',
     allEnabled: 'The controller already uses every bundled image',
     confirmTitle: 'Push and apply the bundled images?',
-    confirmMessage: 'The bundled images the controller does not have yet (app container, egress gateway, controller) are uploaded to it and applied. Existing account containers are not recreated: the worker program is replaced in place and only that container restarts, sign-ins are kept; an account handling a request is waited for at most 2 minutes, then skipped (retry later). A different controller image makes the controller upgrade itself (about 1–2 minutes); authorization and model requests may be interrupted briefly, and a failed health check rolls back.',
+    confirmMessage: 'The bundled images the controller does not have yet (app container, egress gateway, controller) are uploaded to it and applied. A new app image is for new accounts only: existing accounts keep their worker until you update it by hand. A different controller image makes the controller upgrade itself (about 1–2 minutes); authorization and model requests may be interrupted briefly, and a failed health check rolls back.',
+    confirmMessageUpdateExisting: 'The bundled images the controller does not have yet (app container, egress gateway, controller) are uploaded to it and applied, and the worker of the existing accounts is updated in place: no container is recreated, the program is replaced and only that container restarts, sign-ins are kept; an account handling a request is waited for at most 2 minutes, then skipped (retry later). A different controller image makes the controller upgrade itself (about 1–2 minutes); authorization and model requests may be interrupted briefly, and a failed health check rolls back.',
+    updateExisting: 'Also update the worker of existing accounts (default: new accounts only)',
     done: 'The bundled images are pushed and applied',
     partial: 'Some bundled images could not be applied; see the results',
     failed: 'Pushing the bundled images failed',
@@ -216,11 +218,14 @@ export default {
     problem: { type: 'Choose a .tar, .tar.gz or .tgz file', empty: 'Choose a non-empty image file', tooLarge: 'The file exceeds the 4 GiB limit' },
     confirmTitle: 'Upload and apply the image?',
     confirm: {
-      app: 'New accounts use the new image after the upload; existing accounts get their worker program updated in place (containers are not recreated): one at a time, the program inside the container is replaced and only that container restarts, sign-ins are kept. An account handling a request is waited for at most 2 minutes, then skipped; retry later.',
+      app: 'After the upload only new accounts use the new image; existing accounts keep their worker. Update them by hand under "Worker update" or in the account editor when you want to.',
+      appUpdateExisting: 'New accounts use the new image after the upload; existing accounts get their worker program updated in place too (containers are not recreated): one at a time, the program inside the container is replaced and only that container restarts, sign-ins are kept. An account handling a request is waited for at most 2 minutes, then skipped; retry later.',
       egress: 'Once loaded it becomes the shared egress gateway (Xray) image. The running gateway is not recreated; a gateway created later uses it.',
       controller: 'Once loaded the controller upgrades itself to the new image (about 1–2 minutes); authorization and model requests may be interrupted briefly. A failed health check rolls back to the previous controller.'
     },
-    appHint: 'New accounts use the new image after the upload; existing accounts get their worker program updated in place (containers are not recreated).'
+    appHint: 'By default only new accounts use the new image; existing accounts keep their worker.',
+    appHintUpdateExisting: 'New accounts use the new image; existing accounts get their worker program updated in place too (containers are not recreated).',
+    updateExisting: 'Also update the worker of existing accounts'
   },
   workers: {
     pairedUpdate: 'Upgrade Worker + CLI {version}',
@@ -233,7 +238,7 @@ export default {
     groupTitle: 'Worker update',
     update: 'Update the worker of existing accounts',
     updating: 'Updating the workers one account at a time; with many accounts this can take a while…',
-    hint: 'Updates the worker program of every existing account in place with the effective app image; use it to retry accounts that were busy or not running.',
+    hint: 'A new app image is for new accounts only; existing accounts are never updated on their own. This updates the worker program of every existing account in place with the effective app image (one account: the account editor); use it also to retry accounts that were busy or not running.',
     confirmTitle: 'Update the worker of existing accounts?',
     confirmMessage: 'Only the worker program inside each account container is replaced and that container restarted; no container is recreated and sign-ins are kept. The restart briefly interrupts requests in progress on that account; an account handling a request is waited for at most 2 minutes, then skipped.',
     done: 'The worker update finished; see the result of each account',

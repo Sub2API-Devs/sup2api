@@ -1,11 +1,13 @@
 <script setup lang="ts">
 // "Advanced: upload an image by hand" of the runtime card (control panel mode,
 // CONTRACTS §53.6): a docker save archive is uploaded in chunks
-// (./imageUpload), then loaded and applied by the controller. Cancelling stops
-// the chunk upload; loading, once started, runs to its end in the core.
+// (./imageUpload), then loaded and applied by the controller. An app image is
+// for new accounts only unless "also update existing accounts" is ticked.
+// Cancelling stops the chunk upload; loading, once started, runs to its end in
+// the core.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SAlert, SButton, SDisclosure, SField, SHint, SInput, SProgress, SSelect, confirm, toast } from '@sub2api/ui'
+import { SAlert, SButton, SCheckbox, SDisclosure, SField, SHint, SInput, SProgress, SSelect, confirm, toast } from '@sub2api/ui'
 import { reasonOf } from './ccgAuthFlow'
 import { useCcgError } from './ccgError'
 import { IMAGE_ROLES, createUploadTransport, formatMiB, imageFileProblem, isAbort, uploadImage, uploadPercent, type ImageLoadResult, type ImageRole, type UploadPhase, type UploadPosition } from './imageUpload'
@@ -21,6 +23,9 @@ const { t } = useI18n()
 const describe = useCcgError()
 
 const role = ref<ImageRole>('app')
+/** An app image also replaces the workers of the existing accounts (off: new accounts only). */
+const updateExisting = ref(false)
+const appUpdatesExisting = computed(() => role.value === 'app' && updateExisting.value)
 const file = ref<File | null>(null)
 /** Bumped to clear the file input after an upload. */
 const fileKey = ref(0)
@@ -56,7 +61,9 @@ async function upload() {
     error.value = t(`ccgateway.imageUpload.problem.${problem}`)
     return
   }
-  const ok = await confirm({ title: t('ccgateway.imageUpload.confirmTitle'), message: t(`ccgateway.imageUpload.confirm.${role.value}`), confirmText: t('ccgateway.imageUpload.submit') })
+  const updating = appUpdatesExisting.value
+  const message = updating ? 'appUpdateExisting' : role.value
+  const ok = await confirm({ title: t('ccgateway.imageUpload.confirmTitle'), message: t(`ccgateway.imageUpload.confirm.${message}`), confirmText: t('ccgateway.imageUpload.submit') })
   if (!ok || uploading.value) return
   error.value = ''
   result.value = null
@@ -66,6 +73,7 @@ async function upload() {
   try {
     const r = await uploadImage(f, role.value, createUploadTransport(), {
       signal: abort.signal,
+      updateExisting: updating,
       onProgress: p => { progress.value = p },
       onPhase: p => { phase.value = p }
     })
@@ -105,7 +113,10 @@ onBeforeUnmount(() => abort?.abort())
           <SInput :key="fileKey" :model-value="null" type="file" accept=".tar,.tar.gz,.tgz,application/x-tar,application/gzip" :disabled="props.disabled" data-testid="image-upload-file" @update:model-value="pick" />
         </SField>
       </div>
-      <p v-if="role === 'app'" data-testid="image-upload-app-hint">{{ t('ccgateway.imageUpload.appHint') }}</p>
+      <div v-if="role === 'app'" class="space-y-1">
+        <p data-testid="image-upload-app-hint">{{ t(updateExisting ? 'ccgateway.imageUpload.appHintUpdateExisting' : 'ccgateway.imageUpload.appHint') }}</p>
+        <SCheckbox size="xs" :model-value="updateExisting" :disabled="props.disabled || uploading" data-testid="image-upload-update-existing" @update:model-value="updateExisting = !!$event">{{ t('ccgateway.imageUpload.updateExisting') }}</SCheckbox>
+      </div>
       <SHint v-if="fileProblem" tone="danger" size="xs" role="alert">{{ t(`ccgateway.imageUpload.problem.${fileProblem}`) }}</SHint>
       <SProgress v-if="uploading && progress" :value="percent" size="md" :indeterminate="phase === 'load'" :label="t('ccgateway.imageUpload.title')" data-testid="image-upload-progress">
         {{ phase === 'load' ? t('ccgateway.imageUpload.loading') : t('ccgateway.imageUpload.uploading', { percent, done: formatMiB(progress.offset), total: formatMiB(progress.size) }) }}

@@ -617,9 +617,10 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     console.log('[mock ccgateway] runtime installed 0.2.0')
     return runtimeOut()
   })
-  // Pushes the bundled images the controller lacks, applies them (the app image updates the existing
-  // workers in place) and reports per role. A controller host containing "pushfail" fails the egress image.
-  on('POST', `${base}/runtime/bundled`, async () => {
+  // Pushes the bundled images the controller lacks, applies them (a new app image is for new accounts only;
+  // with update_existing it also updates the existing workers in place) and reports per role. A controller
+  // host containing "pushfail" fails the egress image.
+  on('POST', `${base}/runtime/bundled`, async ({ body }) => {
     if (config.mode !== 'controller') return fault(400, 'controller_not_configured', 'No controller is connected')
     if (String(config.host || '').includes('nobundle')) return fault(400, 'no_bundled_images', 'The active ccgateway plugin package carries no runtime images.')
     if (!installed) return fault(503, 'controller_unhealthy', 'The controller is not healthy')
@@ -635,7 +636,7 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     })
     installed = { controller_image: current.controller, app_image: current.app, egress_image: current.egress, version: '0.1.16' }
     const appLoaded = results.some(r => r.role === 'app' && r.status === 'loaded')
-    const workers = appLoaded
+    const workers = appLoaded && body?.update_existing === true
       ? { image: bundled.images.app, results: [...adoptedBy.entries()].map(([id, key]) => ({ key, account_id: Number(id), status: 'updated', previous_sha256: digest(`worker-old-${id}`), sha256: digest('worker-0.1.16') })) }
       : undefined
     console.log('[mock ccgateway] bundled images pushed', results.map(r => `${r.role}:${r.status}`).join(' '))

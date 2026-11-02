@@ -22,6 +22,9 @@ import (
 // Worker updates in place (CONTRACTS §53.7): the controller copies the
 // worker program of an image into each existing account container and
 // restarts only that container. Account containers are never recreated.
+// Nothing updates them on its own: a new app image is the target of new
+// runtimes only, existing ones are updated when an administrator asks (all
+// of them, or one runtime at a time).
 
 var (
 	workersLimit = 25 * time.Minute
@@ -45,11 +48,13 @@ type workerResult struct {
 	Online         *bool  `json:"online,omitempty"`
 }
 
-// workersReport is the answer of POST /system/ccgateway/runtime/workers and
-// the workers field of an applied app upload. reason is set (and results
-// empty) when the runtimes could not be listed.
+// workersReport is the answer of POST /system/ccgateway/runtime/workers, of
+// POST /system/ccgateway/runtimes/:key/worker (key set, one result) and the
+// workers field of an app image applied with update_existing. reason is set
+// (and results empty) when the runtimes could not be listed.
 type workersReport struct {
 	Image      string         `json:"image"`
+	Key        string         `json:"key,omitempty"`
 	Results    []workerResult `json:"results"`
 	Reason     string         `json:"reason,omitempty"`
 	Components []string       `json:"components,omitempty"`
@@ -89,22 +94,8 @@ func (s *Service) updateWorkers(ctx context.Context, cfg Config, image string) (
 
 func (s *Service) updateWorkersWithOptions(ctx context.Context, cfg Config, image string, options workerUpdateOptions) (workersReport, *core.Error) {
 	report := workersReport{Image: image, Results: []workerResult{}, Components: options.Components, CLIVersion: options.CLIVersion}
-	if err := options.validate(); err != nil {
-		return report, core.ErrInvalidArgument.WithMessage(err.Error())
-	}
-	// An older controller answers the unknown route 404 not_found, the same
-	// as a missing container: ask what it supports first.
-	healthCtx, cancelHealth := context.WithTimeout(ctx, 30*time.Second)
-	h, herr := s.health(healthCtx, cfg)
-	cancelHealth()
-	if herr != nil {
-		return report, reasonError(core.ErrUnavailable, "controller_unhealthy")
-	}
-	if !h.has("worker-update") {
-		return report, reasonError(core.ErrUnavailable, "controller_outdated")
-	}
-	if options.paired() && !h.has("runtime-pair-update-v1") {
-		return report, reasonError(core.ErrUnavailable, "controller_outdated")
+	if err := s.checkWorkerUpdate(ctx, cfg, options); err != nil {
+		return report, err
 	}
 	var list struct {
 		Runtimes []remoteRuntime `json:"runtimes"`
@@ -124,25 +115,67 @@ func (s *Service) updateWorkersWithOptions(ctx context.Context, cfg Config, imag
 		} else {
 			r = s.updateWorkerWithOptions(ctx, cfg, key, image, options)
 		}
-		if id, ok := accounts[key]; ok {
-			r.AccountID = &id
-		}
-		if r.Status == "updated" || r.Status == "rolled_back" {
-			// Another Worker answers behind the same revision: every node
-			// drops the route and the capabilities it read (audit A7).
-			s.workerChanged(ctx, accounts[key], key)
-			// The restart rebuilt the container's network namespace; the
-			// controller restores it, a reconcile makes sure. A paired
-			// activation already verifies the same container, and a
-			// reconcile could still carry the deliberately retained old
-			// global CLI version until the operator saves new policy.
-			if !options.paired() {
-				s.Kick(key)
-			}
-		}
-		report.Results = append(report.Results, r)
+		report.Results = append(report.Results, s.workerUpdated(ctx, r, accounts, options))
 	}
 	return report, nil
+}
+
+// updateRuntimeWorker updates the worker of the one runtime key in place
+// (the manual update of POST /system/ccgateway/runtimes/:key/worker). The
+// caller holds the install lock.
+func (s *Service) updateRuntimeWorker(ctx context.Context, cfg Config, key, image string, options workerUpdateOptions) (workersReport, *core.Error) {
+	report := workersReport{Image: image, Key: key, Results: []workerResult{}, Components: options.Components, CLIVersion: options.CLIVersion}
+	if err := s.checkWorkerUpdate(ctx, cfg, options); err != nil {
+		return report, err
+	}
+	r := s.updateWorkerWithOptions(ctx, cfg, key, image, options)
+	report.Results = append(report.Results, s.workerUpdated(ctx, r, s.runtimeAccounts(ctx, []string{key}), options))
+	return report, nil
+}
+
+// checkWorkerUpdate refuses an update the options or the controller cannot
+// carry, before any container is touched. An older controller answers the
+// unknown route 404 not_found, the same as a missing container: ask what it
+// supports first.
+func (s *Service) checkWorkerUpdate(ctx context.Context, cfg Config, options workerUpdateOptions) *core.Error {
+	if err := options.validate(); err != nil {
+		return core.ErrInvalidArgument.WithMessage(err.Error())
+	}
+	healthCtx, cancelHealth := context.WithTimeout(ctx, 30*time.Second)
+	h, herr := s.health(healthCtx, cfg)
+	cancelHealth()
+	if herr != nil {
+		return reasonError(core.ErrUnavailable, "controller_unhealthy")
+	}
+	if !h.has("worker-update") {
+		return reasonError(core.ErrUnavailable, "controller_outdated")
+	}
+	if options.paired() && !h.has("runtime-pair-update-v1") {
+		return reasonError(core.ErrUnavailable, "controller_outdated")
+	}
+	return nil
+}
+
+// workerUpdated completes one runtime's result: its account, and after a
+// new program answers the dropped routes and a reconcile.
+func (s *Service) workerUpdated(ctx context.Context, r workerResult, accounts map[string]int64, options workerUpdateOptions) workerResult {
+	if id, ok := accounts[r.Key]; ok {
+		r.AccountID = &id
+	}
+	if r.Status == "updated" || r.Status == "rolled_back" {
+		// Another Worker answers behind the same revision: every node
+		// drops the route and the capabilities it read (audit A7).
+		s.workerChanged(ctx, accounts[r.Key], r.Key)
+		// The restart rebuilt the container's network namespace; the
+		// controller restores it, a reconcile makes sure. A paired
+		// activation already verifies the same container, and a
+		// reconcile could still carry the deliberately retained old
+		// global CLI version until the operator saves new policy.
+		if !options.paired() {
+			s.Kick(r.Key)
+		}
+	}
+	return r
 }
 
 // runtimeKeysOf lists the runtime keys of a controller GET /accounts answer,
@@ -320,11 +353,77 @@ func decodeStrictJSON(raw []byte, v any) error {
 // effective app image). It runs to its end when the caller disconnects.
 func (s *Service) runtimeWorkers(c *gin.Context) {
 	httpapi.NoStore(c)
-	raw, e := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 4096))
-	var in struct {
-		Image string `json:"image"`
-		workerUpdateOptions
+	in, ok := decodeWorkersRequest(c)
+	if !ok {
+		return
 	}
+	ctx, cancel := detached(c, workersLimit)
+	defer cancel()
+	cfg, image, ok := s.workersConfig(c, ctx, in.Image)
+	if !ok {
+		return
+	}
+	ctx, release, ok := s.installLock(c, ctx)
+	if !ok {
+		return
+	}
+	defer release()
+	report, err := s.updateWorkersWithOptions(ctx, cfg, image, in.workerUpdateOptions)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	s.auditWorkers(ctx, report)
+	httpapi.OK(c, report)
+}
+
+// runtimeWorker serves POST /system/ccgateway/runtimes/:key/worker with the
+// body of runtime/workers: the manual in-place worker update of one runtime
+// (an account id key or a draft key). It runs to its end when the caller
+// disconnects.
+func (s *Service) runtimeWorker(c *gin.Context) {
+	httpapi.NoStore(c)
+	key := c.Param("key")
+	if !accountKeyPattern.MatchString(key) && !isDraftKey(key) {
+		httpapi.Fail(c, core.ErrNotFound)
+		return
+	}
+	in, ok := decodeWorkersRequest(c)
+	if !ok {
+		return
+	}
+	ctx, cancel := detached(c, workerLimit+time.Minute)
+	defer cancel()
+	cfg, image, ok := s.workersConfig(c, ctx, in.Image)
+	if !ok {
+		return
+	}
+	ctx, release, ok := s.installLock(c, ctx)
+	if !ok {
+		return
+	}
+	defer release()
+	report, err := s.updateRuntimeWorker(ctx, cfg, key, image, in.workerUpdateOptions)
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	s.auditWorkers(ctx, report)
+	httpapi.OK(c, report)
+}
+
+// workersRequest is the body of the worker updates: {"image"?, "components"?,
+// "cli_version"?}.
+type workersRequest struct {
+	Image string `json:"image"`
+	workerUpdateOptions
+}
+
+// decodeWorkersRequest reads a worker update body (empty means the
+// defaults) and writes the failure response when it cannot be used.
+func decodeWorkersRequest(c *gin.Context) (workersRequest, bool) {
+	var in workersRequest
+	raw, e := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 4096))
 	decode := func() error {
 		if len(bytes.TrimSpace(raw)) == 0 {
 			return nil
@@ -345,47 +444,41 @@ func (s *Service) runtimeWorkers(c *gin.Context) {
 	}
 	if e != nil || decode() != nil || in.workerUpdateOptions.validate() != nil {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_request"))
-		return
+		return in, false
 	}
 	if in.Image != "" && !validImage(in.Image) {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_image"))
-		return
+		return in, false
 	}
-	ctx, cancel := detached(c, workersLimit)
-	defer cancel()
+	return in, true
+}
+
+// workersConfig is the configuration a worker update runs with and its
+// image (default: the effective app image); ok=false means the response was
+// already written.
+func (s *Service) workersConfig(c *gin.Context, ctx context.Context, requested string) (Config, string, bool) {
 	cfg, e := s.Load(ctx)
 	if e != nil {
 		httpapi.Fail(c, reasonError(core.ErrUnavailable, "not_configured"))
-		return
+		return cfg, "", false
 	}
 	if cfg.Mode != "ssh" && cfg.Mode != "controller" && cfg.Mode != "local" {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "ssh_not_configured"))
-		return
+		return cfg, "", false
 	}
 	if !cfg.AccountRuntimes {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "runtimes_disabled"))
-		return
+		return cfg, "", false
 	}
-	image := in.Image
+	image := requested
 	if image == "" {
 		image = cfg.EffectiveImages().App
 	}
 	if !validImage(image) {
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, "invalid_image"))
-		return
+		return cfg, "", false
 	}
-	ctx, release, ok := s.installLock(c, ctx)
-	if !ok {
-		return
-	}
-	defer release()
-	report, err := s.updateWorkersWithOptions(ctx, cfg, image, in.workerUpdateOptions)
-	if err != nil {
-		httpapi.Fail(c, err)
-		return
-	}
-	s.auditWorkers(ctx, report)
-	httpapi.OK(c, report)
+	return cfg, image, true
 }
 
 // auditWorkers records ccgateway.runtime.workers with the image and the
@@ -399,6 +492,9 @@ func (s *Service) auditWorkers(ctx context.Context, report workersReport) {
 	defer cancel()
 	uid, _ := core.UserID(ctx)
 	detail := map[string]any{"image": report.Image, "statuses": counts}
+	if report.Key != "" {
+		detail["key"] = report.Key
+	}
 	if len(report.Components) > 0 {
 		detail["components"] = report.Components
 	}
