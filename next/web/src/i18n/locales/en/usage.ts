@@ -159,6 +159,49 @@ export default {
   hooks: {
     title: 'Hook decisions'
   },
+  availability: {
+    title: 'Model availability check',
+    seeBelow: 'See "Model availability check" below for the reason.',
+    outcomes: {
+      blocked_all: 'All blocked',
+      partial: 'Partly blocked',
+      fail_open: 'Check failed, let through'
+    },
+    candidates: 'Candidates',
+    admitted: 'Let through',
+    retryAt: 'Earliest retry',
+    sampleRetry: 'Retry at',
+    afterRequest: '{time} after the request',
+    counts: 'By reason',
+    samples: 'Sample accounts',
+    omitted: '{n} more accounts not listed',
+    guard: 'Pre-send recheck',
+    attempt: 'Attempt {n}',
+    hiddenAccount: 'No permission to view accounts',
+    batch: 'Whole batch of plugin {plugin}',
+    reasonWithDetail: '{reason}: {detail}',
+    decisions: {
+      block: 'Blocked',
+      fail_open: 'Let through'
+    },
+    reasons: {
+      snapshot_unavailable: 'Quota snapshot unavailable',
+      plugin_error: 'Plugin call failed',
+      plugin_timeout: 'Plugin call timed out',
+      plugin_bad_response: 'Plugin returned an invalid result',
+      plugin_unknown: 'Plugin could not tell',
+      unavailable: 'Unavailable',
+      guard_identity_changed: 'Account was re-authorized',
+      guard_models_changed: 'Account model list changed',
+      upstream_model_mismatch: 'Upstream request model differs from the checked model'
+    },
+    pluginReasons: {
+      quota_rejected: 'Quota window {window} exhausted',
+      invalid_candidate: 'Invalid candidate',
+      duplicate_candidate: 'Duplicate candidate',
+      unsupported_account_type: 'Unsupported account type'
+    }
+  },
   sticky: {
     title: 'Sticky session',
     rule: 'Rule',

@@ -40,6 +40,123 @@ export function accountLabel(u: Pick<UsageLog, 'account_id' | 'account_name'>): 
   return u.account_name ? `#${u.account_id} ${u.account_name}` : `#${u.account_id}`
 }
 
+/** One account (or one failed plugin batch) of a model availability trace (anomalies.availability). */
+export interface AvailabilitySample {
+  /** Missing when the caller lacks account:read, and on a whole-batch fail-open sample. */
+  account_id?: number
+  /** Filled by the API for callers with account:read. */
+  account_name?: string
+  plugin?: string
+  model?: string
+  /** block | fail_open */
+  decision: string
+  /** Reason code; a plugin reason follows the first ':' ("unavailable:quota_rejected:7d_fable"). */
+  reason: string
+  /** Unix seconds. */
+  retry_at?: number
+  /** Guard samples only. */
+  attempt?: number
+}
+
+/** The model availability precheck of one request (MODEL-AVAILABILITY-PRECHECK-DESIGN.md §6.1). */
+export interface AvailabilityTrace {
+  v: number
+  /** blocked_all | partial | fail_open */
+  outcome: string
+  candidates: number
+  admitted: number
+  /** Reason code -> accounts. */
+  counts: Record<string, number>
+  /** Unix seconds: the earliest retry among the blocked accounts. */
+  retry_at?: number
+  samples: AvailabilitySample[]
+  omitted?: number
+  guard?: AvailabilitySample[]
+}
+
+const count = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0)
+const text = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '')
+
+function availabilitySamples(value: unknown, max: number): AvailabilitySample[] {
+  if (!Array.isArray(value)) return []
+  const out: AvailabilitySample[] = []
+  for (const item of value.slice(0, max)) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const s = item as Record<string, unknown>
+    const reason = text(s.reason, 200)
+    if (!reason) continue
+    const sample: AvailabilitySample = { decision: text(s.decision, 32), reason }
+    if (count(s.account_id) > 0) sample.account_id = count(s.account_id)
+    if (text(s.account_name, 200)) sample.account_name = text(s.account_name, 200)
+    if (text(s.plugin, 100)) sample.plugin = text(s.plugin, 100)
+    if (text(s.model, 200)) sample.model = text(s.model, 200)
+    if (count(s.retry_at) > 0) sample.retry_at = count(s.retry_at)
+    if (count(s.attempt) > 0) sample.attempt = count(s.attempt)
+    out.push(sample)
+  }
+  return out
+}
+
+/** The recorded availability trace of a request, or null when absent or malformed.
+ *  Defensive: the record is free-form JSON, so every field is type-checked and lists are capped. */
+export function availabilityTrace(u: Pick<UsageLog, 'anomalies'>): AvailabilityTrace | null {
+  const raw: unknown = u.anomalies?.availability
+  let value: unknown = raw
+  if (typeof raw === 'string') {
+    try { value = JSON.parse(raw) } catch { return null }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const o = value as Record<string, unknown>
+  const outcome = text(o.outcome, 32)
+  if (!outcome) return null
+  const counts: Record<string, number> = {}
+  if (o.counts && typeof o.counts === 'object' && !Array.isArray(o.counts)) {
+    for (const [k, v] of Object.entries(o.counts).slice(0, 32)) if (count(v) > 0) counts[k.slice(0, 200)] = count(v)
+  }
+  const trace: AvailabilityTrace = {
+    v: count(o.v),
+    outcome,
+    candidates: count(o.candidates),
+    admitted: count(o.admitted),
+    counts,
+    samples: availabilitySamples(o.samples, 50)
+  }
+  if (count(o.retry_at) > 0) trace.retry_at = count(o.retry_at)
+  if (count(o.omitted) > 0) trace.omitted = count(o.omitted)
+  const guard = availabilitySamples(o.guard, 10)
+  if (guard.length) trace.guard = guard
+  return trace
+}
+
+/** Badge tone of a trace outcome. */
+export function availabilityOutcomeTone(outcome: string): 'danger' | 'warning' | 'info' | 'gray' {
+  return outcome === 'blocked_all' ? 'danger' : outcome === 'partial' ? 'warning' : outcome === 'fail_open' ? 'info' : 'gray'
+}
+
+type OptionalT = (key: string, params?: Record<string, unknown>, fallback?: string) => string
+
+/** A plugin's own reason: "quota_rejected:7d_fable" -> "Quota window 7d_fable exhausted"; unknown ones as they are. */
+function pluginReasonLabel(tr: OptionalT, reason: string): string {
+  const i = reason.indexOf(':')
+  const code = i < 0 ? reason : reason.slice(0, i)
+  const arg = i < 0 ? '' : reason.slice(i + 1)
+  // quota_rejected names its window; the others carry no argument.
+  if (code === 'quota_rejected') return arg ? tr('usage.availability.pluginReasons.quota_rejected', { window: arg }, reason) : reason
+  return arg ? reason : tr(`usage.availability.pluginReasons.${code}`, undefined, reason)
+}
+
+/** Text of an availability reason code. The part after the first ':' is the plugin's reason
+ *  ("unavailable:quota_rejected:7d_fable"); codes the console does not know show as recorded.
+ *  tr is useOptionalT(). */
+export function availabilityReasonLabel(tr: OptionalT, reason: string): string {
+  const i = reason.indexOf(':')
+  const code = i < 0 ? reason : reason.slice(0, i)
+  const detail = i < 0 ? '' : reason.slice(i + 1)
+  const label = tr(`usage.availability.reasons.${code}`, undefined, '')
+  if (!label) return pluginReasonLabel(tr, reason)
+  return detail ? tr('usage.availability.reasonWithDetail', { reason: label, detail: pluginReasonLabel(tr, detail) }) : label
+}
+
 /** True when the core converted the request to another upstream protocol. */
 export function isConverted(u: Pick<UsageLog, 'protocol' | 'upstream_protocol'>): boolean {
   return !!u.upstream_protocol && !!u.protocol && u.upstream_protocol !== u.protocol

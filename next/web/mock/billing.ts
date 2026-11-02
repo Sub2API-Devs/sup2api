@@ -1006,6 +1006,53 @@ for (let i = 0; i < 90; i++) {
   }
   usageRows.push(row)
 }
+// Two records with a model availability trace (anomalies.availability, detail only):
+// every ccgateway candidate blocked by its 7d Fable window (429, no account), and
+// one candidate blocked while another served the request.
+{
+  const at = (min: number) => new Date(Date.now() - min * 60000)
+  const unix = (d: Date, min: number) => Math.floor(d.getTime() / 1000) + min * 60
+  const base = {
+    user_id: 1, user_email: USERS[0].email, api_key_id: 1, api_key_name: `${USERS[0].name}-key`, client_ip: CLIENT_IPS[1][0],
+    group_id: 2, group_name: 'vip', platform: 'anthropic', protocol: 'anthropic.messages', endpoint: '/v1/messages',
+    model: 'claude-fable-4', upstream_model: 'claude-fable-4', stream: true, cache_read_tokens: 0, cache_creation_tokens: 0,
+    cache_creation_1h_tokens: 0, rate_multiplier: '1.50', billing_mode: undefined, matched_tier: '', price_id: null, expr_hash: '',
+    hook_decisions: [], upload_ms: 40, sticky_rule: 'claude-code-session', sticky_hit: false, _detail: null, _price: null
+  }
+  const blockedAt = at(3)
+  usageRows.push({
+    ...base, id: 4990, request_id: 'req_availability0001', client_request_id: '', created_at: blockedAt.toISOString(),
+    account_id: null, account_name: null, plugin_key: '', account_type: '', upstream_protocol: '',
+    status_code: 429, success: false, error_type: 'model_availability',
+    error_message: 'the requested model is unavailable for these accounts, please retry later',
+    input_tokens: 0, output_tokens: 0, total_cost: money(0), billing_status: 'free', latency_ms: 4,
+    _anomalies: { availability: JSON.stringify({
+      v: 1, outcome: 'blocked_all', candidates: 3, admitted: 0, retry_at: unix(blockedAt, 134),
+      counts: { 'unavailable:quota_rejected:7d_fable': 3 },
+      samples: [
+        { account_id: 25, account_name: 'cc-main', model: 'claude-fable-4', decision: 'block', reason: 'unavailable:quota_rejected:7d_fable', retry_at: unix(blockedAt, 134) },
+        { account_id: 26, account_name: 'cc-backup', model: 'claude-fable-4', decision: 'block', reason: 'unavailable:quota_rejected:7d_fable', retry_at: unix(blockedAt, 391) },
+        { account_id: 27, model: 'claude-fable-4', decision: 'block', reason: 'unavailable:quota_rejected:7d_fable', retry_at: unix(blockedAt, 1450) }
+      ]
+    }) }
+  })
+  const partialAt = at(9)
+  usageRows.push({
+    ...base, id: 4991, request_id: 'req_availability0002', client_request_id: '', created_at: partialAt.toISOString(),
+    account_id: 26, account_name: 'cc-backup', plugin_key: 'ccgateway', account_type: 'managed', upstream_protocol: 'anthropic.messages',
+    status_code: 200, success: true, error_type: '', error_message: '',
+    input_tokens: 1200, output_tokens: 300, total_cost: money(0), billing_status: 'free', latency_ms: 3200, first_token_ms: 900,
+    _anomalies: { availability: JSON.stringify({
+      v: 1, outcome: 'partial', candidates: 3, admitted: 2, retry_at: unix(partialAt, 72),
+      counts: { 'unavailable:quota_rejected:7d_fable': 1, snapshot_unavailable: 1 },
+      samples: [
+        { account_id: 25, account_name: 'cc-main', model: 'claude-fable-4', decision: 'block', reason: 'unavailable:quota_rejected:7d_fable', retry_at: unix(partialAt, 72) },
+        { account_id: 27, model: 'claude-fable-4', decision: 'fail_open', reason: 'snapshot_unavailable' }
+      ],
+      guard: [{ account_id: 27, model: 'claude-fable-4', decision: 'block', reason: 'guard_models_changed', attempt: 1 }]
+    }) }
+  })
+}
 usageRows.sort((a, b) => b.created_at.localeCompare(a.created_at))
 
 // Ledger: usage debits + a few admin credits, oldest first to compute balance_after.
@@ -1047,9 +1094,10 @@ usageRows.sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
 function publicUsage(u: any, self = false) {
-  const { _detail, _price, ...rest } = u
+  const { _detail, _price, _anomalies, ...rest } = u
   void _detail
   void _price
+  void _anomalies
   if (self) {
     delete rest.account_id
     delete rest.account_name
@@ -1097,6 +1145,8 @@ function usageDetail(u: any, self = false) {
     ...publicUsage(u, self),
     billing_detail: u._detail ? { ...u._detail, ledger_id: u.ledger_id ?? null } : null,
     price: u._price, metrics, attempts: 1,
+    // Self-service details carry no anomalies, like the server.
+    ...(u._anomalies && !self ? { anomalies: u._anomalies } : {}),
     user_agent: 'claude-cli/mock (external, cli; usage-detail-preview)'
   }
 }
