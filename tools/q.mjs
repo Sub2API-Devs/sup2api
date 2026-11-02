@@ -56,19 +56,19 @@ function resolve(x) {
   if (!hits.length) for (const d of D) if (d.names.includes(x)) hits.push(d);
   return hits.filter(Boolean);
 }
+const declByLocal = new Map();
+for (const d of D) for (const n of d.names) declByLocal.set(`${d.file}#${n}`, d);
 function usesOf(d) {
   const out = [];
   for (const r of d.refs) {
-    let id;
     if (r.startsWith('=')) {
-      const n = r.slice(1);
-      id = D.find((x) => x.file === d.file && x.names.includes(n));
-      if (id) out.push(id);
+      const t = declByLocal.get(`${d.file}#${r.slice(1)}`);
+      if (t) out.push(t);
       continue;
     }
     const [f, name] = r.split('|');
     const local = exportsOf.get(f)?.[name];
-    const t = local && D.find((x) => x.file === f && x.names.includes(local));
+    const t = local && declByLocal.get(`${f}#${local}`);
     if (t) out.push(t);
   }
   return out;
