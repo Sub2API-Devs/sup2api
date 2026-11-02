@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -90,11 +91,17 @@ type Service struct {
 	// refreshLocal serialises credential refreshes of one account on this
 	// node when there is no cluster Locker (CONTRACTS §48).
 	refreshLocal sync.Map // account id -> *sync.Mutex
+
+	// sweepRounds counts the rounds runAutomaticStateSweep finished.
+	sweepRounds atomic.Int64
 }
 
 type groupSnap struct {
 	at   time.Time
 	refs []core.AccountRef
+	// releases holds the release time of each ref under a timed automatic
+	// disable; Candidates skips the ref until then.
+	releases map[int64]time.Time
 }
 
 type accountSnap struct {
@@ -176,6 +183,7 @@ func (s *Service) Run(ctx context.Context) {
 	go s.runQuotaSweep(ctx)
 	go s.runRefreshSweep(ctx)
 	go s.runAutomaticStateSweep(ctx)
+	go s.runUsageLimitsLoop(ctx)
 	go s.runPreparationSweep(ctx)
 	go s.runLifecycleStatusSweep(ctx)
 	if s.d.Bus != nil {

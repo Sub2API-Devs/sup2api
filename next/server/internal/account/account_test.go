@@ -721,6 +721,11 @@ func setupWith(t *testing.T, authz fakeAuthz) *env {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go e.svc.Run(ctx)
+	// Let the start-up recovery round pass, so it does not race the rows a
+	// test writes directly.
+	for deadline := time.Now().Add(5 * time.Second); e.svc.sweepRounds.Load() == 0 && time.Now().Before(deadline); {
+		time.Sleep(time.Millisecond)
+	}
 	engine := gin.New()
 	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, authz))
 	e.h = engine

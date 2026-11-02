@@ -19,12 +19,20 @@ import (
 // type is in types (all types when empty), in priority order, excluding
 // accounts that are cooling down.
 func (s *Service) Candidates(ctx context.Context, groupID int64, types []core.AccountTypeKey) ([]core.AccountRef, error) {
-	refs, err := s.groupSnapshot(ctx, groupID)
+	snap, err := s.groupSnapshot(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]core.AccountRef, 0, len(refs))
-	for _, r := range refs {
+	now := time.Now()
+	out := make([]core.AccountRef, 0, len(snap.refs))
+	for _, r := range snap.refs {
+		// A timed automatic disable expires by itself (lazy expiry, as the
+		// legacy temp_unschedulable_until): the account serves again once its
+		// release time passes, whether or not the recovery sweep has written
+		// it back to active yet.
+		if until, ok := snap.releases[r.ID]; ok && now.Before(until) {
+			continue
+		}
 		if len(types) == 0 || slices.Contains(types, core.AccountTypeKey{PluginKey: r.PluginKey, Type: r.Type}) {
 			out = append(out, r)
 		}
@@ -69,31 +77,43 @@ func (s *Service) GroupHasType(ctx context.Context, groupID int64, types []core.
 	return ok, err
 }
 
-func (s *Service) groupSnapshot(ctx context.Context, groupID int64) ([]core.AccountRef, error) {
+// groupSnapshot returns the group's schedulable accounts: active ones and
+// those under a timed automatic disable, whose release times it lists.
+func (s *Service) groupSnapshot(ctx context.Context, groupID int64) (groupSnap, error) {
 	now := time.Now()
 	s.cacheMu.Lock()
 	snap, ok := s.groups[groupID]
 	epoch := s.epoch
 	s.cacheMu.Unlock()
 	if ok && now.Sub(snap.at) < snapshotTTL {
-		return snap.refs, nil
+		return snap, nil
 	}
 	v, err, _ := s.sf.Do("g:"+itoa(groupID), func() (any, error) {
 		rows, err := s.d.DB.Pool.Query(ctx, `SELECT a.id, a.name, a.plugin_key, a.type, a.priority, a.weight,
-				a.max_concurrency, a.proxy_id, a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.model_limits, a.environment
+				a.max_concurrency, a.proxy_id, a.models, a.model_mapping, a.rpm_limit, a.tpm_limit, a.spm_limit, a.model_limits, a.environment,
+				CASE WHEN a.status = 'auto_disabled' THEN a.auto_disabled_until END
 			FROM accounts a JOIN account_groups ag ON ag.account_id = a.id
-			WHERE ag.group_id = $1 AND a.deleted_at IS NULL AND a.status = 'active' AND a.schedulable
+			WHERE ag.group_id = $1 AND a.deleted_at IS NULL AND a.schedulable
+				AND (a.status = 'active' OR a.status = 'auto_disabled' AND a.auto_disabled_until IS NOT NULL)
 			ORDER BY a.priority, a.id`, groupID)
 		if err != nil {
 			return nil, err
 		}
-		refs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (core.AccountRef, error) {
+		snap := groupSnap{at: now}
+		snap.refs, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (core.AccountRef, error) {
 			var a core.AccountRef
 			var mapping, limits []byte
+			var until *time.Time
 			err := r.Scan(&a.ID, &a.Name, &a.PluginKey, &a.Type, &a.Priority, &a.Weight, &a.MaxConcurrency, &a.ProxyID,
-				&a.Models, &mapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &limits, &a.Environment)
+				&a.Models, &mapping, &a.RPMLimit, &a.TPMLimit, &a.SPMLimit, &limits, &a.Environment, &until)
 			if err == nil && len(mapping) > 0 {
 				_ = json.Unmarshal(mapping, &a.ModelMapping)
+			}
+			if until != nil {
+				if snap.releases == nil {
+					snap.releases = map[int64]time.Time{}
+				}
+				snap.releases[a.ID] = *until
 			}
 			a.ModelLimits = parseModelLimits(limits)
 			return a, err
@@ -103,15 +123,15 @@ func (s *Service) groupSnapshot(ctx context.Context, groupID int64) ([]core.Acco
 		}
 		s.cacheMu.Lock()
 		if s.epoch == epoch {
-			s.groups[groupID] = groupSnap{at: now, refs: refs}
+			s.groups[groupID] = snap
 		}
 		s.cacheMu.Unlock()
-		return refs, nil
+		return snap, nil
 	})
 	if err != nil {
-		return nil, err
+		return groupSnap{}, err
 	}
-	return v.([]core.AccountRef), nil
+	return v.(groupSnap), nil
 }
 
 // Load returns one account with decrypted credentials (not deleted; any status).

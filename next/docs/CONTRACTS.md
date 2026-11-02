@@ -2533,7 +2533,7 @@ PUT 是补丁语义（省略的字段不变），响应为保存后的完整设�
 - `HostService.SetAccountAutomaticState` / `pluginsdk.SetAccountAutomaticState`：需要新增高风险权限 `accounts.auto_state`，scope 严格为 `{"types":"own"}`；核心在 SQL 中限定调用插件的账号，其他插件账号与不存在账号均返回 NOT_FOUND。响应提供 `changed/status/reason/until_unix`。2026-10-12 起插件直接发起的 `ACTION_DISABLE` 在完成参数及所属账号校验后返回当前状态、`changed=false`，不写数据库、不发状态事件；`ACTION_CLEAR` 保留既有恢复语义，不得解除管理员手动停用。
 - `ClassifyErrorResponse.automatic_state`：不再用于停用账号或指定禁用期限，避免插件用过短或非法期限削弱管理员规则。主动解除仍走 HostService。只有命中管理员禁用规则且两级开关允许时才停用，原因记录命中的管理员规则；未命中时与旧 `ACCOUNT_EFFECT_DISABLE` 一样只冷却，不写 `auto_disabled`。`local_failure` 标识本地/Worker 容量或请求本身错误，不参与管理员状态码、关键词禁用规则。
 - 迁移 `0049_account_automatic_state.sql` 只新增 `accounts.auto_disabled_until` 与到期扫描索引，不修改任何已发布迁移。历史 `disabled` 记录不靠错误文本猜测来源，保守保留，管理员可显式重置；新程序只产生 `auto_disabled`。
-- 核心每 5 秒按数据库时间处理最多 200 条到期记录，托管节点只有获准工作后才扫描。事务内 `FOR UPDATE SKIP LOCKED` 保证多节点只恢复一次；只处理当前仍是 `auto_disabled` 且当前解除时间已到的记录，不排队保存旧定时任务。重启或插件退出不会遗失期限。
+- 惰性过期（与旧版 `temp_unschedulable_until` 一致）：调度选号（`Candidates`）把 `auto_disabled_until` 已过的 `auto_disabled` 账号直接当作可用，不依赖任何任务先把状态改回。状态回写由核心低频巡检完成：启动时先跑一轮（补上停机期间到期的），之后每分钟按数据库时间处理最多 200 条到期记录，写审计与 `account.status_changed`，托管节点只有获准工作后才巡检。事务内 `FOR UPDATE SKIP LOCKED` 保证多节点只恢复一次；只处理当前仍是 `auto_disabled` 且当前解除时间已到的记录。期限只存在数据库里，重启、Redis 丢键或插件退出都不会遗失。
 - 管理员 `disabled` 状态永远不被插件或到期扫描解除；`schedulable=false` 永远保留。未指定期限的自动禁用不会被随后到来的定时建议降级，需先显式解除。插件状态变更和到期恢复分别审计 `account.automatic_state` / `account.automatic_recovery`，状态事件与数据库更新同事务提交。
 - 手工“重置状态”同时清除自动解除时间；管理员显式修改 `status` 时取消旧期限。成功重新授权会恢复 `error/auto_disabled`，但不恢复管理员 `disabled`，也不改变调度开关。
 - CCGateway 0.1.37：托管 OAuth 账号收到上游 429 后，插件声明到期自动禁用建议；2026-10-12 起核心仅在命中管理员禁用规则时执行，未配置 429 且关键词未命中时只冷却。取所有已耗尽窗口中最晚的 reset，与 Retry-After 同时存在时取较晚值；没有这两类信息时用未标明耗尽窗口的最近 reset，再无时间信息时使用 60 秒。旧 Worker relay 曾隐藏订阅额度明细并把耗尽窗口 reset 转为 Retry-After，这是归档行为；当前 native-only 从 CLI rate_limit_event 的有效重置时间生成有界提示，不再观察原始模型 HTTP 限额头（§53.14）。Worker 满载的 `Gateway concurrency limit reached` 保留短冷却，不标记配额耗尽；401/403 不附解除时间。自动禁用不关闭 Worker，额度查询、重新授权仍可用，模型调度继续被核心阻断。
@@ -4719,7 +4719,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 规则：
 - 上游返回 HTTP 错误（`status > 0`，不含传输错误）时，即使发布了故障策略，核心也调用插件 `ClassifyError`（`platform.execute` 插件则用 Execute 返回的分类），并执行其中两项：
   1. `quota`：配额观测照常保存（§44）。
-  2. `automatic_state` 为 `DISABLE` 且带解除时间（`until_unix` 在未来，或 `duration_seconds` > 0，最长 366 天）：账号立即设为 `auto_disabled`，`auto_disabled_until` = 解除时间，原因用插件给的 `reason`。核心每 5 秒的清扫在解除时间把账号恢复为 `active`。
+  2. `automatic_state` 为 `DISABLE` 且带解除时间（`until_unix` 在未来，或 `duration_seconds` > 0，最长 366 天）：账号立即设为 `auto_disabled`，`auto_disabled_until` = 解除时间，原因用插件给的 `reason`。解除时间一过调度即可再选中它（惰性过期），核心的低频巡检随后把状态写回 `active`。
 - 其余仍由策略决定：是否重试、同账号重试次数、换号、冷却、返回给客户端的内容。插件的 `action`、`account_effect`、`cooldown_until_unix` 不采用。
 - 临时禁用仍受全局自动禁用开关（策略的 `account_enabled`）和账号自己的 `auto_disable` 约束，管理员手动停用的账号不受影响。策略里的禁用规则已经停用了账号时，不再重复处理。
 - 禁用后本次请求的 `failureState.blocked` 置位，策略的"同账号重试"直接跳到换号；`policyCandidates` 每次尝试前重新读取候选账号，被禁用的账号不在其中。粘性会话：除非粘性设置开了"账号停用时保留绑定"（`KeepOnAccountDisabled`），立即解除到该账号的绑定，本次和后续请求改绑到新账号。
@@ -5410,7 +5410,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - `anchor`：周期起点，2000–2100 年，按 `timezone` 的挂钟向下取整点后保存；null = 该时区 2024-01-01 00:00，即日/周一/月初的自然边界。`period=hour` 时起点改为向下取 UTC 整点：用量按 UTC 小时桶汇总，半小时/45 分时区的小时周期否则每个周期都会把两个桶各算一半；这类时区的小时周期因此比挂钟整点早 30/45 分钟。
   - `timezone`：IANA 时区，**保存时必填**（空字符串、`Local`、未知名称都是 `timezone` 字段错误）。周期按该时区挂钟计算，日/周跨夏令时仍从零点开始，月按日历，起点是 31 日时短月取月末。控制台取值规则见 73.4。
   - `none` 为总额度，按累计值计算、不重置。
-- 执行：账号服务每 5 秒的自动状态巡检后，在一个节点上先汇总用量（73.2），再执行 `EnforceUsageLimits`（单个账号失败只记日志，不影响其它账号）。周期按数据库时钟（`clock_timestamp()`）计算，与到期解除用的是同一个时钟，节点时钟偏差不会让刚解除的账号按上一个周期再被禁用。限额与用量在事务外读取；每个账号的写入在一个事务里先锁账号行、再锁其 `account_usage_limits` 行，只有账号的状态/原因/来源/解除时间与配置的 `updated_at`、`waived_window` 都还是读到的值才写，否则跳过本轮（保存配置的那次请求会按新配置自己执行一遍）。所以另一节点的管理员调高限额时，巡检不会按旧限额误禁用：
+- 执行：账号服务每 5 秒（独立于自动禁用的状态回写）在一个节点上先汇总用量（73.2），再执行 `EnforceUsageLimits`（单个账号失败只记日志，不影响其它账号）。周期按数据库时钟（`clock_timestamp()`）计算，与到期解除用的是同一个时钟，节点时钟偏差不会让刚解除的账号按上一个周期再被禁用。限额与用量在事务外读取；每个账号的写入在一个事务里先锁账号行、再锁其 `account_usage_limits` 行，只有账号的状态/原因/来源/解除时间与配置的 `updated_at`、`waived_window` 都还是读到的值才写，否则跳过本轮（保存配置的那次请求会按新配置自己执行一遍）。所以另一节点的管理员调高限额时，巡检不会按旧限额误禁用：
   - 启用中的账号本周期用量 ≥ 限额 → `status=auto_disabled`，`status_reason="usage limit reached: $<used> / $<amount> (<per month|per 2 weeks|total>)"`，`auto_disabled_until` = 本周期结束（总额度为 null），`auto_disabled_source='usage_limit'`。不受账号「允许自动禁用」和全局自动禁用开关影响。
   - 周期结束由现有的自动状态巡检（§42）自动启用。
   - 被用量限制禁用、且现在不再超限（调高限额、关闭限制、改了周期）→ 立即恢复 `active`；但若有被暂缓的插件/失败策略禁用（见下）且尚未到期，改为切换成那个禁用。仍超限但限额或周期改了 → 更新原因和 `auto_disabled_until`；新的结束时间早于暂缓的禁用时，同样切换成那个禁用。
