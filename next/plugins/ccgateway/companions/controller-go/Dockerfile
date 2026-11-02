@@ -25,7 +25,6 @@ LABEL io.sup2api.ccgateway.shared-egress="1" \
 # override it in the environment file (the guard drops that line on upgrade).
 ARG VERSION=dev
 ENV CCG_CONTROLLER_VERSION=$VERSION
-ENV CCG_DEFAULT_CLI_VERSION=2.1.312
 USER 0:0
 EXPOSE 8787
 HEALTHCHECK --interval=5s --timeout=4s --start-period=10s --retries=3 CMD ["/ccg-controller", "healthcheck"]

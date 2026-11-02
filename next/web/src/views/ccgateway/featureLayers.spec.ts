@@ -71,8 +71,8 @@ describe('CC feature layer contract', () => {
     await w.get('[data-testid="environment-convert-edit"] button').trigger('click')
     expect(w.findAll('[data-testid^="build-attachment-"]')).toHaveLength(10)
     expect(w.findAll('[data-testid^="billing-cc_"]').filter(x => x.attributes('role') === 'radiogroup')).toHaveLength(2)
-    expect(w.get('[data-testid="cli-version"]').text()).toBe('CLI 2.1.312')
-    expect(w.find('[data-testid="cli-version"] input').exists()).toBe(false)
+    // The image decides the CLI version (cli-from-image-v1): the policy shows none.
+    expect(w.find('[data-testid="cli-version"]').exists()).toBe(false)
     expect(enabled('billing-cc_version')).toEqual(['client', 'worker'])
     expect(enabled('build-attachment-shell')).toEqual(['client', 'worker', 'erase'])
     // The global layer has no follow toggles.

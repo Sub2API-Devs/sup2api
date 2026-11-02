@@ -35,8 +35,9 @@ type WorkerPolicy struct {
 	SchemaVersion int `json:"schema_version"`
 	// RelayMode is build or direct.
 	RelayMode string `json:"relay_mode"`
-	// CLIVersion is the Claude Code version the Worker must run.
-	CLIVersion             string                 `json:"cli_version"`
+	// CLIVersion is the Claude Code version the Worker must run; "" (what
+	// the core sends since cli-from-image-v1) is the one it runs.
+	CLIVersion             string                 `json:"cli_version,omitempty"`
 	BuildBillingSources    BuildBillingSources    `json:"build_billing_sources,omitempty"`
 	BuildBillingEntrypoint string                 `json:"build_billing_entrypoint,omitempty"`
 	BuildAttachmentSources BuildAttachmentSources `json:"build_attachment_sources,omitempty"`
@@ -61,8 +62,8 @@ const (
 const RequestLogPolicyCapability = "request_log_policy_v1"
 
 // Validate checks every field's vocabulary. The core always names the relay
-// mode and CLI version; a value the Worker reads without them (the CLI run by
-// hand, a test) means its own.
+// mode (and no longer the CLI version); a value the Worker reads without
+// them (the CLI run by hand, a test) means its own.
 func (p WorkerPolicy) Validate() error {
 	if p.SchemaVersion != 0 && p.SchemaVersion != PolicySchemaVersion {
 		return errors.New("unsupported request policy schema_version")

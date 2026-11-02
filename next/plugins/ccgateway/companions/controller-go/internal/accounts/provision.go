@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/netip"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -154,6 +155,10 @@ func (m *Manager) provisionLocked(ctx context.Context, aid string, authRaw any, 
 		st.CLI = store.Some[any](p.cli.Raw)
 		st.Mark("cli")
 	}
+	st.RuntimeImage = store.Some(p.imageRef)
+	if p.image.ID != "" {
+		st.RuntimeImage = store.Some(p.image.ID) // a tag may later name another image
+	}
 	st.Environment = store.Some(env)
 	st.EnvironmentCreated = store.Some(env)
 	st.EnvironmentPending = store.Some(false)
@@ -243,38 +248,12 @@ func (m *Manager) noteEnvironment(aid string, st *store.AccountState, env store.
 	return m.save(aid, st)
 }
 
-// planContainer is _plan_container (PV8).
+// planContainer is _plan_container (PV8); runtimeImage picks the image and
+// the CLI.
 func (m *Manager) planContainer(ctx context.Context, aid string, st *store.AccountState, existing *guardapi.Container,
 	cli *cliprofile.Profile) (*plan, error) {
-	if existing == nil && cli == nil && m.cfg.DefaultCLIVersion != "" {
-		var err error
-		if cli, err = cliprofile.Default(m.cfg.DefaultCLIVersion); err != nil {
-			return nil, errs.Wrap(errs.BadRequest, "invalid controller default CLI version", err)
-		}
-	}
-	var saved pyjson.Ordered
-	if st != nil {
-		saved = orderedOf(st.CLI.Get())
-	}
-	versionChanged := cli != nil && !pyjson.Equal(field(saved, "version"), cli.Version)
-	retired := cli != nil && !directOrBuild(field(saved, "request_mode"))
-	// Credential/network changes must not incidentally upgrade the image.
-	imageRef := m.images.App()
-	if existing != nil && !versionChanged && !retired {
-		imageRef = existing.ImageOf()
-	}
-	image, err := m.EnsureImage(ctx, imageRef)
+	imageRef, image, cli, cliEnv, err := m.runtimeImage(ctx, aid, st, existing, cli)
 	if err != nil {
-		return nil, err
-	}
-	if err := names.CheckBusinessImage(image.Config.Env); err != nil {
-		return nil, err
-	}
-	cliEnv, err := cliprofile.Resolve(ctx, m.g, aid, imageRef, cli)
-	if err != nil {
-		if errors.Is(err, cliprofile.ErrUnavailable) {
-			return nil, errs.Wrap(errs.InvalidCLIProfile, "requested CLI version/mode is unavailable or invalid in the selected image", err)
-		}
 		return nil, err
 	}
 	// An enforced quota never silently becomes unbounded; legacy data
@@ -296,6 +275,141 @@ func (m *Manager) planContainer(ctx context.Context, aid string, st *store.Accou
 		return nil, err
 	}
 	return &plan{imageRef: imageRef, image: image, cli: cli, cliEnv: cliEnv, diskBytes: diskBytes, legacy: legacy}, nil
+}
+
+// runtimeImage picks the image and the CLI of the app container to create
+// and resolves the CLI in that image.
+//
+// A configuration naming a CLI (cores before cli-from-image-v1) keeps the
+// pinned rules: a new version or a retired mode takes the target image,
+// anything else the existing container's image (credential/network changes
+// must not incidentally upgrade it).
+//
+// Without one the image decides (2026-11-02): a new runtime (or one leaving
+// a retired mode) runs the CLI the target image packages; a recreated one
+// keeps the CLI it runs (runningProfile) from the first image packaging it
+// among the one its Worker came from (RuntimeImage), the existing
+// container's and the target. A container from before CLI profiles stays
+// as it is.
+func (m *Manager) runtimeImage(ctx context.Context, aid string, st *store.AccountState, existing *guardapi.Container,
+	cli *cliprofile.Profile) (string, *guardapi.Image, *cliprofile.Profile, map[string]string, error) {
+	var candidates []string
+	if cli != nil {
+		var saved pyjson.Ordered
+		if st != nil {
+			saved = orderedOf(st.CLI.Get())
+		}
+		versionChanged := !pyjson.Equal(field(saved, "version"), cli.Version)
+		retired := !directOrBuild(field(saved, "request_mode"))
+		ref := m.images.App()
+		if existing != nil && !versionChanged && !retired {
+			ref = existing.ImageOf()
+		}
+		candidates = []string{ref}
+	} else {
+		running, legacy, err := runningProfile(st, existing)
+		if err != nil {
+			return "", nil, nil, nil, err
+		}
+		switch {
+		case running != nil:
+			cli = running
+			if ref, ok := st.RuntimeImage.Get(); ok && ref != "" {
+				candidates = append(candidates, ref)
+			}
+			if existing != nil {
+				candidates = append(candidates, existing.ImageOf())
+			}
+			candidates = append(candidates, m.images.App())
+		case legacy:
+			candidates = []string{existing.ImageOf()}
+		default:
+			ref := m.images.App()
+			if _, err := m.businessImage(ctx, ref); err != nil {
+				return "", nil, nil, nil, err
+			}
+			if cli, err = cliprofile.Packaged(ctx, m.g, aid, ref); err != nil {
+				return "", nil, nil, nil, cliUnavailable(err)
+			}
+			candidates = []string{ref}
+		}
+	}
+	candidates = slices.Compact(candidates)
+	for i, ref := range candidates {
+		last := i == len(candidates)-1
+		image, err := m.businessImage(ctx, ref)
+		if err != nil {
+			if last {
+				return "", nil, nil, nil, err
+			}
+			continue // gone or not ours: the next one
+		}
+		cliEnv, err := cliprofile.Resolve(ctx, m.g, aid, ref, cli)
+		if err == nil {
+			return ref, image, cli, cliEnv, nil
+		}
+		if last || !errors.Is(err, cliprofile.ErrUnavailable) {
+			return "", nil, nil, nil, cliUnavailable(err)
+		}
+	}
+	return "", nil, nil, nil, errors.New("no runtime image")
+}
+
+// businessImage is the account image ref, present and an account runtime
+// image (not a controller or gateway one).
+func (m *Manager) businessImage(ctx context.Context, ref string) (*guardapi.Image, error) {
+	image, err := m.EnsureImage(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+	if err := names.CheckBusinessImage(image.Config.Env); err != nil {
+		return nil, err
+	}
+	return image, nil
+}
+
+// cliUnavailable names a CLI the selected image does not package (409
+// cli_profile_unavailable); other failures stay as they are.
+func cliUnavailable(err error) error {
+	if errors.Is(err, cliprofile.ErrUnavailable) {
+		return errs.Wrap(errs.InvalidCLIProfile, "requested CLI version/mode is unavailable or invalid in the selected image", err)
+	}
+	return err
+}
+
+// runningProfile is the CLI a runtime runs when nothing names one: the
+// version of the pair activated in place in this very container, else the
+// stored profile's, in the stored mode. nil for a new runtime and for a
+// retired mode (both take the target image's CLI); legacy for a container
+// from before CLI profiles (nothing stored or activated).
+func runningProfile(st *store.AccountState, existing *guardapi.Container) (*cliprofile.Profile, bool, error) {
+	if st == nil {
+		return nil, false, nil
+	}
+	saved := orderedOf(st.CLI.Get())
+	if st.CLI.Set && !directOrBuild(field(saved, "request_mode")) {
+		return nil, false, nil
+	}
+	version := field(saved, "version")
+	active := orderedOf(st.ActiveRuntime.Get())
+	if existing != nil && pyjson.Equal(field(active, "container_identity"), identityOf(existing)) {
+		if v, ok := field(active, "version").(string); ok && v != "" {
+			version = v
+		}
+	}
+	if v, ok := version.(string); !ok || v == "" {
+		return nil, existing != nil, nil
+	}
+	mode := field(saved, "request_mode")
+	if !directOrBuild(mode) {
+		mode = cliprofile.ModeBuild
+	}
+	p, err := cliprofile.Validate(pyjson.Ordered{{Key: "version", Value: version}, {Key: "request_mode", Value: mode},
+		{Key: "disable_auto_update", Value: true}})
+	if err != nil {
+		return nil, false, errs.Wrap(errs.InvalidCLIProfile, "the CLI this runtime runs is not a valid profile", err)
+	}
+	return p, false, nil
 }
 
 var volumeSize = regexp.MustCompile(`^[1-9][0-9]{0,14}$`)

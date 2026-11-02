@@ -16,9 +16,9 @@
 // The runtime images also ship inside the ccgateway plugin package (§53.10):
 // in controller mode the card shows them (GET runtime `bundled`) and pushes the
 // ones the controller lacks (POST .../runtime/bundled); the manual upload stays
-// as an advanced option. The paired Worker + CLI update activates `cliVersion`,
-// the version of the saved CC configuration (the core refuses a paired update
-// without one, so the action is off while it is unknown).
+// as an advanced option. The paired Worker + CLI update activates the CLI the
+// image of new containers packages (cli-from-image-v1: the image decides the
+// version; new accounts run it, existing ones only after this update).
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
@@ -33,7 +33,7 @@ import { knownReason, setupProblems } from './ccgAuthFlow'
 import { BUNDLED_ROLES, BUNDLED_TIMEOUT_MS, RUNTIME_COMPONENTS, bundledAllEnabled, bundledState, componentImages, runtimeState, displayImage } from './runtimeInstall'
 import { WORKERS_TIMEOUT_MS, type ImageLoadResult } from './imageUpload'
 
-const props = defineProps<{ disabled?: boolean; mode?: string; accountRuntimes?: boolean; hasAdminKey?: boolean; cliVersion: string }>()
+const props = defineProps<{ disabled?: boolean; mode?: string; accountRuntimes?: boolean; hasAdminKey?: boolean }>()
 const emit = defineEmits<{ (event: 'changed'): void }>()
 const { t } = useI18n()
 const tr = useOptionalT()
@@ -169,12 +169,11 @@ const workerCounts = computed(() => {
 })
 
 async function updateWorkers(paired = false) {
-  if (locked.value || !workersReady.value || (paired && !props.cliVersion)) return
-  const version = { version: props.cliVersion }
+  if (locked.value || !workersReady.value) return
   const ok = await confirm({
-    title: t(paired ? 'ccgateway.workers.pairedConfirmTitle' : 'ccgateway.workers.confirmTitle', version),
-    message: t(paired ? 'ccgateway.workers.pairedConfirmMessage' : 'ccgateway.workers.confirmMessage', version),
-    confirmText: t(paired ? 'ccgateway.workers.pairedUpdate' : 'ccgateway.workers.update', version)
+    title: t(paired ? 'ccgateway.workers.pairedConfirmTitle' : 'ccgateway.workers.confirmTitle'),
+    message: t(paired ? 'ccgateway.workers.pairedConfirmMessage' : 'ccgateway.workers.confirmMessage'),
+    confirmText: t(paired ? 'ccgateway.workers.pairedUpdate' : 'ccgateway.workers.update')
   })
   if (!ok || locked.value || !workersReady.value) return
   pairedUpdate.value = paired
@@ -182,7 +181,7 @@ async function updateWorkers(paired = false) {
   workersError.value = ''
   try {
     // One synchronous request: every runtime in turn, at most 5 minutes each, 25 minutes in all (the core keeps going if this tab gives up).
-    workers.value = await api.post<CcgWorkersReport>('/system/ccgateway/runtime/workers', paired ? { components: ['worker', 'cli'], cli_version: props.cliVersion } : {}, { signal: AbortSignal.timeout(WORKERS_TIMEOUT_MS) })
+    workers.value = await api.post<CcgWorkersReport>('/system/ccgateway/runtime/workers', paired ? { components: ['worker', 'cli'] } : {}, { signal: AbortSignal.timeout(WORKERS_TIMEOUT_MS) })
     pairedReport.value = paired
     toast(t(paired ? 'ccgateway.workers.pairedDone' : 'ccgateway.workers.done'), 'success')
   } catch (e) {
@@ -296,13 +295,13 @@ onMounted(async () => {
             <div v-if="workersReady" class="space-y-2" data-testid="ccgateway-workers">
               <div class="flex flex-wrap items-center gap-3">
                 <SButton size="sm" icon="refresh" :loading="updatingWorkers && !pairedUpdate" :disabled="locked" data-testid="ccgateway-workers-update" @click="updateWorkers(false)">{{ t('ccgateway.workers.update') }}</SButton>
-                <SButton size="sm" variant="primary" icon="refresh" :loading="updatingWorkers && pairedUpdate" :disabled="locked || !cliVersion" data-testid="ccgateway-workers-cli-update" @click="updateWorkers(true)">{{ t('ccgateway.workers.pairedUpdate', { version: cliVersion }) }}</SButton>
+                <SButton size="sm" variant="primary" icon="refresh" :loading="updatingWorkers && pairedUpdate" :disabled="locked" data-testid="ccgateway-workers-cli-update" @click="updateWorkers(true)">{{ t('ccgateway.workers.pairedUpdate') }}</SButton>
                 <SHint v-if="updatingWorkers" inline size="xs">{{ t('ccgateway.workers.updating') }}</SHint>
               </div>
-              <SHint data-testid="ccgateway-workers-cli-hint">{{ t('ccgateway.workers.pairedHint', { version: cliVersion }) }}</SHint>
+              <SHint data-testid="ccgateway-workers-cli-hint">{{ t('ccgateway.workers.pairedHint') }}</SHint>
               <SAlert v-if="workersError" tone="danger" dense data-testid="ccgateway-workers-error"><span class="break-all">{{ workersError }}</span></SAlert>
             </div>
-            <SCard v-if="workers" variant="flat" :title="pairedReport ? t('ccgateway.workers.pairedTitle', { version: workers.cli_version || cliVersion }) : t('ccgateway.workers.title')" role="status" data-testid="ccgateway-workers-result">
+            <SCard v-if="workers" variant="flat" :title="pairedReport ? t('ccgateway.workers.pairedTitle') : t('ccgateway.workers.title')" role="status" data-testid="ccgateway-workers-result">
               <template #actions><span class="break-all font-mono text-xs text-fg-muted" :title="workers.image">{{ t('ccgateway.workers.image', { image: displayImage(workers.image) || workers.image }) }}</span></template>
               <div class="space-y-2">
                 <SHint v-if="workers.reason" tone="warning" data-testid="ccgateway-workers-list-failed">{{ t('ccgateway.workers.listFailed', { reason: workerReason(workers.reason) }) }}</SHint>

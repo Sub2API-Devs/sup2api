@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Re-authorize in the existing account container. Cancelling only closes the login session.
 // Settings administrators can also update this account's worker in place to the
-// image of new containers (a new image never reaches existing accounts on its own).
+// image of new containers, alone or with that image's CLI (a new image never
+// reaches existing accounts on its own).
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api, isApiError } from '@sub2api/host'
@@ -105,19 +106,26 @@ const WORKER_TONES: Record<string, Tone> = { updated: 'success', unchanged: 'gra
 const tr = useOptionalT()
 const canUpdateWorker = computed(() => auth.has('settings:manage') && !!status.value?.key && !!status.value?.current_image)
 const updatingWorker = ref(false)
+/** The running update also activates the image's CLI (paired, cli-from-image-v1). */
+const updatingCLI = ref(false)
 const workerResult = ref<CcgWorkerResult | null>(null)
 const workerError = ref<CcgFailure | null>(null)
 
-async function updateWorker() {
+/** Worker only, or Worker + the CLI of the image of new containers (paired). */
+async function updateWorker(withCLI = false) {
   const key = status.value?.key
   if (!key || updatingWorker.value) return
-  const ok = await confirm({ title: t('ccgateway.reauth.workerConfirmTitle'), message: t('ccgateway.reauth.workerConfirmMessage'), confirmText: t('ccgateway.reauth.updateWorker') })
+  const ok = await confirm(withCLI
+    ? { title: t('ccgateway.reauth.cliConfirmTitle'), message: t('ccgateway.reauth.cliConfirmMessage'), confirmText: t('ccgateway.reauth.updateWorkerCLI') }
+    : { title: t('ccgateway.reauth.workerConfirmTitle'), message: t('ccgateway.reauth.workerConfirmMessage'), confirmText: t('ccgateway.reauth.updateWorker') })
   if (!ok || updatingWorker.value) return
   updatingWorker.value = true
+  updatingCLI.value = withCLI
   workerResult.value = null
   workerError.value = null
   try {
-    const report = await api.post<CcgWorkersReport>(`/system/ccgateway/runtimes/${encodeURIComponent(key)}/worker`, {}, { signal: AbortSignal.timeout(WORKER_TIMEOUT_MS) })
+    const body = withCLI ? { components: ['worker', 'cli'] } : {}
+    const report = await api.post<CcgWorkersReport>(`/system/ccgateway/runtimes/${encodeURIComponent(key)}/worker`, body, { signal: AbortSignal.timeout(WORKER_TIMEOUT_MS) })
     workerResult.value = report.results?.[0] ?? null
   } catch (e) {
     if (alive) workerError.value = failureOf(e)
@@ -327,9 +335,11 @@ onBeforeUnmount(() => {
         <SHint v-if="status.image_update_available" size="xs">{{ t('ccgateway.reauth.imageMismatch') }}</SHint>
       </div>
       <div v-if="canUpdateWorker" class="flex flex-wrap items-center gap-2" data-testid="ccgateway-account-worker">
-        <SButton size="sm" icon="refresh" :variant="status?.image_update_available ? 'primary' : 'secondary'" :loading="updatingWorker" :disabled="starting" data-testid="ccgateway-account-worker-update" @click="updateWorker">{{ t('ccgateway.reauth.updateWorker') }}</SButton>
+        <SButton size="sm" icon="refresh" variant="secondary" :loading="updatingWorker && !updatingCLI" :disabled="starting || updatingWorker" data-testid="ccgateway-account-worker-update" @click="updateWorker(false)">{{ t('ccgateway.reauth.updateWorker') }}</SButton>
+        <SButton size="sm" icon="refresh" :variant="status?.image_update_available ? 'primary' : 'secondary'" :loading="updatingWorker && updatingCLI" :disabled="starting || updatingWorker" data-testid="ccgateway-account-worker-cli-update" @click="updateWorker(true)">{{ t('ccgateway.reauth.updateWorkerCLI') }}</SButton>
         <template v-if="workerResult">
           <SBadge :tone="WORKER_TONES[workerResult.status] || 'gray'" data-testid="ccgateway-account-worker-status" :data-status="workerResult.status">{{ tr(`ccgateway.workers.statuses.${workerResult.status}`, undefined, workerResult.status) }}</SBadge>
+          <span v-if="workerResult.cli_version" class="font-mono text-xs text-fg-muted" data-testid="ccgateway-account-worker-cli">CLI {{ workerResult.cli_version }}</span>
           <span v-if="workerResult.reason" class="break-all text-xs text-fg-muted">{{ tr(`ccgateway.workers.reasons.${workerResult.reason}`, undefined, workerResult.reason) }}</span>
         </template>
       </div>

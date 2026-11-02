@@ -139,7 +139,7 @@ export default {
   },
   reauth: {
     replaceTitle: "原地重新授权", switchNow: "确认授权结果",
-    currentImage: '当前容器镜像 ID', targetImage: '新建容器镜像', imageMismatch: '当前容器的镜像与新建容器镜像不同。新镜像只用于新建账号，保存配置、同步和普通重启都不会替换当前容器；需要时点“更新此账号的 Worker”手动原地更新。', updateWorker: '更新此账号的 Worker', workerConfirmTitle: '更新此账号的 Worker？', workerConfirmMessage: '用新建容器镜像中的 worker 程序原地替换此账号容器内的程序，并只重启该容器；不重建容器、不影响登录状态。重启会短暂中断该账号正在进行的请求；正在处理请求时最多等待 2 分钟，仍忙则跳过，可稍后重试。', workerFailed: 'Worker 更新失败',
+    currentImage: '当前容器镜像 ID', targetImage: '新建容器镜像', imageMismatch: '当前容器的镜像与新建容器镜像不同。新镜像只用于新建账号，保存配置、同步和普通重启都不会替换当前容器；需要时点“更新此账号的 Worker”（只换程序）或“更新此账号的 Worker + CLI”（同时换成新镜像里的 CLI）手动原地更新。', updateWorker: '更新此账号的 Worker', workerConfirmTitle: '更新此账号的 Worker？', workerConfirmMessage: '用新建容器镜像中的 worker 程序原地替换此账号容器内的程序，并只重启该容器；不重建容器、不影响登录状态。重启会短暂中断该账号正在进行的请求；正在处理请求时最多等待 2 分钟，仍忙则跳过，可稍后重试。', workerFailed: 'Worker 更新失败', updateWorkerCLI: '更新此账号的 Worker + CLI', cliConfirmTitle: '更新此账号的 Worker 与 CLI？', cliConfirmMessage: '用新建容器镜像中的 Worker 与 CLI 原地成对激活此账号，并只重启该容器；不重建容器、不影响登录状态。若此账号已是该 CLI，只更新 Worker。重启会短暂中断该账号正在进行的请求；正在处理请求时最多等待 2 分钟，仍忙则跳过，可稍后重试。',
     container: '容器', login: 'Claude 登录', checking: '检查中…',
     loginState: { authorized: '凭据已保存', notAuthorized: '未保存凭据', unknown: '未知（容器未就绪）' },
     hint: "在当前容器中重新登录 Claude，保留容器、数据卷和会话历史。完成后刷新账号状态。",
@@ -228,12 +228,12 @@ export default {
     updateExisting: '同时更新现有账号的 worker'
   },
   workers: {
-    pairedUpdate: '升级 Worker + CLI {version}',
-    pairedConfirmTitle: '成对升级 Worker 与 CLI {version}？',
-    pairedConfirmMessage: '将对各账号执行 Worker 与 CLI {version} 成对激活并核对健康状态，不重建账号容器、不改变登录身份。旧 Worker 请先使用单独的 worker 更新完成程序升级，再执行成对激活。有活动请求的账号可能跳过；请查看逐账号结果。',
-    pairedHint: 'CLI {version} 是已保存的 CC 配置使用的版本。先单独更新 Worker，再成对激活 Worker + CLI {version}；不重建账号容器。保存配置不会自动升级运行程序。',
+    pairedUpdate: '升级 Worker + CLI',
+    pairedConfirmTitle: '成对升级 Worker 与 CLI？',
+    pairedConfirmMessage: '将用新建容器镜像中的 Worker 与 CLI 对所有现有账号成对激活并核对健康状态，不重建账号容器、不改变登录身份。已是该 CLI 的账号只更新 Worker。旧 Worker 请先使用单独的 worker 更新完成程序升级，再执行成对激活。有活动请求的账号可能跳过；请查看逐账号结果。',
+    pairedHint: 'CLI 版本由镜像决定：新建账号直接使用新建容器镜像里的 CLI，现有账号保持当前 CLI，直到在这里（全部）或账号页（逐个）成对升级 Worker + CLI；不重建账号容器。',
     pairedDone: 'Worker + CLI 升级检查已完成，请查看各账号结果',
-    pairedTitle: 'Worker + CLI {version} 成对升级结果',
+    pairedTitle: 'Worker + CLI 成对升级结果',
     activeCLI: '实际 CLI', online: '在线', offline: '未确认在线',
     groupTitle: 'Worker 更新',
     update: '更新现有账号的 worker',

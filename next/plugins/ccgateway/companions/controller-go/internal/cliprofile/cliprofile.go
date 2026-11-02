@@ -2,7 +2,8 @@
 // behaviour V7, PV19): the shape check of a configuration's "cli" and the
 // probe of the selected image that proves the version is packaged.
 //
-// FROZEN: Profile, Validate, ProbeScript, Resolve, ErrUnavailable.
+// FROZEN: Profile, Validate, ProbeScript, Resolve, ErrUnavailable. Packaged
+// (2026-11-02) reads the version from the image itself.
 package cliprofile
 
 import (
@@ -58,7 +59,7 @@ func Validate(value any) (*Profile, error) {
 	return &Profile{Version: version, RequestMode: mode, Raw: o.Clone()}, nil
 }
 
-// Default is the profile a new runtime gets from CCG_DEFAULT_CLI_VERSION.
+// Default is the build-mode profile of version with updates disabled.
 func Default(version string) (*Profile, error) {
 	return Validate(pyjson.Ordered{{Key: "version", Value: version}, {Key: "request_mode", Value: ModeBuild},
 		{Key: "disable_auto_update", Value: true}})
@@ -152,4 +153,47 @@ func Resolve(ctx context.Context, jobs Jobs, aid, image string, p *Profile) (map
 	}
 	out["CCG_REQUEST_MODE"] = p.RequestMode
 	return out, nil
+}
+
+// PackagedScript prints the CLI versions image packages with the build mode,
+// sorted: the image decides the version of the runtimes created from it.
+const PackagedScript = "\n" +
+	"const fs=require('fs');\n" +
+	"const manifest=JSON.parse(fs.readFileSync('/opt/ccgateway/cli/manifest.json','utf8'));\n" +
+	"const out=Object.keys(manifest.versions||{}).filter(v=>Array.isArray(manifest.versions[v].modes)&&manifest.versions[v].modes.includes('build')).sort();\n" +
+	"process.stdout.write(JSON.stringify(out));\n"
+
+// PackagedJob is the job of PackagedScript (root, no volume, no capabilities).
+func PackagedJob(image string) guardapi.Job {
+	return guardapi.Job{Image: image, Entrypoint: []string{"node"}, Argv: []string{"-e", PackagedScript},
+		User: guardapi.JobUserRoot, Volume: guardapi.VolumeNone, Caps: []string{}}
+}
+
+// Packaged is the profile of the one CLI version image packages (build mode,
+// updates disabled). An image packaging none or several cannot say which one
+// a new runtime runs: ErrUnavailable.
+func Packaged(ctx context.Context, jobs Jobs, aid, image string) (*Profile, error) {
+	res, err := jobs.RunJob(ctx, aid, PackagedJob(image))
+	if err != nil {
+		if _, ok := guardapi.AsError(err); ok {
+			return nil, unavailable(err)
+		}
+		return nil, err
+	}
+	if res.ExitCode != 0 || len(res.Stdout) > MaxProbeOutput {
+		return nil, unavailable(fmt.Errorf("packaged CLI probe exited with %d", res.ExitCode))
+	}
+	v, err := pyjson.Decode(res.Stdout)
+	if err != nil {
+		return nil, unavailable(err)
+	}
+	list, ok := v.([]any)
+	if !ok || len(list) != 1 {
+		return nil, unavailable(errors.New("the image must package exactly one CLI version"))
+	}
+	version, ok := list[0].(string)
+	if !ok || !names.Version.MatchString(version) {
+		return nil, unavailable(errors.New("invalid packaged CLI version"))
+	}
+	return Default(version)
 }

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	"ccgateway/controller/internal/cliprofile"
 	"ccgateway/controller/internal/config"
 	"ccgateway/controller/internal/errs"
 	"ccgateway/controller/internal/guardapi"
@@ -66,10 +67,11 @@ func TestNewAccountUsesAHardVolumeQuota(t *testing.T) {
 		t.Fatal("quota variable")
 	}
 	jobs := e.g.Jobs()
-	if len(jobs) != 2 {
+	// The image's packaged CLI and its probe come first.
+	if len(jobs) != 4 || jobs[0].Job.Argv[1] != cliprofile.PackagedScript || jobs[1].Job.Argv[1] != cliprofile.ProbeScript {
 		t.Fatalf("%+v", jobs)
 	}
-	quota, prepare := jobs[0].Job, jobs[1].Job
+	quota, prepare := jobs[2].Job, jobs[3].Job
 	if quota.User != "1000:1000" || quota.Volume != "ro" || len(quota.Caps) != 0 || quota.Argv[1] != scripts.DiskQuota(limit) {
 		t.Fatalf("%+v", quota)
 	}
@@ -171,7 +173,7 @@ func TestFailedMountVerificationKeepsTheWorkingRuntime(t *testing.T) {
 		if job.Volume == guardapi.VolumeRO {
 			return 42, nil
 		}
-		return 0, nil
+		return e.defaultJob(aid, job)
 	})
 	if _, err := e.provision("7", apiKeyAuth()); !isKind(err, errs.DiskQuotaUnavailable) {
 		t.Fatal(err)

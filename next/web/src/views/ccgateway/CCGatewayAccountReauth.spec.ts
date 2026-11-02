@@ -52,6 +52,18 @@ describe('in-place account authorization', () => {
   expect(w.get('[data-testid="ccgateway-account-worker-status"]').text()).toBe('Handling a request (retry later)')
   w.unmount()
  })
+ it('updates this account\'s Worker together with the image\'s CLI, by hand', async () => {
+  mocks.post.mockResolvedValue({ image: 'new', key, components: ['worker', 'cli'], results: [{ key, account_id: 22, status: 'updated', cli_version: '2.1.320' }] })
+  const w = render(); await flushPromises()
+  await w.get('[data-testid="ccgateway-account-worker-cli-update"]').trigger('click'); await flushPromises()
+  expect(mocks.post).toHaveBeenCalledTimes(1)
+  expect(mocks.post.mock.calls[0][0]).toBe('/system/ccgateway/runtimes/22/worker')
+  // No version: the controller activates the CLI the image packages.
+  expect(mocks.post.mock.calls[0][1]).toEqual({ components: ['worker', 'cli'] })
+  expect(w.get('[data-testid="ccgateway-account-worker-status"]').attributes('data-status')).toBe('updated')
+  expect(w.get('[data-testid="ccgateway-account-worker-cli"]').text()).toBe('CLI 2.1.320')
+  w.unmount()
+ })
  it('does not resume an old replacement draft as the current runtime', async () => {
   sessionStorage.setItem('sub2api.ccgReauth.22','d0123456789abcdef')
   const w=render(); await flushPromises()

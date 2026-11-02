@@ -141,7 +141,7 @@ func TestDBEncryptedAuditAndModelForward(t *testing.T) {
 		// The trusted policy is the wire form (features.WorkerPolicy): the
 		// caller's header is replaced, and stored-only fields never travel.
 		policy, err := features.ParseWorkerPolicy([]byte(r.Header.Get(features.PolicyHeader)))
-		if err != nil || policy.RelayMode != "build" || policy.CLIVersion != "2.1.302" {
+		if err != nil || policy.RelayMode != "build" || policy.CLIVersion != "" {
 			t.Errorf("trusted request policy not injected: %v %+v", err, policy)
 		}
 		for _, absent := range []string{`"attachment_source"`, `"unknown_beta"`, `"unknown_field"`, `"tool_search"`, `"betas"`} {

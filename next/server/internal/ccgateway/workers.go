@@ -79,10 +79,11 @@ func (o workerUpdateOptions) validate() error {
 	// Any release version: the controller takes the pair from the image's
 	// CLI manifest and refuses a version the image does not package
 	// (runtime_updates.release_entry), so the core does not pin one here.
-	if o.paired() && features.ValidCLIVersion(o.CLIVersion) {
+	// Without one the image's own CLI is activated (cli-from-image-v1).
+	if o.paired() && (o.CLIVersion == "" || features.ValidCLIVersion(o.CLIVersion)) {
 		return nil
 	}
-	return errors.New("components must be worker-only, or worker and cli with a cli_version (x.y.z)")
+	return errors.New("components must be worker-only, or worker and cli with an optional cli_version (x.y.z)")
 }
 
 // updateWorkers updates the worker of every runtime the controller lists,
@@ -153,6 +154,9 @@ func (s *Service) checkWorkerUpdate(ctx context.Context, cfg Config, options wor
 	if options.paired() && !h.has("runtime-pair-update-v1") {
 		return reasonError(core.ErrUnavailable, "controller_outdated")
 	}
+	if options.paired() && options.CLIVersion == "" && !h.has(cliFromImageFeature) {
+		return reasonError(core.ErrUnavailable, "controller_outdated")
+	}
 	return nil
 }
 
@@ -168,9 +172,8 @@ func (s *Service) workerUpdated(ctx context.Context, r workerResult, accounts ma
 		s.workerChanged(ctx, accounts[r.Key], r.Key)
 		// The restart rebuilt the container's network namespace; the
 		// controller restores it, a reconcile makes sure. A paired
-		// activation already verifies the same container, and a
-		// reconcile could still carry the deliberately retained old
-		// global CLI version until the operator saves new policy.
+		// activation already verifies the same container (and to an older
+		// controller a reconcile would still name the stored CLI version).
 		if !options.paired() {
 			s.Kick(r.Key)
 		}
@@ -301,7 +304,8 @@ func (a workerAnswer) pairedActivation(options workerUpdateOptions) bool {
 	if !options.paired() || (a.Status != "updated" && a.Status != "unchanged") {
 		return true
 	}
-	return a.CLIVersion == options.CLIVersion &&
+	version := a.CLIVersion == options.CLIVersion || options.CLIVersion == "" && features.ValidCLIVersion(a.CLIVersion)
+	return version &&
 		sha256Pattern.MatchString(a.CLISHA256) && cliVersionPattern.MatchString(a.CLIPatch)
 }
 
@@ -311,7 +315,7 @@ func (a workerAnswer) result(key string, options workerUpdateOptions) workerResu
 	r := workerResult{Key: key, Status: a.Status}
 	if options.paired() {
 		r.Online = a.Online
-		if a.CLIVersion == options.CLIVersion {
+		if a.CLIVersion == options.CLIVersion || options.CLIVersion == "" && features.ValidCLIVersion(a.CLIVersion) {
 			r.CLIVersion = a.CLIVersion
 		}
 		if cliVersionPattern.MatchString(a.CLIPatch) {

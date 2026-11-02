@@ -3917,6 +3917,13 @@ GET `/groups/:id/models`（`group:read`）返回所有未删除成员账号的�
 > - 新接口 **`POST /system/ccgateway/runtimes/:key/worker`**（`settings:manage`；请求体与 `runtime/workers` 相同：`{"image"?, "components"?, "cli_version"?}`；与安装共用锁，409 `install_in_progress`；不随调用方断开取消，上限约 6 分钟）：只对这一个运行环境（账号 id 键或草稿键，其他键 404）调用控制器 `POST /accounts/<key>/worker`。前置检查同 `runtime/workers`（`controller_unhealthy` / `controller_outdated` / `runtimes_disabled` 等，均不触碰任何容器）；返回 `{"image", "key", "results": [<该运行环境的一条结果>]}`，容器不存在等是该条结果的 `failed` + `reason`，不是请求错误。`updated` / `rolled_back` 之后同样清掉请求路由缓存并 Kick 该运行环境；审计 `ccgateway.runtime.workers`，详情带 `key`。
 > - 界面：上传与推送内置镜像各加一个默认不勾选的"同时更新现有账号的 worker"；账号编辑页（`settings:manage`）在当前容器镜像旁提供"更新此账号的 Worker"，镜像与新建容器镜像不同时高亮。`GET .../accounts/:id/status` 返回的 `key` 就是该接口的 `:key`。
 > - 控制器行为不变：`PUT /runtime/images` 本来就只影响新建容器；`PUT config` 对已有容器的三种结果见本节开头的 2026-10-24 补充（CLI 版本单独变化回 409，不重建）。
+>
+> **2026-11-02 再更新（用户要求：CLI 版本由镜像决定，核心不再指定）**：上一条只对"CLI 不变的新 Worker"成立；新镜像换了 CLI 时，旧规则下新建账号会因核心指定的全局版本不在新镜像里而 409。现在：
+> - **控制器**（新特性 `cli-from-image-v1`，`CCG_DEFAULT_CLI_VERSION` 删除）：`PUT config` 不带 `cli` 时由镜像决定。新运行环境（或旧的退役模式）跑目标镜像打包的那**唯一**一个 CLI（镜像 `/opt/ccgateway/cli/manifest.json` 里带 build 模式的版本必须恰好一个，否则 409 `cli_profile_unavailable`，容器不建）；`state.cli` 记下它。已有运行环境保持正在跑的 CLI（本容器的配对激活记录 `active_runtime.version`，否则 `state.cli.version`），重建时依次在 `state.runtime_image`、原容器镜像、目标镜像中找第一个打包了该版本的镜像；两者都没有的老容器原样沿用原镜像。`state.runtime_image`（镜像 ID）在创建容器、Worker 原地更新成功或 `unchanged`、配对激活提交时写入。带 `cli` 的 `PUT config`（旧核心）按原规则处理。
+> - **配对更新** `POST /accounts/<key>/worker` 可以不带 `cli_version`：`{"image", "components": ["worker","cli"]}` 激活该镜像唯一的 CLI；容器已经在跑这个 CLI（sha256 相同）时只更新 Worker，回答同样带 `cli_version` / `cli_patch` / `cli_sha256`。
+> - **核心**：账号的目标配置不再带 `cli`，`cli_version` 不再参与运行环境 revision（升级后各账号对账一次，凭据、网络、CLI 都没变，控制器不重建容器）；只有控制器缺 `cli-from-image-v1`（仍有 `cli-profile-v1`）时才按旧逻辑发已保存的 `request_policy.cli_version`。请求策略头不再带 `cli_version`（Worker 遇到空值本来就不核对），请求前也不再比较 Worker 的 CLI 版本，只核对策略需要的能力。保存远程配置不再询问各账号跑的版本（`cli_version_unavailable` 不再出现）。`runtime/workers` 与 `runtimes/:key/worker` 的 `components: ["worker","cli"]` 可省略 `cli_version`，此时要求控制器有 `cli-from-image-v1`（否则 503 `controller_outdated`），结果里的 `cli_version` 取控制器回答。
+> - **界面**：部署页"升级 Worker + CLI"不再带版本号，激活新建容器镜像里的 CLI；账号编辑页在"更新此账号的 Worker"旁加"更新此账号的 Worker + CLI"。
+> - 发布顺序：先升控制器（插件 ccgateway），再升核心。旧控制器配新核心时核心照旧发 `cli`，行为同以前。
 
 ### 53.8 已知限制
 

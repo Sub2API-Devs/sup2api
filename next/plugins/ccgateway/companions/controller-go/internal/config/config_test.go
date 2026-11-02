@@ -37,13 +37,13 @@ func TestDefaults(t *testing.T) {
 	m := base()
 	m["CCG_CONTROLLER_VERSION"], m["CCG_CONTROLLER_PORT"], m["CCG_CONTROLLER_BIND"] = "0.1.119", " +9000 ", "0.0.0.0"
 	m["CCG_ACCOUNT_DISK_GIB"], m["CCG_ACCOUNT_DISK_QUOTA_REQUIRED"], m["CCG_RUNTIME_PREFIX"] = "1024", "1", "ccg-gt"
-	m["CCG_XRAY_IMAGE"], m["CCG_DEFAULT_CLI_VERSION"], m["CCG_CONTROLLER_IMAGE"] = "xray:1", "2.1.312", "ctl:1"
+	m["CCG_XRAY_IMAGE"], m["CCG_CONTROLLER_IMAGE"] = "xray:1", "ctl:1"
 	c, err = FromEnv(env(m), "abc")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c.Version != "0.1.119" || c.Port != 9000 || c.Bind != "0.0.0.0" || c.AccountDiskBytes != 1024<<30 || !c.RequireDiskQuota ||
-		c.Prefix != "ccg-gt" || c.XrayImage != "xray:1" || c.DefaultCLIVersion != "2.1.312" || c.ControllerImage != "ctl:1" {
+		c.Prefix != "ccg-gt" || c.XrayImage != "xray:1" || c.ControllerImage != "ctl:1" {
 		t.Fatalf("%+v", c)
 	}
 }

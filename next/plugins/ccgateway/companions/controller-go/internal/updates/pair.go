@@ -33,11 +33,13 @@ func strList(list []string) []any {
 	return out
 }
 
-// pairRequest is P1: exactly {"image", "components": ["worker", "cli"], "cli_version"}.
+// pairRequest is P1: exactly {"image", "components": ["worker", "cli"],
+// "cli_version"}, or without "cli_version" (cli-from-image-v1): version ""
+// is the one CLI the image packages.
 func pairRequest(desired any) (image, version string, err error) {
 	bad := errs.New(errs.BadRequest, "invalid paired runtime update")
 	o, ok := desired.(pyjson.Ordered)
-	if !ok || len(o) != 3 || !o.Has("image") || !o.Has("components") || !o.Has("cli_version") {
+	if !ok || !o.Has("image") || !o.Has("components") || !(len(o) == 3 && o.Has("cli_version") || len(o) == 2) {
 		return "", "", bad
 	}
 	components, _ := o.Get("components")
@@ -45,13 +47,30 @@ func pairRequest(desired any) (image, version string, err error) {
 		return "", "", bad
 	}
 	iv, _ := o.Get("image")
-	vv, _ := o.Get("cli_version")
 	image, ok1 := iv.(string)
+	if !ok1 || !names.ValidImage(image) {
+		return "", "", bad
+	}
+	if !o.Has("cli_version") {
+		return image, "", nil
+	}
+	vv, _ := o.Get("cli_version")
 	version, ok2 := vv.(string)
-	if !ok1 || !names.ValidImage(image) || !ok2 || !names.Version.MatchString(version) {
+	if !ok2 || !names.Version.MatchString(version) {
 		return "", "", bad
 	}
 	return image, version, nil
+}
+
+// packagedVersion is the one CLI version manifest lists.
+func packagedVersion(manifest any) (string, error) {
+	m, _ := manifest.(pyjson.Ordered)
+	versions, _ := m.Get("versions")
+	vs, _ := versions.(pyjson.Ordered)
+	if len(vs) != 1 || !names.Version.MatchString(vs[0].Key) {
+		return "", errors.New("the image must package exactly one CLI version")
+	}
+	return vs[0].Key, nil
 }
 
 // releaseEntry is runtime_updates.release_entry (P2): the packaged entry of
@@ -105,46 +124,52 @@ func entryString(entry pyjson.Ordered, key string) string {
 	return s
 }
 
-// pkg is runtime_updates.package (P2): Worker, CLI and entry of the image.
+// pkg is runtime_updates.package (P2): Worker, CLI and entry of the image,
+// and the CLI's version (version, or the one the image packages when "").
 // The CLI and the Worker are shared with every other activation of the
 // same image (read once, spooled, never in memory); done releases both.
-func (u *updater) pkg(ctx context.Context, image, version string) (worker, cli containerfs.Blob, entry pyjson.Ordered, done func(), err error) {
+func (u *updater) pkg(ctx context.Context, image, version string) (worker, cli containerfs.Blob, entry pyjson.Ordered, packaged string, done func(), err error) {
 	img, err := u.o.Host.EnsureImage(ctx, image)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, "", nil, err
 	}
 	mb, err := containerfs.ImageFile(ctx, u.o.Guard, image, CLIRoot+"/manifest.json", maxSmallFile, u.o.Store.CreateSpool)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, "", nil, err
 	}
 	raw := containerfs.Bytes(mb) // at most maxSmallFile: always a memory blob
 	mb.Close()
 	manifest, err := pyjson.Decode(raw)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, "", nil, err
+	}
+	if version == "" {
+		if version, err = packagedVersion(manifest); err != nil {
+			return nil, nil, nil, "", nil, err
+		}
 	}
 	if entry, err = releaseEntry(manifest, version); err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, "", nil, err
 	}
 	cli, doneCLI, err := u.imageFile(ctx, img, image, CLIRoot+"/"+entryString(entry, "path"), MaxCLI)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, "", nil, err
 	}
 	if !containerfs.IsELF(cli) || cli.SHA256() != entryString(entry, "sha256") {
 		doneCLI()
-		return nil, nil, nil, nil, errors.New("packaged CLI checksum or binary format mismatch")
+		return nil, nil, nil, "", nil, errors.New("packaged CLI checksum or binary format mismatch")
 	}
 	worker, doneWorker, err := u.imageFile(ctx, img, image, containerfs.WorkerSource, containerfs.WorkerMaxBytes)
 	if err != nil {
 		doneCLI()
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, "", nil, err
 	}
 	if !containerfs.IsELF(worker) {
 		doneCLI()
 		doneWorker()
-		return nil, nil, nil, nil, errors.New("packaged Worker is not a Linux executable")
+		return nil, nil, nil, "", nil, errors.New("packaged Worker is not a Linux executable")
 	}
-	return worker, cli, entry, func() { doneWorker(); doneCLI() }, nil
+	return worker, cli, entry, version, func() { doneWorker(); doneCLI() }, nil
 }
 
 // pair is one paired activation in progress.
@@ -173,6 +198,9 @@ type pair struct {
 }
 
 // UpdatePair is POST worker {"image","components","cli_version"} (P1-P11).
+// Without cli_version the image's one CLI is activated; when the container
+// already runs that very CLI only its Worker is updated (W1-W13), with the
+// answer naming the CLI.
 func (u *updater) UpdatePair(ctx context.Context, aid string, desired any) (pyjson.Ordered, error) {
 	image, version, err := pairRequest(desired)
 	if err != nil {
@@ -181,7 +209,7 @@ func (u *updater) UpdatePair(ctx context.Context, aid string, desired any) (pyjs
 	if err := names.CheckKey(aid); err != nil {
 		return nil, err
 	}
-	worker, cli, entry, done, err := u.pkg(ctx, image, version)
+	worker, cli, entry, packaged, done, err := u.pkg(ctx, image, version)
 	if err != nil {
 		return nil, err
 	}
@@ -191,17 +219,51 @@ func (u *updater) UpdatePair(ctx context.Context, aid string, desired any) (pyjs
 		return nil, err
 	}
 	defer s.release()
+	s.image = image
 	free, err := u.slot(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer free()
-	p, answer, err := s.begin(version, worker, cli, entry)
+	if version == "" && s.runningCLI() == entryString(entry, "sha256") {
+		answer, err := s.updateWorker(worker)
+		if err != nil {
+			return nil, err
+		}
+		if s := answer[0].Value; s != "updated" && s != "unchanged" {
+			return answer, nil
+		}
+		return append(answer, pyjson.KV{Key: "cli_version", Value: packaged},
+			pyjson.KV{Key: "cli_patch", Value: entryString(entry, "patch")},
+			pyjson.KV{Key: "cli_sha256", Value: entryString(entry, "sha256")}), nil
+	}
+	p, answer, err := s.begin(packaged, worker, cli, entry)
 	if err != nil || answer != nil {
 		return answer, err
 	}
 	defer p.old.Close()
 	return s.run(p)
+}
+
+// runningCLI is the sha256 of the CLI the account container runs: the pair
+// activated in this very container, else the one it was created with; ""
+// when unknown.
+func (s *session) runningCLI() string {
+	c, err := s.u.o.Host.App(s.ctx, s.aid)
+	if err != nil {
+		return ""
+	}
+	if st, err := s.u.o.Host.State(s.aid); err == nil && st != nil {
+		if active, ok := st.ActiveRuntime.Get(); ok {
+			if a, isObj := active.(pyjson.Ordered); isObj {
+				id, idErr := containerfs.Identity(c)
+				if v, _ := a.Get("container_identity"); idErr == nil && pyjson.Equal(v, id) {
+					return entryString(a, "sha256")
+				}
+			}
+		}
+	}
+	return c.EnvMap()["CCG_CLI_SHA256"]
 }
 
 // begin (P3): the running container, verified, idle and backed up, its
@@ -551,6 +613,9 @@ func (s *session) commit(p *pair, selected pyjson.Ordered) (pyjson.Ordered, erro
 		{Key: "sha256", Value: entryString(p.entry, "sha256")}, {Key: "worker_sha256", Value: p.digest},
 		{Key: "container_id", Value: app.ID()}, {Key: "container_identity", Value: p.identity},
 	})
+	if s.image != "" {
+		p.state.RuntimeImage = store.Some(s.imageID())
+	}
 	if err := s.u.o.Host.Save(s.h, p.state); err != nil {
 		return nil, err
 	}

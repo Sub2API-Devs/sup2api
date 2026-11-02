@@ -108,7 +108,6 @@ const identityRules = computed(() => {
             >
               {{ t('ccgateway.levels.layerNames.' + layer.key) }}
             </SChip>
-            <span data-testid="cli-version">CLI <span class="font-mono">{{ layers.view.cli_version }}</span></span>
           </span>
         </template>
         <SSelect

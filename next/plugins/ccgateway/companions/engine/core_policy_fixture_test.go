@@ -38,14 +38,16 @@ func TestCorePoliciesAreReadByTheWorker(t *testing.T) {
 			policy, err := features.ParseWorkerPolicy([]byte(tc.Wire))
 			require.NoError(t, err)
 			require.NotEmpty(t, policy.RelayMode)
-			require.NotEmpty(t, policy.CLIVersion)
+			// The core names no CLI version (cli-from-image-v1): the Worker runs its own.
+			require.Empty(t, policy.CLIVersion)
+			const ownCLI = "2.1.312"
 			modes[policy.RelayMode] = true
 			root := t.TempDir()
 			envCapture := filepath.Join(root, "env.json")
 			g := &Gateway{RequestMode: policy.RelayMode, Key: "fixture", Slots: make(chan struct{}, 1), Timeout: 10 * time.Second,
-				CLIInfo: cliRequestInfo{Version: policy.CLIVersion, Capabilities: []string{"request_direct", "request_build", features.BuildContentPreservationCapability,
+				CLIInfo: cliRequestInfo{Version: ownCLI, Capabilities: []string{"request_direct", "request_build", features.BuildContentPreservationCapability,
 					features.BuildAttachmentCapabilityV2, features.BuildBillingCapability, features.BuildIdentityCapability, features.BuildInjectionCapability, features.RequestIdentityCapability, features.DirectBillingCapability, features.RequestLevelsCapability, features.RequestAgentContextCapability}},
-				Runner: &Runner{CLI: exe, Version: policy.CLIVersion, Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{
+				Runner: &Runner{CLI: exe, Version: ownCLI, Work: root, WorkingDirectory: root, Env: envWith(os.Environ(), map[string]string{
 					"CCG_TEST_REQUEST_PEER": "capture", "CCG_TEST_REQUEST_READY": filepath.Join(root, "input.jsonl"), "CCG_TEST_REQUEST_ENV_CAPTURE": envCapture,
 				})}}
 			req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"fixture","system":"plain system","messages":[{"role":"user","content":"hello"}]}`))

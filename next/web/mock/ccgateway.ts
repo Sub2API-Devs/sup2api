@@ -108,12 +108,17 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
   }
   const isRuntime = (r: Runtime | { __status: number; body: unknown }): r is Runtime => !('__status' in r)
 
+  /** The image each runtime's Worker (and CLI) came from; a new app image never changes it on its own. */
+  const runningImage = new Map<string, string>()
+
   /** status / health / session / sync / start / complete / cancel / logout of one runtime kind. */
   function runtimeRoutes(prefix: string, resolve: Resolve) {
     on('GET', `${prefix}/status`, (req) => {
       const r = resolve(req)
       if (!isRuntime(r)) return r
-      return { status: ready(r.key) ? 'ready' : converging.get(r.key) || 'creating', container: `ccg-${r.key}-app` }
+      const running = runningImage.get(r.key) || `sha256:${digest('app-0.1.15')}`
+      const target = installed?.app_image || expected.app
+      return { status: ready(r.key) ? 'ready' : converging.get(r.key) || 'creating', container: `ccg-${r.key}-app`, key: r.key, current_image: running, target_image: target, image_update_available: running !== target }
     })
     on('GET', `${prefix}/health`, (req) => {
       const r = resolve(req)
@@ -641,6 +646,17 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
       : undefined
     console.log('[mock ccgateway] bundled images pushed', results.map(r => `${r.role}:${r.status}`).join(' '))
     return { results, ...(workers ? { workers } : {}), runtime: runtimeOut() }
+  })
+
+  // The manual in-place update of one runtime: Worker only, or Worker + the image's CLI ({components: [worker, cli]}).
+  on('POST', `${base}/runtimes/:key/worker`, async ({ params, body }) => {
+    await sleep(1500)
+    const image = installed?.app_image || expected.app
+    const paired = Array.isArray(body?.components) && body.components.includes('cli')
+    const previous = runningImage.get(params.key)
+    runningImage.set(params.key, image)
+    const result = { key: params.key, account_id: Number(params.key) || undefined, status: previous === image && !paired ? 'unchanged' : 'updated', sha256: digest('worker-0.1.16'), ...(paired ? { cli_version: '2.1.320', cli_patch: 'ccgateway-v40-cc-2-1-320', cli_sha256: digest('cli-2.1.320'), online: true } : {}) }
+    return { image, key: params.key, ...(paired ? { components: ['worker', 'cli'] } : {}), results: [result] }
   })
 
   registerCcgDrafts({

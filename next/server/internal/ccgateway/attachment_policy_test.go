@@ -45,7 +45,9 @@ func TestBuildAttachmentCapabilityCheckedBeforeModelSend(t *testing.T) {
 		blocked       bool
 	}{
 		{"build", PinnedCLIVersion, false, true},
-		{"build", "2.1.296", true, true},
+		// Another CLI version is no refusal: the Worker runs the CLI its
+		// image packages, only the capabilities count (cli-from-image-v1).
+		{"build", "2.1.296", true, false},
 		{"build", PinnedCLIVersion, true, false},
 		{"direct", PinnedCLIVersion, true, false},
 		{"direct", PinnedCLIVersion, false, true},

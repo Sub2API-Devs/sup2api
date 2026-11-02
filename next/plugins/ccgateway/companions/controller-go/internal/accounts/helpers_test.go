@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"ccgateway/controller/internal/cliprofile"
 	"ccgateway/controller/internal/clock"
 	"ccgateway/controller/internal/config"
 	"ccgateway/controller/internal/contract"
@@ -117,6 +118,7 @@ func newEnv(t *testing.T) *env {
 			AppImage: "app:test", EgressImage: "ccgateway-egress:test"},
 		// No Worker listens unless a test starts one (never dial a real address).
 		worker: &workeradmin.Client{Port: 1, HostOverride: "127.0.0.1"}}
+	g.OnJob(e.defaultJob)
 	e.open("app:test", "ccgateway-egress:test")
 	t.Cleanup(func() { e.st.Close() })
 	return e
@@ -304,4 +306,29 @@ func (w *workerServer) last() workerCall {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.calls[len(w.calls)-1]
+}
+
+// packagedCLI is the one CLI every image packages unless a test says
+// otherwise (prober).
+const packagedCLI = "2.1.312"
+
+// probeAnswer is the CLI probe's answer for version.
+func probeAnswer(version string) []byte {
+	return pyjson.MustMarshal(pyjson.Ordered{kv("path", "/opt/ccgateway/cli/"+version+"/claude"), kv("version", version),
+		kv("sha256", strings.Repeat("a", 64)), kv("patch", "ccgateway-v7-request-modes")})
+}
+
+// defaultJob answers the CLI jobs as for an image packaging packagedCLI;
+// every other job exits 0 without output.
+func (e *env) defaultJob(aid string, job guardapi.Job) (int, []byte) {
+	if len(job.Argv) >= 2 && job.Argv[1] == cliprofile.PackagedScript {
+		return 0, []byte(`["` + packagedCLI + `"]`)
+	}
+	if len(job.Argv) >= 3 && job.Argv[1] == cliprofile.ProbeScript {
+		if job.Argv[2] != packagedCLI {
+			return 1, []byte("requested CLI version/mode is not packaged in this image")
+		}
+		return 0, probeAnswer(packagedCLI)
+	}
+	return 0, nil
 }

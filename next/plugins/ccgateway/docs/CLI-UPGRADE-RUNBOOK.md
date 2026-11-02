@@ -179,7 +179,7 @@ equiv 的配对靠规范形式与传播，可能把形状相同而语义不同�
 
 - `contracts/features`：CC 上下文头表 `AgentContextHeaders`、UA 形状 `ClientUserAgent`（`agent_context.go`）、身份行名（`identity_line.go`，对应 `n1n`）、注入工具清单 `InjectionTools`（`injection.go`）、系统提示词里的工具名（`levels.go`）。新版改了这些头或工具时要同步改，核心与 Worker 共用。
 - cli-mods 测试夹具 `test/fixtures/*-<版本>.json`：`native-vocabulary`、`native-layers`、`native-environment` 由原生函数生成（`CCG_UPDATE_CONTRACT_FIXTURES=1`）；`official-request`、`official-tools` 是官方客户端的抓包，要用新版官方二进制重新抓。
-- 版本号常量：`worker/Dockerfile` 的 `ARG CLAUDE_VERSION`、`controller/Dockerfile` 的 `ENV CCG_DEFAULT_CLI_VERSION`、核心 `server/internal/ccgateway/cli_version.go` 的 `PinnedCLIVersion`、控制台 `web/src/views/ccgateway/requestPolicy.ts` 的默认 `cli_version`，以及控制器的迁移探针（`runtime_migration_probe.py` 等）。
+- 版本号常量：`worker/Dockerfile` 的 `ARG CLAUDE_VERSION`、核心 `server/internal/ccgateway/cli_version.go` 的 `PinnedCLIVersion` 与控制台 `web/src/views/ccgateway/requestPolicy.ts` 的默认 `cli_version`（这两个只给没有 `cli-from-image-v1` 的旧控制器用；`CCG_DEFAULT_CLI_VERSION` 已于 2026-11-02 删除），以及控制器的迁移探针（`runtime_migration_probe.py` 等）。
 
 ## 4. 移植补丁器
 
@@ -250,9 +250,9 @@ bun package-release.cjs /abs/claude-linux-v<NN> /abs/patched-v<NN>/ccgateway-pat
 6. `POST /system/ccgateway/runtime/bundled {"roles":["app"]}`。
 7. 需要时再发核心（核心改动依赖新 Worker 时必须在插件之后，例如隧道空闲 110 秒依赖 Worker 180 秒）。
 
-**换 Claude Code 版本时的额外步骤**：配对更新把账号切到新版本后，在 CCGateway 设置里把 `cli_version` 改成新版本。核心保存时要求所有就绪的运行环境都已报告新版本（`cli_version.go admitCLIVersion`）；没有就绪运行环境时只接受 `PinnedCLIVersion`，所以核心的这个常量也要随版本更新发布。
+**换 Claude Code 版本（2026-11-02 起，控制器 `cli-from-image-v1`）**：CLI 版本由镜像决定，核心不再指定，也不用改 `cli_version` 设置。第 6 步推送 app 镜像后，新建账号直接跑新镜像里的 CLI；现有账号保持原 CLI，照常服务，没有切换窗口。要升级现有账号时：全部账号用 `POST /system/ccgateway/runtime/workers {"components":["worker","cli"]}`（不带 `cli_version`，激活新建容器镜像里唯一的 CLI；部署页"升级 Worker + CLI"），单个账号用 `POST /system/ccgateway/runtimes/<key>/worker` 同样的请求体（账号页"更新此账号的 Worker + CLI"）。第 5 步也可以照此省略 `cli_version`。镜像里必须只打包一个 CLI 版本（`package-release.cjs` 本来就只写一个）。
 
-**切换窗口**：从第一个账号切到新 CLI 起，到保存新的 `cli_version` 为止，核心发出的策略仍写旧版本，已切换的账号会被核心预检拒绝（503 `configuration_error`，插件冷却 10 秒）或被 Worker 拒绝（409）。所以配对更新和保存设置要在一个脚本里连着做，窗口约等于配对更新的时长；同一分组里还没切换的账号在这段时间承接请求。
+旧做法（控制器没有 `cli-from-image-v1` 时仍然适用）：配对更新后在 CCGateway 设置里把 `cli_version` 改成新版本，并在一个脚本里连着做，以缩短"核心策略写旧版本、账号已是新版本"的窗口。
 
 **校验点**：
 

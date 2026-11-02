@@ -139,7 +139,7 @@ export default {
   },
   reauth: {
     replaceTitle: "Re-authorize in place", switchNow: "Confirm authorization",
-    currentImage: 'Current container image ID', targetImage: 'Image for new containers', imageMismatch: 'This container runs another image than new containers. A new image is for new accounts only: saving settings, syncing and ordinary restarts never replace this container; use "Update this account\'s worker" to update it in place when you want to.', updateWorker: 'Update this account\'s worker', workerConfirmTitle: 'Update this account\'s worker?', workerConfirmMessage: 'The worker program inside this account\'s container is replaced in place with the one of the image for new containers, and only that container restarts; it is not recreated and sign-ins are kept. The restart briefly interrupts requests in progress on this account; while it handles a request it is waited for at most 2 minutes, then skipped (retry later).', workerFailed: 'Updating the worker failed',
+    currentImage: 'Current container image ID', targetImage: 'Image for new containers', imageMismatch: 'This container runs another image than new containers. A new image is for new accounts only: saving settings, syncing and ordinary restarts never replace this container; use "Update this account\'s worker" (the program only) or "Update this account\'s Worker + CLI" (also the new image\'s CLI) to update it in place when you want to.', updateWorker: 'Update this account\'s worker', workerConfirmTitle: 'Update this account\'s worker?', workerConfirmMessage: 'The worker program inside this account\'s container is replaced in place with the one of the image for new containers, and only that container restarts; it is not recreated and sign-ins are kept. The restart briefly interrupts requests in progress on this account; while it handles a request it is waited for at most 2 minutes, then skipped (retry later).', workerFailed: 'Updating the worker failed', updateWorkerCLI: 'Update this account\'s Worker + CLI', cliConfirmTitle: 'Update this account\'s Worker and CLI?', cliConfirmMessage: 'The Worker and CLI of the image for new containers are activated together in this account\'s container, and only that container restarts; it is not recreated and sign-ins are kept. An account already on that CLI only gets the Worker. The restart briefly interrupts requests in progress on this account; while it handles a request it is waited for at most 2 minutes, then skipped (retry later).',
     container: 'Container', login: 'Claude login', checking: 'Checking…',
     loginState: { authorized: 'Credentials saved', notAuthorized: 'No saved credentials', unknown: 'Unknown (container not ready)' },
     hint: "Sign in again in the current container. Keep its volume and conversation history, then refresh account state.",
@@ -228,12 +228,12 @@ export default {
     updateExisting: 'Also update the worker of existing accounts'
   },
   workers: {
-    pairedUpdate: 'Upgrade Worker + CLI {version}',
-    pairedConfirmTitle: 'Upgrade Worker and CLI {version} together?',
-    pairedConfirmMessage: 'Activate Worker and CLI {version} together and check each account runtime. Containers and login identities are retained. Bootstrap older workers using the worker-only action first. Busy accounts may be skipped; review the per-account results.',
-    pairedHint: 'CLI {version} is the version of the saved CC settings. Update the Worker on its own first, then activate Worker + CLI {version} together; containers are retained. Saving the settings does not upgrade running programs.',
+    pairedUpdate: 'Upgrade Worker + CLI',
+    pairedConfirmTitle: 'Upgrade Worker and CLI together?',
+    pairedConfirmMessage: 'Activate the Worker and CLI of the new-container image together on every existing account and check each runtime. Containers and login identities are retained; accounts already on that CLI only get the Worker. Bootstrap older workers using the worker-only action first. Busy accounts may be skipped; review the per-account results.',
+    pairedHint: 'The image decides the CLI version: new accounts run the CLI of the new-container image, existing accounts keep theirs until Worker + CLI are upgraded here (all) or on the account page (one by one); containers are retained.',
     pairedDone: 'Worker + CLI upgrade checks completed. Review the per-account results.',
-    pairedTitle: 'Worker + CLI {version} upgrade results',
+    pairedTitle: 'Worker + CLI upgrade results',
     activeCLI: 'Active CLI', online: 'Online', offline: 'Not confirmed online',
     groupTitle: 'Worker update',
     update: 'Update the worker of existing accounts',

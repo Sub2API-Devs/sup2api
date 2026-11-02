@@ -17,6 +17,7 @@ import (
 	"ccgateway/controller/internal/names"
 	"ccgateway/controller/internal/pyjson"
 	"ccgateway/controller/internal/scripts"
+	"ccgateway/controller/internal/store"
 )
 
 // Timing of the in-place update (worker_update.WORKER_*; B3).
@@ -50,10 +51,11 @@ func New(opts Options) (contract.Updates, error) {
 // the request: once the lock is held a client that goes away must not cut a
 // swap, a restart or a rollback in half (Python finishes regardless).
 type session struct {
-	u   *updater
-	ctx context.Context
-	h   *keylock.Held
-	aid string
+	u     *updater
+	ctx   context.Context
+	h     *keylock.Held
+	aid   string
+	image string // the image the Worker (and CLI) come from
 }
 
 func (u *updater) lock(ctx context.Context, aid string) (*session, error) {
@@ -100,6 +102,7 @@ func (u *updater) UpdateWorker(ctx context.Context, aid string, desired any) (py
 		return nil, err
 	}
 	defer s.release()
+	s.image = ref
 	free, err := u.slot(ctx)
 	if err != nil {
 		return nil, err
@@ -440,6 +443,7 @@ func (s *session) updateWorker(program containerfs.Blob) (pyjson.Ordered, error)
 	}
 	sha := program.SHA256()
 	if w.previous == sha {
+		s.noteImage()
 		return pyjson.Ordered{{Key: "status", Value: "unchanged"}, {Key: "sha256", Value: sha}}, nil
 	}
 	app, err := s.waitIdle(w.identity, w.base)
@@ -493,6 +497,7 @@ func (s *session) updateWorker(program containerfs.Blob) (pyjson.Ordered, error)
 	}
 	var result pyjson.Ordered
 	if healthy {
+		s.noteImage()
 		result = pyjson.Ordered{{Key: "status", Value: "updated"}, {Key: "previous_sha256", Value: w.previous},
 			{Key: "sha256", Value: sha}, {Key: "path", Value: w.target}}
 	} else {
@@ -527,4 +532,30 @@ func (s *session) stillIdle(w *running, app *guardapi.AppHandle, tmp string) (*g
 		return nil, err
 	}
 	return same, nil
+}
+
+// noteImage records the image the Worker now comes from (RuntimeImage), so
+// that a recreation of the container keeps it. The update itself is done: a
+// state that cannot be written is logged, not its failure.
+func (s *session) noteImage() {
+	if s.image == "" {
+		return
+	}
+	st, err := s.u.o.Host.State(s.aid)
+	if err == nil && st != nil {
+		st.RuntimeImage = store.Some(s.imageID())
+		err = s.u.o.Host.Save(s.h, st)
+	}
+	if err != nil {
+		s.u.o.Log.Warn("worker update key=%s: runtime image not recorded: %s", s.aid, err)
+	}
+}
+
+// imageID is the ID of the session's image (a tag may later name another
+// image), else its reference.
+func (s *session) imageID() string {
+	if img, err := s.u.o.Host.EnsureImage(s.ctx, s.image); err == nil && img.ID != "" {
+		return img.ID
+	}
+	return s.image
 }

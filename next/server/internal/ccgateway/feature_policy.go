@@ -419,9 +419,9 @@ func workerPolicy(p RequestPolicy) features.WorkerPolicy {
 	if level == "" {
 		level = features.DefaultRequestLevel
 	}
-	// p is resolved: EffectiveRequestPolicy set its cli_version (the pinned
-	// one at least) and no layer overrides it.
-	wire := features.WorkerPolicy{SchemaVersion: features.PolicySchemaVersion, RelayMode: features.RelayModeForLevel(level), CLIVersion: p.CLIVersion}
+	// No cli_version: the Worker runs the CLI its runtime has (the image
+	// decides, cli-from-image-v1); the request path checks capabilities.
+	wire := features.WorkerPolicy{SchemaVersion: features.PolicySchemaVersion, RelayMode: features.RelayModeForLevel(level)}
 	// Client is also the wire default: the wire stays sparse.
 	wire.BuildBillingSources = withoutClient(p.BuildBillingSources)
 	if features.LevelHasEnvironment(level) {

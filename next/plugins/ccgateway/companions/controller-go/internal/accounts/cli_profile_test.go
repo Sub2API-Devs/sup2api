@@ -1,6 +1,7 @@
 package accounts
 
 import (
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -10,28 +11,31 @@ import (
 	"ccgateway/controller/internal/errs"
 	"ccgateway/controller/internal/guardapi"
 	"ccgateway/controller/internal/pyjson"
+	"ccgateway/controller/internal/store"
 )
 
 func profile(version, mode string) pyjson.Ordered {
 	return pyjson.Ordered{kv("version", version), kv("request_mode", mode), kv("disable_auto_update", true)}
 }
 
-// prober answers the CLI probe job (PV19) for the packaged versions.
+// prober answers the CLI jobs (PV19 and the packaged version) for the
+// packaged versions, or per image for the images listed in images.
 type prober struct {
 	mu       sync.Mutex
 	packaged map[string]bool
-	versions []string // probed versions, in order
-	fail     bool     // a probe is a test failure
+	images   map[string][]string // image ref or ID -> the versions it packages
+	versions []string            // probed versions, in order
+	fail     bool                // a probe is a test failure
 	t        *testing.T
 }
 
 func (e *env) probe(versions ...string) *prober {
-	p := &prober{packaged: map[string]bool{}, t: e.t}
+	p := &prober{packaged: map[string]bool{}, images: map[string][]string{}, t: e.t}
 	for _, v := range versions {
 		p.packaged[v] = true
 	}
 	e.g.OnJob(func(aid string, job guardapi.Job) (int, []byte) {
-		if len(job.Argv) < 4 || job.Argv[1] != cliprofile.ProbeScript {
+		if len(job.Argv) < 2 || job.Argv[1] != cliprofile.ProbeScript && job.Argv[1] != cliprofile.PackagedScript {
 			return 0, nil
 		}
 		p.mu.Lock()
@@ -39,16 +43,39 @@ func (e *env) probe(versions ...string) *prober {
 		if p.fail {
 			p.t.Error("the existing runtime must be reused: no probe")
 		}
+		packaged, own := p.images[job.Image]
+		if !own {
+			for v := range p.packaged {
+				packaged = append(packaged, v)
+			}
+		}
+		if job.Argv[1] == cliprofile.PackagedScript {
+			slices.Sort(packaged)
+			return 0, pyjson.MustMarshal(strList(packaged))
+		}
 		v := job.Argv[2]
 		p.versions = append(p.versions, v)
-		if !p.packaged[v] {
+		if !slices.Contains(packaged, v) {
 			return 1, []byte("requested CLI version/mode is not packaged in this image")
 		}
-		out := pyjson.Ordered{kv("path", "/opt/ccgateway/cli/"+v+"/claude"), kv("version", v),
-			kv("sha256", strings.Repeat("a", 64)), kv("patch", "ccgateway-v7-request-modes")}
-		return 0, pyjson.MustMarshal(out)
+		return 0, probeAnswer(v)
 	})
 	return p
+}
+
+// image says what image (a ref or an ID) packages.
+func (p *prober) image(ref string, versions ...string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.images[ref] = versions
+}
+
+func strList(list []string) []any {
+	out := make([]any, len(list))
+	for i, s := range list {
+		out[i] = s
+	}
+	return out
 }
 
 func (p *prober) forbid() {
@@ -77,38 +104,90 @@ func TestRetiredAgentModeRequiresExplicitActivationAndKeepsData(t *testing.T) {
 	}
 }
 
-// covers: PV8 EV (test_new_authorization_runtime_uses_controller_default)
-func TestNewAuthorizationRuntimeUsesControllerDefault(t *testing.T) {
+// covers: PV8 EV, 2026-11-02 cli-from-image-v1: a new runtime nobody names
+// a CLI for runs the one its image packages.
+func TestNewRuntimeRunsTheImagesCLI(t *testing.T) {
 	e := newEnv(t)
-	e.cfg.DefaultCLIVersion = "2.1.304"
-	e.open("app:test", "ccgateway-egress:test")
 	p := e.probe("2.1.304")
 	e.mustApply("22", desired(rev))
 	if string(pyjson.MustMarshal(e.state("22").CLI.V)) != `{"version": "2.1.304", "request_mode": "build", "disable_auto_update": true}` {
 		t.Fatal(e.state("22").CLI.V)
 	}
-	if len(p.versions) != 1 || p.versions[0] != "2.1.304" || e.appEnv("22")["CCG_REQUEST_MODE"] != "build" {
+	if len(p.versions) != 1 || p.versions[0] != "2.1.304" || e.appEnv("22")["CCG_REQUEST_MODE"] != "build" ||
+		e.appEnv("22")["WORKER_CLI_VERSION"] != "2.1.304" {
 		t.Fatal(p.versions)
 	}
-	e.cfg.DefaultCLIVersion = "../bad"
-	e.open("app:test", "ccgateway-egress:test")
-	if _, err := e.apply("23", desired(rev)); !isKind(err, errs.BadRequest) {
-		t.Fatal("invalid controller default CLI version")
+	if ref, _ := e.state("22").RuntimeImage.Get(); ref != e.app("22").Image {
+		t.Fatal("runtime image", ref)
+	}
+	p.packaged["2.1.312"] = true // two versions: which one is not the image's to say
+	if _, err := e.apply("23", desired(rev)); !isKind(err, errs.InvalidCLIProfile) || e.g.Exists("ccg-23-app") {
+		t.Fatal(err)
 	}
 }
 
-// covers: PV5 PV8 (test_new_default_does_not_upgrade_existing_302_container)
-func TestNewDefaultDoesNotUpgradeExisting302Container(t *testing.T) {
+// covers: PV5 PV8: a new target image (with another CLI) leaves the existing
+// runtime alone, and a recreation keeps the CLI it runs.
+func TestNewImageDoesNotUpgradeExistingRuntime(t *testing.T) {
 	e := newEnv(t)
-	p := e.probe("2.1.302", "2.1.304")
-	e.mustApply("21", desired(rev, kv("cli", profile("2.1.302", "direct"))))
-	old := e.appID("21")
-	e.cfg.DefaultCLIVersion = "2.1.304"
-	e.open("app:test", "ccgateway-egress:test")
-	p.forbid()
+	p := e.probe("2.1.302")
+	e.mustApply("21", desired(rev))
+	first := e.app("21").Image
+	e.newImage()
+	p.image(first, "2.1.302")
+	p.image("app:test", "2.1.304")
 	e.mustApply("21", desired(revB))
-	if e.appID("21") != old || !pyjson.Equal(e.state("21").CLI.V, profile("2.1.302", "direct")) {
+	if e.app("21").Image != first || !pyjson.Equal(e.state("21").CLI.V, profile("2.1.302", "build")) {
 		t.Fatal("kept")
+	}
+	// A credential change recreates it: same image, same CLI.
+	if _, err := e.provision("21", apiKeyAuth()); err != nil {
+		t.Fatal(err)
+	}
+	if e.app("21").Image != first || e.appEnv("21")["WORKER_CLI_VERSION"] != "2.1.302" ||
+		!pyjson.Equal(e.state("21").CLI.V, profile("2.1.302", "build")) {
+		t.Fatal("recreated from the image it runs", e.app("21").Image)
+	}
+	// A runtime created now runs the new image's CLI.
+	e.mustApply("22", desired(rev))
+	if e.app("22").Image == first || e.appEnv("22")["WORKER_CLI_VERSION"] != "2.1.304" {
+		t.Fatal("new runtime")
+	}
+}
+
+// covers: 2026-11-02: a recreation starts from the image the Worker and CLI
+// were last updated from in place (RuntimeImage), not the container's own.
+func TestRecreationUsesTheRuntimeImage(t *testing.T) {
+	e := newEnv(t)
+	p := e.probe("2.1.302")
+	e.mustApply("21", desired(rev))
+	first := e.app("21").Image
+	second := e.newImage()
+	p.image(first, "2.1.302")
+	p.image(second, "2.1.304")
+	p.image("app:test", "2.1.304")
+	// What a paired in-place update leaves: the pair active in this
+	// container, its image recorded.
+	st := e.state("21")
+	st.ActiveRuntime = store.Some[any](pyjson.Ordered{kv("version", "2.1.304"), kv("container_identity", identityOf(e.app("21")))})
+	st.RuntimeImage = store.Some(second)
+	e.save("21", st)
+	if _, err := e.provision("21", apiKeyAuth()); err != nil {
+		t.Fatal(err)
+	}
+	if e.app("21").Image != second || e.appEnv("21")["WORKER_CLI_VERSION"] != "2.1.304" ||
+		!pyjson.Equal(e.state("21").CLI.V, profile("2.1.304", "build")) {
+		t.Fatal("recreated from the runtime image", e.app("21").Image)
+	}
+	// The recorded image is gone: the next one packaging the CLI.
+	st = e.state("21")
+	st.RuntimeImage = store.Some("sha256:" + strings.Repeat("f", 64))
+	e.save("21", st)
+	if _, err := e.provision("21", nil); err != nil {
+		t.Fatal(err)
+	}
+	if e.appEnv("21")["WORKER_CLI_VERSION"] != "2.1.304" {
+		t.Fatal("fallback")
 	}
 }
 

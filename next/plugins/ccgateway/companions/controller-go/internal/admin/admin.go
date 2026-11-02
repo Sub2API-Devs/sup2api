@@ -15,10 +15,12 @@ import (
 
 // Features are /health's features: Python 0.1.118's eleven in their order,
 // then guard-api-v1 (the controller runs under the guard, 04 §2.9) and
-// egress-recreate-v1 (POST /runtime/egress/recreate, 02 §7.4).
+// egress-recreate-v1 (POST /runtime/egress/recreate, 02 §7.4), then
+// cli-from-image-v1 (a runtime the configuration names no CLI for runs the
+// one its image packages; a paired update may omit cli_version).
 var Features = []string{"tunnel", "uploads", "runtime-images", "self-upgrade", "worker-update",
 	"runtime-pair-update-v1", "shared-egress-v1", "cli-profile-v1", "runtime-cleanup-v1",
-	"account-disk-quota-v1", "runtime-purge-v2", "guard-api-v1", "egress-recreate-v1"}
+	"account-disk-quota-v1", "runtime-purge-v2", "guard-api-v1", "egress-recreate-v1", "cli-from-image-v1"}
 
 const (
 	// GatewayCacheTTL is how long /health reuses the gateway fields (02 §7.4).

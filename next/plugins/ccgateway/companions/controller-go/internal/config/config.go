@@ -43,9 +43,8 @@ type Config struct {
 	XrayImage       string // CCG_XRAY_IMAGE, optional: pinned gateway image
 	Version         string // CCG_CONTROLLER_VERSION, else the build version, else "dev"
 
-	AccountDiskBytes  int64  // CCG_ACCOUNT_DISK_GIB << 30
-	RequireDiskQuota  bool   // CCG_ACCOUNT_DISK_QUOTA_REQUIRED == "1"
-	DefaultCLIVersion string // CCG_DEFAULT_CLI_VERSION (checked when used, PV8)
+	AccountDiskBytes int64 // CCG_ACCOUNT_DISK_GIB << 30
+	RequireDiskQuota bool  // CCG_ACCOUNT_DISK_QUOTA_REQUIRED == "1"
 
 	GuardURL   string // CCG_GUARD_URL: http://<IPv4>:<port>
 	GuardToken string // CCG_GUARD_TOKEN: 64 lower-case hex characters
@@ -143,7 +142,6 @@ func FromEnv(lookup func(string) (string, bool), buildVersion string) (Config, e
 	}
 	c.ControllerImage = getenv("CCG_CONTROLLER_IMAGE")
 	c.XrayImage = getenv("CCG_XRAY_IMAGE")
-	c.DefaultCLIVersion = getenv("CCG_DEFAULT_CLI_VERSION")
 	var err error
 	if c.GuardURL, err = CheckGuardURL(getenv("CCG_GUARD_URL")); err != nil {
 		return c, err

@@ -77,7 +77,7 @@ func TestEditorPayloadsDecodeInTheCore(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, wire.Validate())
 			require.Equal(t, r.Effective.RelayMode, wire.RelayMode)
-			require.NotEmpty(t, wire.CLIVersion, "the core always names the CLI version")
+			require.Empty(t, wire.CLIVersion, "the image decides the CLI (cli-from-image-v1)")
 			require.Equal(t, features.LevelInjection(r.Effective.Level, r.Effective.BuildInjection), wire.BuildInjection)
 			if !features.LevelHasEnvironment(r.Effective.Level) {
 				require.Nil(t, wire.BuildAttachmentSources)

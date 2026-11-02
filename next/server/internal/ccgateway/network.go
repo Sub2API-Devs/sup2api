@@ -59,12 +59,8 @@ func (s *Service) desiredNetwork(ctx context.Context, q store.Querier, d account
 	d.Network = c.EffectiveNetwork()
 	encoded, _ := json.Marshal(d.Network)
 	d.Revision = revisionOf(d.Revision + "|network:" + string(encoded))
-	policy := c.EffectiveRequestPolicy()
-	if policy.CLIVersion != "" {
-		d.CLI = &RuntimeCLI{Version: policy.CLIVersion, RequestMode: runtimeDefaultMode, DisableAutoUpdate: true}
-		encoded, _ = json.Marshal(d.CLI)
-		d.Revision = revisionOf(d.Revision + "|cli:" + string(encoded))
-	}
+	// No CLI: the image decides (cli-from-image-v1, 2026-11-02); putConfig
+	// names one only for a controller that cannot.
 	return d, nil
 }
 
@@ -72,13 +68,13 @@ func (s *Service) desiredNetwork(ctx context.Context, q store.Querier, d account
 // decides nothing per request: the core sends relay_mode with each one and
 // the Worker switches to it (CONTRACTS §53.21). The controller still requires
 // the key (cli_profiles.validate_profile accepts exactly version, request_mode
-// and disable_auto_update) and checks the packaged CLI has that mode; and the
-// profile is part of every revision, so changing it re-applies every runtime.
-// Dropping it needs the controller first.
+// and disable_auto_update) and checks the packaged CLI has that mode.
 const runtimeDefaultMode = "build"
 
-// RuntimeCLI travels with the account revision, including authorization drafts.
-// An omitted profile keeps legacy containers until an operator selects a version.
+// RuntimeCLI is the CLI profile a controller without cli-from-image-v1 is
+// sent (legacyCLI). The core does not choose the CLI otherwise: a new
+// runtime runs the one its image packages, an existing one keeps the one it
+// runs until it is updated in place.
 type RuntimeCLI struct {
 	Version           string `json:"version"`
 	RequestMode       string `json:"request_mode"`

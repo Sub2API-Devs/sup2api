@@ -128,6 +128,10 @@ type AccountState struct {
 	ActiveRuntime      Opt[any]
 	EgressBackend      Opt[string]
 	MigrationFailed    Opt[any]
+	// RuntimeImage is the image whose Worker (and CLI) the container runs:
+	// the one it was created from, or the one its last in-place update took
+	// them from. A recreation starts from it, so it keeps what runs.
+	RuntimeImage Opt[string]
 
 	object
 }
@@ -165,6 +169,7 @@ func (s *AccountState) specs() []spec {
 		optField("active_runtime", &s.ActiveRuntime, anyConv, nil),
 		optField("egress_backend", &s.EgressBackend, asString, nil),
 		optField("migration_failed", &s.MigrationFailed, anyConv, nil),
+		optField("runtime_image", &s.RuntimeImage, asString, nil),
 	}
 }
 

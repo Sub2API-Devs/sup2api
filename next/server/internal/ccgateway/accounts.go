@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"time"
 
@@ -431,8 +432,10 @@ func (s *Service) markBlocked(key, revision string) {
 }
 
 // putConfig applies d to the runtime key on the controller (PUT config).
+// The core names no CLI (the image decides, cli-from-image-v1); a
+// controller without that feature is sent the legacy profile (legacyCLI).
 func (s *Service) putConfig(ctx context.Context, key string, d accountDesired) error {
-	if d.CLI != nil {
+	if d.CLI == nil {
 		cfg, err := s.Load(ctx)
 		if err != nil {
 			return err
@@ -443,13 +446,11 @@ func (s *Service) putConfig(ctx context.Context, key string, d accountDesired) e
 		if err := s.controllerJSON(ctx, cfg, "GET", "/health", nil, &health); err != nil {
 			return err
 		}
-		supported := false
-		for _, feature := range health.Features {
-			if feature == "cli-profile-v1" {
-				supported = true
-			}
-		}
-		if !supported {
+		switch {
+		case slices.Contains(health.Features, cliFromImageFeature):
+		case slices.Contains(health.Features, "cli-profile-v1"):
+			d.CLI = legacyCLI(cfg)
+		default:
 			return errors.New("controller upgrade required: cli-profile-v1")
 		}
 	}

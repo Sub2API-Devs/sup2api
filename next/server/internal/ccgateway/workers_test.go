@@ -32,13 +32,16 @@ var workerPath = regexp.MustCompile(`^/accounts/([^/]+)/worker$`)
 
 func TestRuntimePairedWorkersExplicitAndAudited(t *testing.T) {
 	requests := []map[string]any{}
-	pairedCap := true
+	pairedCap, fromImage := true, false
 	f := newRuntimeFixture(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/health":
 			caps := []string{"worker-update"}
 			if pairedCap {
 				caps = append(caps, "runtime-pair-update-v1")
+			}
+			if fromImage {
+				caps = append(caps, cliFromImageFeature)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"features": caps})
 		case "/accounts":
@@ -75,7 +78,7 @@ func TestRuntimePairedWorkersExplicitAndAudited(t *testing.T) {
 	var n int
 	require.NoError(t, f.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_logs WHERE action='ccgateway.runtime.workers' AND detail->>'cli_version'='2.1.304' AND detail->'components'='["worker","cli"]'::jsonb`).Scan(&n))
 	require.Equal(t, 1, n)
-	for _, bad := range []string{`{"components":[]}`, `{"components":["cli"]}`, `{"components":["cli","worker"],"cli_version":"2.1.304"}`, `{"components":["worker","cli"],"cli_version":"latest"}`, `{"components":["worker","cli"],"cli_version":"2.1"}`, `{"components":["worker","cli"]}`, `{"cli_version":"2.1.304"}`, `{"path":"/tmp/evil"}`, `{"components":["worker","cli"],"cli_version":"2.1.304","target":"/etc"}`} {
+	for _, bad := range []string{`{"components":[]}`, `{"components":["cli"]}`, `{"components":["cli","worker"],"cli_version":"2.1.304"}`, `{"components":["worker","cli"],"cli_version":"latest"}`, `{"components":["worker","cli"],"cli_version":"2.1"}`, `{"cli_version":"2.1.304"}`, `{"path":"/tmp/evil"}`, `{"components":["worker","cli"],"cli_version":"2.1.304","target":"/etc"}`} {
 		code, out = f.request(admin, "POST", path, bad)
 		require.Equal(t, 400, code, out)
 	}
@@ -93,11 +96,24 @@ func TestRuntimePairedWorkersExplicitAndAudited(t *testing.T) {
 	require.Len(t, requests, 6)
 	require.NotContains(t, requests[4], "components")
 	require.NotContains(t, requests[4], "cli_version")
+	// Without a version the image's own CLI: only a controller with
+	// cli-from-image-v1 takes it, and any version it answers is reported.
+	code, out = f.request(admin, "POST", path, `{"components":["worker","cli"]}`)
+	require.Equal(t, 503, code, out)
+	require.Equal(t, "controller_outdated", reason(out))
+	fromImage = true
+	code, out = f.request(admin, "POST", path, `{"components":["worker","cli"]}`)
+	require.Equal(t, 200, code, out)
+	require.Len(t, requests, 8)
+	require.Equal(t, []any{"worker", "cli"}, requests[6]["components"])
+	require.NotContains(t, requests[6], "cli_version")
+	require.Equal(t, "2.1.304", workerResults(t, out)["21"]["cli_version"])
+	require.Equal(t, "updated", workerResults(t, out)["21"]["status"])
 	pairedCap = false
 	code, out = f.request(admin, "POST", path, body)
 	require.Equal(t, 503, code, out)
 	require.Equal(t, "controller_outdated", reason(out))
-	require.Len(t, requests, 6)
+	require.Len(t, requests, 8)
 }
 
 func (c *fakeWorkers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
