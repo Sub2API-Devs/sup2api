@@ -6,7 +6,7 @@ import UsageTable from './UsageTable.vue'
 import UsageStatus from './UsageStatus.vue'
 import UsageError from './UsageError.vue'
 import UsageTokens from './UsageTokens.vue'
-import type { UsageRow } from './usage'
+import { errorText, type UsageRow } from './usage'
 
 enableAutoUnmount(afterEach)
 const row = {
@@ -112,5 +112,19 @@ describe('usage records layout', () => {
     const w = mount(UsageError, { props: { row }, global })
     expect(w.text()).not.toContain('model_not_allowed')
     expect(w.get('p').attributes('title')).toContain('model not allowed for this group')
+  })
+  it('shows a failed request as "status_code=…, message" in the detail column, whole text on hover', async () => {
+    const w = mount(UsageTable, { props: { rows: [row, { ...row, id: 2, success: true, status_code: 200, matched_tier: 'tier-a' }] }, global, attachTo: document.body })
+    const texts = w.findAll('[data-testid="usage-error-text"]')
+    expect(texts.map(x => x.text())).toEqual(['status_code=403, model not allowed for this group', 'status_code=403, model not allowed for this group'])
+    expect(texts[0].element.closest('td')).not.toBeNull()
+    expect(w.text()).toContain('tier-a')
+    await texts[0].trigger('focusin')
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toContain('status_code=403, model not allowed for this group')
+  })
+  it('falls back to the error type when there is no message', () => {
+    expect(errorText({ ...row, status_code: 503, error_type: 'model_availability', error_message: '' })).toBe('status_code=503, model_availability')
+    expect(errorText({ ...row, status_code: 0, error_type: '', error_message: 'boom' })).toBe('boom')
+    expect(errorText({ ...row, success: true })).toBe('')
   })
 })

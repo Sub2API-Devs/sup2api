@@ -5,6 +5,7 @@ import { SDateTime, SBadge, SEmpty, SIcon, SIPAddress, SSpinner, STable, STableC
 import { formatMoney, formatNumber } from '@/utils/format'
 import UsageDetail from './UsageDetail.vue'
 import UsageError from './UsageError.vue'
+import UsageErrorText from './UsageErrorText.vue'
 import UsageStatus from './UsageStatus.vue'
 import UsageTiming from './UsageTiming.vue'
 import UsageTokens from './UsageTokens.vue'
@@ -43,7 +44,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'tokens', label: t('usage.tokens.title'), width: '125px' },
   { key: 'total_cost', label: t('usage.cols.cost'), width: '95px' },
   { key: 'latency', label: t('usage.cols.timing'), width: '140px' },
-  { key: 'detail', label: t('usage.cols.detail'), width: '140px' }
+  { key: 'detail', label: t('usage.cols.detail'), width: '240px' }
 ])
 const columnState = useTableColumns(columns, () => props.columnSettingsKey)
 const { visibleColumns, isVisible } = columnState
@@ -153,7 +154,8 @@ function toggleMobile(id: number) {
       <template #cell-latency="{ row }"><UsageTiming :row="row" /></template>
       <template #cell-detail="{ row }">
         <div class="min-w-0 space-y-1">
-          <p class="truncate text-xs text-fg-muted" :title="row.matched_tier || undefined">{{ row.matched_tier || '—' }}</p>
+          <UsageErrorText v-if="!row.success" :row="row" />
+          <p v-else class="truncate text-xs text-fg-muted" :title="row.matched_tier || undefined">{{ row.matched_tier || '—' }}</p>
           <button
             v-if="showClientRequestId && row.client_request_id"
             type="button"
@@ -185,7 +187,10 @@ function toggleMobile(id: number) {
           </div>
           <UsageStatus :row="row" />
         </div>
-        <UsageError v-if="!row.success" :row="row" class="mt-2" />
+        <template v-if="!row.success">
+          <UsageError :row="row" class="mt-2" />
+          <UsageErrorText v-if="isVisible('detail')" :row="row" class="mt-1" />
+        </template>
         <div v-if="isVisible('tokens') || isVisible('total_cost') || isVisible('latency')" class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg bg-surface-2/60 p-3">
           <div v-if="isVisible('tokens')">
             <p class="mb-1 text-xxs text-fg-subtle">{{ t('usage.tokens.title') }}</p>

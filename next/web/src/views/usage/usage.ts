@@ -113,3 +113,13 @@ export function blockingHook(u: UsageRow) {
   return (u.hook_decisions || []).find((h) => BLOCK_DECISIONS.includes(h.decision)) || null
 }
 
+/** A failed request's error as one string, like new-api's log content:
+ *  "status_code=503, <message>"; the hook note or error type when there is no
+ *  message. Empty for successes. */
+export function errorText(u: UsageRow): string {
+  if (u.success) return ''
+  const message = u.error_message || blockingHook(u)?.note || u.error_type || ''
+  if (!u.status_code) return message
+  return message ? `status_code=${u.status_code}, ${message}` : `status_code=${u.status_code}`
+}
+
