@@ -1,0 +1,412 @@
+{"id":"chunk-0e9ty0k2.js#e","doc":"/daemon 命令对象（local-jsx）；描述：Manage background services and routines；实现 chunk-b7gstm5r.js 的 qo。"}
+{"id":"chunk-b7gstm5r.js#qo","doc":"/daemon 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-3m7t4vj8.js#t","doc":"/background 命令对象（local-jsx）；描述：Send this session to the background and free the terminal；别名 [\"bg\"]；isEnabled: ()=>!0；实现 chunk-7c7hjd56.js 的 $ji。"}
+{"id":"chunk-53mky9yr.js#r","doc":"/remote-control 命令对象（local-jsx）；描述：{return Wc()?\"Disconnect Remote Control\":\"Control this session from your phone or claude.ai/code\"}；别名 [\"rc\"]；isEnabled: e；isHidden: {return!wH()}；实现 chunk-k7ve8htw.js 的 Br。"}
+{"id":"chunk-k7ve8htw.js#Br","doc":"/remote-control 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-66drwgm7.js#e","doc":"/recap 命令对象（local）；描述：Generate a one-line session recap now；实现 chunk-z9nn3hxt.js 的 E。"}
+{"id":"chunk-z9nn3hxt.js#M","doc":"/recap 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-8t8n4kdh.js#Bi","doc":"动态生成的 prompt 命令对象（name=\"mcp__\"+Sn(e.name)+\"__\"+M.name）；描述：ce??\"\"；别名 S?[`${e.name}:${M.name}`,`${e.name}:${M.name} (MCP)`]:void 0；isEnabled: ()=>!0；isHidden: false。"}
+{"id":"chunk-adzz9hc5.js#t","doc":"/stop 命令对象（local-jsx）；描述：Stop this background session; transcript and worktree are kept；isEnabled: ()=>Ft()||hkt()!==null；实现 chunk-t85zxbmt.js 的 cho。"}
+{"id":"chunk-zsxk930s.js#s","doc":"/stop 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-bfnfj4kx.js#oE","doc":"动态生成的 prompt 命令对象（name=e.name）；描述：typeof e.description===\"function\"?\"\":e.description；别名 e.aliases；isEnabled: e.isEnabled??(()=>!0)；isHidden: !(e.userInvocable??!0)。"}
+{"id":"chunk-e6aww6q8.js#Ato","doc":"动态生成的 local 命令对象（name=n.name）；描述：n.description。"}
+{"id":"chunk-e6aww6q8.js#Dvo","doc":"/compact 命令对象（local）；描述：Free up context by summarizing the conversation so far；isEnabled: ()=>!Oe(process.env.DISABLE_COMPACT)；实现 chunk-vrrvwm85.js 的 se。"}
+{"id":"chunk-vrrvwm85.js#se","doc":"/compact 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#XK","doc":"动态生成的 prompt 命令对象（name=e）；描述：lt；别名 Yt?void 0:It；isHidden: !ho。"}
+{"id":"chunk-e6aww6q8.js#u5e","doc":"/add-dir 命令对象（local）；描述：Add a new working directory；isEnabled: ()=>_e()&&WMi()；isHidden: {return!_e()}；实现 chunk-efagea6a.js 的 d。"}
+{"id":"chunk-efagea6a.js#d","doc":"/add-dir 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-x4gf1bcz.js#J","doc":"/add-dir 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#f5e","doc":"/cloud-plugins 命令对象（local-jsx）；描述：Choose whether cloud sessions use the plugins enabled on this machine；isEnabled: ()=>YTn()&&!i.CLAUDE_CODE_DISABLE_PLUGIN_FORWARDING；实现 chunk-n30mmv2p.js 的 No。"}
+{"id":"chunk-n30mmv2p.js#No","doc":"/cloud-plugins 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#g5e","doc":"/auto-mode-setup 命令对象（local）；描述：Teach auto mode about your environment, plus optional rule tweaks；isEnabled: ()=>p5e()&&_e()；isHidden: {return!_e()}；实现 chunk-4cndz99e.js 的 Y。"}
+{"id":"chunk-4cndz99e.js#A","doc":"/auto-mode-setup 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-m8444q1d.js#Fo","doc":"/auto-mode-setup 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#vXo","doc":"/artifacts 命令对象（local-jsx）；描述：Browse your published and shared artifacts；isEnabled: ()=>VA()&&hc()===null；实现 chunk-qr2y97px.js 的 fs。"}
+{"id":"chunk-qr2y97px.js#fs","doc":"/artifacts 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#RXo","doc":"/autofix-pr 命令对象（local-jsx）；描述：Monitor and autofix any issues with the current PR；availability [\"claude-ai\",\"console-profile\"]；isEnabled: ()=>GZt()&&!_e()；isHidden: {return!GZt()}；实现 chunk-4pdevvfa.js 的 fr。"}
+{"id":"chunk-4pdevvfa.js#fr","doc":"/autofix-pr 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#AXo","doc":"/btw 命令对象（local-jsx）；描述：Ask a quick side question without interrupting the main conversation；实现 chunk-583vs41k.js 的 pr。"}
+{"id":"chunk-583vs41k.js#pr","doc":"/btw 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#xXo","doc":"/feedback 命令对象（local-jsx）；描述：Send feedback to Anthropic or report a bug；实现 chunk-dnxbqwmv.js 的 EWi。"}
+{"id":"chunk-e6aww6q8.js#PXo","doc":"/bug 命令对象（local-jsx）；描述：Report a bug or share your conversation；别名 [\"share\"]；实现 chunk-myrezy36.js 的 t。"}
+{"id":"chunk-myrezy36.js#t","doc":"/bug 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#MXo","doc":"/cd 命令对象（local-jsx）；描述：Move this session to a new working directory；实现 chunk-fh3th4b7.js 的 Vo。"}
+{"id":"chunk-fh3th4b7.js#Vo","doc":"/cd 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#LXo","doc":"/clear 命令对象（local）；描述：Start a new session with empty context; previous session stays on disk (resumable with /resume)；别名 [\"reset\",\"new\"]；实现 chunk-4mtxrwhe.js 的 D。"}
+{"id":"chunk-4mtxrwhe.js#D","doc":"/clear 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#UXo","doc":"/color 命令对象（local-jsx）；描述：Set the prompt bar color for this session；isHidden: {return Vd()&&Zee()&&wd()&&!ym()}；实现 chunk-b5scw0qq.js 的 Xzi。"}
+{"id":"chunk-evjaj4jh.js#a","doc":"/color 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#jXo","doc":"/copy 命令对象（local-jsx）；描述：Copy Claude's last response to clipboard (or /copy N for the Nth-latest)；实现 chunk-0knprqgt.js 的 xn。"}
+{"id":"chunk-0knprqgt.js#_t","doc":"MAX_BLOCK_LABEL_WIDTH：120。"}
+{"id":"chunk-e6aww6q8.js#zXo","doc":"/desktop 命令对象（local-jsx）；描述：Continue the current session in Claude Desktop；别名 [\"app\"]；availability [\"claude-ai\"]；isEnabled: lRe；isHidden: {return!lRe()}；实现 chunk-ds2d8kad.js 的 ue。"}
+{"id":"chunk-ds2d8kad.js#ue","doc":"/desktop 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#JXo","doc":"/commit-push-pr 命令对象（prompt）；描述：Commit, push, and open a PR。"}
+{"id":"chunk-e6aww6q8.js#oen","doc":"/autocompact 命令对象（local-jsx）；描述：Set how full the context gets before auto-summarizing；isEnabled: ()=>!_e()；isHidden: false；实现 chunk-qqj12s77.js 的 vo。"}
+{"id":"chunk-qqj12s77.js#vo","doc":"/autocompact 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#ZXo","doc":"/config 命令对象（local-jsx）；描述：Open settings；别名 [\"settings\"]；实现 chunk-ak1qv1dp.js 的 _。"}
+{"id":"chunk-ak1qv1dp.js#_","doc":"/config 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-8ncxevqn.js#c","doc":"/config 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#ren","doc":"createMovedToConfigCommand：生成 \"X moved to /config\" 的隐藏 local-jsx 命令。"}
+{"id":"chunk-e6aww6q8.js#C5e","doc":"/output-style 命令对象（local）；描述：List output styles or switch to one；isEnabled: ()=>_e()||!dRe()||ien()；isHidden: {return!_e()&&dRe()&&!ien()}；实现 chunk-1ehcpf9z.js 的 B。"}
+{"id":"chunk-1ehcpf9z.js#B","doc":"/output-style 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#A5e","doc":"/context 命令对象（local-jsx）；描述：Visualize current context usage as a colored grid；isEnabled: ()=>!_e()&&!aen()；实现 chunk-10q8r8ck.js 的 Yn。"}
+{"id":"chunk-10q8r8ck.js#Yn","doc":"/context 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#x5e","doc":"/diff 命令对象（local-jsx）；描述：{return m_n(wd()?\"fullscreen\":\"inline\")===\"fullscreen\"?\"Toggle the diff panel showing uncommitted changes\":\"View uncommitted changes and per；isEnabled: ()=>!Q7n()；实现 chunk-19av2vh6.js 的 C。"}
+{"id":"chunk-19av2vh6.js#C","doc":"/diff 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#e9o","doc":"/memory 命令对象（local-jsx）；描述：Edit CLAUDE.md files and memory settings；实现 chunk-c55mbvfz.js 的 Qi。"}
+{"id":"chunk-c55mbvfz.js#Qi","doc":"/memory 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#o9o","doc":"/pause-memory 命令对象（local）；描述：{if(g_n())return\"Pause automemory for this session\";return\"Pause account memory and local auto-memory for this session (run again to turn bo；别名 [\"memory-pause\",\"toggle-memory\"]；isEnabled: ()=>!1；isHidden: {return!g_n()&&Oe(i.IS_DEMO)}；实现 chunk-8dz40wpq.js 的 q。"}
+{"id":"chunk-8dz40wpq.js#q","doc":"/pause-memory 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#s9o","doc":"/help 命令对象（local-jsx）；描述：Show help and available commands；实现 chunk-yxcx2jtr.js 的 as。"}
+{"id":"chunk-yxcx2jtr.js#as","doc":"/help 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#f9o","doc":"/ide 命令对象（local-jsx）；描述：Manage IDE integrations and show status；实现 chunk-5bdzenzx.js 的 _t。"}
+{"id":"chunk-5bdzenzx.js#_t","doc":"/ide 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#m9o","doc":"/import 命令对象（local-jsx）；描述：Import config from another AI coding agent；isEnabled: N0e；isHidden: {return!N0e()}；实现 chunk-cdgppz20.js 的 Fo。"}
+{"id":"chunk-cdgppz20.js#Fo","doc":"/import 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-he8wyk3b.js#E","doc":"/import 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#h9o","doc":"getOldInitPrompt：同旧版 OLD_INIT_PROMPT。"}
+{"id":"chunk-e6aww6q8.js#S9o","doc":"/keybindings 命令对象（local）；描述：Open your keyboard shortcuts file；isEnabled: ()=>Iee()；实现 chunk-1nat7wre.js 的 T。"}
+{"id":"chunk-1nat7wre.js#T","doc":"/keybindings 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#fen","doc":"/design-consent 命令对象（local）；描述：Grant Claude agent access to your Design projects；isEnabled: ()=>UW()；isHidden: true；实现 chunk-c9mbsnrs.js 的 m。"}
+{"id":"chunk-c9mbsnrs.js#m","doc":"/design-consent 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-6qdkmygq.js#m","doc":"/design-revoke 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#men","doc":"createDesignLoginCommand：返回 /design-login 命令对象。"}
+{"id":"chunk-zkzpd9ky.js#Je","doc":"/design-login 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#_en","doc":"/login 命令对象（local-jsx）；描述：{return _no()?\"Switch Anthropic accounts\":\"Sign in with your Anthropic account\"}；isEnabled: ()=>{let e=Jn();return!i.DISABLE_LOGIN_COMMAND&&(e===null||e.sessionId!==void 0)}；isHidden: {return!Ud(this)||$0e().kind===\"refused\"}；实现 chunk-whwtfsqf.js 的 nWi。"}
+{"id":"chunk-e6aww6q8.js#Sen","doc":"/logout 命令对象（local-jsx）；描述：Sign out from your Anthropic account；isEnabled: ()=>!i.DISABLE_LOGOUT_COMMAND；实现 chunk-tndsj50r.js 的 u。"}
+{"id":"chunk-tndsj50r.js#u","doc":"/logout 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#A9o","doc":"/install-github-app 命令对象（local-jsx）；描述：Set up Claude GitHub Actions for a repository；availability [\"claude-ai\",\"console\"]；isEnabled: ()=>!i.DISABLE_INSTALL_GITHUB_APP_COMMAND；实现 chunk-4v9zy7gn.js 的 Si。"}
+{"id":"chunk-4v9zy7gn.js#Si","doc":"/install-github-app 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#x9o","doc":"/install-slack-app 命令对象（local）；描述：Install the Claude Slack app；availability [\"claude-ai\"]；实现 chunk-xarcg2hx.js 的 p。"}
+{"id":"chunk-xarcg2hx.js#p","doc":"/install-slack-app 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#pwe","doc":"/mcp 命令对象（local）；描述：Manage MCP servers；isEnabled: ()=>_e()；isHidden: {return!_e()}；实现 chunk-3re05e6m.js 的 Le。"}
+{"id":"chunk-3re05e6m.js#Le","doc":"/mcp 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-cpqpnzp4.js#Vd","doc":"/mcp 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#M9o","doc":"/mobile 命令对象（local-jsx）；描述：Show QR code to download the Claude mobile app；别名 [\"ios\",\"android\"]；实现 chunk-7mtn3rbz.js 的 le。"}
+{"id":"chunk-7mtn3rbz.js#le","doc":"/mobile 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#O9o","doc":"/voice 命令对象（local）；描述：Toggle voice mode；availability [\"claude-ai\"]；isHidden: {return!Vvt()}；实现 chunk-vrdyygyr.js 的 D。"}
+{"id":"chunk-vrdyygyr.js#D","doc":"/voice 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#G5e","doc":"/powerup 命令对象（local-jsx）；描述：Discover Claude Code features through quick interactive lessons；实现 chunk-fxpvgzqn.js 的 l。"}
+{"id":"chunk-fxpvgzqn.js#l","doc":"/powerup 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#I9o","doc":"/release-notes 命令对象（local-jsx）；描述：View release notes；实现 chunk-8k62p17d.js 的 te。"}
+{"id":"chunk-8k62p17d.js#te","doc":"/release-notes 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#D9o","doc":"/rename 命令对象（local-jsx）；描述：Rename the current conversation；别名 [\"name\"]；实现 chunk-wqa2f5xk.js 的 Hzi。"}
+{"id":"chunk-5h69ret3.js#o","doc":"/rename 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#N9o","doc":"/resume 命令对象（local-jsx）；描述：{return\"Resume a previous conversation\"}；别名 [\"continue\"]；isEnabled: L9o；isHidden: {if(!On())return!1;let e=Jn();if(!Ud(this)||e?.sessionId===void 0||e.viewerOnly)return!0;return!1}；实现 chunk-74n7apcd.js 的 De。"}
+{"id":"chunk-74n7apcd.js#De","doc":"/resume 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#Ren","doc":"/setup-bedrock 命令对象（local-jsx）；描述：Reconfigure Amazon Bedrock authentication, region, or model pins；isEnabled: ()=>jae(\"bedrock\")===void 0；isHidden: {return!i.CLAUDE_CODE_USE_BEDROCK}；实现 chunk-vt5kkj4e.js 的 d。"}
+{"id":"chunk-vt5kkj4e.js#d","doc":"/setup-bedrock 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#Cen","doc":"/setup-vertex 命令对象（local-jsx）；描述：Reconfigure Google Vertex AI authentication, project, region, or model pins；isEnabled: ()=>jae(\"vertex\")===void 0；isHidden: {return!i.CLAUDE_CODE_USE_VERTEX}；实现 chunk-8nayjra0.js 的 p。"}
+{"id":"chunk-8nayjra0.js#p","doc":"/setup-vertex 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#xen","doc":"/ultrareview 命令对象（local-jsx）；描述：{return Aen()}；isEnabled: ()=>UF()；实现 chunk-0eepcc6r.js 的 Mo。"}
+{"id":"chunk-0eepcc6r.js#Mo","doc":"/ultrareview 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-yxg7c7n7.js#m","doc":"/ultrareview 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#$9o","doc":"/session 命令对象（local-jsx）；描述：Show cloud session URL and QR code；别名 [\"remote\"]；isEnabled: ()=>On()；isHidden: {return!_C(\"fanout\")}；实现 chunk-3rb87ry3.js 的 Pe。"}
+{"id":"chunk-3rb87ry3.js#Pe","doc":"/session 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#H9o","doc":"/scroll-speed 命令对象（local-jsx）；描述：Adjust mouse wheel scroll speed；isEnabled: ()=>{if(!wd())return!1;let e=_u();return!(e?jhe.includes(e.terminal??\"\"):DA.isJetBrainsIdeTerminal())}；实现 chunk-myhtjy4v.js 的 gr。"}
+{"id":"chunk-myhtjy4v.js#Pt","doc":"/scroll-speed 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#B9o","doc":"/skills 命令对象（local-jsx）；描述：List available skills；实现 chunk-00qhwn8e.js 的 Rr。"}
+{"id":"chunk-00qhwn8e.js#Rr","doc":"/skills 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#U9o","doc":"/status 命令对象（local-jsx）；描述：Show Claude Code status including version, model, account, API connectivity, and tool statuses；实现 chunk-gwbvvmmk.js 的 o。"}
+{"id":"chunk-gwbvvmmk.js#o","doc":"/status 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#j9o","doc":"/tasks 命令对象（local-jsx）；描述：View and manage everything running in the background；别名 [\"bashes\"]；实现 chunk-pw933apk.js 的 i。"}
+{"id":"chunk-pw933apk.js#i","doc":"/tasks 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#_8o","doc":"/team-onboarding 命令对象（prompt）；描述：Help teammates ramp on Claude Code with a guide from your usage；isHidden: false。"}
+{"id":"chunk-e6aww6q8.js#v8o","doc":"/teleport 命令对象（local-jsx）；描述：Send this session to the cloud, or resume one from claude.ai；别名 [\"tp\"]；availability [\"claude-ai\",\"console-profile\"]；isEnabled: ()=>vt()||B8t()；isHidden: {return!Ud(this)}；实现 chunk-c2tx3syd.js 的 oe。"}
+{"id":"chunk-c2tx3syd.js#oe","doc":"/teleport 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#Hen","doc":"createMovedToPluginCommand：同旧版。"}
+{"id":"chunk-e6aww6q8.js#jen","doc":"NATIVE_SHIFT_ENTER_TERMINALS：ghostty/kitty/Warp/WezTerm/Windows Terminal。"}
+{"id":"chunk-e6aww6q8.js#rrn","doc":"/ultraplan 命令对象（local-jsx）；描述：{return`Draft an editable plan in a cloud session (${MXn().timeEstimate}) \\xB7 See ${wbe}`}；availability [\"claude-ai\"]；isEnabled: ()=>f6()。"}
+{"id":"chunk-e6aww6q8.js#RXe","doc":"/usage 命令对象（local-jsx）；描述：Show session cost, plan usage, and activity stats；别名 [\"cost\",\"stats\"]；实现 chunk-b8fqh6y9.js 的 m。"}
+{"id":"chunk-b8fqh6y9.js#m","doc":"/usage 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-9689amr8.js#G","doc":"/usage 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#AXe","doc":"/skill-doctor 命令对象（local-jsx）；描述：Show which loaded skills are unused and costing context；实现 chunk-ej3ckp70.js 的 r。"}
+{"id":"chunk-ej3ckp70.js#r","doc":"/skill-doctor 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#tor","doc":"/theme 命令对象（local-jsx）；描述：Change the theme；实现 chunk-3s4dbk22.js 的 Or。"}
+{"id":"chunk-3s4dbk22.js#Or","doc":"/theme 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#nor","doc":"/tui 命令对象（local-jsx）；描述：Set the terminal UI renderer (default | fullscreen)；实现 chunk-wdq8e3yt.js 的 Uji。"}
+{"id":"chunk-e6aww6q8.js#oor","doc":"/permissions 命令对象（local-jsx）；描述：Manage allow and deny tool permission rules；别名 [\"allowed-tools\"]；实现 chunk-p2qwpk2k.js 的 Aw。"}
+{"id":"chunk-p2qwpk2k.js#Aw","doc":"/permissions 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#ror","doc":"/plan 命令对象（local-jsx）；描述：Enable plan mode or view the current session plan；实现 chunk-ve85yyeb.js 的 le。"}
+{"id":"chunk-ve85yyeb.js#le","doc":"/plan 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#ior","doc":"/fast 命令对象（local-jsx）；描述：{return`Toggle fast mode (${U4()})`}；isHidden: {return!ys()}；实现 chunk-sfatdaes.js 的 Fji。"}
+{"id":"chunk-vr5qyyg8.js#S","doc":"/fast 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#DXe","doc":"/passes 命令对象（local-jsx）；描述：{if(drt())return\"Share a free week of Claude Code with friends and earn usage credits\";return\"Share a free week of Claude Code with friends\"；isHidden: {let{eligible:e,hasCache:n}=qvt();return!e||!n}；实现 chunk-aa3cndeh.js 的 Da。"}
+{"id":"chunk-aa3cndeh.js#Da","doc":"/passes 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#aor","doc":"/privacy-settings 命令对象（local-jsx）；描述：View and update your privacy settings；isEnabled: ()=>_G()；实现 chunk-p3x5wbde.js 的 _。"}
+{"id":"chunk-p3x5wbde.js#_","doc":"/privacy-settings 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#lor","doc":"/hooks 命令对象（local-jsx）；描述：View hook configurations for tool events；实现 chunk-bajxb7bf.js 的 Qd。"}
+{"id":"chunk-bajxb7bf.js#Qd","doc":"/hooks 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#dor","doc":"/loops 命令对象（local-jsx）；描述：List, create, and delete loops；isEnabled: ()=>!1；实现 chunk-wtfk012h.js 的 kt。"}
+{"id":"chunk-wtfk012h.js#kt","doc":"/loops 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#uor","doc":"/branch 命令对象（local-jsx）；描述：Create a branch of the current conversation at this point；实现 chunk-khj4kcw5.js 的 _e。"}
+{"id":"chunk-khj4kcw5.js#_e","doc":"/branch 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#lrn","doc":"/fork 命令对象（local-jsx）；描述：Spawn a background agent that inherits the full conversation；isEnabled: ()=>!Ua()；实现 chunk-cc2xzzcg.js 的 m。"}
+{"id":"chunk-cc2xzzcg.js#m","doc":"/fork 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#drn","doc":"/fork 命令对象（local-jsx）；描述：Copy this conversation into a new background session and keep working here；isEnabled: ()=>!Ua()；实现 chunk-d62reftv.js 的 He。"}
+{"id":"chunk-d62reftv.js#He","doc":"/fork 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#urn","doc":"/subtask 命令对象（local-jsx）；描述：Send a subagent off with your full context; its result comes back here；isEnabled: ()=>!Ua()；实现 chunk-3vqj3nc0.js 的 l。"}
+{"id":"chunk-3vqj3nc0.js#l","doc":"/subtask 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#cor","doc":"callAgentsRemoved：返回 \"/agents wizard has been removed\" 文案。"}
+{"id":"chunk-e6aww6q8.js#hor","doc":"/plugin 命令对象（local-jsx）；描述：Manage Claude Code plugins；别名 [\"plugins\",\"marketplace\"]；实现 chunk-qey4tpm4.js 的 p。"}
+{"id":"chunk-qey4tpm4.js#p","doc":"/plugin 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#yor","doc":"/reload-plugins 命令对象（local）；描述：Activate pending plugin changes in the current session；实现 chunk-8vqp1nqq.js 的 qr。"}
+{"id":"chunk-8vqp1nqq.js#we","doc":"call：/reload-plugins 的 call。"}
+{"id":"chunk-e6aww6q8.js#_or","doc":"/reload-skills 命令对象（local）；描述：Pick up skills added or changed on disk during this session；实现 chunk-9dc848ph.js 的 M。"}
+{"id":"chunk-9dc848ph.js#M","doc":"/reload-skills 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#kor","doc":"/rewind 命令对象（local）；描述：Restore the code and/or conversation to a previous point；别名 [\"checkpoint\",\"undo\"]；实现 chunk-ye0hzrsv.js 的 o。"}
+{"id":"chunk-ye0hzrsv.js#o","doc":"/rewind 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#bor","doc":"/heapdump 命令对象（local）；描述：Dump the JS heap to the Desktop; on Linux with no Desktop folder, the home directory；isHidden: true；实现 chunk-dhgx9s0b.js 的 x。"}
+{"id":"chunk-dhgx9s0b.js#x","doc":"/heapdump 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#vor","doc":"callVersion：/version 非交互实现。"}
+{"id":"chunk-e6aww6q8.js#$or","doc":"/sandbox 命令对象（local-jsx）；描述：{let e=Ke.isSandboxingEnabled(),n=Ke.isAutoAllowBashIfSandboxedEnabled(),r=Ke.areUnsandboxedCommandsAllowed(),s=Ke.areSandboxSettingsLockedB；isHidden: {return!Ke.isSupportedPlatform()||!Ke.isPlatformInEnabledList()}；实现 chunk-55w3ydvj.js 的 Hn。"}
+{"id":"chunk-55w3ydvj.js#Hn","doc":"/sandbox 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#Hor","doc":"/chrome 命令对象（local-jsx）；描述：Open Claude in Chrome settings；availability [\"claude-ai\"]；isEnabled: ()=>!_e()&&ox()；实现 chunk-1ztfztfw.js 的 Uo。"}
+{"id":"chunk-1ztfztfw.js#Uo","doc":"/chrome 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#jor","doc":"/stickers 命令对象（local）；描述：Order Claude Code stickers；实现 chunk-ekn75w8p.js 的 s。"}
+{"id":"chunk-ekn75w8p.js#s","doc":"/stickers 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#Gor","doc":"/radio 命令对象（local）；描述：Listen to Claude FM lo-fi radio；实现 chunk-03rvwpge.js 的 r。"}
+{"id":"chunk-03rvwpge.js#r","doc":"/radio 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#WXe","doc":"/advisor 命令对象（local-jsx）；描述：Let Claude consult a stronger model at key moments；isEnabled: ()=>MA()；isHidden: {return!MA()}；实现 chunk-tx2s9zpa.js 的 Ne。"}
+{"id":"chunk-tx2s9zpa.js#Ne","doc":"/advisor 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-vhac946c.js#f","doc":"/advisor 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#A2","doc":"createEnterpriseUpsellCommand：隐藏 local 命令，提示需要 Claude for Enterprise。"}
+{"id":"chunk-e6aww6q8.js#Vor","doc":"/exit 命令对象（local-jsx）；描述：{return Arn()}；别名 [\"quit\"]；实现 chunk-xs5f70ym.js 的 Pe。"}
+{"id":"chunk-xs5f70ym.js#Pe","doc":"/exit 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-f55t9a8b.js#n","doc":"/exit 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#arr","doc":"/restart 命令对象（local）；描述：{let e=TGt();return(e.kind===\"newer\"||e.kind===\"older\")&&rJn()===void 0?`Restart on ${e.version} and keep this session`:\"Restart Claude Code；别名 [\"update\"]；isEnabled: Mrn；isHidden: {return!Mrn()}；实现 chunk-egxcxk6h.js 的 hzi。"}
+{"id":"chunk-e6aww6q8.js#drr","doc":"/export 命令对象（local-jsx）；描述：Export the current conversation to a file or clipboard；实现 chunk-am3vy82s.js 的 ho。"}
+{"id":"chunk-am3vy82s.js#ho","doc":"/export 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#KXe","doc":"/model 命令对象（local）；描述：Set the AI model for Claude Code；isEnabled: ()=>_e()；isHidden: {return!_e()}；实现 chunk-0pmcg6nh.js 的 b。"}
+{"id":"chunk-0pmcg6nh.js#b","doc":"/model 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-mvhmq2z8.js#zs","doc":"/model 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#Drn","doc":"/remote-env 命令对象（local-jsx）；描述：Choose the default environment for cloud agents；availability [\"claude-ai\",\"console-profile\"]；isEnabled: ()=>vt()||B8t()；isHidden: {return!Ud(this)}；实现 chunk-zj31az9x.js 的 Vt。"}
+{"id":"chunk-zj31az9x.js#Vt","doc":"/remote-env 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#urr","doc":"/__remote-workflow 命令对象（local）；描述：Run the workflow script delivered in this session environment (server-launched sessions only)；isHidden: true；实现 chunk-cg8zacmh.js 的 d。"}
+{"id":"chunk-cg8zacmh.js#d","doc":"/__remote-workflow 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#frr","doc":"/workflow-launch-exec 命令对象（local）；描述：Execute a server-launched workflow handoff (workflow_launch event sessions only)；isHidden: true；实现 chunk-3sew516d.js 的 u。"}
+{"id":"chunk-3sew516d.js#i","doc":"/workflow-launch-exec 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#prr","doc":"/upgrade 命令对象（local-jsx）；描述：Upgrade to Max for higher rate limits and more Opus；availability [\"claude-ai\"]；isEnabled: Gpe；实现 chunk-txp87wj5.js 的 Jji。"}
+{"id":"chunk-e6aww6q8.js#VZ","doc":"/usage-credits 命令对象（local-jsx）；描述：Configure usage credits or request them from your admin when you hit a limit；isEnabled: ()=>Px()&&!_e()；实现 chunk-2gtphf4m.js 的 Jpt。"}
+{"id":"chunk-g49d7j62.js#s","doc":"/usage-credits 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-139kcwcq.js#C","doc":"/extra-usage 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#yrr","doc":"/pro-trial-expired 命令对象（local-jsx）；描述：Options shown when the Pro plan Claude Code trial has ended；isHidden: true；实现 chunk-fnmk6x3n.js 的 I。"}
+{"id":"chunk-fnmk6x3n.js#I","doc":"/pro-trial-expired 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#krr","doc":"/rate-limit-options 命令对象（local-jsx）；描述：Manage usage limits and upgrade options；isEnabled: ()=>vt()||!1；实现 chunk-dg94x42s.js 的 Ha。"}
+{"id":"chunk-dg94x42s.js#Ha","doc":"/rate-limit-options 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#wrr","doc":"/low-priority 命令对象（local）；描述：Continue now at lower priority after reaching your 5-hour limit; run again to stop；isEnabled: ()=>vt()&&(dD()||iAt())；isHidden: true；实现 chunk-khcb6nvd.js 的 r。"}
+{"id":"chunk-khcb6nvd.js#r","doc":"/low-priority 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#Prr","doc":"/limit-reset 命令对象（local-jsx）；描述：{return kse()?\"Use an available limit reset and keep working\":\"Reset your 5-hour limit now and keep working; once a week, still counts towar；isEnabled: ()=>vt()&&(Tbe()||kse())；isHidden: true；实现 chunk-q8p98373.js 的 ge。"}
+{"id":"chunk-q8p98373.js#ge","doc":"/limit-reset 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#Mrr","doc":"/claim-credit 命令对象（local）；描述：Open the page of the offer shown at start-up；isEnabled: ()=>vt()&&!Fie()&&ktr()!==null；isHidden: true；实现 chunk-ndsajhew.js 的 zt。"}
+{"id":"chunk-ndsajhew.js#zt","doc":"/claim-credit 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#Orr","doc":"/statusline 命令对象（prompt）；描述：Set up Claude Code's status line UI。"}
+{"id":"chunk-e6aww6q8.js#Irr","doc":"/effort 命令对象（local-jsx）；描述：Set effort level for model usage；实现 chunk-3rwvzn82.js 的 ls。"}
+{"id":"chunk-3rwvzn82.js#ls","doc":"/effort 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-mtkg11k6.js#u","doc":"/effort 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#Drr","doc":"/wellbeing 命令对象（local-jsx）；描述：Configure optional break reminders and quiet-hours nudges；别名 [\"breaks\",\"break-reminder\",\"downtime\"]；isEnabled: ()=>!1；实现 chunk-a7sxm3q7.js 的 L。"}
+{"id":"chunk-a7sxm3q7.js#L","doc":"/wellbeing 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#Lrr","doc":"/focus 命令对象（local-jsx）；描述：Toggle focus view: just your prompt, summary, and response。"}
+{"id":"chunk-fv21ck8e.js#r","doc":"/focus 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-e6aww6q8.js#u9e","doc":"promoteMemoryCommands：构建期为 null；注册表里取 .promoteMemory/.promoteMemoryNonInteractive。"}
+{"id":"chunk-e6aww6q8.js#hjo","doc":"withWorkerOnlyCommands：在命令列表后补上 Worker 环境专有的技能名（不与一方命令重名时）。"}
+{"id":"chunk-e6aww6q8.js#phn","doc":"动态生成的 prompt 命令对象（name=hn）；描述：ho.description；isHidden: !Ie。"}
+{"id":"chunk-g8tswn69.js#o","doc":"/workflows 命令对象（local-jsx）；描述：Browse running and completed workflows；isEnabled: ()=>Sg()；实现 chunk-wnym76ss.js 的 Rn。"}
+{"id":"chunk-wnym76ss.js#Rn","doc":"/workflows 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-gv7qjj2t.js#m","doc":"/brief 命令对象（local-jsx）；描述：Toggle brief-only mode；isEnabled: ()=>i().enable_slash_command。"}
+{"id":"chunk-na8jp6ng.js#ae","doc":"/install 命令对象（local-jsx）；描述：Install Claude Code native build。"}
+{"id":"chunk-nn4xbsmj.js#e","doc":"/goal 命令对象（local-jsx）；描述：Set a goal Claude checks before stopping；实现 chunk-hgfnw8bk.js 的 At。"}
+{"id":"chunk-hgfnw8bk.js#At","doc":"/goal 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-s4441tej.js#u","doc":"/goal 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-pemtjbn7.js#_","doc":"/web-setup 命令对象（local-jsx）；描述：Set up cloud sessions with your GitHub account；availability [\"claude-ai\"]；isEnabled: o$e；isHidden: {return!dn(\"allow_remote_sessions\")||!dn(\"allow_quick_web_setup\")}；实现 chunk-ajkmgejw.js 的 et。"}
+{"id":"chunk-ajkmgejw.js#et","doc":"/web-setup 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-qzez70vf.js#m","doc":"动态生成的 prompt 命令对象（name=o.name）；描述：o.description。"}
+{"id":"chunk-wf4qcsws.js#z","doc":"动态生成的 prompt 命令对象（name=t.name）；别名 t.handles?.aliases。"}
+{"id":"chunk-yjaa68dq.js#ol","doc":"registerBundledSkill：注册一个发行内建技能（code-review、commit、pr、simplify、doctor、loop 等），生成 source=bundled 的 prompt 命令。"}
+{"id":"chunk-yt6zn9vg.js#Jt","doc":"/insights 命令对象（prompt）；描述：Generate a report analyzing your Claude Code sessions。"}
+{"id":"chunk-yxzqxbzv.js#s","doc":"/list-agents 命令对象（local）；描述：List subagents, teammates, and other Claude sessions you can message；别名 [\"peers\"]；isEnabled: ()=>Pa()；实现 chunk-kq21a1r9.js 的 u。"}
+{"id":"chunk-kq21a1r9.js#u","doc":"/list-agents 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。"}
+{"id":"chunk-z1n5m6nf.js#Lr","doc":"动态生成的 prompt 命令对象（name=\"mcp__\"+Sn(e.name)+\"__\"+w.name）；描述：Q??\"\"；别名 S?[`${e.name}:${w.name}`,`${e.name}:${w.name} (MCP)`]:void 0；isEnabled: ()=>!0；isHidden: false。"}
+{"id":"chunk-e6aww6q8.js#q_e","doc":"dropShadowedFallbackSkills：旧版名 getMcpSkillCommands 不符：316 里按 \":后缀\" 收集插件/内置/MCP 技能名，丢弃同名 fallback 技能。"}
+{"id":"chunk-e6aww6q8.js#Y_e","doc":"isSkillToolCommand：SkillTool 列表的单条谓词；门面把 getSkillToolCommands 给了 YI。"}
+{"id":"chunk-e6aww6q8.js#EA","doc":"addCommandSpellings：把 name、显示名、aliases 规范化后加入集合；旧版名 findCommand 配错（门面 findCommand=s61vbvea Zs）。"}
+{"id":"chunk-e6aww6q8.js#K0","doc":"addSpelling：规范化（Gy）后加入集合，跳过 claude.ai 同步技能保留名。"}
+{"id":"chunk-e6aww6q8.js#rM","doc":"joinScopedName：返回 `${scope}:${name}`。"}
+{"id":"chunk-e6aww6q8.js#_jt","doc":"matchesUnqualifiedName：prompt 且非 syncedSkills 且 unqualifiedName===n。"}
+{"id":"chunk-e6aww6q8.js#EF","doc":"getBareCommandName：prompt 有 unqualifiedName 时返回它，否则 name。"}
+{"id":"chunk-e6aww6q8.js#bjt","doc":"getBareCommandNameUnlessSynced：同 EF，但 syncedSkills 不取 unqualifiedName。"}
+{"id":"chunk-e6aww6q8.js#Afn","doc":"dedupeBundledSkills：按名去重 source=bundled 的 prompt；结果缓存在 state.shadowedBundledSkills。"}
+{"id":"chunk-e6aww6q8.js#uGe","doc":"addNameAndAliases：规范化 name 与 aliases 加入集合。"}
+{"id":"chunk-e6aww6q8.js#V0","doc":"addNonSyncedSpellings：对非 syncedSkills 命令调用 addCommandSpellings。"}
+{"id":"chunk-e6aww6q8.js#Mxo","doc":"isSyncedSkillNameTaken：同步技能名为空或已被占用。"}
+{"id":"chunk-e6aww6q8.js#nsn","doc":"getRuntimeGatedCommandGroups：fleetFork/fleetBackground/daemon/skillDoctor/logout 五组 {open, whenOpen, whenClosed}。"}
+{"id":"chunk-e6aww6q8.js#osn","doc":"compactCommandList：filter(Boolean)；旧版名 filterCommandsForRemoteMode 配错（门面把它给了 gjo）。"}
+{"id":"chunk-e6aww6q8.js#SZ","doc":"getRuntimeGatedGroup：按组 open() 取 whenOpen 或 whenClosed。"}
+{"id":"chunk-e6aww6q8.js#Wrr","doc":"BRIDGE_TWINS_FOR_PLUGIN_COMMANDS：new Set([contextNonInteractive])：插件同名 local 命令也可由这些桥接安全孪生代答。"}
+{"id":"chunk-e6aww6q8.js#E9e","doc":"isPluginLocalCommand：type=local 且 loadedFrom=plugin（函数钩子插件注册的命令）。"}
+{"id":"chunk-e6aww6q8.js#M9e","doc":"addShippedCommandSpellings：运行时门控内建、内建技能、内建插件技能名都加入集合。"}
+{"id":"chunk-e6aww6q8.js#asn","doc":"addRuntimeGatedCommandSpellings：对 getRuntimeGatedBuiltinCommands() 逐个 addCommandSpellings。"}
+{"id":"chunk-e6aww6q8.js#zrr","doc":"getReservedSpellingsFor：state.reservedSpellingsFor 缓存：命令列表占用的全部拼写。"}
+{"id":"chunk-e6aww6q8.js#M2","doc":"getBuiltinCommandTable：state.builtinCommandTable ??= buildBuiltinCommandTable()。"}
+{"id":"chunk-e6aww6q8.js#lsn","doc":"collectBuiltinCommandSpellings：内建表 + 发行内建技能的所有拼写。"}
+{"id":"chunk-e6aww6q8.js#Zrr","doc":"loadAllCommands：同旧版 loadAllCommands：按 commandsMemoKey 缓存 loadAllCommandsUncached。"}
+{"id":"chunk-e6aww6q8.js#RTe","doc":"markBareNameReserved：syncedSkills 命令加 bareNameReserved:true。"}
+{"id":"chunk-e6aww6q8.js#esr","doc":"loadAllCommandsUncached：合并技能目录、附加目录技能、工作流、插件命令、插件技能、内建技能、内建插件技能与内建表；校验名字、处理 claude.ai 同步技能与保留名、丢弃被遮蔽的 fallback 技能、剥离冲突别名，并上报冲突遥测。"}
+{"id":"chunk-e6aww6q8.js#tsr","doc":"logRefusedReservedSkillNames：一次性上报 skill_reserved_namespace 遥测。"}
+{"id":"chunk-e6aww6q8.js#nsr","doc":"assembleCommands：getCommands 的主体。按 availability 与 isCommandEnabled 过滤；附加目录里的项目技能去重；处理条件技能、同步技能；嵌套 .claude/skills 的技能按目录加作用域前缀；把动态技能插入到第一个内建命令之前。"}
+{"id":"chunk-e6aww6q8.js#osr","doc":"dropAmbiguousScopedSkills：同名且无法加作用域前缀的嵌套技能不提供。"}
+{"id":"chunk-e6aww6q8.js#dsn","doc":"canOfferUnscoped：无作用域、同步技能或作用域名被保留时返回 true。"}
+{"id":"chunk-e6aww6q8.js#rsr","doc":"getSkillScopeLabel：技能所在项目相对 cwd 的路径（或目录名）作为作用域。"}
+{"id":"chunk-e6aww6q8.js#CTe","doc":"getSkillProjectRoot：skillRoot 中 /.claude/ 之前的部分。"}
+{"id":"chunk-e6aww6q8.js#rsn","doc":"withNestedSkillDescription：描述追加 \"(from X/.claude/skills — applies when working on files under X/)\"。"}
+{"id":"chunk-e6aww6q8.js#ssr","doc":"toScopedSkillCommand：生成 \"scope:name\" 形式的嵌套技能命令。"}
+{"id":"chunk-e6aww6q8.js#isr","doc":"shedReservedAliases：插件/同步技能的别名若与内建/保留名冲突则移入 shedAliases；无头模式让出 help/feedback。"}
+{"id":"chunk-e6aww6q8.js#asr","doc":"getSkillToolCommandsUncached：getCommands 后用 isSkillToolCommand 过滤。"}
+{"id":"chunk-e6aww6q8.js#lsr","doc":"getSlashCommandToolSkillsUncached：旧版 getSlashCommandToolSkills 的过滤逻辑；门面名给了缓存层 G0e。"}
+{"id":"chunk-e6aww6q8.js#kxo","doc":"OVERRIDABLE_LOCAL_COMMANDS：new Set([\"auto-mode-setup\"])：可用 skillOverrides 关掉的 local 命令。"}
+{"id":"chunk-e6aww6q8.js#LCe","doc":"getSkillOverrideState：返回 on/off/user-invocable-only（skillOverrides、插件隐藏）。"}
+{"id":"chunk-e6aww6q8.js#Q5","doc":"isHiddenFromModel：override 为 user-invocable-only 或 off。"}
+{"id":"chunk-e6aww6q8.js#JBr","doc":"getCommandRequirements：{workspace, ink}：requires 字段或按类型默认（local 需工作区，local-jsx 需工作区+Ink）。"}
+{"id":"chunk-e6aww6q8.js#BUt","doc":"isUsableWithoutWorkspace：不需要工作区或声明了 thinClientDispatch。"}
+{"id":"chunk-e6aww6q8.js#f4s","doc":"getThinClientDispatchMode：瘦客户端（远程查看端）对命令的派发方式：post-text/local/unavailable。"}
+{"id":"chunk-e6aww6q8.js#NCe","doc":"getNonInteractiveCommands：禁用斜杠命令时为空，否则过滤 supportsNonInteractive。"}
+{"id":"chunk-e6aww6q8.js#aGe","doc":"supportsNonInteractive：prompt 且未 disableNonInteractive，或 local 且 supportsNonInteractive。"}
+{"id":"chunk-e6aww6q8.js#fSt","doc":"isFallbackSkill：prompt 且 fallback=true 且非 syncedSkills。"}
+{"id":"chunk-e6aww6q8.js#MB","doc":"isHostCatalogSkill：prompt 且 fromHostCatalog=true。"}
+{"id":"chunk-e6aww6q8.js#tN","doc":"isSyncedSkill：loadedFrom=syncedSkills 且非宿主目录技能。"}
+{"id":"chunk-e6aww6q8.js#lX","doc":"isKilledHostCatalogSkill：宿主目录技能且被内建技能开关关掉。"}
+{"id":"chunk-e6aww6q8.js#KUo","doc":"getAutoModeModelSetting：dpn()：auto 模式分类器模型。"}
+{"id":"chunk-e6aww6q8.js#bXo","doc":"isAutoModeSetupSurface：非 CLAUDE_CODE_REMOTE 且 yse()。"}
+{"id":"chunk-e6aww6q8.js#p5e","doc":"isAutoModeSetupAvailable：/auto-mode-setup（非交互）启用条件。"}
+{"id":"chunk-e6aww6q8.js#m5e","doc":"isAutoModeOnboardingEnabled：/auto-mode-setup（交互）启用条件：tengu_auto_mode_config.envOnboarding。"}
+{"id":"chunk-e6aww6q8.js#sfe","doc":"isAutoModeSetupNotOverridden：且 skillOverrides[\"auto-mode-setup\"] 不为 off。"}
+{"id":"chunk-e6aww6q8.js#EXo","doc":"artifactsRunsBesideTurns：tengu_cobalt_plinth_sainfoin：/artifacts 可在回合进行中打开。"}
+{"id":"chunk-e6aww6q8.js#GZt","doc":"isAutofixPrEnabled：(claude.ai 订阅 或 console 档案) 且 allow_remote_sessions。"}
+{"id":"chunk-e6aww6q8.js#WXo","doc":"isDesktopHandoffBuilt：构建期常量 false。"}
+{"id":"chunk-e6aww6q8.js#lRe","doc":"isDesktopCommandEnabled：/desktop 的 isEnabled。"}
+{"id":"chunk-e6aww6q8.js#dRe","doc":"isSettingsMovedToConfig：tengu_maple_sundial：vim/output-style 改到 /config。"}
+{"id":"chunk-e6aww6q8.js#R5e","doc":"vimMovedToConfigCommand：createMovedToConfigCommand(\"vim\",\"Editor mode\")。"}
+{"id":"chunk-e6aww6q8.js#ien","doc":"isOutputStyleCommandForced：构建期常量 false。"}
+{"id":"chunk-e6aww6q8.js#N0e","doc":"isImportEnabled：tengu_import。"}
+{"id":"chunk-e6aww6q8.js#H1o","doc":"IMPORT_UNAVAILABLE_MESSAGE：`claude import` is not yet available。"}
+{"id":"chunk-e6aww6q8.js#X6s","doc":"planImportRewrite：`claude import` → `claude -- /import ...` 改写。"}
+{"id":"chunk-e6aww6q8.js#J6s","doc":"parseImportArgv：识别 argv 中的 import 子命令。"}
+{"id":"chunk-e6aww6q8.js#p9o","doc":"areValidImportArgs：codex|gemini|cursor|--dry-run|--yes[=digest]。"}
+{"id":"chunk-e6aww6q8.js#q6s","doc":"IMPORT_OFFER_INSTRUCTIONS：提示模型建议用户 /import。"}
+{"id":"chunk-e6aww6q8.js#g9o","doc":"useNewInitPrompt：CLAUDE_CODE_NEW_INIT 或 tengu_slate_harbor_experiment。"}
+{"id":"chunk-e6aww6q8.js#$0e","doc":"getLoginAvailability：any-method / refused / claudeai-only（云会话内登录限制）。"}
+{"id":"chunk-e6aww6q8.js#sGt","doc":"isTeamOnboardingShareEnabled：tengu_flint_harbor_share 且 allow_team_onboarding。"}
+{"id":"chunk-e6aww6q8.js#Nen","doc":"scanSessionUsage：扫描会话 JSONL：斜杠命令次数、MCP 调用次数、会话描述。"}
+{"id":"chunk-e6aww6q8.js#m8o","doc":"TEAM_ONBOARDING_DEFAULT_WINDOW_DAYS：30。"}
+{"id":"chunk-e6aww6q8.js#h8o","doc":"readProjectMcpServers：读 .mcp.json 的 mcpServers。"}
+{"id":"chunk-e6aww6q8.js#y8o","doc":"collectTeamOnboardingUsage：组装 /team-onboarding 的 usageData。"}
+{"id":"chunk-e6aww6q8.js#qJ","doc":"getCommandOriginKind：builtin/plugin/mcp/user。"}
+{"id":"chunk-e6aww6q8.js#f6","doc":"isUltraplanEnabled：tengu_ultraplan_config.enabled 且 bridge 可用且非远程。"}
+{"id":"chunk-e6aww6q8.js#jwt","doc":"isApiKeyOnlyUser：Oi() 且 Slt()。"}
+{"id":"chunk-e6aww6q8.js#Ern","doc":"isEnterpriseUpsellEnabled：tengu_c4e_slash_upsell。"}
+{"id":"chunk-e6aww6q8.js#zor","doc":"isSignedOut：无 OAuth 也无 API key。"}
+{"id":"chunk-e6aww6q8.js#qor","doc":"getEnterpriseUpsellMessage：policy_disabled / signed_out / c4e 三种文案。"}
+{"id":"chunk-e6aww6q8.js#Kor","doc":"isClaudeAiSubscriberForUpsell：vt()。"}
+{"id":"chunk-e6aww6q8.js#Rrn","doc":"ENTERPRISE_UPSELL_COMMANDS：ultraplan/ultrareview/teleport/remote-control/schedule/autofix-pr 的升级提示存根。"}
+{"id":"chunk-e6aww6q8.js#Arn","doc":"getExitDescription：后台会话为 \"Detach...\"，否则 \"Exit the CLI\"。"}
+{"id":"chunk-e6aww6q8.js#Irn","doc":"canRestartInPlace：TTY、macOS/Linux、非后台、非远程。"}
+{"id":"chunk-e6aww6q8.js#Zor","doc":"isRestartFlagOn：tengu_fancy_wand。"}
+{"id":"chunk-e6aww6q8.js#Mrn","doc":"isRestartCommandEnabled：/restart 的 isEnabled。"}
+{"id":"chunk-e6aww6q8.js#STe","doc":"getCedarEmberConfig：tengu_cedar_ember（额度重置的另一形态）。"}
+{"id":"chunk-e6aww6q8.js#kTe","doc":"getLimitResetConfig：tengu_nifty_lemur。"}
+{"id":"chunk-e6aww6q8.js#Wrn","doc":"applyFocusViewToRemote：远程会话时通过 control request 下发 viewMode。"}
+{"id":"chunk-e6aww6q8.js#mjo","doc":"WORKER_ONLY_SKILL_NAMES：autopilot/bugfix/dashboard/deep-research/docs/investigate。"}
+{"id":"chunk-e6aww6q8.js#c9e","doc":"gatedInternalCommand：构建期为 null。"}
+{"id":"chunk-e6aww6q8.js#jrn","doc":"formatEffortArgumentHint：[low|medium|high|...|auto|ultracode [on|off]]。"}
+{"id":"chunk-e6aww6q8.js#F9o","doc":"CCR_TERMS_URL：同旧版。"}
+{"id":"chunk-e6aww6q8.js#L9o","doc":"isResumeEnabled：恒 true。"}
+{"id":"chunk-e6aww6q8.js#aen","doc":"isContextGridDisabled：构建期常量 false。"}
+{"id":"chunk-e6aww6q8.js#C8o","doc":"SECURITY_REVIEW_PROMPT：带 frontmatter 的安全审查提示词。"}
+{"id":"chunk-e6aww6q8.js#YZt","doc":"getCoAuthorTrailer：构建期返回 null。"}
+{"id":"chunk-e6aww6q8.js#ZZt","doc":"SLACK_POST_TOOLS：ToolSearch + slack send_message 工具。"}
+{"id":"chunk-e6aww6q8.js#YXo","doc":"getCommitPushPrAllowedTools：按 git remote 动态生成 push 规则。"}
+{"id":"chunk-e6aww6q8.js#QZt","doc":"getPromptContent：同旧版 commit-push-pr getPromptContent。"}
+{"id":"chunk-e6aww6q8.js#wbe","doc":"ULTRAPLAN_PROMPTS：simple_plan/visual_plan/three_subagents_with_critique。"}
+{"id":"chunk-e6aww6q8.js#EXe","doc":"getUltraplanPromptId：tengu_ultraplan_prompt_identifier。"}
+{"id":"chunk-e6aww6q8.js#Knr","doc":"call：/ultraplan 的 call（rrn.load 直接给出）。"}
+{"id":"chunk-s61vbvea.js#dqr","doc":"clearUserFacingName：把 userFacingName 挪进 shedAliases 后清空。"}
+{"id":"chunk-s61vbvea.js#YKo","doc":"passesPolicyGate：policyGate.policy 由 commandPolicyGateAllows 判定。"}
+{"id":"chunk-s61vbvea.js#NZn","doc":"getCommandContextMode：getContext?.() ?? context ?? \"inline\"（inline/fork）。"}
+{"id":"chunk-s61vbvea.js#JRe","doc":"isImmediateCommand：immediate 可为布尔或 (args, presentation) 函数。"}
+{"id":"chunk-s61vbvea.js#BX","doc":"splitSlashCommandInput：\"/name args\" → {name, args}。"}
+{"id":"chunk-s61vbvea.js#XE","doc":"looksLikeSlashInput：字符串或最后一个文本块以 / 开头。"}
+{"id":"chunk-s61vbvea.js#eqe","doc":"TEAM_SETUP_GUIDE_LABEL：\"✦ Team setup guide\"。"}
+{"id":"chunk-s61vbvea.js#bx","doc":"commandMatchesName：name、显示名或 aliases 命中。"}
+{"id":"chunk-s61vbvea.js#Ser","doc":"buildCommandLookup：name/显示名/aliases → 命令 的 Map。"}
+{"id":"chunk-s61vbvea.js#axe","doc":"hasSensitiveArgs：isSensitive 为布尔或函数。"}
+{"id":"chunk-s61vbvea.js#tpe","doc":"buildCommandRunInfo：{command, args（敏感则 ***）, plugin}。"}
+{"id":"chunk-s61vbvea.js#Zyn","doc":"shouldRedactInput：粘贴内容或命令参数命中敏感模式时不写入历史。"}
+{"id":"chunk-s61vbvea.js#jc","doc":"containsSecretPattern：按 64KB 分段（带重叠）扫描。"}
+{"id":"chunk-s61vbvea.js#na","doc":"SECRET_SCAN_CHUNK：65536。"}
+{"id":"chunk-s61vbvea.js#gei","doc":"resolveBarePluginSkillName：{kind: none|ambiguous|unique}。"}
+{"id":"chunk-s61vbvea.js#VA","doc":"GLOB_PATTERN_REGEX：同旧版 utils/permissions/pathValidation.ts（误归 commands.ts）。"}
+{"id":"chunk-s61vbvea.js#Aqr","doc":"getGlobBaseDirectory：同旧版 pathValidation.getGlobBaseDirectory；旧版名 getCommands 配错。"}
+{"id":"chunk-gv7qjj2t.js#r","doc":"DEFAULT_BRIEF_CONFIG：同旧版。"}
+{"id":"chunk-khj4kcw5.js#Z","doc":"MAX_FORK_TRANSCRIPT_BYTES：4194304。"}
+{"id":"chunk-khj4kcw5.js#oe","doc":"createForkFromStorage：storage v5 路径的 createFork。"}
+{"id":"chunk-583vs41k.js#ft","doc":"CHROME_ROWS：同旧版。"}
+{"id":"chunk-583vs41k.js#kt","doc":"askSideQuestion：记录 inFlight 并调用侧问 API。"}
+{"id":"chunk-hantmvxa.js#at","doc":"getExtraCommitTools：构建期返回 []。"}
+{"id":"chunk-hantmvxa.js#oi","doc":"getCommitPromptContent：/commit 内建技能提示词。"}
+{"id":"chunk-vrrvwm85.js#A","doc":"tryReusePrecomputedCompaction：命中 session.precompute 的预计算摘要则复用。"}
+{"id":"chunk-0knprqgt.js#de","doc":"RESPONSE_FILENAME：同旧版。"}
+{"id":"chunk-19av2vh6.js#s","doc":"toggleDiffPanel：全屏模式切换 diff 面板。"}
+{"id":"chunk-x1p3yktn.js#z$n","doc":"getExportFilename：时间戳-首条提示.txt 或 conversation-时间戳.txt。"}
+{"id":"chunk-xarcg2hx.js#e","doc":"SLACK_APP_URL：同旧版。"}
+{"id":"chunk-4v9zy7gn.js#ps","doc":"INITIAL_STATE：同旧版。"}
+{"id":"chunk-mvhmq2z8.js#et","doc":"CLOUD_MODEL_LIST_TIMEOUT_MS：15000。"}
+{"id":"chunk-vrb44rx7.js#Gen","doc":"PluginCommand：/plugin 的根组件（解析参数后渲染 PluginSettings）。"}
+{"id":"chunk-p3x5wbde.js#p","doc":"FALLBACK_MESSAGE：同旧版。"}
+{"id":"chunk-zmqmnh19.js#$Lr","doc":"performRename：门面 chunk-wqa2f5xk 导出名。"}
+{"id":"chunk-hm0ce8vc.js#Zo","doc":"getRemoteSessionOrigin：environment_variables.CLAUDE_CODE_REMOTE_SESSION_ORIGIN。"}
+{"id":"chunk-hm0ce8vc.js#cs","doc":"isReviewOriginSession：旧版名 review 配错。"}
+{"id":"chunk-7p2hc4jn.js#p","doc":"NATIVE_CSIU_TERMINALS：同旧版。"}
+{"id":"chunk-tx2s9zpa.js#q","doc":"AdvisorPicker：旧版名 ThinkbackMenu 配错：内容是 advisor 模型选择。"}
+{"id":"chunk-vrdyygyr.js#L","doc":"parseVoiceArg：hold|tap|off|invalid。"}
+{"id":"chunk-18hwfzwa.js#_P","doc":"resolveCommandDialog：local-jsx 命令未提供 load 时，按 dialogKey ?? name 从 COMMAND_DIALOG_LOADERS 懒加载实现 chunk。"}
+{"id":"chunk-18hwfzwa.js#nre","doc":"COMMAND_DIALOG_LOADERS：local-jsx 命令名 → 实现 chunk 的懒加载表。"}
+{"id":"chunk-e6aww6q8.js#Z3s","doc":"buildBuiltinCommandTable：按固定顺序列出全部内建命令对象（约 145 项，含运行时门控组与构建期为 null 的占位），filter(Boolean) 后返回；结果由 getBuiltinCommandTable 缓存在 state.builtinCommandTable。"}
+{"id":"chunk-e6aww6q8.js#SX","doc":"getBuiltinCommands：返回缓存的内建命令表（不含技能、插件、MCP）。"}
+{"id":"chunk-e6aww6q8.js#UB","doc":"builtInCommandNames：内建命令占用的全部拼写（name、显示名、aliases，规范化后）的集合，用于技能/插件命名冲突检查。"}
+{"id":"chunk-e6aww6q8.js#bX","doc":"shippedCommandNames：内建表 + 运行时门控命令 + 发行内建技能/内建插件技能的全部拼写，用于遥测时判断命令名是否可原样上报。"}
+{"id":"chunk-e6aww6q8.js#Q3s","doc":"getRuntimeGatedBuiltinCommands：五个运行时门控组（fleetFork、fleetBackground、daemon、skillDoctor、logout）的 whenOpen 与 whenClosed 全部成员。"}
+{"id":"chunk-e6aww6q8.js#tzr","doc":"REMOTE_SAFE_COMMANDS：远程模式（--remote）下仍可在本地执行的命令集合。"}
+{"id":"chunk-e6aww6q8.js#Gwt","doc":"isBridgeSafeCommand：prompt 命令一律可桥接；local-jsx 不可；local 命令需在 BRIDGE_SAFE_COMMANDS 里。"}
+{"id":"chunk-e6aww6q8.js#FKe","doc":"admitsBridgeAuthor：判断桥接端提交的斜杠命令是否允许执行（插件注册的 local 命令需要能找到桥接安全的孪生命令）。"}
+{"id":"chunk-e6aww6q8.js#wtt","doc":"findBridgeFallback：为插件注册的同名 local 命令找到可代答的桥接安全内建孪生命令。"}
+{"id":"chunk-e6aww6q8.js#nzr","doc":"isBridgeDispatchable：命令能否通过桥接派发（综合 isBridgeSafeCommand 与插件孪生回退）。"}
+{"id":"chunk-e6aww6q8.js#gjo","doc":"filterCommandsForRemoteMode：只保留 REMOTE_SAFE_COMMANDS 中的命令。"}
+{"id":"chunk-e6aww6q8.js#Ett","doc":"getHumanFacingDescription：取命令面向用户的描述（技能优先用 description，过长时截断）。"}
+{"id":"chunk-e6aww6q8.js#AGt","doc":"formatDescriptionWithSource：描述后附加来源标注，例如 (plugin X)、(user)、(project)、(MCP)。"}
+{"id":"chunk-e6aww6q8.js#qZ","doc":"toSlashCommands：把命令列表转换为 SDK/控制协议用的 slash_commands 条目（name、description、argumentHint、aliases）。"}
+{"id":"chunk-e6aww6q8.js#iJn","doc":"toSlashCommand：单条转换；目录同名别名（named-folder alias）与内建命令的 aliases 会展开为额外拼写。"}
+{"id":"chunk-e6aww6q8.js#CGt","doc":"isBuiltinCommand：命令是否来自内建表（按对象身份或名字判断）。"}
+{"id":"chunk-e6aww6q8.js#RGt","doc":"bridgeAdvertisedCommands：向桥接端（claude.ai 远程会话）公布的命令列表，只含可桥接派发者。"}
+{"id":"chunk-e6aww6q8.js#yjo","doc":"toBridgeSlashCommands：把可桥接命令转换为带来源和描述的公布条目。"}
+{"id":"chunk-e6aww6q8.js#Tse","doc":"shippedCommandNameForAnalytics：命令名属于发行内建拼写时原样返回，否则返回 \"custom\"，避免上报用户自定义命令名。"}
+{"id":"chunk-e6aww6q8.js#zwt","doc":"warmCommandSourceCaches：启动时并发预热技能目录、插件命令/技能与内建技能的缓存，记录耗时。"}
+{"id":"chunk-e6aww6q8.js#Fp","doc":"getCommands：会话可用的全部斜杠命令。内部调用 assembleCommands（加载、可用性/启用过滤、动态技能插入），再经命令集钩子（插件 hookedCommands）与插件隐藏表处理；按 cwd+存储+隐藏插件做键缓存。"}
+{"id":"chunk-e6aww6q8.js#qI","doc":"clearCommandMemoizationCaches：清空 getCommands/loadAllCommands/技能列表等的记忆化缓存，但不清技能目录缓存。"}
+{"id":"chunk-e6aww6q8.js#CF","doc":"clearCommandsCache：清空命令相关的全部缓存（含技能目录、插件命令、插件技能）。"}
+{"id":"chunk-e6aww6q8.js#YI","doc":"getSkillToolCommands：Skill 工具可调用的技能列表（prompt、非内建、模型可调用、有描述或 whenToUse）。"}
+{"id":"chunk-e6aww6q8.js#G0e","doc":"getSlashCommandToolSkills：系统提示里列出的技能清单（来自技能目录、插件、内建技能，按设置过滤）。"}
+{"id":"chunk-e6aww6q8.js#bjo","doc":"commandsMemoKey：命令缓存键，由 cwd、存储 v5 开关与隐藏插件列表组成。"}
+{"id":"chunk-e6aww6q8.js#Pmn","doc":"firstPartyCommandNameCheck：名字是否被一方（内建/发行技能）命令占用的检查器。"}
+{"id":"chunk-e6aww6q8.js#Imn","doc":"folderNameAliasCheck：插件命名目录别名（named-folder）是否与已有命令冲突。"}
+{"id":"chunk-e6aww6q8.js#_jo","doc":"isFirstPartyCommandName：名字是否属于一方命令拼写。"}
+{"id":"chunk-e6aww6q8.js#Sjo","doc":"getHiddenSyncedSkills：被保留名挡住而未提供的 claude.ai 同步技能。"}
+{"id":"chunk-e6aww6q8.js#Ase","doc":"withNamedFolderYieldsRestored：恢复插件命名目录让出的别名（用于展示完整命令列表）。"}
+{"id":"chunk-e6aww6q8.js#rzr","doc":"HEADLESS_YIELDABLE_NAMES：无头模式下内建命令可以让给插件/技能的名字（help、feedback）。"}
+{"id":"chunk-e6aww6q8.js#HCe","doc":"meetsAvailabilityRequirement：命令 availability 要求是否满足。宿主可通过 commandsOffHere 关闭；claude-ai 需 claude.ai 订阅登录；console 需一方 API 且非 claude.ai 订阅；console-profile 需 user_oauth 档案登录。"}
+{"id":"chunk-e6aww6q8.js#Vrr","doc":"getSkills：并发加载技能目录、插件技能、发行内建技能与内建插件技能；任一来源失败只记日志并返回空。"}
+{"id":"chunk-s61vbvea.js#Zo","doc":"getCommandName：命令显示名（userFacingName?.() ?? name）。"}
+{"id":"chunk-s61vbvea.js#Ud","doc":"isCommandEnabled：先检查 policyGate（commandPolicyGateAllows，getter 抛错按 false），再 isEnabled?.() ?? true。"}
+{"id":"chunk-s61vbvea.js#Zs","doc":"findCommand：先按 name 精确匹配，再按显示名或 aliases，最后按 directoryListingName。"}
+{"id":"chunk-s61vbvea.js#hSe","doc":"hasCommand：findCommand 是否找到。"}
+{"id":"chunk-s61vbvea.js#t_n","doc":"getCommand：findCommand，找不到时抛出列出全部可用命令的 ReferenceError。"}
+{"id":"chunk-yjaa68dq.js#gEn","doc":"getRegisteredBundledSkillsIgnoringKillSwitch：返回已注册的全部发行内建技能命令，不看技能开关（用于名字保留）。"}

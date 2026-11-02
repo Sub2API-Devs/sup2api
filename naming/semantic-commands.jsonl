@@ -1,0 +1,1025 @@
+{"file":"chunk-00qhwn8e.js","key":"@27874","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /skills 的 local-jsx call 参数"}
+{"file":"chunk-00qhwn8e.js","key":"@27876","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /skills 的 local-jsx call 参数"}
+{"file":"chunk-0e9ty0k2.js","key":"@195","name":"daemonCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /daemon"}
+{"file":"chunk-0e9ty0k2.js","key":"@315","name":"daemonCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /daemon（模块导出的别名）"}
+{"file":"chunk-0eepcc6r.js","key":"@20604","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /ultrareview 的 local-jsx call 参数"}
+{"file":"chunk-0eepcc6r.js","key":"@20606","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /ultrareview 的 local-jsx call 参数"}
+{"file":"chunk-0eepcc6r.js","key":"@20608","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /ultrareview 的 local-jsx call 参数"}
+{"file":"chunk-0eepcc6r.js","key":"@20610","name":"invokedName","source":"semantic","confidence":0.85,"note":"call-param: /ultrareview 的 local-jsx call 参数"}
+{"file":"chunk-0knprqgt.js","key":"@13800","name":"withCopyFullResponse","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-0knprqgt.js","key":"@13850","name":"renderCopyBlockItem","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-0knprqgt.js","key":"@14032","name":"RESPONSE_FILENAME","source":"semantic","confidence":0.85,"note":"manual: 同旧版"}
+{"file":"chunk-0knprqgt.js","key":"@14049","name":"COPY_FILENAME","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-0knprqgt.js","key":"@14062","name":"MAX_LOOKBACK","source":"semantic","confidence":0.85,"note":"manual: 同旧版"}
+{"file":"chunk-0knprqgt.js","key":"@14068","name":"COPY_PICKER_TITLE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-0knprqgt.js","key":"@19757","name":"blockLabel","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-0knprqgt.js","key":"@19889","name":"MAX_BLOCK_LABEL_WIDTH","source":"semantic","confidence":0.6,"note":"manual: 120"}
+{"file":"chunk-0knprqgt.js","key":"@19896","name":"call","source":"semantic","confidence":0.75,"note":"manual: /copy 的 call"}
+{"file":"chunk-0knprqgt.js","key":"@19905","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /copy 的 local-jsx call 参数"}
+{"file":"chunk-0knprqgt.js","key":"@19907","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /copy 的 local-jsx call 参数"}
+{"file":"chunk-0knprqgt.js","key":"@19909","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /copy 的 local-jsx call 参数"}
+{"file":"chunk-0pmcg6nh.js","key":"@12232","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /model 的 local call 参数"}
+{"file":"chunk-0pmcg6nh.js","key":"@12234","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /model 的 local call 参数"}
+{"file":"chunk-0wa2vg6f.js","key":"@1723","name":"hasValidOAuthToken","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-0wa2vg6f.js","key":"@1790","name":"fetchGithubAuthStatus","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-0wa2vg6f.js","key":"@2181","name":"getGithubAuthSource","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-0wa2vg6f.js","key":"@2294","name":"getGithubConnectionStatus","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-10q8r8ck.js","key":"@27164","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /context 的 local-jsx call 参数"}
+{"file":"chunk-10q8r8ck.js","key":"@27166","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /context 的 local-jsx call 参数"}
+{"file":"chunk-10q8r8ck.js","key":"@27168","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /context 的 local-jsx call 参数"}
+{"file":"chunk-139kcwcq.js","key":"@4458","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /extra-usage 的 local-jsx call 参数"}
+{"file":"chunk-139kcwcq.js","key":"@4460","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /extra-usage 的 local-jsx call 参数"}
+{"file":"chunk-18hwfzwa.js","key":"@162629","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /tui 的 local-jsx call 参数"}
+{"file":"chunk-18hwfzwa.js","key":"@162631","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /tui 的 local-jsx call 参数"}
+{"file":"chunk-18hwfzwa.js","key":"@162633","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /tui 的 local-jsx call 参数"}
+{"file":"chunk-18hwfzwa.js","key":"@37278","name":"COMMAND_DIALOG_LOADERS","source":"semantic","confidence":0.8,"note":"manual: local-jsx 命令名 → 实现 chunk 的懒加载表"}
+{"file":"chunk-18hwfzwa.js","key":"@40629","name":"resolveCommandDialog","source":"semantic","confidence":0.85,"note":"manual: local-jsx：cmd.load ?? COMMAND_DIALOG_LOADERS[dialogKey??name]；旧版名 thinkback 配错"}
+{"file":"chunk-18hwfzwa.js","key":"@520989","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /fast 的 local-jsx call 参数"}
+{"file":"chunk-18hwfzwa.js","key":"@520991","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /fast 的 local-jsx call 参数"}
+{"file":"chunk-18hwfzwa.js","key":"@520993","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /fast 的 local-jsx call 参数"}
+{"file":"chunk-18hwfzwa.js","key":"@64051","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /background 的 local-jsx call 参数"}
+{"file":"chunk-18hwfzwa.js","key":"@64053","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /background 的 local-jsx call 参数"}
+{"file":"chunk-18hwfzwa.js","key":"@64055","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /background 的 local-jsx call 参数"}
+{"file":"chunk-19av2vh6.js","key":"@4000","name":"toggleDiffPanel","source":"semantic","confidence":0.6,"note":"manual: 全屏模式切换 diff 面板"}
+{"file":"chunk-19av2vh6.js","key":"@4095","name":"openDiffDialog","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-19av2vh6.js","key":"@4215","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /diff 的 local-jsx call 参数"}
+{"file":"chunk-19av2vh6.js","key":"@4217","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /diff 的 local-jsx call 参数"}
+{"file":"chunk-19av2vh6.js","key":"@4219","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /diff 的 local-jsx call 参数"}
+{"file":"chunk-19av2vh6.js","key":"@4221","name":"invokedName","source":"semantic","confidence":0.85,"note":"call-param: /diff 的 local-jsx call 参数"}
+{"file":"chunk-1ehcpf9z.js","key":"@13055","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /output-style 的 local call 参数"}
+{"file":"chunk-1ehcpf9z.js","key":"@13057","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /output-style 的 local call 参数"}
+{"file":"chunk-1nat7wre.js","key":"@4531","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /keybindings 的 local call 参数"}
+{"file":"chunk-1nat7wre.js","key":"@4533","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /keybindings 的 local call 参数"}
+{"file":"chunk-1ztfztfw.js","key":"@17519","name":"CHROME_NOT_ENABLED_NOTICE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-1ztfztfw.js","key":"@17746","name":"CHROME_NEEDS_CLAUDE_AI_NOTICE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-1ztfztfw.js","key":"@18036","name":"CHROME_DISABLED_IN_MCP_NOTICE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-1ztfztfw.js","key":"@22332","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /chrome 的 local-jsx call 参数"}
+{"file":"chunk-3m7t4vj8.js","key":"@195","name":"backgroundCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /background"}
+{"file":"chunk-3m7t4vj8.js","key":"@355","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-3m7t4vj8.js","key":"@387","name":"backgroundCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /background（模块导出的别名）"}
+{"file":"chunk-3rb87ry3.js","key":"@7804","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /session 的 local-jsx call 参数"}
+{"file":"chunk-3re05e6m.js","key":"@13286","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /mcp 的 local call 参数"}
+{"file":"chunk-3re05e6m.js","key":"@13288","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /mcp 的 local call 参数"}
+{"file":"chunk-3rwvzn82.js","key":"@15013","name":"applyEffortAndReport","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-3rwvzn82.js","key":"@32653","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /effort 的 local-jsx call 参数"}
+{"file":"chunk-3rwvzn82.js","key":"@32655","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /effort 的 local-jsx call 参数"}
+{"file":"chunk-3rwvzn82.js","key":"@32657","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /effort 的 local-jsx call 参数"}
+{"file":"chunk-3s4dbk22.js","key":"@27524","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /theme 的 local-jsx call 参数"}
+{"file":"chunk-3s4dbk22.js","key":"@27527","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /theme 的 local-jsx call 参数"}
+{"file":"chunk-3sew516d.js","key":"@12928","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /workflow-launch-exec 的 local call 参数"}
+{"file":"chunk-3sew516d.js","key":"@12930","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /workflow-launch-exec 的 local call 参数"}
+{"file":"chunk-3vqj3nc0.js","key":"@12640","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /subtask 的 local-jsx call 参数"}
+{"file":"chunk-3vqj3nc0.js","key":"@12642","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /subtask 的 local-jsx call 参数"}
+{"file":"chunk-3vqj3nc0.js","key":"@12644","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /subtask 的 local-jsx call 参数"}
+{"file":"chunk-4cndz99e.js","key":"@13440","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /auto-mode-setup 的 local call 参数"}
+{"file":"chunk-4cndz99e.js","key":"@13442","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /auto-mode-setup 的 local call 参数"}
+{"file":"chunk-4mtxrwhe.js","key":"@12398","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /clear 的 local call 参数"}
+{"file":"chunk-4mtxrwhe.js","key":"@12400","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /clear 的 local call 参数"}
+{"file":"chunk-4pdevvfa.js","key":"@26684","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /autofix-pr 的 local-jsx call 参数"}
+{"file":"chunk-4pdevvfa.js","key":"@26686","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /autofix-pr 的 local-jsx call 参数"}
+{"file":"chunk-4pdevvfa.js","key":"@26688","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /autofix-pr 的 local-jsx call 参数"}
+{"file":"chunk-4v9zy7gn.js","key":"@22855","name":"API_KEY_OPTIONS","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-4v9zy7gn.js","key":"@49001","name":"INITIAL_STATE","source":"semantic","confidence":0.85,"note":"manual: 同旧版"}
+{"file":"chunk-4v9zy7gn.js","key":"@49354","name":"NO_TERMINAL_ERROR_STATE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-4v9zy7gn.js","key":"@63119","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /install-github-app 的 local-jsx call 参数"}
+{"file":"chunk-4v9zy7gn.js","key":"@63121","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /install-github-app 的 local-jsx call 参数"}
+{"file":"chunk-53mky9yr.js","key":"@3803","name":"remoteControlCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /remote-control"}
+{"file":"chunk-53mky9yr.js","key":"@4078","name":"remoteControlCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /remote-control（模块导出的别名）"}
+{"file":"chunk-55w3ydvj.js","key":"@30458","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /sandbox 的 local-jsx call 参数"}
+{"file":"chunk-55w3ydvj.js","key":"@30460","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /sandbox 的 local-jsx call 参数"}
+{"file":"chunk-55w3ydvj.js","key":"@30462","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /sandbox 的 local-jsx call 参数"}
+{"file":"chunk-583vs41k.js","key":"@14333","name":"TRANSCRIPT_START_UNAVAILABLE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-583vs41k.js","key":"@14413","name":"CHROME_ROWS","source":"semantic","confidence":0.85,"note":"manual: 同旧版"}
+{"file":"chunk-583vs41k.js","key":"@14418","name":"OUTER_CHROME_ROWS","source":"semantic","confidence":0.85,"note":"manual: 同旧版"}
+{"file":"chunk-583vs41k.js","key":"@14423","name":"SCROLL_LINES","source":"semantic","confidence":0.85,"note":"manual: 同旧版"}
+{"file":"chunk-583vs41k.js","key":"@14433","name":"BTW_RESPONSE_SCHEMA","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-583vs41k.js","key":"@22279","name":"scheduleRetry","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-583vs41k.js","key":"@22365","name":"toBtwResult","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-583vs41k.js","key":"@22487","name":"toBtwError","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-583vs41k.js","key":"@26121","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /btw 的 local-jsx call 参数"}
+{"file":"chunk-583vs41k.js","key":"@26123","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /btw 的 local-jsx call 参数"}
+{"file":"chunk-583vs41k.js","key":"@26125","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /btw 的 local-jsx call 参数"}
+{"file":"chunk-583vs41k.js","key":"@26834","name":"askSideQuestion","source":"semantic","confidence":0.6,"note":"manual: 记录 inFlight 并调用侧问 API"}
+{"file":"chunk-5bdzenzx.js","key":"@16156","name":"countByName","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-5bdzenzx.js","key":"@16216","name":"isVSCodeName","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-5bdzenzx.js","key":"@24070","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /ide 的 local-jsx call 参数"}
+{"file":"chunk-5bdzenzx.js","key":"@24072","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /ide 的 local-jsx call 参数"}
+{"file":"chunk-5bdzenzx.js","key":"@24074","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /ide 的 local-jsx call 参数"}
+{"file":"chunk-5h69ret3.js","key":"@11893","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /rename 的 local call 参数"}
+{"file":"chunk-5h69ret3.js","key":"@11895","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /rename 的 local call 参数"}
+{"file":"chunk-66drwgm7.js","key":"@195","name":"recapCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /recap"}
+{"file":"chunk-66drwgm7.js","key":"@373","name":"recapCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /recap（模块导出的别名）"}
+{"file":"chunk-6a3xjg89.js","key":"@3868","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /context 的 local call 参数"}
+{"file":"chunk-6a3xjg89.js","key":"@3870","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /context 的 local call 参数"}
+{"file":"chunk-6qdkmygq.js","key":"@3651","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /design-revoke 的 local call 参数"}
+{"file":"chunk-6qdkmygq.js","key":"@3653","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /design-revoke 的 local call 参数"}
+{"file":"chunk-74n7apcd.js","key":"@21452","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /resume 的 local-jsx call 参数"}
+{"file":"chunk-74n7apcd.js","key":"@21454","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /resume 的 local-jsx call 参数"}
+{"file":"chunk-74n7apcd.js","key":"@21456","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /resume 的 local-jsx call 参数"}
+{"file":"chunk-7mtn3rbz.js","key":"@7279","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /mobile 的 local-jsx call 参数"}
+{"file":"chunk-7p2hc4jn.js","key":"@16613","name":"ZED_SHIFT_ENTER_ACTION","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-7p2hc4jn.js","key":"@16657","name":"isZedTerminalShiftEnterBinding","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-7p2hc4jn.js","key":"@2488","name":"NATIVE_CSIU_TERMINALS","source":"semantic","confidence":0.85,"note":"manual: 同旧版"}
+{"file":"chunk-7p2hc4jn.js","key":"@3871","name":"ITERM_CLIPBOARD_SETTING_PATH","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-7p2hc4jn.js","key":"@4844","name":"SHIFT_ENTER_BINDING_TERMINALS","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-7p2hc4jn.js","key":"@5221","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /terminal-setup 的 local-jsx call 参数"}
+{"file":"chunk-7p2hc4jn.js","key":"@5223","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /terminal-setup 的 local-jsx call 参数"}
+{"file":"chunk-7p2hc4jn.js","key":"@5225","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /terminal-setup 的 local-jsx call 参数"}
+{"file":"chunk-7p2hc4jn.js","key":"@6733","name":"VSCODE_SCROLL_SENSITIVITY_KEY","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-7p2hc4jn.js","key":"@6791","name":"VSCODE_GPU_ACCELERATION_KEY","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-7p2hc4jn.js","key":"@6832","name":"GPU_ACCELERATION_OFF","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-7p2hc4jn.js","key":"@7167","name":"getVSCodeFamilyName","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-8dz40wpq.js","key":"@3955","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /pause-memory 的 local call 参数"}
+{"file":"chunk-8dz40wpq.js","key":"@3957","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /pause-memory 的 local call 参数"}
+{"file":"chunk-8k62p17d.js","key":"@13769","name":"showReleaseNotesNotice","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-8k62p17d.js","key":"@13863","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /release-notes 的 local-jsx call 参数"}
+{"file":"chunk-8k62p17d.js","key":"@13865","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /release-notes 的 local-jsx call 参数"}
+{"file":"chunk-8nayjra0.js","key":"@15276","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /setup-vertex 的 local-jsx call 参数"}
+{"file":"chunk-8nayjra0.js","key":"@15278","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /setup-vertex 的 local-jsx call 参数"}
+{"file":"chunk-8ncxevqn.js","key":"@12856","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /config 的 local call 参数"}
+{"file":"chunk-8ncxevqn.js","key":"@12858","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /config 的 local call 参数"}
+{"file":"chunk-8t8n4kdh.js","key":"@160351","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-8t8n4kdh.js","key":"@160353","name":"context","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-8vqp1nqq.js","key":"@14428","name":"REMOTE_RELOAD_UNAVAILABLE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-8vqp1nqq.js","key":"@14507","name":"PLUGIN_MCP_NEXT_SESSION_NOTE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-8vqp1nqq.js","key":"@14572","name":"call","source":"semantic","confidence":0.75,"note":"manual: /reload-plugins 的 call"}
+{"file":"chunk-8vqp1nqq.js","key":"@14581","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /reload-plugins 的 local call 参数"}
+{"file":"chunk-8vqp1nqq.js","key":"@14583","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /reload-plugins 的 local call 参数"}
+{"file":"chunk-8vqp1nqq.js","key":"@16994","name":"canReloadPlugins","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-9689amr8.js","key":"@13270","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /usage 的 local call 参数"}
+{"file":"chunk-9689amr8.js","key":"@13272","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /usage 的 local call 参数"}
+{"file":"chunk-9dc848ph.js","key":"@12009","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /reload-skills 的 local call 参数"}
+{"file":"chunk-9dc848ph.js","key":"@12011","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /reload-skills 的 local call 参数"}
+{"file":"chunk-a7sxm3q7.js","key":"@6887","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /wellbeing 的 local-jsx call 参数"}
+{"file":"chunk-aa3cndeh.js","key":"@11164","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /passes 的 local-jsx call 参数"}
+{"file":"chunk-aa3cndeh.js","key":"@11166","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /passes 的 local-jsx call 参数"}
+{"file":"chunk-adzz9hc5.js","key":"@3348","name":"stopCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /stop"}
+{"file":"chunk-adzz9hc5.js","key":"@3504","name":"stopNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /stop"}
+{"file":"chunk-adzz9hc5.js","key":"@3688","name":"stopCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /stop（模块导出的别名）"}
+{"file":"chunk-ajkmgejw.js","key":"@21777","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /web-setup 的 local-jsx call 参数"}
+{"file":"chunk-ajkmgejw.js","key":"@21779","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /web-setup 的 local-jsx call 参数"}
+{"file":"chunk-ak1qv1dp.js","key":"@17293","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /config 的 local-jsx call 参数"}
+{"file":"chunk-ak1qv1dp.js","key":"@17295","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /config 的 local-jsx call 参数"}
+{"file":"chunk-ak1qv1dp.js","key":"@17297","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /config 的 local-jsx call 参数"}
+{"file":"chunk-am3vy82s.js","key":"@21489","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /export 的 local-jsx call 参数"}
+{"file":"chunk-am3vy82s.js","key":"@21491","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /export 的 local-jsx call 参数"}
+{"file":"chunk-am3vy82s.js","key":"@21493","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /export 的 local-jsx call 参数"}
+{"file":"chunk-b7gstm5r.js","key":"@22686","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /daemon 的 local-jsx call 参数"}
+{"file":"chunk-b7gstm5r.js","key":"@22688","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /daemon 的 local-jsx call 参数"}
+{"file":"chunk-b8fqh6y9.js","key":"@17187","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /usage 的 local-jsx call 参数"}
+{"file":"chunk-b8fqh6y9.js","key":"@17189","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /usage 的 local-jsx call 参数"}
+{"file":"chunk-b8fqh6y9.js","key":"@17191","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /usage 的 local-jsx call 参数"}
+{"file":"chunk-b8fqh6y9.js","key":"@17193","name":"invokedName","source":"semantic","confidence":0.85,"note":"call-param: /usage 的 local-jsx call 参数"}
+{"file":"chunk-bajxb7bf.js","key":"@57828","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /hooks 的 local-jsx call 参数"}
+{"file":"chunk-bajxb7bf.js","key":"@57830","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /hooks 的 local-jsx call 参数"}
+{"file":"chunk-c2tx3syd.js","key":"@17639","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /teleport 的 local-jsx call 参数"}
+{"file":"chunk-c2tx3syd.js","key":"@17641","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /teleport 的 local-jsx call 参数"}
+{"file":"chunk-c55mbvfz.js","key":"@43687","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /memory 的 local-jsx call 参数"}
+{"file":"chunk-c55mbvfz.js","key":"@43689","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /memory 的 local-jsx call 参数"}
+{"file":"chunk-c9mbsnrs.js","key":"@3651","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /design-consent 的 local call 参数"}
+{"file":"chunk-c9mbsnrs.js","key":"@3653","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /design-consent 的 local call 参数"}
+{"file":"chunk-cc2xzzcg.js","key":"@12640","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /fork 的 local-jsx call 参数"}
+{"file":"chunk-cc2xzzcg.js","key":"@12642","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /fork 的 local-jsx call 参数"}
+{"file":"chunk-cc2xzzcg.js","key":"@12644","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /fork 的 local-jsx call 参数"}
+{"file":"chunk-cdgppz20.js","key":"@19624","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /import 的 local-jsx call 参数"}
+{"file":"chunk-cdgppz20.js","key":"@19626","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /import 的 local-jsx call 参数"}
+{"file":"chunk-cdgppz20.js","key":"@19628","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /import 的 local-jsx call 参数"}
+{"file":"chunk-cefm4bvm.js","key":"@321","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /stop 的 local-jsx call 参数"}
+{"file":"chunk-cefm4bvm.js","key":"@323","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /stop 的 local-jsx call 参数"}
+{"file":"chunk-cg8zacmh.js","key":"@12955","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /__remote-workflow 的 local call 参数"}
+{"file":"chunk-cg8zacmh.js","key":"@12957","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /__remote-workflow 的 local call 参数"}
+{"file":"chunk-cpqpnzp4.js","key":"@45201","name":"NO_TERMINAL_MCP_NOTICE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-cpqpnzp4.js","key":"@45674","name":"requestMcpSettingsFromHost","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-cpqpnzp4.js","key":"@45863","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /mcp 的 local-jsx call 参数"}
+{"file":"chunk-cpqpnzp4.js","key":"@45865","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /mcp 的 local-jsx call 参数"}
+{"file":"chunk-cpqpnzp4.js","key":"@45867","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /mcp 的 local-jsx call 参数"}
+{"file":"chunk-d62reftv.js","key":"@16031","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /fork 的 local-jsx call 参数"}
+{"file":"chunk-d62reftv.js","key":"@16033","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /fork 的 local-jsx call 参数"}
+{"file":"chunk-d62reftv.js","key":"@16035","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /fork 的 local-jsx call 参数"}
+{"file":"chunk-dg94x42s.js","key":"@37687","name":"getWaitOptionLabel","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-dg94x42s.js","key":"@38113","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /rate-limit-options 的 local-jsx call 参数"}
+{"file":"chunk-dg94x42s.js","key":"@38115","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /rate-limit-options 的 local-jsx call 参数"}
+{"file":"chunk-dhgx9s0b.js","key":"@2280","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /heapdump 的 local call 参数"}
+{"file":"chunk-dhgx9s0b.js","key":"@2282","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /heapdump 的 local call 参数"}
+{"file":"chunk-dhgx9s0b.js","key":"@2849","name":"formatHeapReport","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-dhgx9s0b.js","key":"@3917","name":"formatGigabytes","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-ds2d8kad.js","key":"@18336","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /desktop 的 local-jsx call 参数"}
+{"file":"chunk-ds2d8kad.js","key":"@18338","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /desktop 的 local-jsx call 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1673280","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1673283","name":"context","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1683965","name":"addDirNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /add-dir"}
+{"file":"chunk-e6aww6q8.js","key":"@1684213","name":"addDirCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /add-dir"}
+{"file":"chunk-e6aww6q8.js","key":"@1684325","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1684327","name":"presentation","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1684390","name":"addDirCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /add-dir（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1684402","name":"cloudPluginsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /cloud-plugins"}
+{"file":"chunk-e6aww6q8.js","key":"@1684632","name":"getAutoModeModelSetting","source":"semantic","confidence":0.6,"note":"manual: dpn()：auto 模式分类器模型"}
+{"file":"chunk-e6aww6q8.js","key":"@1684690","name":"isAutoModeSetupSurface","source":"semantic","confidence":0.6,"note":"manual: 非 CLAUDE_CODE_REMOTE 且 yse()"}
+{"file":"chunk-e6aww6q8.js","key":"@1684740","name":"isAutoModeSetupAvailable","source":"semantic","confidence":0.6,"note":"manual: /auto-mode-setup（非交互）启用条件"}
+{"file":"chunk-e6aww6q8.js","key":"@1684786","name":"isAutoModeOnboardingEnabled","source":"semantic","confidence":0.6,"note":"manual: /auto-mode-setup（交互）启用条件：tengu_auto_mode_config.envOnboarding"}
+{"file":"chunk-e6aww6q8.js","key":"@1684840","name":"isAutoModeSetupNotOverridden","source":"semantic","confidence":0.6,"note":"manual: 且 skillOverrides[\"auto-mode-setup\"] 不为 off"}
+{"file":"chunk-e6aww6q8.js","key":"@1684913","name":"autoModeSetupNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /auto-mode-setup"}
+{"file":"chunk-e6aww6q8.js","key":"@1685300","name":"autoModeSetupCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /auto-mode-setup"}
+{"file":"chunk-e6aww6q8.js","key":"@1685484","name":"autoModeSetupCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /auto-mode-setup（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1685496","name":"artifactsCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /artifacts"}
+{"file":"chunk-e6aww6q8.js","key":"@1685678","name":"artifactsRunsBesideTurns","source":"semantic","confidence":0.6,"note":"manual: tengu_cobalt_plinth_sainfoin：/artifacts 可在回合进行中打开"}
+{"file":"chunk-e6aww6q8.js","key":"@1685732","name":"artifactsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /artifacts（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1685749","name":"isAutofixPrEnabled","source":"semantic","confidence":0.75,"note":"manual: (claude.ai 订阅 或 console 档案) 且 allow_remote_sessions"}
+{"file":"chunk-e6aww6q8.js","key":"@1685808","name":"autofixPrCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /autofix-pr"}
+{"file":"chunk-e6aww6q8.js","key":"@1686090","name":"autofixPrCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /autofix-pr（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1686102","name":"btwCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /btw"}
+{"file":"chunk-e6aww6q8.js","key":"@1686318","name":"btwCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /btw（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1686381","name":"feedbackCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /feedback"}
+{"file":"chunk-e6aww6q8.js","key":"@1686532","name":"feedbackCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /feedback（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1686544","name":"bugCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /bug"}
+{"file":"chunk-e6aww6q8.js","key":"@1686705","name":"bugCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /bug（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1686717","name":"cdCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /cd"}
+{"file":"chunk-e6aww6q8.js","key":"@1686831","name":"cdCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /cd（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1686843","name":"clearCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /clear"}
+{"file":"chunk-e6aww6q8.js","key":"@1687127","name":"clearCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /clear（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1687139","name":"colorCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /color"}
+{"file":"chunk-e6aww6q8.js","key":"@1687417","name":"colorNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /color"}
+{"file":"chunk-e6aww6q8.js","key":"@1687685","name":"colorCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /color（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1687697","name":"copyCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /copy"}
+{"file":"chunk-e6aww6q8.js","key":"@1687837","name":"copyCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /copy（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1687878","name":"isDesktopCommandEnabled","source":"semantic","confidence":0.7,"note":"manual: /desktop 的 isEnabled"}
+{"file":"chunk-e6aww6q8.js","key":"@1687908","name":"desktopCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /desktop"}
+{"file":"chunk-e6aww6q8.js","key":"@1688093","name":"desktopCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /desktop（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1688133","name":"COMMIT_PUSH_PR_TOOLS","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1688167","name":"SLACK_POST_TOOLS","source":"semantic","confidence":0.6,"note":"manual: ToolSearch + slack send_message 工具"}
+{"file":"chunk-e6aww6q8.js","key":"@1688256","name":"COMMIT_PUSH_PR_GIT_COMMANDS","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1688408","name":"buildAllowedTools","source":"semantic","confidence":0.6,"note":"manual: Bash(…) 规则 + 额外工具"}
+{"file":"chunk-e6aww6q8.js","key":"@1688466","name":"COMMIT_PUSH_PR_ALLOWED_TOOLS","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1688507","name":"getCommitPushPrAllowedTools","source":"semantic","confidence":0.6,"note":"manual: 按 git remote 动态生成 push 规则"}
+{"file":"chunk-e6aww6q8.js","key":"@1688615","name":"COMMIT_PUSH_PR_DISALLOWED_TOOLS","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1688685","name":"SLACK_POST_INSTRUCTIONS","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1689188","name":"getPromptContent","source":"semantic","confidence":0.85,"note":"manual: 同旧版 commit-push-pr getPromptContent"}
+{"file":"chunk-e6aww6q8.js","key":"@1692597","name":"commitPushPrCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: prompt 命令对象 /commit-push-pr"}
+{"file":"chunk-e6aww6q8.js","key":"@1692876","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1692878","name":"context","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1693172","name":"commitPushPrCommand","source":"semantic","confidence":0.9,"note":"cmd-object: prompt 命令对象 /commit-push-pr（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1693189","name":"sanitizeUsername","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1693240","name":"autocompactCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /autocompact"}
+{"file":"chunk-e6aww6q8.js","key":"@1693464","name":"autocompactNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /autocompact"}
+{"file":"chunk-e6aww6q8.js","key":"@1693790","name":"configCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /config"}
+{"file":"chunk-e6aww6q8.js","key":"@1693913","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1693915","name":"presentation","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1694077","name":"configNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /config"}
+{"file":"chunk-e6aww6q8.js","key":"@1694303","name":"configCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /config（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1694320","name":"isSettingsMovedToConfig","source":"semantic","confidence":0.65,"note":"manual: tengu_maple_sundial：vim/output-style 改到 /config"}
+{"file":"chunk-e6aww6q8.js","key":"@1694370","name":"createMovedToConfigCommand","source":"semantic","confidence":0.8,"note":"manual: 生成 \"X moved to /config\" 的隐藏 local-jsx 命令"}
+{"file":"chunk-e6aww6q8.js","key":"@1694374","name":"name","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@1694376","name":"label","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@1694378","name":"extraRequires","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@1694491","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1694493","name":"presentation","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1694542","name":"vimMovedToConfigCommand","source":"semantic","confidence":0.8,"note":"manual: createMovedToConfigCommand(\"vim\",\"Editor mode\")"}
+{"file":"chunk-e6aww6q8.js","key":"@1694571","name":"outputStyleMovedToConfigCommand","source":"semantic","confidence":0.8,"note":"manual: createMovedToConfigCommand(\"output-style\",\"Output style\")"}
+{"file":"chunk-e6aww6q8.js","key":"@1694653","name":"outputStyleCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /output-style"}
+{"file":"chunk-e6aww6q8.js","key":"@1694966","name":"contextCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /context"}
+{"file":"chunk-e6aww6q8.js","key":"@1695154","name":"contextNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /context"}
+{"file":"chunk-e6aww6q8.js","key":"@1695351","name":"diffCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /diff"}
+{"file":"chunk-e6aww6q8.js","key":"@1695588","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1695590","name":"presentation","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1695658","name":"memoryCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /memory"}
+{"file":"chunk-e6aww6q8.js","key":"@1695793","name":"memoryCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /memory（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1695805","name":"pauseMemoryCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /pause-memory"}
+{"file":"chunk-e6aww6q8.js","key":"@1696252","name":"pauseMemoryCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /pause-memory（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1696264","name":"helpCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /help"}
+{"file":"chunk-e6aww6q8.js","key":"@1696356","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1696358","name":"presentation","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1696398","name":"helpCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /help（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1696410","name":"ideCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /ide"}
+{"file":"chunk-e6aww6q8.js","key":"@1696520","name":"ideCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /ide（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1696537","name":"isImportEnabled","source":"semantic","confidence":0.75,"note":"manual: tengu_import"}
+{"file":"chunk-e6aww6q8.js","key":"@1696575","name":"IMPORT_UNAVAILABLE_MESSAGE","source":"semantic","confidence":0.6,"note":"manual: `claude import` is not yet available"}
+{"file":"chunk-e6aww6q8.js","key":"@1696701","name":"CONFIG_UNREADABLE_MESSAGE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1696803","name":"planImportRewrite","source":"semantic","confidence":0.6,"note":"manual: `claude import` → `claude -- /import ...` 改写"}
+{"file":"chunk-e6aww6q8.js","key":"@1696977","name":"parseImportArgv","source":"semantic","confidence":0.6,"note":"manual: 识别 argv 中的 import 子命令"}
+{"file":"chunk-e6aww6q8.js","key":"@1697321","name":"areValidImportArgs","source":"semantic","confidence":0.6,"note":"manual: codex|gemini|cursor|--dry-run|--yes[=digest]"}
+{"file":"chunk-e6aww6q8.js","key":"@1697449","name":"importCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /import"}
+{"file":"chunk-e6aww6q8.js","key":"@1697648","name":"importNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /import"}
+{"file":"chunk-e6aww6q8.js","key":"@1697876","name":"importCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /import（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1698106","name":"IMPORT_OFFER_INSTRUCTIONS","source":"semantic","confidence":0.6,"note":"manual: 提示模型建议用户 /import"}
+{"file":"chunk-e6aww6q8.js","key":"@1698712","name":"useNewInitPrompt","source":"semantic","confidence":0.7,"note":"manual: CLAUDE_CODE_NEW_INIT 或 tengu_slate_harbor_experiment"}
+{"file":"chunk-e6aww6q8.js","key":"@1698791","name":"getOldInitPrompt","source":"semantic","confidence":0.8,"note":"manual: 同旧版 OLD_INIT_PROMPT"}
+{"file":"chunk-e6aww6q8.js","key":"@1700573","name":"getNewInitPrompt","source":"semantic","confidence":0.8,"note":"manual: 同旧版 NEW_INIT_PROMPT"}
+{"file":"chunk-e6aww6q8.js","key":"@1722471","name":"initCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: prompt 命令对象 /init"}
+{"file":"chunk-e6aww6q8.js","key":"@1722852","name":"initCommand","source":"semantic","confidence":0.9,"note":"cmd-object: prompt 命令对象 /init（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1722864","name":"keybindingsCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /keybindings"}
+{"file":"chunk-e6aww6q8.js","key":"@1723059","name":"keybindingsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /keybindings（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1723071","name":"designConsentCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /design-consent"}
+{"file":"chunk-e6aww6q8.js","key":"@1723287","name":"designRevokeCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /design-revoke"}
+{"file":"chunk-e6aww6q8.js","key":"@1723507","name":"createDesignLoginCommand","source":"semantic","confidence":0.7,"note":"manual: 返回 /design-login 命令对象"}
+{"file":"chunk-e6aww6q8.js","key":"@1730781","name":"getLoginAvailability","source":"semantic","confidence":0.65,"note":"manual: any-method / refused / claudeai-only（云会话内登录限制）"}
+{"file":"chunk-e6aww6q8.js","key":"@1731826","name":"logoutCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /logout"}
+{"file":"chunk-e6aww6q8.js","key":"@1732055","name":"installGithubAppCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /install-github-app"}
+{"file":"chunk-e6aww6q8.js","key":"@1732253","name":"installGithubAppCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /install-github-app（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1732265","name":"installSlackAppCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /install-slack-app"}
+{"file":"chunk-e6aww6q8.js","key":"@1732444","name":"installSlackAppCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /install-slack-app（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1732507","name":"mcpNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /mcp"}
+{"file":"chunk-e6aww6q8.js","key":"@1732770","name":"mcpCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /mcp"}
+{"file":"chunk-e6aww6q8.js","key":"@1732961","name":"mcpCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /mcp（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1732973","name":"mobileCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /mobile"}
+{"file":"chunk-e6aww6q8.js","key":"@1733115","name":"mobileCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /mobile（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1733178","name":"voiceCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /voice"}
+{"file":"chunk-e6aww6q8.js","key":"@1733393","name":"voiceCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /voice（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1733405","name":"powerupCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /powerup"}
+{"file":"chunk-e6aww6q8.js","key":"@1733543","name":"releaseNotesCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /release-notes"}
+{"file":"chunk-e6aww6q8.js","key":"@1733638","name":"releaseNotesCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /release-notes（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1733650","name":"renameCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /rename"}
+{"file":"chunk-e6aww6q8.js","key":"@1733842","name":"renameNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /rename"}
+{"file":"chunk-e6aww6q8.js","key":"@1734072","name":"renameCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /rename（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1734089","name":"isResumeEnabled","source":"semantic","confidence":0.6,"note":"manual: 恒 true"}
+{"file":"chunk-e6aww6q8.js","key":"@1734108","name":"resumeCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /resume"}
+{"file":"chunk-e6aww6q8.js","key":"@1734418","name":"resumeCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /resume（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1734430","name":"setupBedrockCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /setup-bedrock"}
+{"file":"chunk-e6aww6q8.js","key":"@1734644","name":"setupVertexCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /setup-vertex"}
+{"file":"chunk-e6aww6q8.js","key":"@1734866","name":"CCR_TERMS_URL","source":"semantic","confidence":0.85,"note":"manual: 同旧版"}
+{"file":"chunk-e6aww6q8.js","key":"@1734936","name":"getUltrareviewDescription","source":"semantic","confidence":0.7,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1735084","name":"ultrareviewCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /ultrareview"}
+{"file":"chunk-e6aww6q8.js","key":"@1735177","name":"ultrareviewNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /ultrareview"}
+{"file":"chunk-e6aww6q8.js","key":"@1735369","name":"sessionCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /session"}
+{"file":"chunk-e6aww6q8.js","key":"@1735548","name":"sessionCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /session（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1735662","name":"scrollSpeedCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /scroll-speed"}
+{"file":"chunk-e6aww6q8.js","key":"@1735864","name":"scrollSpeedCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /scroll-speed（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1735876","name":"skillsCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /skills"}
+{"file":"chunk-e6aww6q8.js","key":"@1735999","name":"skillsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /skills（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1736011","name":"statusCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /status"}
+{"file":"chunk-e6aww6q8.js","key":"@1736188","name":"statusCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /status（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1736200","name":"tasksCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /tasks"}
+{"file":"chunk-e6aww6q8.js","key":"@1736372","name":"tasksCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /tasks（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1736556","name":"isTeamOnboardingShareEnabled","source":"semantic","confidence":0.6,"note":"manual: tengu_flint_harbor_share 且 allow_team_onboarding"}
+{"file":"chunk-e6aww6q8.js","key":"@1738214","name":"scanSessionUsage","source":"semantic","confidence":0.6,"note":"manual: 扫描会话 JSONL：斜杠命令次数、MCP 调用次数、会话描述"}
+{"file":"chunk-e6aww6q8.js","key":"@1739830","name":"TEAM_ONBOARDING_DEFAULT_WINDOW_DAYS","source":"semantic","confidence":0.6,"note":"manual: 30"}
+{"file":"chunk-e6aww6q8.js","key":"@1739911","name":"readProjectMcpServers","source":"semantic","confidence":0.6,"note":"manual: 读 .mcp.json 的 mcpServers"}
+{"file":"chunk-e6aww6q8.js","key":"@1740231","name":"collectTeamOnboardingUsage","source":"semantic","confidence":0.6,"note":"manual: 组装 /team-onboarding 的 usageData"}
+{"file":"chunk-e6aww6q8.js","key":"@1741005","name":"TEAM_ONBOARDING_GUIDE_TEMPLATE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1742796","name":"TEAM_ONBOARDING_PROMPT","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1747480","name":"getTeamOnboardingSharingInstructions","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1748661","name":"TEAM_ONBOARDING_ALLOWED_TOOLS","source":"semantic","confidence":0.65,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1748706","name":"teamOnboardingCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: prompt 命令对象 /team-onboarding"}
+{"file":"chunk-e6aww6q8.js","key":"@1749101","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1749103","name":"context","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1749809","name":"teamOnboardingCommand","source":"semantic","confidence":0.9,"note":"cmd-object: prompt 命令对象 /team-onboarding（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1749821","name":"teleportCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /teleport"}
+{"file":"chunk-e6aww6q8.js","key":"@1750067","name":"teleportCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /teleport（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@1750084","name":"getCommandOriginKind","source":"semantic","confidence":0.6,"note":"manual: builtin/plugin/mcp/user"}
+{"file":"chunk-e6aww6q8.js","key":"@1750433","name":"createMovedToPluginCommand","source":"semantic","confidence":0.85,"note":"manual: 同旧版"}
+{"file":"chunk-e6aww6q8.js","key":"@1750717","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1750719","name":"context","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@1750742","name":"SECURITY_REVIEW_GIT_COMMANDS","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1750821","name":"SECURITY_REVIEW_ALLOWED_TOOLS","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@1750888","name":"SECURITY_REVIEW_PROMPT","source":"semantic","confidence":0.65,"note":"manual: 带 frontmatter 的安全审查提示词"}
+{"file":"chunk-e6aww6q8.js","key":"@1761668","name":"securityReviewCommand","source":"semantic","confidence":0.85,"note":"manual: createMovedToPluginCommand({name:\"security-review\"})"}
+{"file":"chunk-e6aww6q8.js","key":"@1762656","name":"NATIVE_SHIFT_ENTER_TERMINALS","source":"semantic","confidence":0.6,"note":"manual: ghostty/kitty/Warp/WezTerm/Windows Terminal"}
+{"file":"chunk-e6aww6q8.js","key":"@1762770","name":"terminalSetupCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /terminal-setup"}
+{"file":"chunk-e6aww6q8.js","key":"@1763383","name":"terminalSetupCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /terminal-setup（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2014149","name":"isUltraplanEnabled","source":"semantic","confidence":0.75,"note":"manual: tengu_ultraplan_config.enabled 且 bridge 可用且非远程"}
+{"file":"chunk-e6aww6q8.js","key":"@2014226","name":"CCR_TERMS_URL_ULTRAPLAN","source":"semantic","confidence":0.7,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2014287","name":"ULTRAPLAN_PROMPTS","source":"semantic","confidence":0.6,"note":"manual: simple_plan/visual_plan/three_subagents_with_critique"}
+{"file":"chunk-e6aww6q8.js","key":"@2014365","name":"DEFAULT_ULTRAPLAN_PROMPT_ID","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2014392","name":"isUltraplanPromptId","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2014424","name":"getUltraplanPromptId","source":"semantic","confidence":0.6,"note":"manual: tengu_ultraplan_prompt_identifier"}
+{"file":"chunk-e6aww6q8.js","key":"@2014503","name":"DEFAULT_ULTRAPLAN_COPY","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2014928","name":"ULTRAPLAN_COPY_BY_PROMPT","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2015426","name":"getUltraplanCopy","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2015463","name":"getUltraplanPromptText","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2018387","name":"buildLaunchingMessage","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2018645","name":"buildPlanReadyMessage","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2018729","name":"getUltraplanUsage","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2022805","name":"call","source":"semantic","confidence":0.7,"note":"manual: /ultraplan 的 call（rrn.load 直接给出）"}
+{"file":"chunk-e6aww6q8.js","key":"@2023394","name":"ULTRAPLAN_NO_CONSENT_SURFACE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2023561","name":"runUltraplanConsentFlow","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2025509","name":"ultraplanCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /ultraplan"}
+{"file":"chunk-e6aww6q8.js","key":"@2025769","name":"usageCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /usage"}
+{"file":"chunk-e6aww6q8.js","key":"@2025962","name":"usageNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /usage"}
+{"file":"chunk-e6aww6q8.js","key":"@2026270","name":"skillDoctorCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /skill-doctor"}
+{"file":"chunk-e6aww6q8.js","key":"@2026422","name":"skillDoctorNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /skill-doctor"}
+{"file":"chunk-e6aww6q8.js","key":"@2026678","name":"themeCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /theme"}
+{"file":"chunk-e6aww6q8.js","key":"@2026755","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@2026757","name":"presentation","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@2026797","name":"themeCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /theme（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2026809","name":"tuiCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /tui"}
+{"file":"chunk-e6aww6q8.js","key":"@2026945","name":"tuiCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /tui（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2026957","name":"permissionsCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /permissions"}
+{"file":"chunk-e6aww6q8.js","key":"@2027133","name":"permissionsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /permissions（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2027145","name":"planCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /plan"}
+{"file":"chunk-e6aww6q8.js","key":"@2027298","name":"planCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /plan（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2027310","name":"fastCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /fast"}
+{"file":"chunk-e6aww6q8.js","key":"@2027519","name":"fastNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /fast"}
+{"file":"chunk-e6aww6q8.js","key":"@2027740","name":"fastCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /fast（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2027752","name":"passesCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /passes"}
+{"file":"chunk-e6aww6q8.js","key":"@2028032","name":"privacySettingsCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /privacy-settings"}
+{"file":"chunk-e6aww6q8.js","key":"@2028168","name":"privacySettingsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /privacy-settings（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2028180","name":"hooksCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /hooks"}
+{"file":"chunk-e6aww6q8.js","key":"@2028315","name":"hooksCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /hooks（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2028327","name":"loopsCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /loops"}
+{"file":"chunk-e6aww6q8.js","key":"@2028438","name":"loopsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /loops（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2028450","name":"branchCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /branch"}
+{"file":"chunk-e6aww6q8.js","key":"@2028620","name":"branchCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /branch（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2028632","name":"forkSubagentCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /fork"}
+{"file":"chunk-e6aww6q8.js","key":"@2028832","name":"forkToBackgroundCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /fork"}
+{"file":"chunk-e6aww6q8.js","key":"@2029004","name":"subtaskCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /subtask"}
+{"file":"chunk-e6aww6q8.js","key":"@2029212","name":"callAgentsRemoved","source":"semantic","confidence":0.7,"note":"manual: 返回 \"/agents wizard has been removed\" 文案"}
+{"file":"chunk-e6aww6q8.js","key":"@2029562","name":"agentsRemovedCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /agents"}
+{"file":"chunk-e6aww6q8.js","key":"@2029788","name":"agentsRemovedCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /agents（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2029800","name":"pluginCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /plugin"}
+{"file":"chunk-e6aww6q8.js","key":"@2030067","name":"pluginCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /plugin（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2030079","name":"reloadPluginsCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /reload-plugins"}
+{"file":"chunk-e6aww6q8.js","key":"@2030336","name":"reloadPluginsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /reload-plugins（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2030348","name":"reloadSkillsCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /reload-skills"}
+{"file":"chunk-e6aww6q8.js","key":"@2030558","name":"reloadSkillsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /reload-skills（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2030570","name":"rewindCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /rewind"}
+{"file":"chunk-e6aww6q8.js","key":"@2030822","name":"rewindCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /rewind（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2030834","name":"heapdumpCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /heapdump"}
+{"file":"chunk-e6aww6q8.js","key":"@2031336","name":"heapdumpCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /heapdump（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2031399","name":"versionCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /version"}
+{"file":"chunk-e6aww6q8.js","key":"@2031561","name":"callVersion","source":"semantic","confidence":0.7,"note":"manual: /version 非交互实现"}
+{"file":"chunk-e6aww6q8.js","key":"@2033107","name":"versionNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /version"}
+{"file":"chunk-e6aww6q8.js","key":"@2033338","name":"versionCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /version（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2033751","name":"sandboxCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /sandbox"}
+{"file":"chunk-e6aww6q8.js","key":"@2034486","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@2034568","name":"sandboxCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /sandbox（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2034580","name":"chromeCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /chrome"}
+{"file":"chunk-e6aww6q8.js","key":"@2034768","name":"chromeCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /chrome（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2034780","name":"stickersCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /stickers"}
+{"file":"chunk-e6aww6q8.js","key":"@2034921","name":"stickersCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /stickers（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2034933","name":"radioCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /radio"}
+{"file":"chunk-e6aww6q8.js","key":"@2035076","name":"radioCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /radio（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2035088","name":"advisorCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /advisor"}
+{"file":"chunk-e6aww6q8.js","key":"@2035256","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@2035258","name":"presentation","source":"semantic","confidence":0.8,"note":"cmd-method-param: immediate 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@2035401","name":"advisorNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /advisor"}
+{"file":"chunk-e6aww6q8.js","key":"@2035739","name":"isEnterpriseUpsellEnabled","source":"semantic","confidence":0.6,"note":"manual: tengu_c4e_slash_upsell"}
+{"file":"chunk-e6aww6q8.js","key":"@2035850","name":"isSignedOut","source":"semantic","confidence":0.6,"note":"manual: 无 OAuth 也无 API key"}
+{"file":"chunk-e6aww6q8.js","key":"@2035973","name":"getEnterpriseUpsellMessage","source":"semantic","confidence":0.6,"note":"manual: policy_disabled / signed_out / c4e 三种文案"}
+{"file":"chunk-e6aww6q8.js","key":"@2035977","name":"spec","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2036372","name":"createEnterpriseUpsellCommand","source":"semantic","confidence":0.75,"note":"manual: 隐藏 local 命令，提示需要 Claude for Enterprise"}
+{"file":"chunk-e6aww6q8.js","key":"@2036375","name":"spec","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2036757","name":"ENTERPRISE_UPSELL_COMMANDS","source":"semantic","confidence":0.75,"note":"manual: ultraplan/ultrareview/teleport/remote-control/schedule/autofix-pr 的升级提示存根"}
+{"file":"chunk-e6aww6q8.js","key":"@2037485","name":"getExitDescription","source":"semantic","confidence":0.7,"note":"manual: 后台会话为 \"Detach...\"，否则 \"Exit the CLI\""}
+{"file":"chunk-e6aww6q8.js","key":"@2037579","name":"exitCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /exit"}
+{"file":"chunk-e6aww6q8.js","key":"@2037749","name":"exitNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /exit"}
+{"file":"chunk-e6aww6q8.js","key":"@2037897","name":"exitCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /exit（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2039780","name":"canRestartInPlace","source":"semantic","confidence":0.6,"note":"manual: TTY、macOS/Linux、非后台、非远程"}
+{"file":"chunk-e6aww6q8.js","key":"@2040008","name":"isRestartFlagOn","source":"semantic","confidence":0.6,"note":"manual: tengu_fancy_wand"}
+{"file":"chunk-e6aww6q8.js","key":"@2040085","name":"isRestartCommandEnabled","source":"semantic","confidence":0.65,"note":"manual: /restart 的 isEnabled"}
+{"file":"chunk-e6aww6q8.js","key":"@2040115","name":"restartCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /restart"}
+{"file":"chunk-e6aww6q8.js","key":"@2040486","name":"restartCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /restart（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2040498","name":"exportCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /export"}
+{"file":"chunk-e6aww6q8.js","key":"@2040648","name":"exportCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /export（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2040660","name":"modelNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /model"}
+{"file":"chunk-e6aww6q8.js","key":"@2040874","name":"modelCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /model"}
+{"file":"chunk-e6aww6q8.js","key":"@2041089","name":"remoteEnvCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /remote-env"}
+{"file":"chunk-e6aww6q8.js","key":"@2041313","name":"remoteWorkflowCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /__remote-workflow"}
+{"file":"chunk-e6aww6q8.js","key":"@2041595","name":"remoteWorkflowCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /__remote-workflow（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2041607","name":"workflowLaunchExecCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /workflow-launch-exec"}
+{"file":"chunk-e6aww6q8.js","key":"@2041879","name":"workflowLaunchExecCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /workflow-launch-exec（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2041891","name":"upgradeCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /upgrade"}
+{"file":"chunk-e6aww6q8.js","key":"@2042054","name":"upgradeCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /upgrade（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2042066","name":"usageCreditsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /usage-credits"}
+{"file":"chunk-e6aww6q8.js","key":"@2042244","name":"usageCreditsNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /usage-credits"}
+{"file":"chunk-e6aww6q8.js","key":"@2042493","name":"extraUsageCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /extra-usage"}
+{"file":"chunk-e6aww6q8.js","key":"@2042631","name":"extraUsageNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /extra-usage"}
+{"file":"chunk-e6aww6q8.js","key":"@2042815","name":"proTrialExpiredCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /pro-trial-expired"}
+{"file":"chunk-e6aww6q8.js","key":"@2042949","name":"proTrialExpiredCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /pro-trial-expired（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2042961","name":"rateLimitOptionsCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /rate-limit-options"}
+{"file":"chunk-e6aww6q8.js","key":"@2043105","name":"rateLimitOptionsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /rate-limit-options（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2043117","name":"lowPriorityCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /low-priority"}
+{"file":"chunk-e6aww6q8.js","key":"@2043353","name":"lowPriorityCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /low-priority（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2045070","name":"getCedarEmberConfig","source":"semantic","confidence":0.6,"note":"manual: tengu_cedar_ember（额度重置的另一形态）"}
+{"file":"chunk-e6aww6q8.js","key":"@2045162","name":"isCedarEmberEnabled","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2045398","name":"getCedarEmberCopy","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2047777","name":"getLimitResetConfig","source":"semantic","confidence":0.6,"note":"manual: tengu_nifty_lemur"}
+{"file":"chunk-e6aww6q8.js","key":"@2047869","name":"isLimitResetEnabled","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2048105","name":"getLimitResetCopy","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-e6aww6q8.js","key":"@2048564","name":"limitResetCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /limit-reset"}
+{"file":"chunk-e6aww6q8.js","key":"@2048890","name":"limitResetCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /limit-reset（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2048902","name":"claimCreditCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /claim-credit"}
+{"file":"chunk-e6aww6q8.js","key":"@2049119","name":"claimCreditCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /claim-credit（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2049131","name":"statuslineCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: prompt 命令对象 /statusline"}
+{"file":"chunk-e6aww6q8.js","key":"@2049486","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@2050085","name":"statuslineCommand","source":"semantic","confidence":0.9,"note":"cmd-object: prompt 命令对象 /statusline（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2050102","name":"formatEffortArgumentHint","source":"semantic","confidence":0.7,"note":"manual: [low|medium|high|...|auto|ultracode [on|off]]"}
+{"file":"chunk-e6aww6q8.js","key":"@2050204","name":"effortCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /effort"}
+{"file":"chunk-e6aww6q8.js","key":"@2050396","name":"effortNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /effort"}
+{"file":"chunk-e6aww6q8.js","key":"@2050628","name":"effortCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /effort（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2050640","name":"wellbeingCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /wellbeing"}
+{"file":"chunk-e6aww6q8.js","key":"@2050847","name":"wellbeingCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /wellbeing（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2050859","name":"focusCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /focus"}
+{"file":"chunk-e6aww6q8.js","key":"@2052447","name":"focusNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /focus"}
+{"file":"chunk-e6aww6q8.js","key":"@2052738","name":"focusCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /focus（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@2052755","name":"applyFocusViewToRemote","source":"semantic","confidence":0.6,"note":"manual: 远程会话时通过 control request 下发 viewMode"}
+{"file":"chunk-e6aww6q8.js","key":"@2053319","name":"promoteMemoryCommands","source":"semantic","confidence":0.6,"note":"manual: 构建期为 null；注册表里取 .promoteMemory/.promoteMemoryNonInteractive"}
+{"file":"chunk-e6aww6q8.js","key":"@2053328","name":"accountMemoryCommands","source":"semantic","confidence":0.6,"note":"manual: 构建期为 null；含 memoryAccount/memoryNotes/localMemoryToAccount/accountMemorySwitch"}
+{"file":"chunk-e6aww6q8.js","key":"@2053380","name":"briefCommand","source":"semantic","confidence":0.85,"note":"manual: require(\"./chunk-gv7qjj2t.js\").default = /brief"}
+{"file":"chunk-e6aww6q8.js","key":"@2053423","name":"remoteControlCommand","source":"semantic","confidence":0.85,"note":"manual: require(\"./chunk-53mky9yr.js\").default = /remote-control"}
+{"file":"chunk-e6aww6q8.js","key":"@2053466","name":"daemonCommand","source":"semantic","confidence":0.85,"note":"manual: require(\"./chunk-0e9ty0k2.js\").default = /daemon"}
+{"file":"chunk-e6aww6q8.js","key":"@2053525","name":"recapCommand","source":"semantic","confidence":0.85,"note":"manual: require(\"./chunk-66drwgm7.js\").default = /recap"}
+{"file":"chunk-e6aww6q8.js","key":"@2053604","name":"goalCommandModule","source":"semantic","confidence":0.8,"note":"manual: require(\"./chunk-nn4xbsmj.js\")"}
+{"file":"chunk-e6aww6q8.js","key":"@2053639","name":"goalCommand","source":"semantic","confidence":0.85,"note":"manual: _9e.default = /goal (local-jsx)"}
+{"file":"chunk-e6aww6q8.js","key":"@2053655","name":"goalNonInteractive","source":"semantic","confidence":0.9,"note":"manual: 源导出名 goalNonInteractive"}
+{"file":"chunk-e6aww6q8.js","key":"@2053682","name":"workflowsCommand","source":"semantic","confidence":0.85,"note":"manual: require(\"./chunk-g8tswn69.js\").default = /workflows"}
+{"file":"chunk-e6aww6q8.js","key":"@2053725","name":"webSetupCommand","source":"semantic","confidence":0.8,"note":"manual: require(\"./chunk-yddv4we7.js\").default → chunk-pemtjbn7 的 /web-setup"}
+{"file":"chunk-e6aww6q8.js","key":"@2053775","name":"listAgentsCommand","source":"semantic","confidence":0.85,"note":"manual: require(\"./chunk-yxzqxbzv.js\").default = /list-agents（别名 peers）"}
+{"file":"chunk-e6aww6q8.js","key":"@2053853","name":"backgroundCommand","source":"semantic","confidence":0.85,"note":"manual: require(\"./chunk-3m7t4vj8.js\").default = /background"}
+{"file":"chunk-e6aww6q8.js","key":"@2053896","name":"stopCommandModule","source":"semantic","confidence":0.8,"note":"manual: require(\"./chunk-adzz9hc5.js\")"}
+{"file":"chunk-e6aww6q8.js","key":"@2053931","name":"stopCommand","source":"semantic","confidence":0.85,"note":"manual: esn.default = /stop (local-jsx)"}
+{"file":"chunk-e6aww6q8.js","key":"@2053954","name":"stopNonInteractive","source":"semantic","confidence":0.85,"note":"manual: esn.stopNonInteractive"}
+{"file":"chunk-e6aww6q8.js","key":"@2053997","name":"loginCommand","source":"semantic","confidence":0.85,"note":"manual: _en() 的结果 = /login 命令对象"}
+{"file":"chunk-e6aww6q8.js","key":"@2054007","name":"usageReport","source":"semantic","confidence":0.9,"note":"cmd-object: prompt 命令对象 /insights"}
+{"file":"chunk-e6aww6q8.js","key":"@2054298","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@2054300","name":"context","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@2054439","name":"INTERNAL_ONLY_COMMANDS","source":"semantic","confidence":0.8,"note":"manual: 同旧版：内部命令列表（存根/commit-push-pr/version），外部构建未并入注册表"}
+{"file":"chunk-e6aww6q8.js","key":"@2054711","name":"getRuntimeGatedCommandGroups","source":"semantic","confidence":0.75,"note":"manual: fleetFork/fleetBackground/daemon/skillDoctor/logout 五组 {open, whenOpen, whenClosed}"}
+{"file":"chunk-e6aww6q8.js","key":"@2055061","name":"compactCommandList","source":"semantic","confidence":0.6,"note":"manual: filter(Boolean)；旧版名 filterCommandsForRemoteMode 配错（门面把它给了 gjo）"}
+{"file":"chunk-e6aww6q8.js","key":"@2055110","name":"getRuntimeGatedGroup","source":"semantic","confidence":0.75,"note":"manual: 按组 open() 取 whenOpen 或 whenClosed"}
+{"file":"chunk-e6aww6q8.js","key":"@2055113","name":"groupName","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2055120","name":"group","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2056982","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2057154","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2057156","name":"submission","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2057233","name":"BRIDGE_TWINS_FOR_PLUGIN_COMMANDS","source":"semantic","confidence":0.6,"note":"manual: new Set([contextNonInteractive])：插件同名 local 命令也可由这些桥接安全孪生代答"}
+{"file":"chunk-e6aww6q8.js","key":"@2057265","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2057272","name":"isPluginLocal","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2057324","name":"twin","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2057468","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2057488","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2057590","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2057592","name":"workerCommandNames","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2057620","name":"isFirstParty","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2057628","name":"taken","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@2057687","name":"extras","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@2057978","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2058085","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2058087","name":"description","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2058270","name":"pluginManifest","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2058609","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2058611","name":"isFolderAlias","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2058618","name":"displayName","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2058626","name":"isBuiltin","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@2058635","name":"qualifiedName","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@2058730","name":"aliases","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 y"}
+{"file":"chunk-e6aww6q8.js","key":"@2058762","name":"allAliases","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 S"}
+{"file":"chunk-e6aww6q8.js","key":"@2059058","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2059065","name":"result","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2059070","name":"isFolderAlias","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2059086","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@2059126","name":"displayName","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@2059134","name":"advertisedName","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 y"}
+{"file":"chunk-e6aww6q8.js","key":"@2059219","name":"source","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 S"}
+{"file":"chunk-e6aww6q8.js","key":"@2059231","name":"described","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 w"}
+{"file":"chunk-e6aww6q8.js","key":"@2059320","name":"entry","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 L"}
+{"file":"chunk-e6aww6q8.js","key":"@2059406","name":"aliases","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 q"}
+{"file":"chunk-e6aww6q8.js","key":"@2059532","name":"isPluginLocalCommand","source":"semantic","confidence":0.8,"note":"manual: type=local 且 loadedFrom=plugin（函数钩子插件注册的命令）"}
+{"file":"chunk-e6aww6q8.js","key":"@2059597","name":"addShippedCommandSpellings","source":"semantic","confidence":0.6,"note":"manual: 运行时门控内建、内建技能、内建插件技能名都加入集合"}
+{"file":"chunk-e6aww6q8.js","key":"@2059674","name":"addRuntimeGatedCommandSpellings","source":"semantic","confidence":0.65,"note":"manual: 对 getRuntimeGatedBuiltinCommands() 逐个 addCommandSpellings"}
+{"file":"chunk-e6aww6q8.js","key":"@2059717","name":"getReservedSpellingsFor","source":"semantic","confidence":0.6,"note":"manual: state.reservedSpellingsFor 缓存：命令列表占用的全部拼写"}
+{"file":"chunk-e6aww6q8.js","key":"@2059861","name":"getBuiltinCommandTable","source":"semantic","confidence":0.85,"note":"manual: state.builtinCommandTable ??= buildBuiltinCommandTable()"}
+{"file":"chunk-e6aww6q8.js","key":"@2059870","name":"state","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2060377","name":"collectBuiltinCommandSpellings","source":"semantic","confidence":0.65,"note":"manual: 内建表 + 发行内建技能的所有拼写"}
+{"file":"chunk-e6aww6q8.js","key":"@2060387","name":"spellings","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2060526","name":"cwd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2060528","name":"storage","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2060535","name":"failureReason","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2060542","name":"skillDirFailed","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@2060547","name":"pluginSkillsFailed","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@2060562","name":"pluginSkills","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 S"}
+{"file":"chunk-e6aww6q8.js","key":"@2060974","name":"bundledSkills","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 w"}
+{"file":"chunk-e6aww6q8.js","key":"@2060982","name":"builtinPluginSkills","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 L"}
+{"file":"chunk-e6aww6q8.js","key":"@2061628","name":"cwd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2061630","name":"hiddenPlugins","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2061638","name":"storageV5","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2061746","name":"loadAllCommands","source":"semantic","confidence":0.75,"note":"manual: 同旧版 loadAllCommands：按 commandsMemoKey 缓存 loadAllCommandsUncached"}
+{"file":"chunk-e6aww6q8.js","key":"@2061750","name":"cwd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2061752","name":"storage","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2061754","name":"storageV5","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2061839","name":"cwd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2061841","name":"storage","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2061852","name":"startedAt","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2062024","name":"markBareNameReserved","source":"semantic","confidence":0.6,"note":"manual: syncedSkills 命令加 bareNameReserved:true"}
+{"file":"chunk-e6aww6q8.js","key":"@2062028","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2062202","name":"loadAllCommandsUncached","source":"semantic","confidence":0.7,"note":"manual: 并发加载技能/插件命令/工作流，合并内建表，去重保留名，记录冲突遥测"}
+{"file":"chunk-e6aww6q8.js","key":"@2062206","name":"cwd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2062208","name":"storage","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2062210","name":"storageV5","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2062217","name":"startedAt","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@2062256","name":"skillDirCommands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@2062271","name":"pluginSkills","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 y"}
+{"file":"chunk-e6aww6q8.js","key":"@2062287","name":"bundledSkills","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 S"}
+{"file":"chunk-e6aww6q8.js","key":"@2062309","name":"builtinPluginSkills","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 w"}
+{"file":"chunk-e6aww6q8.js","key":"@2062336","name":"trustedNamesFailedToLoad","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 L"}
+{"file":"chunk-e6aww6q8.js","key":"@2062339","name":"pluginCommands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 G"}
+{"file":"chunk-e6aww6q8.js","key":"@2062341","name":"workflowCommands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 q"}
+{"file":"chunk-e6aww6q8.js","key":"@2062450","name":"localSkillDirCommands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Z"}
+{"file":"chunk-e6aww6q8.js","key":"@2062499","name":"listed","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Se"}
+{"file":"chunk-e6aww6q8.js","key":"@2062758","name":"syncedSkills","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 ke"}
+{"file":"chunk-e6aww6q8.js","key":"@2062808","name":"reserved","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 we"}
+{"file":"chunk-e6aww6q8.js","key":"@2063079","name":"acceptedSyncedSkills","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Ee"}
+{"file":"chunk-e6aww6q8.js","key":"@2063293","name":"reservedNameCommands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Ae"}
+{"file":"chunk-e6aww6q8.js","key":"@2063296","name":"otherCommands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Ie"}
+{"file":"chunk-e6aww6q8.js","key":"@2063321","name":"result","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Me"}
+{"file":"chunk-e6aww6q8.js","key":"@2063547","name":"logRefusedReservedSkillNames","source":"semantic","confidence":0.7,"note":"manual: 一次性上报 skill_reserved_namespace 遥测"}
+{"file":"chunk-e6aww6q8.js","key":"@2063904","name":"cwd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2063906","name":"storage","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2063908","name":"hiddenPlugins","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2063916","name":"storageV5","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@2063929","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@2064013","name":"cwd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2064015","name":"storage","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2064017","name":"hiddenPlugins","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2064144","name":"assembleCommands","source":"semantic","confidence":0.65,"note":"manual: getCommands 的主体：可用性/启用过滤、动态技能与嵌套 .claude/skills 插入到内建命令之前"}
+{"file":"chunk-e6aww6q8.js","key":"@2064148","name":"cwd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2064150","name":"storage","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2064152","name":"storageV5","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2064167","name":"allCommands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@2064186","name":"shadowedProjectSkills","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@2064515","name":"baseCommands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 y"}
+{"file":"chunk-e6aww6q8.js","key":"@2064557","name":"syncAllowed","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 S"}
+{"file":"chunk-e6aww6q8.js","key":"@2064565","name":"withTrustedNames","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 w"}
+{"file":"chunk-e6aww6q8.js","key":"@2064680","name":"dynamicSkills","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 L"}
+{"file":"chunk-e6aww6q8.js","key":"@2064688","name":"realRootByCommand","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 G"}
+{"file":"chunk-e6aww6q8.js","key":"@2065012","name":"dynamicAndShadowed","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Z"}
+{"file":"chunk-e6aww6q8.js","key":"@2065147","name":"hostCatalogSkills","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Se"}
+{"file":"chunk-e6aww6q8.js","key":"@2065211","name":"dropHostDuplicates","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 ke"}
+{"file":"chunk-e6aww6q8.js","key":"@2065287","name":"extraCommands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 we"}
+{"file":"chunk-e6aww6q8.js","key":"@2065296","name":"filteredBase","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Ee"}
+{"file":"chunk-e6aww6q8.js","key":"@2065381","name":"scopeCache","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Ae"}
+{"file":"chunk-e6aww6q8.js","key":"@2065392","name":"scopeOf","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Ie"}
+{"file":"chunk-e6aww6q8.js","key":"@2065473","name":"offeredExtras","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Me"}
+{"file":"chunk-e6aww6q8.js","key":"@2065520","name":"needsReservedCheck","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 We"}
+{"file":"chunk-e6aww6q8.js","key":"@2065629","name":"reserved","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 ze"}
+{"file":"chunk-e6aww6q8.js","key":"@2065801","name":"base","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 lt"}
+{"file":"chunk-e6aww6q8.js","key":"@2065829","name":"baseNames","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 Je"}
+{"file":"chunk-e6aww6q8.js","key":"@2065840","name":"baseSkillRoots","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 nt"}
+{"file":"chunk-e6aww6q8.js","key":"@2065986","name":"nameCounts","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 pt"}
+{"file":"chunk-e6aww6q8.js","key":"@2066462","name":"inserted","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 At"}
+{"file":"chunk-e6aww6q8.js","key":"@2066468","name":"insertedNames","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 It"}
+{"file":"chunk-e6aww6q8.js","key":"@2067597","name":"builtinNames","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 pn"}
+{"file":"chunk-e6aww6q8.js","key":"@2067633","name":"insertIndex","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 no"}
+{"file":"chunk-e6aww6q8.js","key":"@2067784","name":"dropAmbiguousScopedSkills","source":"semantic","confidence":0.6,"note":"manual: 同名且无法加作用域前缀的嵌套技能不提供"}
+{"file":"chunk-e6aww6q8.js","key":"@2068269","name":"canOfferUnscoped","source":"semantic","confidence":0.6,"note":"manual: 无作用域、同步技能或作用域名被保留时返回 true"}
+{"file":"chunk-e6aww6q8.js","key":"@2068352","name":"getSkillScopeLabel","source":"semantic","confidence":0.6,"note":"manual: 技能所在项目相对 cwd 的路径（或目录名）作为作用域"}
+{"file":"chunk-e6aww6q8.js","key":"@2068542","name":"getSkillProjectRoot","source":"semantic","confidence":0.65,"note":"manual: skillRoot 中 /.claude/ 之前的部分"}
+{"file":"chunk-e6aww6q8.js","key":"@2068700","name":"withNestedSkillDescription","source":"semantic","confidence":0.6,"note":"manual: 描述追加 \"(from X/.claude/skills — applies when working on files under X/)\""}
+{"file":"chunk-e6aww6q8.js","key":"@2068868","name":"toScopedSkillCommand","source":"semantic","confidence":0.6,"note":"manual: 生成 \"scope:name\" 形式的嵌套技能命令"}
+{"file":"chunk-e6aww6q8.js","key":"@2069551","name":"shedReservedAliases","source":"semantic","confidence":0.6,"note":"manual: 插件/同步技能的别名若与内建/保留名冲突则移入 shedAliases；无头模式让出 help/feedback"}
+{"file":"chunk-e6aww6q8.js","key":"@2069555","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2069557","name":"checkNamedFolders","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2069564","name":"isPluginOrSynced","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2069643","name":"nonInteractive","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@2069650","name":"takenNames","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@2070044","name":"isTaken","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 w"}
+{"file":"chunk-e6aww6q8.js","key":"@2071554","name":"cwd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2071556","name":"storage","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2071558","name":"hiddenPlugins","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2071571","name":"storageV5","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@2071657","name":"getSkillToolCommandsUncached","source":"semantic","confidence":0.7,"note":"manual: getCommands 后用 isSkillToolCommand 过滤"}
+{"file":"chunk-e6aww6q8.js","key":"@2071661","name":"cwd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2071663","name":"storage","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2071665","name":"hiddenPlugins","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2071667","name":"storageV5","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@2071691","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@2071752","name":"cwd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2071754","name":"storage","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2071761","name":"storageV5","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2071855","name":"getSlashCommandToolSkillsUncached","source":"semantic","confidence":0.75,"note":"manual: 旧版 getSlashCommandToolSkills 的过滤逻辑；门面名给了缓存层 G0e"}
+{"file":"chunk-e6aww6q8.js","key":"@2071859","name":"cwd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@2071861","name":"storage","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@2071863","name":"options","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@2071891","name":"filtered","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@2071926","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 y"}
+{"file":"chunk-e6aww6q8.js","key":"@2072222","name":"error","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@3128284","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@3128287","name":"context","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-e6aww6q8.js","key":"@779278","name":"compactCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /compact"}
+{"file":"chunk-e6aww6q8.js","key":"@779584","name":"compactCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /compact（模块导出的别名）"}
+{"file":"chunk-e6aww6q8.js","key":"@953299","name":"OVERRIDABLE_LOCAL_COMMANDS","source":"semantic","confidence":0.6,"note":"manual: new Set([\"auto-mode-setup\"])：可用 skillOverrides 关掉的 local 命令"}
+{"file":"chunk-e6aww6q8.js","key":"@953341","name":"getSkillOverrideState","source":"semantic","confidence":0.7,"note":"manual: 返回 on/off/user-invocable-only（skillOverrides、插件隐藏）"}
+{"file":"chunk-e6aww6q8.js","key":"@953345","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@953627","name":"settings","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@953634","name":"state","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@953724","name":"isHiddenFromModel","source":"semantic","confidence":0.6,"note":"manual: override 为 user-invocable-only 或 off"}
+{"file":"chunk-e6aww6q8.js","key":"@953837","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@953914","name":"requirement","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@954144","name":"joinScopedName","source":"semantic","confidence":0.65,"note":"manual: 返回 `${scope}:${name}`"}
+{"file":"chunk-e6aww6q8.js","key":"@954147","name":"scope","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@954149","name":"name","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@954179","name":"matchesUnqualifiedName","source":"semantic","confidence":0.6,"note":"manual: prompt 且非 syncedSkills 且 unqualifiedName===n"}
+{"file":"chunk-e6aww6q8.js","key":"@954183","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@954185","name":"name","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@954276","name":"getBareCommandName","source":"semantic","confidence":0.6,"note":"manual: prompt 有 unqualifiedName 时返回它，否则 name"}
+{"file":"chunk-e6aww6q8.js","key":"@954279","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@954366","name":"getBareCommandNameUnlessSynced","source":"semantic","confidence":0.6,"note":"manual: 同 EF，但 syncedSkills 不取 unqualifiedName"}
+{"file":"chunk-e6aww6q8.js","key":"@954370","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@954488","name":"dropShadowedFallbackSkills","source":"semantic","confidence":0.7,"note":"manual: 旧版名 getMcpSkillCommands 不符：316 里按 \":后缀\" 收集插件/内置/MCP 技能名，丢弃同名 fallback 技能"}
+{"file":"chunk-e6aww6q8.js","key":"@954492","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@954499","name":"suffixes","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@954509","name":"sawMcp","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@954710","name":"colon","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 y"}
+{"file":"chunk-e6aww6q8.js","key":"@954795","name":"telemetryLogged","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@955020","name":"dedupeBundledSkills","source":"semantic","confidence":0.7,"note":"manual: 按名去重 source=bundled 的 prompt；结果缓存在 state.shadowedBundledSkills"}
+{"file":"chunk-e6aww6q8.js","key":"@955024","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@955031","name":"state","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@955118","name":"seen","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@955128","name":"hadDuplicates","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@955133","name":"deduped","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@955249","name":"result","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 y"}
+{"file":"chunk-e6aww6q8.js","key":"@955359","name":"isSkillToolCommand","source":"semantic","confidence":0.8,"note":"manual: SkillTool 列表的单条谓词；门面把 getSkillToolCommands 给了 YI"}
+{"file":"chunk-e6aww6q8.js","key":"@955363","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@955658","name":"getCommandRequirements","source":"semantic","confidence":0.75,"note":"manual: {workspace, ink}：requires 字段或按类型默认（local 需工作区，local-jsx 需工作区+Ink）"}
+{"file":"chunk-e6aww6q8.js","key":"@955662","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@955895","name":"isUsableWithoutWorkspace","source":"semantic","confidence":0.6,"note":"manual: 不需要工作区或声明了 thinClientDispatch"}
+{"file":"chunk-e6aww6q8.js","key":"@955966","name":"getThinClientDispatchMode","source":"semantic","confidence":0.65,"note":"manual: 瘦客户端（远程查看端）对命令的派发方式：post-text/local/unavailable"}
+{"file":"chunk-e6aww6q8.js","key":"@955970","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@955972","name":"hasRpc","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@956288","name":"getNonInteractiveCommands","source":"semantic","confidence":0.65,"note":"manual: 禁用斜杠命令时为空，否则过滤 supportsNonInteractive"}
+{"file":"chunk-e6aww6q8.js","key":"@956342","name":"supportsNonInteractive","source":"semantic","confidence":0.7,"note":"manual: prompt 且未 disableNonInteractive，或 local 且 supportsNonInteractive"}
+{"file":"chunk-e6aww6q8.js","key":"@956346","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@956553","name":"isFallbackSkill","source":"semantic","confidence":0.75,"note":"manual: prompt 且 fallback=true 且非 syncedSkills"}
+{"file":"chunk-e6aww6q8.js","key":"@956716","name":"isHostCatalogSkill","source":"semantic","confidence":0.7,"note":"manual: prompt 且 fromHostCatalog=true"}
+{"file":"chunk-e6aww6q8.js","key":"@956780","name":"isSyncedSkill","source":"semantic","confidence":0.7,"note":"manual: loadedFrom=syncedSkills 且非宿主目录技能"}
+{"file":"chunk-e6aww6q8.js","key":"@956840","name":"isKilledHostCatalogSkill","source":"semantic","confidence":0.6,"note":"manual: 宿主目录技能且被内建技能开关关掉"}
+{"file":"chunk-e6aww6q8.js","key":"@959647","name":"addSpelling","source":"semantic","confidence":0.7,"note":"manual: 规范化（Gy）后加入集合，跳过 claude.ai 同步技能保留名"}
+{"file":"chunk-e6aww6q8.js","key":"@959650","name":"spellings","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@959652","name":"name","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@959654","name":"allowReserved","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@959732","name":"addCommandSpellings","source":"semantic","confidence":0.75,"note":"manual: 把 name、显示名、aliases 规范化后加入集合；旧版名 findCommand 配错（门面 findCommand=s61vbvea Zs）"}
+{"file":"chunk-e6aww6q8.js","key":"@959735","name":"spellings","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@959737","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@959744","name":"allowReserved","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@959772","name":"displayName","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@959812","name":"alias","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@959850","name":"addNameAndAliases","source":"semantic","confidence":0.6,"note":"manual: 规范化 name 与 aliases 加入集合"}
+{"file":"chunk-e6aww6q8.js","key":"@959926","name":"addNonSyncedSpellings","source":"semantic","confidence":0.6,"note":"manual: 对非 syncedSkills 命令调用 addCommandSpellings"}
+{"file":"chunk-e6aww6q8.js","key":"@959999","name":"isSyncedSkillNameTaken","source":"semantic","confidence":0.6,"note":"manual: 同步技能名为空或已被占用"}
+{"file":"chunk-e6aww6q8.js","key":"@960102","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@960104","name":"onRefused","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@960111","name":"listed","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@960124","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-e6aww6q8.js","key":"@960136","name":"displayName","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-e6aww6q8.js","key":"@960829","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-e6aww6q8.js","key":"@960831","name":"isReserved","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-e6aww6q8.js","key":"@960838","name":"aliases","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-e6aww6q8.js","key":"@960869","name":"kept","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-efagea6a.js","key":"@11946","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /add-dir 的 local call 参数"}
+{"file":"chunk-efagea6a.js","key":"@11948","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /add-dir 的 local call 参数"}
+{"file":"chunk-ej3ckp70.js","key":"@17054","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /skill-doctor 的 local-jsx call 参数"}
+{"file":"chunk-ej3ckp70.js","key":"@17056","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /skill-doctor 的 local-jsx call 参数"}
+{"file":"chunk-evjaj4jh.js","key":"@11865","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /color 的 local call 参数"}
+{"file":"chunk-evjaj4jh.js","key":"@11867","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /color 的 local call 参数"}
+{"file":"chunk-f55t9a8b.js","key":"@12109","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /exit 的 local call 参数"}
+{"file":"chunk-f55t9a8b.js","key":"@12111","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /exit 的 local call 参数"}
+{"file":"chunk-fh3th4b7.js","key":"@19201","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /cd 的 local-jsx call 参数"}
+{"file":"chunk-fh3th4b7.js","key":"@19203","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /cd 的 local-jsx call 参数"}
+{"file":"chunk-fh3th4b7.js","key":"@19205","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /cd 的 local-jsx call 参数"}
+{"file":"chunk-fnmk6x3n.js","key":"@18816","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /pro-trial-expired 的 local-jsx call 参数"}
+{"file":"chunk-fnmk6x3n.js","key":"@18818","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /pro-trial-expired 的 local-jsx call 参数"}
+{"file":"chunk-fv21ck8e.js","key":"@3422","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /focus 的 local call 参数"}
+{"file":"chunk-fv21ck8e.js","key":"@3424","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /focus 的 local call 参数"}
+{"file":"chunk-fxpvgzqn.js","key":"@13715","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /powerup 的 local-jsx call 参数"}
+{"file":"chunk-g49d7j62.js","key":"@11961","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /usage-credits 的 local call 参数"}
+{"file":"chunk-g49d7j62.js","key":"@11963","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /usage-credits 的 local call 参数"}
+{"file":"chunk-g8tswn69.js","key":"@3479","name":"workflowsCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /workflows"}
+{"file":"chunk-g8tswn69.js","key":"@3650","name":"workflowsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /workflows（模块导出的别名）"}
+{"file":"chunk-gv7qjj2t.js","key":"@3450","name":"BRIEF_CONFIG_SCHEMA","source":"semantic","confidence":0.7,"note":"manual"}
+{"file":"chunk-gv7qjj2t.js","key":"@3489","name":"DEFAULT_BRIEF_CONFIG","source":"semantic","confidence":0.85,"note":"manual: 同旧版"}
+{"file":"chunk-gv7qjj2t.js","key":"@3618","name":"briefCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /brief"}
+{"file":"chunk-gv7qjj2t.js","key":"@4537","name":"briefCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /brief（模块导出的别名）"}
+{"file":"chunk-gwbvvmmk.js","key":"@17192","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /status 的 local-jsx call 参数"}
+{"file":"chunk-gwbvvmmk.js","key":"@17194","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /status 的 local-jsx call 参数"}
+{"file":"chunk-hantmvxa.js","key":"@95382","name":"COMMIT_ALLOWED_TOOLS","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-hantmvxa.js","key":"@95434","name":"getCommitPromptContent","source":"semantic","confidence":0.65,"note":"manual: /commit 内建技能提示词"}
+{"file":"chunk-he8wyk3b.js","key":"@12576","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /import 的 local call 参数"}
+{"file":"chunk-he8wyk3b.js","key":"@12578","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /import 的 local call 参数"}
+{"file":"chunk-hf9dmwqr.js","key":"@926","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /usage-credits 的 local-jsx call 参数"}
+{"file":"chunk-hf9dmwqr.js","key":"@928","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /usage-credits 的 local-jsx call 参数"}
+{"file":"chunk-hgfnw8bk.js","key":"@8721","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /goal 的 local-jsx call 参数"}
+{"file":"chunk-hgfnw8bk.js","key":"@8723","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /goal 的 local-jsx call 参数"}
+{"file":"chunk-hgfnw8bk.js","key":"@8725","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /goal 的 local-jsx call 参数"}
+{"file":"chunk-hm0ce8vc.js","key":"@58895","name":"getRemoteSessionOrigin","source":"semantic","confidence":0.6,"note":"manual: environment_variables.CLAUDE_CODE_REMOTE_SESSION_ORIGIN"}
+{"file":"chunk-hm0ce8vc.js","key":"@59078","name":"isReviewOriginSession","source":"semantic","confidence":0.6,"note":"manual: 旧版名 review 配错"}
+{"file":"chunk-k7ve8htw.js","key":"@27769","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /remote-control 的 local-jsx call 参数"}
+{"file":"chunk-k7ve8htw.js","key":"@27771","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /remote-control 的 local-jsx call 参数"}
+{"file":"chunk-k7ve8htw.js","key":"@27773","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /remote-control 的 local-jsx call 参数"}
+{"file":"chunk-kcvmr83c.js","key":"@1207","name":"formatValidEffortOptions","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-kcvmr83c.js","key":"@1466","name":"parseEffortArg","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-kcvmr83c.js","key":"@4988","name":"setUltracode","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-kcvmr83c.js","key":"@522","name":"EFFORT_LEVEL_DESCRIPTIONS","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-kcvmr83c.js","key":"@5626","name":"parseUltracodeArg","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-kcvmr83c.js","key":"@6003","name":"applyEffortCommand","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-kcvmr83c.js","key":"@940","name":"getEffortUsage","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-khj4kcw5.js","key":"@12231","name":"MAX_FORK_TRANSCRIPT_BYTES","source":"semantic","confidence":0.6,"note":"manual: 4194304"}
+{"file":"chunk-khj4kcw5.js","key":"@15240","name":"toJsonlLine","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-khj4kcw5.js","key":"@15282","name":"createForkFromStorage","source":"semantic","confidence":0.6,"note":"manual: storage v5 路径的 createFork"}
+{"file":"chunk-khj4kcw5.js","key":"@19820","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /branch 的 local-jsx call 参数"}
+{"file":"chunk-khj4kcw5.js","key":"@19822","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /branch 的 local-jsx call 参数"}
+{"file":"chunk-khj4kcw5.js","key":"@19824","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /branch 的 local-jsx call 参数"}
+{"file":"chunk-kq21a1r9.js","key":"@4016","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /list-agents 的 local call 参数"}
+{"file":"chunk-kq21a1r9.js","key":"@4018","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /list-agents 的 local call 参数"}
+{"file":"chunk-kxw5j15d.js","key":"@3422","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /skill-doctor 的 local call 参数"}
+{"file":"chunk-kxw5j15d.js","key":"@3424","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /skill-doctor 的 local call 参数"}
+{"file":"chunk-m8444q1d.js","key":"@26564","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /auto-mode-setup 的 local-jsx call 参数"}
+{"file":"chunk-m8444q1d.js","key":"@26566","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /auto-mode-setup 的 local-jsx call 参数"}
+{"file":"chunk-m8444q1d.js","key":"@26568","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /auto-mode-setup 的 local-jsx call 参数"}
+{"file":"chunk-mtkg11k6.js","key":"@3680","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /effort 的 local call 参数"}
+{"file":"chunk-mtkg11k6.js","key":"@3682","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /effort 的 local call 参数"}
+{"file":"chunk-mvhmq2z8.js","key":"@17555","name":"CLOUD_MODEL_PICKER_UNAVAILABLE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-mvhmq2z8.js","key":"@17656","name":"CLOUD_MODEL_LIST_FAILED","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-mvhmq2z8.js","key":"@17763","name":"CLOUD_MODEL_LIST_TIMEOUT","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-mvhmq2z8.js","key":"@17890","name":"CLOUD_MODEL_LIST_TIMEOUT_MS","source":"semantic","confidence":0.6,"note":"manual: 15000"}
+{"file":"chunk-mvhmq2z8.js","key":"@18181","name":"CLOUD_MODEL_PICKER_SUBTITLE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-mvhmq2z8.js","key":"@18484","name":"LocalModelPicker","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-mvhmq2z8.js","key":"@23415","name":"CloudModelPickerLoader","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-mvhmq2z8.js","key":"@26835","name":"SetModelFromArgs","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-mvhmq2z8.js","key":"@33604","name":"notifyModelDeprecation","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-mvhmq2z8.js","key":"@33954","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /model 的 local-jsx call 参数"}
+{"file":"chunk-mvhmq2z8.js","key":"@33956","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /model 的 local-jsx call 参数"}
+{"file":"chunk-mvhmq2z8.js","key":"@33958","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /model 的 local-jsx call 参数"}
+{"file":"chunk-myhtjy4v.js","key":"@12023","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /scroll-speed 的 local-jsx call 参数"}
+{"file":"chunk-myhtjy4v.js","key":"@12025","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /scroll-speed 的 local-jsx call 参数"}
+{"file":"chunk-myrezy36.js","key":"@13993","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /bug 的 local-jsx call 参数"}
+{"file":"chunk-myrezy36.js","key":"@13995","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /bug 的 local-jsx call 参数"}
+{"file":"chunk-myrezy36.js","key":"@13997","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /bug 的 local-jsx call 参数"}
+{"file":"chunk-myrezy36.js","key":"@13999","name":"invokedName","source":"semantic","confidence":0.85,"note":"call-param: /bug 的 local-jsx call 参数"}
+{"file":"chunk-n30mmv2p.js","key":"@16532","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /cloud-plugins 的 local-jsx call 参数"}
+{"file":"chunk-n30mmv2p.js","key":"@16534","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /cloud-plugins 的 local-jsx call 参数"}
+{"file":"chunk-na8jp6ng.js","key":"@18588","name":"installCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /install"}
+{"file":"chunk-ndsajhew.js","key":"@12730","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /claim-credit 的 local call 参数"}
+{"file":"chunk-nn4xbsmj.js","key":"@458","name":"goalCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /goal"}
+{"file":"chunk-nn4xbsmj.js","key":"@596","name":"goalNonInteractiveCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /goal"}
+{"file":"chunk-nn4xbsmj.js","key":"@846","name":"goalCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /goal（模块导出的别名）"}
+{"file":"chunk-p2qwpk2k.js","key":"@93198","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /permissions 的 local-jsx call 参数"}
+{"file":"chunk-p2qwpk2k.js","key":"@93200","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /permissions 的 local-jsx call 参数"}
+{"file":"chunk-p3x5wbde.js","key":"@13684","name":"FALLBACK_MESSAGE","source":"semantic","confidence":0.85,"note":"manual: 同旧版"}
+{"file":"chunk-p3x5wbde.js","key":"@13780","name":"FETCH_FAILED_MESSAGE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-p3x5wbde.js","key":"@13908","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /privacy-settings 的 local-jsx call 参数"}
+{"file":"chunk-p3x5wbde.js","key":"@13910","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /privacy-settings 的 local-jsx call 参数"}
+{"file":"chunk-p7w1d1hp.js","key":"@626","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /color 的 local-jsx call 参数"}
+{"file":"chunk-p7w1d1hp.js","key":"@628","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /color 的 local-jsx call 参数"}
+{"file":"chunk-p7w1d1hp.js","key":"@630","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /color 的 local-jsx call 参数"}
+{"file":"chunk-pemtjbn7.js","key":"@3126","name":"webSetupCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local-jsx 命令对象 /web-setup"}
+{"file":"chunk-pemtjbn7.js","key":"@3361","name":"webSetupCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local-jsx 命令对象 /web-setup（模块导出的别名）"}
+{"file":"chunk-pw933apk.js","key":"@17876","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /tasks 的 local-jsx call 参数"}
+{"file":"chunk-pw933apk.js","key":"@17878","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /tasks 的 local-jsx call 参数"}
+{"file":"chunk-q8p98373.js","key":"@16240","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /limit-reset 的 local-jsx call 参数"}
+{"file":"chunk-q8p98373.js","key":"@16242","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /limit-reset 的 local-jsx call 参数"}
+{"file":"chunk-q8p98373.js","key":"@16244","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /limit-reset call 参数"}
+{"file":"chunk-qey4tpm4.js","key":"@17022","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /plugin 的 local-jsx call 参数"}
+{"file":"chunk-qey4tpm4.js","key":"@17024","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /plugin 的 local-jsx call 参数"}
+{"file":"chunk-qey4tpm4.js","key":"@17026","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /plugin 的 local-jsx call 参数"}
+{"file":"chunk-qfpyehtk.js","key":"@6632","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /restart 的 local call 参数"}
+{"file":"chunk-qfpyehtk.js","key":"@6634","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /restart 的 local call 参数"}
+{"file":"chunk-qqj12s77.js","key":"@17058","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /autocompact 的 local-jsx call 参数"}
+{"file":"chunk-qqj12s77.js","key":"@17060","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /autocompact 的 local-jsx call 参数"}
+{"file":"chunk-qqj12s77.js","key":"@17062","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /autocompact 的 local-jsx call 参数"}
+{"file":"chunk-qr2y97px.js","key":"@41398","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /artifacts 的 local-jsx call 参数"}
+{"file":"chunk-qr2y97px.js","key":"@41400","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /artifacts 的 local-jsx call 参数"}
+{"file":"chunk-qzez70vf.js","key":"@12670","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-qzez70vf.js","key":"@12672","name":"context","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-rw1dvz2v.js","key":"@477","name":"getUpgradeUrl","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-rw1dvz2v.js","key":"@595","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /upgrade 的 local-jsx call 参数"}
+{"file":"chunk-rw1dvz2v.js","key":"@597","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /upgrade 的 local-jsx call 参数"}
+{"file":"chunk-s4441tej.js","key":"@3801","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /goal 的 local call 参数"}
+{"file":"chunk-s4441tej.js","key":"@3803","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /goal 的 local call 参数"}
+{"file":"chunk-s61vbvea.js","key":"@17471","name":"clearUserFacingName","source":"semantic","confidence":0.6,"note":"manual: 把 userFacingName 挪进 shedAliases 后清空"}
+{"file":"chunk-s61vbvea.js","key":"@17618","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@17677","name":"passesPolicyGate","source":"semantic","confidence":0.75,"note":"manual: policyGate.policy 由 commandPolicyGateAllows 判定"}
+{"file":"chunk-s61vbvea.js","key":"@17681","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@17688","name":"policyGate","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@17774","name":"inputStartsWithMatchingCommand","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-s61vbvea.js","key":"@17993","name":"getCommandContextMode","source":"semantic","confidence":0.75,"note":"manual: getContext?.() ?? context ?? \"inline\"（inline/fork）"}
+{"file":"chunk-s61vbvea.js","key":"@17997","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@17999","name":"args","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@18001","name":"context","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-s61vbvea.js","key":"@18061","name":"isImmediateCommand","source":"semantic","confidence":0.8,"note":"manual: immediate 可为布尔或 (args, presentation) 函数"}
+{"file":"chunk-s61vbvea.js","key":"@18065","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@18067","name":"args","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@18069","name":"presentation","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-s61vbvea.js","key":"@18076","name":"immediate","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-s61vbvea.js","key":"@18143","name":"splitSlashCommandInput","source":"semantic","confidence":0.75,"note":"manual: \"/name args\" → {name, args}"}
+{"file":"chunk-s61vbvea.js","key":"@18146","name":"input","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@18153","name":"body","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@18186","name":"spaceIndex","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-s61vbvea.js","key":"@18296","name":"looksLikeSlashInput","source":"semantic","confidence":0.65,"note":"manual: 字符串或最后一个文本块以 / 开头"}
+{"file":"chunk-s61vbvea.js","key":"@18487","name":"TEAM_SETUP_GUIDE_LABEL","source":"semantic","confidence":0.6,"note":"manual: \"✦ Team setup guide\""}
+{"file":"chunk-s61vbvea.js","key":"@18517","name":"PLACEHOLDER_LABELS_PATTERN","source":"semantic","confidence":0.6,"note":"manual: Pasted text|Image|...Truncated text|Team setup guide"}
+{"file":"chunk-s61vbvea.js","key":"@18682","name":"isImagePlaceholder","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-s61vbvea.js","key":"@18728","name":"commandMatchesName","source":"semantic","confidence":0.75,"note":"manual: name、显示名或 aliases 命中"}
+{"file":"chunk-s61vbvea.js","key":"@18731","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@18733","name":"name","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@18807","name":"commandName","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@18809","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@18816","name":"aliasMatch","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-s61vbvea.js","key":"@18818","name":"directoryMatch","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-s61vbvea.js","key":"@18835","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 y"}
+{"file":"chunk-s61vbvea.js","key":"@19023","name":"buildCommandLookup","source":"semantic","confidence":0.65,"note":"manual: name/显示名/aliases → 命令 的 Map"}
+{"file":"chunk-s61vbvea.js","key":"@19027","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@19034","name":"lookup","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@19229","name":"hasSensitiveArgs","source":"semantic","confidence":0.7,"note":"manual: isSensitive 为布尔或函数"}
+{"file":"chunk-s61vbvea.js","key":"@19233","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@19235","name":"args","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@19280","name":"isSensitive","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-s61vbvea.js","key":"@19335","name":"buildCommandRunInfo","source":"semantic","confidence":0.6,"note":"manual: {command, args（敏感则 ***）, plugin}"}
+{"file":"chunk-s61vbvea.js","key":"@19339","name":"cmd","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@19341","name":"args","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@19343","name":"plugin","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-s61vbvea.js","key":"@19350","name":"registeredBy","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-s61vbvea.js","key":"@19613","name":"shouldRedactInput","source":"semantic","confidence":0.6,"note":"manual: 粘贴内容或命令参数命中敏感模式时不写入历史"}
+{"file":"chunk-s61vbvea.js","key":"@19922","name":"filterCommandsByAllowlist","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-s61vbvea.js","key":"@19926","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@19928","name":"allowlist","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@20234","name":"resolveBarePluginSkillName","source":"semantic","confidence":0.6,"note":"manual: {kind: none|ambiguous|unique}"}
+{"file":"chunk-s61vbvea.js","key":"@20238","name":"name","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@20240","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@20294","name":"suffix","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-s61vbvea.js","key":"@20304","name":"matches","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-s61vbvea.js","key":"@20446","name":"match","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 h"}
+{"file":"chunk-s61vbvea.js","key":"@20553","name":"commandName","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@20555","name":"commands","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@20562","name":"command","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-s61vbvea.js","key":"@20797","name":"containsSecretPattern","source":"semantic","confidence":0.6,"note":"manual: 按 64KB 分段（带重叠）扫描"}
+{"file":"chunk-s61vbvea.js","key":"@208060","name":"GLOB_PATTERN_REGEX","source":"semantic","confidence":0.85,"note":"manual: 同旧版 utils/permissions/pathValidation.ts（误归 commands.ts）"}
+{"file":"chunk-s61vbvea.js","key":"@208084","name":"getGlobBaseDirectory","source":"semantic","confidence":0.8,"note":"manual: 同旧版 pathValidation.getGlobBaseDirectory；旧版名 getCommands 配错"}
+{"file":"chunk-s61vbvea.js","key":"@208088","name":"path","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 e"}
+{"file":"chunk-s61vbvea.js","key":"@208117","name":"isWindows","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 n"}
+{"file":"chunk-s61vbvea.js","key":"@208135","name":"parts","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 r"}
+{"file":"chunk-s61vbvea.js","key":"@208160","name":"globIndex","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 s"}
+{"file":"chunk-s61vbvea.js","key":"@208191","name":"base","source":"semantic","confidence":0.75,"note":"manual-local: 局部/参数 y"}
+{"file":"chunk-seqjkch8.js","key":"@16273","name":"renderFeedbackFromContext","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-seqjkch8.js","key":"@16977","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /feedback 的 local-jsx call 参数"}
+{"file":"chunk-seqjkch8.js","key":"@16979","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /feedback 的 local-jsx call 参数"}
+{"file":"chunk-seqjkch8.js","key":"@16981","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /feedback 的 local-jsx call 参数"}
+{"file":"chunk-th8w37yz.js","key":"@1492","name":"clearOAuthAccountFields","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-tndsj50r.js","key":"@12996","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /logout 的 local-jsx call 参数"}
+{"file":"chunk-tndsj50r.js","key":"@12998","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /logout 的 local-jsx call 参数"}
+{"file":"chunk-tx2s9zpa.js","key":"@14215","name":"ADVISOR_BLOG_URL","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-tx2s9zpa.js","key":"@14273","name":"AdvisorPicker","source":"semantic","confidence":0.6,"note":"manual: 旧版名 ThinkbackMenu 配错：内容是 advisor 模型选择"}
+{"file":"chunk-tx2s9zpa.js","key":"@16891","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /advisor 的 local-jsx call 参数"}
+{"file":"chunk-tx2s9zpa.js","key":"@16893","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /advisor 的 local-jsx call 参数"}
+{"file":"chunk-tx2s9zpa.js","key":"@16895","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /advisor 的 local-jsx call 参数"}
+{"file":"chunk-ve85yyeb.js","key":"@12870","name":"PlanDisplay","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-ve85yyeb.js","key":"@13473","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /plan 的 local-jsx call 参数"}
+{"file":"chunk-ve85yyeb.js","key":"@13475","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /plan 的 local-jsx call 参数"}
+{"file":"chunk-ve85yyeb.js","key":"@13477","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /plan 的 local-jsx call 参数"}
+{"file":"chunk-vhac946c.js","key":"@5131","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /advisor 的 local call 参数"}
+{"file":"chunk-vhac946c.js","key":"@5133","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /advisor 的 local call 参数"}
+{"file":"chunk-vr5qyyg8.js","key":"@12247","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /fast 的 local call 参数"}
+{"file":"chunk-vr5qyyg8.js","key":"@12249","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /fast 的 local call 参数"}
+{"file":"chunk-vrb44rx7.js","key":"@103322","name":"BUILTIN_MARKETPLACE_OFF_NOTICE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-vrb44rx7.js","key":"@123745","name":"getMarketplaceDisplayName","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-vrb44rx7.js","key":"@131632","name":"getErrorGuidanceText","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-vrb44rx7.js","key":"@221493","name":"SkillsMovedNotice","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-vrb44rx7.js","key":"@222528","name":"SkillDoctorMovedNotice","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-vrb44rx7.js","key":"@237726","name":"PluginCommand","source":"semantic","confidence":0.6,"note":"manual: /plugin 的根组件（解析参数后渲染 PluginSettings）"}
+{"file":"chunk-vrb44rx7.js","key":"@37823","name":"INVALID_MARKETPLACE_SOURCE_MESSAGE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-vrb44rx7.js","key":"@69910","name":"DEFAULT_MAX_VISIBLE","source":"semantic","confidence":0.6,"note":"manual"}
+{"file":"chunk-vrdyygyr.js","key":"@3702","name":"parseVoiceArg","source":"semantic","confidence":0.6,"note":"manual: hold|tap|off|invalid"}
+{"file":"chunk-vrdyygyr.js","key":"@3826","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /voice 的 local call 参数"}
+{"file":"chunk-vrdyygyr.js","key":"@3828","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /voice 的 local call 参数"}
+{"file":"chunk-vrmtstb0.js","key":"@10671","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /login 的 local-jsx call 参数"}
+{"file":"chunk-vrmtstb0.js","key":"@10673","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /login 的 local-jsx call 参数"}
+{"file":"chunk-vrrvwm85.js","key":"@12105","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /compact 的 local call 参数"}
+{"file":"chunk-vrrvwm85.js","key":"@12107","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /compact 的 local call 参数"}
+{"file":"chunk-vrrvwm85.js","key":"@16956","name":"tryReusePrecomputedCompaction","source":"semantic","confidence":0.6,"note":"manual: 命中 session.precompute 的预计算摘要则复用"}
+{"file":"chunk-vt5kkj4e.js","key":"@15276","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /setup-bedrock 的 local-jsx call 参数"}
+{"file":"chunk-vt5kkj4e.js","key":"@15278","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /setup-bedrock 的 local-jsx call 参数"}
+{"file":"chunk-wnym76ss.js","key":"@26080","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /workflows 的 local-jsx call 参数"}
+{"file":"chunk-wnym76ss.js","key":"@26082","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /workflows 的 local-jsx call 参数"}
+{"file":"chunk-wtfk012h.js","key":"@19919","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /loops 的 local-jsx call 参数"}
+{"file":"chunk-wtfk012h.js","key":"@19921","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /loops 的 local-jsx call 参数"}
+{"file":"chunk-x1p3yktn.js","key":"@272","name":"getExportFilename","source":"semantic","confidence":0.6,"note":"manual: 时间戳-首条提示.txt 或 conversation-时间戳.txt"}
+{"file":"chunk-x4gf1bcz.js","key":"@14302","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /add-dir 的 local-jsx call 参数"}
+{"file":"chunk-x4gf1bcz.js","key":"@14304","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /add-dir 的 local-jsx call 参数"}
+{"file":"chunk-x4gf1bcz.js","key":"@14306","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /add-dir 的 local-jsx call 参数"}
+{"file":"chunk-xarcg2hx.js","key":"@3382","name":"SLACK_APP_URL","source":"semantic","confidence":0.9,"note":"manual: 同旧版"}
+{"file":"chunk-xarcg2hx.js","key":"@3452","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /install-slack-app 的 local call 参数"}
+{"file":"chunk-xarcg2hx.js","key":"@3454","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /install-slack-app 的 local call 参数"}
+{"file":"chunk-xs5f70ym.js","key":"@18358","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /exit 的 local-jsx call 参数"}
+{"file":"chunk-xs5f70ym.js","key":"@18360","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /exit 的 local-jsx call 参数"}
+{"file":"chunk-ye0hzrsv.js","key":"@208","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /rewind 的 local call 参数"}
+{"file":"chunk-ye0hzrsv.js","key":"@210","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /rewind 的 local call 参数"}
+{"file":"chunk-yt6zn9vg.js","key":"@100569","name":"insightsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: prompt 命令对象 /insights（模块导出的别名）"}
+{"file":"chunk-yt6zn9vg.js","key":"@95970","name":"insightsCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: prompt 命令对象 /insights"}
+{"file":"chunk-yt6zn9vg.js","key":"@96173","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-yt6zn9vg.js","key":"@96175","name":"context","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-yxcx2jtr.js","key":"@19233","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /help 的 local-jsx call 参数"}
+{"file":"chunk-yxg7c7n7.js","key":"@11988","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /ultrareview 的 local call 参数"}
+{"file":"chunk-yxg7c7n7.js","key":"@11990","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /ultrareview 的 local call 参数"}
+{"file":"chunk-yxg7c7n7.js","key":"@11992","name":"invokedName","source":"semantic","confidence":0.85,"note":"call-param: /ultrareview 的 local call 参数"}
+{"file":"chunk-yxzqxbzv.js","key":"@3367","name":"listAgentsCommandDefinition","source":"semantic","confidence":0.85,"note":"cmd-object: local 命令对象 /list-agents"}
+{"file":"chunk-yxzqxbzv.js","key":"@3588","name":"listAgentsCommand","source":"semantic","confidence":0.9,"note":"cmd-object: local 命令对象 /list-agents（模块导出的别名）"}
+{"file":"chunk-z1n5m6nf.js","key":"@122724","name":"args","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-z1n5m6nf.js","key":"@122726","name":"context","source":"semantic","confidence":0.8,"note":"cmd-method-param: getPromptForCommand 参数"}
+{"file":"chunk-z3fsn6g8.js","key":"@3108","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /autocompact 的 local call 参数"}
+{"file":"chunk-z3fsn6g8.js","key":"@3110","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /autocompact 的 local call 参数"}
+{"file":"chunk-z9nn3hxt.js","key":"@13480","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /recap 的 local call 参数"}
+{"file":"chunk-z9nn3hxt.js","key":"@13482","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /recap 的 local call 参数"}
+{"file":"chunk-zj31az9x.js","key":"@19873","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /remote-env 的 local-jsx call 参数"}
+{"file":"chunk-zkzpd9ky.js","key":"@22001","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /design-login 的 local-jsx call 参数"}
+{"file":"chunk-zmqmnh19.js","key":"@4385","name":"onDone","source":"semantic","confidence":0.85,"note":"call-param: /rename 的 local-jsx call 参数"}
+{"file":"chunk-zmqmnh19.js","key":"@4387","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /rename 的 local-jsx call 参数"}
+{"file":"chunk-zmqmnh19.js","key":"@4389","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /rename 的 local-jsx call 参数"}
+{"file":"chunk-zsxk930s.js","key":"@11874","name":"args","source":"semantic","confidence":0.85,"note":"call-param: /stop 的 local call 参数"}
+{"file":"chunk-zsxk930s.js","key":"@11876","name":"context","source":"semantic","confidence":0.85,"note":"call-param: /stop 的 local call 参数"}
