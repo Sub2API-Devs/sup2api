@@ -73,6 +73,11 @@ func (s *availabilitySource) AccountQuotaSnapshots(_ context.Context, ids []int6
 	}
 	return out, s.err
 }
+
+// errFakeQuotaLag is what the fake view returns with Missing ids, as the
+// mirror does: err != nil exactly when Missing is not empty.
+var errFakeQuotaLag = errors.New("quota snapshot not read in time")
+
 func (s *availabilitySource) AccountQuotaView(ctx context.Context, ids []int64) (core.QuotaView, error) {
 	s.mu.Lock()
 	delay, waitMissing := s.delay, false
@@ -83,7 +88,7 @@ func (s *availabilitySource) AccountQuotaView(ctx context.Context, ids []int64) 
 	if delay > 0 {
 		select {
 		case <-ctx.Done():
-			return core.QuotaView{Missing: append([]int64(nil), ids...)}, nil
+			return core.QuotaView{Missing: append([]int64(nil), ids...)}, errFakeQuotaLag
 		case <-time.After(delay):
 		}
 	}
@@ -104,6 +109,9 @@ func (s *availabilitySource) AccountQuotaView(ctx context.Context, ids []int64) 
 		} else if s.stale[id] {
 			view.Stale[id] = true
 		}
+	}
+	if len(view.Missing) > 0 {
+		return view, errFakeQuotaLag
 	}
 	return view, nil
 }

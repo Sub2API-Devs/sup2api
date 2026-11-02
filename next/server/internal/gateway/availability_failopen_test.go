@@ -103,6 +103,31 @@ func TestAvailabilityPartialSnapshotMissing(t *testing.T) {
 	require.False(t, tr.Samples[0].Batch)
 }
 
+// A source that fails without naming the ids it could not read (against
+// the QuotaView contract) cannot say which absent snapshot means "no row":
+// every id without one is treated as unread, the others keep theirs.
+type unnamedFailureSource struct{ *availabilitySource }
+
+func (s unnamedFailureSource) AccountQuotaView(context.Context, []int64) (core.QuotaView, error) {
+	return core.QuotaView{Snapshots: map[int64]*pluginv1.AccountQuotaSnapshot{1: {Generation: 3}}}, errors.New("partial read")
+}
+
+func TestAvailabilitySourceErrorWithoutMissingIDs(t *testing.T) {
+	e := newEnv(t)
+	p, source := enableAvailability(e, 0)
+	e.gw.d.Quota = unnamedFailureSource{source}
+	cl := availabilityCall(t, e)
+	refs := []core.AccountRef{availabilityRef1, {ID: 2, PluginKey: "anthropic", Type: "apikey"}}
+	out, failure := cl.filterAvailability(context.Background(), refs)
+	require.Nil(t, failure)
+	require.Len(t, out, 2)
+	require.Equal(t, int64(3), p.calls[0].Candidates[0].GetQuota().GetGeneration())
+	require.Equal(t, int64(3), cl.availability[1].quota.GetGeneration())
+	require.Empty(t, cl.availability[1].reason)
+	require.Equal(t, availReasonSnapshot, cl.availability[2].reason)
+	require.Equal(t, map[string]int{availReasonSnapshot: 1}, cl.rec.Availability.Counts)
+}
+
 // The guard adopts the snapshot it reads when the admission's generation
 // cannot be trusted (stale) or was never known (nil): no reauthorization is
 // inferred from it, no 503.

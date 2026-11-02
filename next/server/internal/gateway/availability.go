@@ -227,20 +227,21 @@ func (c *call) readQuota(ctx context.Context, ids []int64, budget time.Duration)
 	for _, id := range view.Missing {
 		r.missing[id] = true
 	}
-	if err != nil {
-		// Without the error the view would say which ids have no row; with
-		// it, an id without a snapshot may just not have been read.
-		r.err = err
+	// The contract: err != nil exactly when Missing is not empty, and the
+	// other ids are still answered. A source that fails without naming the
+	// ids cannot say which absent snapshot means "no row": all are unknown.
+	if err != nil && len(view.Missing) == 0 {
 		for _, id := range ids {
 			if r.snapshots[id] == nil {
 				r.missing[id] = true
 			}
 		}
 	}
+	r.err = err
 	if len(r.missing) > 0 && r.err == nil {
 		r.err = errAvailabilitySnapshotLag
 	}
-	r.whole = err != nil || len(ids) > 0 && len(r.missing) >= len(ids)
+	r.whole = len(ids) > 0 && len(r.missing) >= len(ids)
 	return r
 }
 
@@ -544,7 +545,9 @@ func (c *call) guardAvailability(ctx context.Context, ref *core.AccountRef) *gwE
 	if v.blocked {
 		return c.guardBlocked(ctx, ref, availReasonUnavailable, v.detail, v.model, v.retryAt, availabilityFailure(true))
 	}
-	if v.code != "" && !errors.Is(v.err, errAvailabilityFailedOpen) {
+	// A failure the precheck already recorded for this account (or plugin)
+	// is not recorded again.
+	if v.code != "" && !errors.Is(v.err, errAvailabilityFailedOpen) && !(admitted && v.code == old.reason) {
 		c.appendGuardSample(core.AvailabilitySample{AccountID: ref.ID, Plugin: ref.PluginKey, Model: clipText(v.model, availModelBytes),
 			Decision: core.AvailabilityFailOpen, Reason: availabilityReason(v.code, v.detail)})
 		c.logFailOpen(ctx, ref.PluginKey, v.code, 1, v.err)

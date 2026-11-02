@@ -682,7 +682,7 @@ func (s *wsSession) reuse(ctx context.Context, cl *call) (func(), *gwError) {
 	// generation is a reauthorized account (CONTRACTS §44.7). An unknown one
 	// on either side is not adopted later either (applyQuotaObservation).
 	if !sameQuotaGeneration(s.quotaGeneration, cl.availability[s.ref.ID].generation()) {
-		return nil, availabilityFailure(false)
+		return nil, cl.guardBlocked(ctx, s.ref, availReasonIdentity, "", cl.model, 0, availabilityFailure(false))
 	}
 	deadline := time.Now().Add(s.g.ws.slotWait)
 	var pendingRelease func()
