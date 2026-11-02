@@ -104,9 +104,15 @@ for (const m of readJsonl(path.join(A, 'match/local-map.jsonl'))) {
 const byChunk = new Map();
 for (const d of D) { let a = byChunk.get(d.file); if (!a) byChunk.set(d.file, (a = [])); a.push(d); }
 for (const a of byChunk.values()) a.sort((x, y) => x.start - y.start);
+// readable names from the previous resolve run, for naming new modules
+const previousNames = new Map();
+if (fs.existsSync('naming/final/top.json')) {
+  for (const recs of Object.values(JSON.parse(fs.readFileSync('naming/final/top.json', 'utf8'))))
+    for (const r of Object.values(recs)) if (r.declId && r.source !== 'minified' && !previousNames.has(r.declId)) previousNames.set(r.declId, r.name);
+}
 
 // 4. layout + affinity, iterated to a fixpoint
-for (let round = 0; round < 20; round++) {
+for (let round = 0; round < 60; round++) {
   let added = 0;
   for (const list of byChunk.values()) {
     // layout: gap between two declarations of the same path
@@ -136,7 +142,59 @@ for (let round = 0; round < 20; round++) {
       }
     }
   }
+  added += soleConsumerRuns();
   if (!added) break;
+}
+
+// 4c. sole-consumer runs. Take each maximal run of unplaced declarations in
+// a chunk; if everything outside the run that uses it lives in ONE first-party
+// module P, the run is P's private code. Bun keeps a source module's
+// statements contiguous inside a chunk, so:
+//   - the run touches P in the chunk  -> it is part of P            (sole-consumer)
+//   - it does not                      -> a separate module only P uses,
+//                                         placed next to P             (sole-consumer-new)
+// Only first-party consumers count; vendor internals are the vendor role's.
+function soleConsumerRuns() {
+  let added = 0;
+  for (const list of byChunk.values()) {
+    for (let k = 0; k < list.length;) {
+      if (label[list[k].i]) { k++; continue; }
+      let e = k;
+      while (e < list.length && !label[list[e].i]) e++;
+      const run = list.slice(k, e);
+      const inRun = new Set(run.map((d) => d.i));
+      let p = null, ok = true, users = 0;
+      for (const d of run) for (const j of d.usedBy) {
+        if (inRun.has(j)) continue;
+        const l = label[j];
+        users++;
+        if (!l || l.kind !== 'first-party' || (p && l.path !== p)) { ok = false; break; }
+        p = l.path;
+      }
+      if (ok && p && users) {
+        const touches = [list[k - 1], list[e]].some((x) => x && label[x.i]?.path === p);
+        let target = p, method = 'sole-consumer';
+        if (!touches) {
+          const main = run.reduce((a, b) => (b.bytes > a.bytes ? b : a));
+          const dir = p.startsWith('_new/') ? '_new' : path.posix.join(path.posix.dirname(p), '_new');
+          target = path.posix.join(dir, `${nameOfDecl(main, p)}.ts`);
+          method = 'sole-consumer-new';
+        }
+        for (const d of run) label[d.i] = { path: target, kind: 'first-party', method };
+        added += run.length;
+      }
+      k = e;
+    }
+  }
+  return added;
+}
+// A readable name for a new module: the main declaration's previous readable
+// name, else "<consumer file>.helpers-<chunk tag>".
+function nameOfDecl(d, consumer) {
+  const n = previousNames.get(d.id);
+  if (n && /^[A-Za-z_$][\w$]*$/.test(n) && n.length > 3) return n;
+  const base = path.posix.basename(consumer).replace(/\.(tsx?|jsx?)$/, '');
+  return `${base}.helpers-${d.file.replace(/^chunk-|\.js$/g, '').slice(0, 4)}`;
 }
 
 // 4b. a shared clone still unplaced goes to its reference file only when one
