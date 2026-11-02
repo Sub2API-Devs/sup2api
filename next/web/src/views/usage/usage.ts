@@ -56,12 +56,14 @@ export interface AvailabilitySample {
   retry_at?: number
   /** Guard samples only. */
   attempt?: number
+  /** The one sample of a whole plugin batch that failed open (no account). */
+  batch?: boolean
 }
 
 /** The model availability precheck of one request (MODEL-AVAILABILITY-PRECHECK-DESIGN.md §6.1). */
 export interface AvailabilityTrace {
   v: number
-  /** blocked_all | partial | fail_open */
+  /** blocked_all | partial | fail_open | pass (precheck admitted all, only the guard blocked) */
   outcome: string
   candidates: number
   admitted: number
@@ -92,6 +94,7 @@ function availabilitySamples(value: unknown, max: number): AvailabilitySample[] 
     if (text(s.model, 200)) sample.model = text(s.model, 200)
     if (count(s.retry_at) > 0) sample.retry_at = count(s.retry_at)
     if (count(s.attempt) > 0) sample.attempt = count(s.attempt)
+    if (s.batch === true) sample.batch = true
     out.push(sample)
   }
   return out

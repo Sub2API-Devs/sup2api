@@ -63,7 +63,7 @@ describe('UsageAvailabilityTrace', () => {
 
   it('opens a fail-open trace with an info badge and names the plugin of a whole-batch sample', () => {
     const w = render({ v: 1, outcome: 'fail_open', candidates: 4, admitted: 4, counts: { plugin_timeout: 4 },
-      samples: [{ plugin: 'ccgateway', decision: 'fail_open', reason: 'plugin_timeout' }] }, 'en')
+      samples: [{ plugin: 'ccgateway', decision: 'fail_open', reason: 'plugin_timeout', batch: true }] }, 'en')
     expect(open(w)).toBe('true')
     const badge = w.get('[data-testid="availability-outcome"]')
     expect(badge.text()).toBe('Check failed, let through')
@@ -72,6 +72,18 @@ describe('UsageAvailabilityTrace', () => {
     expect(sample.text()).toContain('Whole batch of plugin ccgateway')
     expect(sample.text()).toContain('Plugin call timed out')
     expect(w.find('[data-testid="availability-hidden-account"]').exists()).toBe(false)
+  })
+
+  it('treats a redacted per-account sample as hidden even with a plugin failure reason', () => {
+    const w = render({ v: 1, outcome: 'fail_open', candidates: 1, admitted: 1, counts: { plugin_timeout: 1 },
+      samples: [{ plugin: 'ccgateway', decision: 'fail_open', reason: 'plugin_timeout' }] }, 'en')
+    expect(w.find('[data-testid="availability-hidden-account"]').exists()).toBe(true)
+  })
+
+  it('labels the pass outcome (only the guard blocked)', () => {
+    const w = render({ v: 1, outcome: 'pass', candidates: 2, admitted: 2, counts: {}, samples: [],
+      guard: [{ account_id: 7, decision: 'block', reason: 'guard_identity_changed', attempt: 1 }] }, 'en')
+    expect(w.get('[data-testid="availability-outcome"]').text()).toBe('Precheck passed')
   })
 
   it('shows a hidden-account hint for samples without an account id', () => {

@@ -165,7 +165,8 @@ export default {
     outcomes: {
       blocked_all: '全部拦截',
       partial: '部分拦截',
-      fail_open: '检查失败，已放行'
+      fail_open: '检查失败，已放行',
+      pass: '预检通过'
     },
     candidates: '候选账号',
     admitted: '放行账号',

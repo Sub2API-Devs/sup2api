@@ -165,7 +165,8 @@ export default {
     outcomes: {
       blocked_all: 'All blocked',
       partial: 'Partly blocked',
-      fail_open: 'Check failed, let through'
+      fail_open: 'Check failed, let through',
+      pass: 'Precheck passed'
     },
     candidates: 'Candidates',
     admitted: 'Let through',

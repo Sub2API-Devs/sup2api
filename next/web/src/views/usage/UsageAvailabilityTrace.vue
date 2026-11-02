@@ -23,14 +23,11 @@ const sections = computed(() => [
   { key: 'guard', title: t('usage.availability.guard'), items: trace.value?.guard || [] }
 ].filter(s => s.items.length))
 
-/** Reasons the core records once per failed plugin batch, without an account. */
-const BATCH_REASONS = ['plugin_error', 'plugin_timeout', 'plugin_bad_response']
-
 const reason = (code: string) => availabilityReasonLabel(tr, code)
 
 function account(s: AvailabilitySample): { text: string; hidden: boolean } {
   if (s.account_id) return { text: accountLabel({ account_id: s.account_id, account_name: s.account_name }), hidden: false }
-  if (s.plugin && BATCH_REASONS.includes(s.reason)) return { text: t('usage.availability.batch', { plugin: s.plugin }), hidden: false }
+  if (s.batch) return { text: t('usage.availability.batch', { plugin: s.plugin || '—' }), hidden: false }
   return { text: t('usage.availability.hiddenAccount'), hidden: true }
 }
 
