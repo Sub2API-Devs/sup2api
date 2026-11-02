@@ -6,14 +6,21 @@
 //     --first-party      额外设置 _CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL=1
 //     --no-upstream      不启动假上游（也不设 ANTHROPIC_BASE_URL / 代理）
 //     --keep             保留沙箱目录（默认跑完删除）
+//     --trace            预加载 trace-preload.js，打印 process.exit 调用栈与未捕获异常（诊断用）
+//     --env-trace        预加载 env-trace-preload.js，记录 CLI 读取过的环境变量名（结果在 envReads，非 --json 时打印）
 //     --json             输出完整结果 JSON（含假上游收到的请求）
 //     --timeout <ms>     超时，默认 60000
+//     --env K=V          追加/覆盖环境变量（--env K 表示删除 K），可重复
 //   例：node tools/verify/run.mjs original -- --version
 //       node tools/verify/run.mjs original --json -- -p hi
 //
-// 用法（库）：import { runCli } from './run.mjs'
-//   const r = await runCli({ tree, args, script, firstParty, setup, timeoutMs, stdin, env })
-//   r = { exitCode, signal, timedOut, stdout, stderr, durationMs, requests, sandbox: {root, home, work, tmp}, leaks }
+// 用法（库）：import { runCli, runScenario, pool } from './run.mjs'
+//   const r = await runCli({ tree, args | sequence: [{args, stdin}], script, firstParty, upstream, setup, collect,
+//                            timeoutMs, stdin, env, keep, trace, envTrace })
+//   r = { exitCode, signal, timedOut, stdout, stderr, durationMs, steps?, requests, files, collected, envReads?,
+//         sandbox: {root, home, work, tmp, …}, leaks, hostWarnings }
+//   runScenario(tree, scenario) 按 scenarios.mjs 的场景对象调用 runCli；pool(items, n, fn) 并发 n 路。
+//   Windows 上 libuv 会给子进程补 HOMEDRIVE/HOMEPATH/USERDOMAIN/LOGONSERVER 的真实值，这里显式覆盖。
 //
 // 隔离（详见 docs/process/verify.md）：
 //   - 环境变量从白名单重建（PATH、SystemRoot 等系统必需项），父进程里的 ANTHROPIC_* / CLAUDE_* / OTEL_* /
@@ -102,6 +109,9 @@ export function isolatedEnv(sb, { upstreamUrl, firstParty = false, extra = {} } 
     XDG_RUNTIME_DIR: path.join(sb.tmp, 'xdg-runtime'),
     TMP: sb.tmp, TEMP: sb.tmp, TMPDIR: sb.tmp,
     USER: 'verify', USERNAME: 'verify', LOGNAME: 'verify',
+    // Windows 上 libuv 建子进程环境时，缺这几项会从父进程补上（HOMEPATH=\Users\<真实用户>），所以显式给沙箱值
+    HOMEDRIVE: path.parse(h).root.replace(/\\$/, ''), HOMEPATH: h.slice(path.parse(h).root.length - 1),
+    USERDOMAIN: 'VERIFY', LOGONSERVER: '\\\\VERIFY',
     // 隐私级别：r7t() 里 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC → "essential-traffic"（最严）
     CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1',
     DISABLE_AUTOUPDATER: '1', DISABLE_ERROR_REPORTING: '1', DISABLE_GROWTHBOOK: '1',
@@ -109,6 +119,8 @@ export function isolatedEnv(sb, { upstreamUrl, firstParty = false, extra = {} } 
     CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL: '1',
     // 输出稳定
     NO_COLOR: '1', FORCE_COLOR: '0', TERM: 'dumb', COLUMNS: '80', LINES: '40',
+    // Bun 转译缓存默认写到 XDG_CACHE_HOME（每次约 32 MB），关掉；实测对启动时间无明显影响
+    BUN_RUNTIME_TRANSPILER_CACHE_PATH: '0',
   });
   for (const k of Object.keys(env)) if (k.startsWith('XDG_')) fs.mkdirSync(env[k], { recursive: true });
   fs.mkdirSync(env.APPDATA, { recursive: true });
@@ -137,43 +149,79 @@ function killTree(child) {
   else { try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch {} } }
 }
 
-export async function runCli({ tree, args = [], script, upstream = true, firstParty = false, setup, timeoutMs = 60000,
-  stdin, env: extraEnv = {}, keep = false } = {}) {
+// 按场景对象运行（scenarios.mjs 的字段）
+export async function runScenario(tree, s) {
+  return runCli({ tree, args: s.args, sequence: s.sequence, script: s.script, upstream: s.upstream !== false,
+    firstParty: !!s.firstParty, setup: s.setup, collect: s.collect, stdin: s.stdin, env: s.env, timeoutMs: s.timeoutMs || 60000 });
+}
+
+export async function pool(items, n, fn) {
+  const queue = [...items];
+  await Promise.all(Array.from({ length: Math.max(1, n) }, async () => {
+    while (queue.length) await fn(queue.shift());
+  }));
+}
+
+// 一次 CLI 调用：spawn bun，收集输出，超时按 PID 杀进程树
+async function spawnOnce({ entry, args, sb, env, stdin, timeoutMs, trace, envTrace }) {
+  const t0 = Date.now();
+  const pre = [];
+  if (trace) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'trace-preload.js'));
+  if (envTrace) pre.push('--preload', path.join(projectRoot, 'tools', 'verify', 'env-trace-preload.js'));
+  const child = spawn(bunPath(), ['--no-install', ...pre, entry, ...args], {
+    cwd: sb.work, env, stdio: [stdin === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
+    windowsHide: true, detached: process.platform !== 'win32',
+  });
+  if (stdin !== undefined) { child.stdin.on('error', () => {}); child.stdin.end(stdin); }
+  const out = [], err = [];
+  child.stdout.on('data', (c) => out.push(c));
+  child.stderr.on('data', (c) => err.push(c));
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; killTree(child); }, timeoutMs);
+  const [exitCode, signal] = await new Promise((resolve) => {
+    child.on('error', (e) => { err.push(Buffer.from(`spawn error: ${e.message}`)); resolve([null, null]); });
+    child.on('close', (c, s) => resolve([c, s]));
+  });
+  clearTimeout(timer);
+  killTree(child); // 收掉可能残留的孙进程（bash、MCP 服务器等）
+  return { args, exitCode, signal, timedOut, durationMs: Date.now() - t0,
+    stdout: Buffer.concat(out).toString('utf8'), stderr: Buffer.concat(err).toString('utf8') };
+}
+
+// sequence: [{ args, stdin }, ...] 在同一沙箱、同一假上游里依次运行（例如 mcp add → mcp remove）。
+// 结果的 exitCode/stdout/stderr 取自最后一步，每一步的完整结果在 steps 里。
+// collect(ctx) 在删除沙箱前调用，返回值放进 result.collected（例如读取 MCP 服务器日志）。
+export async function runCli({ tree, args = [], sequence, script, upstream = true, firstParty = false, setup, collect,
+  timeoutMs = 60000, stdin, env: extraEnv = {}, keep = false, trace = false, envTrace = false } = {}) {
   const treeDir = path.resolve(projectRoot, tree);
   const entry = path.join(treeDir, 'cli.js');
   if (!fs.existsSync(entry)) throw new Error(`找不到 ${entry}`);
   const sb = makeSandbox();
-  const ctx = { cwd: sb.work, home: sb.home, tmp: sb.tmp };
+  const ctx = { cwd: sb.work, home: sb.home, tmp: sb.tmp, projectRoot };
   let up;
   try {
     if (setup) await setup(ctx);
     if (upstream) up = await startFakeUpstream({ script: script || {}, ctx });
     const env = isolatedEnv(sb, { upstreamUrl: up?.url, firstParty, extra: extraEnv });
-    const t0 = Date.now();
-    const child = spawn(bunPath(), ['--no-install', entry, ...args], {
-      cwd: sb.work, env, stdio: [stdin === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
-      windowsHide: true, detached: process.platform !== 'win32',
-    });
-    if (stdin !== undefined) { child.stdin.on('error', () => {}); child.stdin.end(stdin); }
-    const out = [], err = [];
-    child.stdout.on('data', (c) => out.push(c));
-    child.stderr.on('data', (c) => err.push(c));
-    let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; killTree(child); }, timeoutMs);
-    const [exitCode, signal] = await new Promise((resolve) => {
-      child.on('error', (e) => { err.push(Buffer.from(`spawn error: ${e.message}`)); resolve([null, null]); });
-      child.on('close', (c, s) => resolve([c, s]));
-    });
-    clearTimeout(timer);
-    killTree(child); // 收掉可能残留的孙进程（bash 等）
+    if (envTrace) env.VERIFY_ENV_TRACE_OUT = path.join(sb.tmp, 'env-trace.txt');
+    const plan = sequence || [{ args, stdin }];
+    const steps = [];
+    for (const st of plan) {
+      const a = typeof st.args === 'function' ? st.args(ctx) : st.args;
+      steps.push(await spawnOnce({ entry, args: a, sb, env, stdin: st.stdin, timeoutMs, trace, envTrace }));
+    }
+    const last = steps.at(-1);
     const result = {
-      tree: path.relative(projectRoot, treeDir).replace(/\\/g, '/') || '.', args, firstParty,
-      exitCode, signal, timedOut, durationMs: Date.now() - t0,
-      stdout: Buffer.concat(out).toString('utf8'), stderr: Buffer.concat(err).toString('utf8'),
+      tree: path.relative(projectRoot, treeDir).replace(/\\/g, '/') || '.', firstParty,
+      ...last, durationMs: steps.reduce((n, x) => n + x.durationMs, 0),
+      steps: sequence ? steps : undefined,
       requests: up ? up.requests : [],
       upstreamUrl: up?.url ?? null,
-      sandbox: { ...sb, sandboxRoot: sandboxRoot(), realHome: os.homedir(), projectRoot },
+      sandbox: { ...sb, sandboxRoot: sandboxRoot(), realHome: os.homedir(), projectRoot, treeDir, bun: bunPath() },
       files: snapshotFiles(sb.work),
+      collected: collect ? await collect(ctx) : undefined,
+      envReads: envTrace ? readEnvTrace(env.VERIFY_ENV_TRACE_OUT) : undefined,
+      hostWarnings: hostWarnings(sb),
     };
     result.leaks = auditLeaks(result);
     return result;
@@ -181,6 +229,22 @@ export async function runCli({ tree, args = [], script, upstream = true, firstPa
     if (up) await up.close();
     if (!keep) removeSandbox(sb);
   }
+}
+
+function readEnvTrace(p) {
+  try {
+    return fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => ({ name: l.slice(6), set: l.startsWith('set') }))
+      .filter((e) => e.name !== 'VERIFY_ENV_TRACE_OUT');
+  } catch { return null; }
+}
+
+// 316 linux 构建在 Windows 上把托管设置目录解析成 <cwd 盘>:\etc\claude-code（见 docs/process/verify.md），
+// 那里若有文件会被当作托管设置读入，破坏隔离。
+function hostWarnings(sb) {
+  const w = [];
+  const managed = path.join(path.parse(sb.work).root, 'etc', 'claude-code');
+  if (fs.existsSync(managed)) w.push(`managed settings dir exists: ${managed}`);
+  return w;
 }
 
 // 工作目录里的文件（场景用来检查 Write/Edit 的结果）
@@ -200,9 +264,13 @@ function snapshotFiles(dir) {
 // 检查真实用户目录 / 项目路径 / 外网请求是否泄漏进输出或请求
 export function auditLeaks(r) {
   const leaks = [];
-  const hay = r.stdout + '\n' + r.stderr + '\n' + JSON.stringify(r.requests);
+  let hay = [r.stdout, r.stderr, ...(r.steps || []).flatMap((s) => [s.stdout, s.stderr]), JSON.stringify(r.requests)].join('\n');
   const variants = (p) => [p, p.replace(/\\/g, '/'), p.replace(/\\/g, '\\\\')];
-  for (const [what, p] of [['realHome', r.sandbox.realHome], ['projectRoot', r.sandbox.projectRoot]]) {
+  // 被测树、bun、tools/verify 自身出现在输出里是正常的（doctor 的 Invoked/Path、MCP 服务器路径等）
+  const allowed = [r.sandbox.treeDir, path.dirname(r.sandbox.bun), path.join(r.sandbox.projectRoot, 'tools', 'verify')];
+  for (const p of allowed) for (const v of variants(p)) hay = hay.split(v).join('<ALLOWED>');
+  const homeNoDrive = r.sandbox.realHome ? r.sandbox.realHome.slice(path.parse(r.sandbox.realHome).root.length - 1) : null;
+  for (const [what, p] of [['realHome', r.sandbox.realHome], ['realHome', homeNoDrive], ['projectRoot', r.sandbox.projectRoot]]) {
     if (!p) continue;
     for (const v of variants(p)) if (v && hay.toLowerCase().includes(v.toLowerCase())) { leaks.push({ what, value: v }); break; }
   }
@@ -217,11 +285,13 @@ if (isMain) {
   const sep = argv.indexOf('--');
   const own = sep >= 0 ? argv.slice(0, sep) : argv.slice(0, 1);
   const cliArgs = sep >= 0 ? argv.slice(sep + 1) : argv.slice(1);
-  const tree = own.find((a) => !a.startsWith('--')) || 'original';
+  const tree = own.find((a, i) => !a.startsWith('--') && !['--env', '--timeout'].includes(own[i - 1])) || 'original';
   const flag = (f) => own.includes(f);
   const timeoutIdx = own.indexOf('--timeout');
+  const env = {};
+  own.forEach((a, i) => { if (a === '--env') { const [k, ...v] = own[i + 1].split('='); env[k] = v.length ? v.join('=') : undefined; } });
   const r = await runCli({ tree, args: cliArgs, firstParty: flag('--first-party'), upstream: !flag('--no-upstream'),
-    keep: flag('--keep'), timeoutMs: timeoutIdx >= 0 ? Number(own[timeoutIdx + 1]) : 60000 });
+    keep: flag('--keep'), trace: flag('--trace'), envTrace: flag('--env-trace'), env, timeoutMs: timeoutIdx >= 0 ? Number(own[timeoutIdx + 1]) : 60000 });
   if (flag('--json')) {
     console.log(JSON.stringify(r, null, 2));
   } else {
@@ -230,6 +300,7 @@ if (isMain) {
     console.error(`\n[verify] exit=${r.exitCode} signal=${r.signal} timedOut=${r.timedOut} ${r.durationMs}ms requests=${r.requests.length}` +
       (r.leaks.length ? ` LEAKS=${JSON.stringify(r.leaks)}` : '') + (flag('--keep') ? ` sandbox=${r.sandbox.root}` : ''));
     for (const q of r.requests) console.error(`[verify]   #${q.seq} ${q.kind} ${q.method} ${q.url} -> ${q.response?.status}`);
+    if (r.envReads) console.error(`[verify] env reads (${r.envReads.length}, 按首次读取顺序):\n` + r.envReads.map((e) => `  ${e.set ? 'set  ' : 'unset'} ${e.name}`).join('\n'));
   }
   process.exitCode = r.exitCode ?? 1;
 }

@@ -19,3 +19,4 @@
 - 04:22 `tools/naming/resolve.mjs`：多来源合并（semantic > vendor > reference > auto），顶层名在 chunk 内和重组模块内都唯一，导入别名跟随导出方；`tools/naming/auto-names.mjs`：基于代码证据的兜底命名 94,453 条（解构键、catch、成员/方法名、已知调用、字符串常量、Error 类名……）。
 - 04:30 `tools/emit/readable.mjs`：阅读树生成（模块头、每个声明前的出处行 `//@ chunk:start-end 方法 = 旧版名`、按使用边合成 import/export、prettier 格式化）；改名统一调用 rename 成员的库（放弃了自写的第二套改名器，避免两套实现）。
 - 04:33 `tools/ast/match-local.mjs`：文件内二次匹配 529 对；旧版命名合计顶层 8,353、参数 5,824、局部 17,816。
+- 05:05 runtime：`tools/verify/`（隔离运行 run.mjs、假 Messages API fake-upstream.mjs、stdio MCP 假服务器、42 个场景、对拍 compare.mjs）+ 开发依赖 `bun@1.4.4`（公版，修订 38afee6c8）。original 自对拍两轮 42/42 一致（16 个场景需归一化），负对照能抓出一字之差；rename 测试输出 `.rn-tmp/out-full`、`out-final` 对拍 42/42 一致。已知限制：Ink 命令需要内部 Bun 的 `Bun.ant.CellSegmenter`，公版跑不了。细节见 `docs/process/verify.md`。

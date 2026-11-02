@@ -22,6 +22,7 @@
 //     steps: [step0, step1, ...],   // 主循环请求（body.tools 非空）按 messages 里 assistant 消息个数选 step
 //     final: '最终文本',            // steps 用完后的回答
 //     side:  '旁路请求的回答',       // 没有 tools 的请求（标题生成、分类等）
+//     error: { status, type, message }  // 设置后对 /v1/messages 一律回这个错误（测试错误处理）
 //   }
 //   step = { text?: '前置文本', tools?: [{ name, input }] }   input 可以是函数 (ctx) => object
 //   无状态：同样的请求永远得到同样的回答，id 由请求序号之外的内容决定（msg_/toolu_ 按 step 下标编号），
@@ -87,6 +88,11 @@ export async function startFakeUpstream({ script = {}, ctx = {}, port = 0, onReq
     if (req.method === 'POST' && path === '/v1/messages/count_tokens') {
       rec.response = { status: 200 };
       return json(res, 200, { input_tokens: 42 });
+    }
+    if (req.method === 'POST' && path === '/v1/messages' && script.error) {
+      const e = script.error;
+      rec.response = { status: e.status, error: e.type };
+      return json(res, e.status, { type: 'error', error: { type: e.type, message: e.message } }, { 'request-id': 'req_fake_error' });
     }
     if (req.method === 'POST' && path === '/v1/messages' && rec.body && typeof rec.body === 'object') {
       const plan = planReply(script, ctx, rec.body);
