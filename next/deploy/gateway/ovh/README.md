@@ -4,6 +4,19 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-03 ccgateway **0.1.124** + 核心 **0.1.234**（`e3f5dde61`，北京时间 04:12–04:22；插件包 `41cdb81b…3e23`，核心 manifest `54879cc2…01ca`，计划 `1bddf37536cb5745bd8097f264830b7c` completed/13，无迁移、schema 不变 `c4cddb7f…`，Host API 8，内置插件为 0.1.233 的一套把 ccgateway 换成 0.1.124）：
+- 内容（用户 2026-11-03 决定"①②③ 都做，②③ 默认开"，分析 `artifacts/cc-thirdparty/`）：CC 改 base URL 接入时发的第三方形状，由网关转成第一方形状。定制 CLI 2.1.316 升为 `ccgateway-v45-first-party-shape`（ELF `724ebb33…3bde`，只给新账号）。
+  - ① 我们自己的不一致（不受开关）：子代理 `x-claude-code-agent-type` 不再写 `custom`；请求体顶层键序与 beta 顺序按原生；`prompt-caching-scope`/`cache-diagnosis`/`extended-cache-ttl` 与请求体一致。
+  - ② 无状态：短计费头由原生补全（`cch=00000`），system 只在开头逐字等于原生静态段时拆 4 块。
+  - ③ 有状态（Worker 会话记忆，宁可少不可错）：`cc_prompt_id` 与 `x-claude-code-prompt-id`、prompt/turn 序号、`cc_prev_req`、`diagnostics`；子代理沿用父线程本轮 prompt-id。
+  - 核心：策略开关 `first_party_shape`（全局 → 分组 → 账号继承，默认开），只发给声明 `build_first_party_shape_v1` 的 Worker（CONTRACTS §53.23）；控制台计费头卡片新增开关。
+  - 与第一方的剩余差异见迁移记录第 11 节（`clear-at` beta、客户端自己的工具/技能、工具耗时头、压缩来源头）。
+- **回滚注意**：0.1.234 之前的核心解码分组/账号覆盖时拒绝未知键；分组覆盖里存了 `first_party_shape` 后回滚核心，整份 CCGateway 配置读不出来。回滚前先把这些层改回"跟随"。
+- **计划暂停一次**：步骤 10（sup2api-ccp start）准备候选时连 Supabase 解析超时（`lookup db.kcgrqbfdlitvzxzjnclc.supabase.co on 127.0.0.11:53: i/o timeout`，容器内 resolv `timeout:1 attempts:1`）。主节点已是 0.1.234、ccp 处于 forward（请求转主节点），未中断服务；核对 ccp 宿主与容器内都能解析后 `sub2api-shell resume`，完成 13/13。
+- 核验：两节点 0.1.234、`/readyz` 200，api.prophey.ai 200；账号容器只换了控制器，`up_to_date: true`；两节点近 20 分钟 0 条 ERROR；发布后请求只有 1 条 400（上游）。`testall`：8×200、24×401、3×429（401/429 为账号自身登录失效与上游限额，同 0.1.123 时）。
+- 测试：Linux（发布提交）engine、worker、contracts、controller-go、guard 全过；核心全量通过（`devenv TestPrepare` 与 web `navigation.spec`/`style.spec` 在并行负载下各失败一次，单独重跑通过）；web 967 过（`plugins.spec.ts` 4 个是已知 Windows 路径问题）；cli-mods 2.1.316 244/245、旧三版 235/236（各 1 条只在 Linux 跑）；v45 的 TLS、L4–L7、离线回归与新增第三方场景见迁移记录第 11 节。
+- 脚本 `stage/ccgateway-0.1.124/`、`stage/0.1.234/`；v45 release 在 `~/sup2api/checks/cli-releases/release-v45-2.1.316`；备份 `backups/ccgateway-0.1.124`（`7e2d160f…`）、`backups/core-0.1.234`（`1ea7e70a…`）。
+
 2026-11-03 ccgateway **0.1.123** + 核心 **0.1.233**（`e03e44a9c`，北京时间 2026-11-02 23:55–00:03；插件包 `a0e35e74…5954`，核心 manifest `cf511c0f…9c95`，计划 `49c764fe9527ad7c8745311f70c76fca` completed/13，58 秒，迁移 0075，Host API 8，内置插件为 0.1.232 的一套把 ccgateway 换成 0.1.123）：
 - 内容：定制 CLI 2.1.316 升为 `ccgateway-v44-stored-login`（ELF `76b11ddd…f99b`，只给新账号）：2.1.316 新增的 `StoredLoginHeldBackError` 按原因回 403 `stored_login_refused_admin` / 401 `stored_login_refused_restart_needed`，`settings_unloaded` 保持可重试的 5xx（此前一律 502 `cli_transport_error`）。迁移 0075 给已发布失败策略的 `login-invalid`、`account-on-hold` 追加这两个关键词（线上策略 revision 2→3，两条规则各 1 个），否则 401/403 只会被降为冷却。旧账号仍是 2.1.312 v41，不受影响。
 - 核验：两节点 0.1.233、`/readyz` 200，api.prophey.ai 200；账号容器只有控制器换了，`up_to_date: true`；核心 0 条 ERROR。升级窗口内 4 条失败：控制器重启时 2×502、1×503 runtime not ready，核心切换后 1×503 Worker 健康检查未应答（16:00:46 UTC，计划进行中），之后恢复。
