@@ -615,39 +615,44 @@ func (m *Manager) point(name, digest string) error {
 	return syncDir(m.Root)
 }
 
-// GC removes old releases and blobs that are no longer referenced by current
-// or previous pointers. It keeps the two most recently used releases.
-func (m *Manager) GC(ctx context.Context) error {
+// GC removes the releases, manifests and bundle blobs that neither the current
+// nor the previous pointer needs (a rollback needs only previous). A release
+// prepared within grace (its manifest or directory is that recent: Prepare
+// rewrites the manifest every time) is kept too, with its blob, so that a
+// plan preparing releases is never raced. It returns the releases removed.
+func (m *Manager) GC(ctx context.Context, grace time.Duration) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	current, _ := m.Current()
-	var previous string
-	if p, err := os.Readlink(filepath.Join(m.Root, "previous")); err == nil {
-		if d := filepath.Base(p); ValidDigest(d) {
-			previous = d
+	keep := make(map[string]bool)
+	for _, name := range []string{"current", "previous"} {
+		if p, err := os.Readlink(filepath.Join(m.Root, name)); err == nil {
+			if d := filepath.Base(p); p == filepath.Join("releases", d) && ValidDigest(d) {
+				keep[d] = true
+			}
+		}
+	}
+	if len(keep) == 0 {
+		return 0, nil // nothing switched yet: nothing is known to be unneeded
+	}
+	cutoff := time.Now().Add(-grace)
+	young := func(p string) bool {
+		info, err := os.Stat(p)
+		return err == nil && info.ModTime().After(cutoff)
+	}
+	for _, dir := range []string{"releases", "manifests"} {
+		entries, err := os.ReadDir(filepath.Join(m.Root, dir))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return 0, err
+		}
+		for _, e := range entries {
+			if ValidDigest(e.Name()) && young(filepath.Join(m.Root, dir, e.Name())) {
+				keep[e.Name()] = true
+			}
 		}
 	}
 
-	keep := make(map[string]bool)
-	if current != "" {
-		keep[current] = true
-	}
-	if previous != "" {
-		keep[previous] = true
-	}
-
-	// Remove old release directories.
-	if err := pruneDir(ctx, filepath.Join(m.Root, "releases"), keep, true); err != nil {
-		return err
-	}
-
-	// Remove old manifests.
-	if err := pruneDir(ctx, filepath.Join(m.Root, "manifests"), keep, false); err != nil {
-		return err
-	}
-
-	// Find which blobs are still needed.
+	// The blobs the kept releases name, from their signed manifests.
 	keepBlobs := make(map[string]bool)
 	for digest := range keep {
 		b, err := os.ReadFile(filepath.Join(m.Root, "manifests", digest))
@@ -668,23 +673,39 @@ func (m *Manager) GC(ctx context.Context) error {
 			}
 		}
 	}
+	blobs := filepath.Join(m.Root, "blobs", "sha256")
+	if entries, err := os.ReadDir(blobs); err == nil {
+		for _, e := range entries {
+			if young(filepath.Join(blobs, e.Name())) {
+				keepBlobs[e.Name()] = true
+			}
+		}
+	}
 
-	// Remove old blobs.
-	return pruneDir(ctx, filepath.Join(m.Root, "blobs", "sha256"), keepBlobs, false)
+	removed, err := pruneDir(ctx, filepath.Join(m.Root, "releases"), keep, true)
+	if err != nil {
+		return removed, err
+	}
+	if _, err := pruneDir(ctx, filepath.Join(m.Root, "manifests"), keep, false); err != nil {
+		return removed, err
+	}
+	_, err = pruneDir(ctx, blobs, keepBlobs, false)
+	return removed, err
 }
 
-// pruneDir removes every digest-named entry of dir that is not in keep. With
-// wantDir it only touches directories (removing them recursively); otherwise it
-// only touches files. A missing directory is not an error, and cancellation is
-// observed between entries.
-func pruneDir(ctx context.Context, dir string, keep map[string]bool, wantDir bool) error {
+// pruneDir removes every digest-named entry of dir that is not in keep and
+// returns how many it removed. With wantDir it only touches directories
+// (removing them recursively); otherwise it only touches files. A missing
+// directory is not an error, and cancellation is observed between entries.
+func pruneDir(ctx context.Context, dir string, keep map[string]bool, wantDir bool) (int, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
+		return 0, err
 	}
+	removed := 0
 	for _, e := range entries {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return removed, ctx.Err()
 		}
 		if e.IsDir() != wantDir || !ValidDigest(e.Name()) || keep[e.Name()] {
 			continue
@@ -695,10 +716,11 @@ func pruneDir(ctx context.Context, dir string, keep map[string]bool, wantDir boo
 			err = os.Remove(filepath.Join(dir, e.Name()))
 		}
 		if err != nil {
-			return err
+			return removed, err
 		}
+		removed++
 	}
-	return nil
+	return removed, nil
 }
 
 func atomicWrite(p string, b []byte) error {

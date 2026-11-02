@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -297,7 +298,33 @@ func (r *LocalRuntime) Start(ctx context.Context, digest string, options rc.Prep
 	if err = c.Prepare(ctx, options); err != nil {
 		return rc.Status{}, err
 	}
-	return r.waitPrepared(ctx, c)
+	st, err := r.waitPrepared(ctx, c)
+	if err == nil {
+		r.collectReleases(ctx)
+	}
+	return st, err
+}
+
+// releaseGrace keeps releases prepared this recently from the release GC: a
+// plan that prepared them has not started them yet.
+const releaseGrace = 6 * time.Hour
+
+// collectReleases removes the releases a rollback cannot need once a core is
+// up from the current one (release.Manager.GC; the disk of a node otherwise
+// fills with every release it ever ran) and forgets them here. A failure is
+// logged: the core runs either way.
+func (r *LocalRuntime) collectReleases(ctx context.Context) {
+	n, err := r.Releases.GC(ctx, releaseGrace)
+	if n > 0 || err != nil {
+		slog.Info("release cleanup", "removed", n, "error", err)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for digest, p := range r.prepared {
+		if _, err := os.Stat(p.Directory); errors.Is(err, os.ErrNotExist) {
+			delete(r.prepared, digest)
+		}
+	}
 }
 
 // Validate embedded capabilities before issuing Prepare, which may migrate the
