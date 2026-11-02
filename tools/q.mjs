@@ -6,7 +6,8 @@
 //   node tools/q.mjs module <path>        declarations of a reconstructed module (analysis/segments)
 //   node tools/q.mjs where <chunk.js>     reconstructed modules a chunk contributes to
 // <id> is "chunk-xxx.js#minName"; <name> is a reference/semantic name or a minified name.
-// When readable names exist (analysis/names/*.jsonl), `show` prints the
+// When readable names exist (analysis/names/*.jsonl, naming/semantic-*.jsonl —
+// the latter win), `show` prints the
 // declaration with them applied (top-level, parameter and local names).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,8 +22,14 @@ const byId = new Map(D.map((d) => [`${d.file}#${d.names[0] ?? '@' + d.start}`, d
 const match = new Map(readJsonl('analysis/match/decl-map.jsonl').map((m) => [m.id, m]));
 const seg = new Map(readJsonl('analysis/segments/decl-path.jsonl').map((m) => [m.id, m]));
 const names = new Map(); // file -> Map(offset -> {name, source, via})
-for (const f of fs.existsSync('analysis/names') ? fs.readdirSync('analysis/names').filter((f) => f.endsWith('.jsonl')) : []) {
-  for (const n of readJsonl(path.join('analysis/names', f))) {
+const nameFiles = [
+  ...(fs.existsSync('analysis/names') ? fs.readdirSync('analysis/names').filter((f) => f.endsWith('.jsonl')).map((f) => path.join('analysis/names', f)) : []),
+  ...(fs.existsSync('naming') ? fs.readdirSync('naming').filter((f) => /^semantic-.*.jsonl$/.test(f)).map((f) => path.join('naming', f)) : []),
+];
+for (const nf of nameFiles) {
+  const boost = nf.includes('semantic-') ? 10 : 0;
+  for (const n0 of readJsonl(nf)) {
+    const n = { ...n0, confidence: (n0.confidence ?? 0.5) + boost };
     let m = names.get(n.file);
     if (!m) names.set(n.file, (m = new Map()));
     const off = +n.key.slice(1);
