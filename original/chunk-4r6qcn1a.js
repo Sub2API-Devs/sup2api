@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.316
+import{ue}from"./chunk-aepeg2w5.js";import{t}from"./chunk-cgr0tezp.js";import{_p,Nn}from"./chunk-dcmhvw5a.js";import{af}from"./chunk-czx62zen.js";import{$N,BN}from"./chunk-f3qhjfah.js";import{ypr}from"./chunk-yf5m6p65.js";import{eYo,Qtr,Ztr,iYo}from"./chunk-csq9ftr9.js";var d=14,f=10;async function u7e(){try{let e=ypr();if(e===void 0)return[];if(BN()!==null)return[];let{enabled:s}=await e;if(s.length===0)return[];let u=af(),l=$N(),c=ue().numStartups,g=Date.now(),r=[];for(let n of s){let{marketplace:o}=Nn(n.repository);if(!o||_p(o))continue;if(iYo(n,u,l)!=="user-install")continue;if(p(n))continue;let i=Qtr(n.repository);if(!i)continue;if(eYo(n.repository))continue;let{sessionsSinceLastUse:m,daysSinceLastUse:a}=Ztr(i,c,g);if(a>=d&&m>=f)r.push({pluginId:n.repository,name:n.name,daysSinceLastUse:a})}return r.sort((n,o)=>o.daysSinceLastUse-n.daysSinceLastUse),r}catch(e){return t(`plugin-disuse tip: failed to compute disused plugins: ${e}`,{level:"error"}),[]}}function w1s(e){if(BN()!==null)return null;let s=Qtr(e);if(!s)return null;if(eYo(e))return 0;return Ztr(s,ue().numStartups,Date.now()).daysSinceLastUse}function p(e){return Boolean(e.themesPath||e.themesPaths?.length||e.outputStylesPath||e.outputStylesPaths?.length||e.monitors?.length||e.workflowsPath||e.workflowsPaths?.length)}
+export{u7e,w1s};

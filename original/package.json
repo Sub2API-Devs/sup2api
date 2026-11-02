@@ -1,0 +1,6 @@
+{
+  "name": "claude-code-local-reconstruction",
+  "version": "2.1.316",
+  "private": true,
+  "type": "module"
+}

@@ -1,0 +1,8 @@
+node_modules/
+artifacts/official/claude-linux-x64
+artifacts/tmp/
+vendor-ref/node_modules/
+analysis/scan/
+analysis/reference/
+analysis/vendor/index/
+*.log

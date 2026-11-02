@@ -1,0 +1,6 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.316
+import{ske,VU,A_s,Ghe,C_s,oT,pV,BDn,Owr,sDt,Mwr,Dwr,sft,jc,iDt,Kdo,Sje,Vdo,R_s,c9e,u9e,qdo,nn}from"./chunk-6ysndsgz.js";import"./chunk-cgcrer2m.js";import"./chunk-aat7wt0p.js";import"./chunk-x7vma94a.js";import"./chunk-2g090z7k.js";import"./chunk-eabawhjj.js";import"./chunk-vk5xfx8n.js";import"./chunk-0wqny7vr.js";import"./chunk-0777tkjc.js";export{u9e as ALLOWED_OAUTH_BASE_URLS,oT as CLAUDE_AI_INFERENCE_SCOPE,sDt as CLAUDE_AI_PLUGINS_SCOPE,pV as CLAUDE_AI_PROFILE_SCOPE,Mwr as CLAUDE_AI_PROJECTS_READ_SCOPE,Dwr as CLAUDE_AI_PROJECTS_WRITE_SCOPE,BDn as CLAUDE_AI_SESSIONS_SCOPE,Owr as CLOUD_SESSIONS_OAUTH_SCOPES,Sje as DESIGN_OAUTH_SCOPES,Ghe as LONG_LIVED_OAUTH_TOKEN_TTL_SECONDS,c9e as MCP_CLIENT_METADATA_URL,jc as OAUTH_BETA_HEADER,ske as OAUTH_GLOBAL_FILE_SUFFIXES,C_s as SETUP_TOKEN_DEFAULT_EXPIRY_DAYS,Kdo as allOAuthScopes,qdo as builtInOauthConfig,iDt as claudeAiLoginScopes,VU as fileSuffixForOauthConfig,R_s as firstPartyRefreshScopes,nn as getOauthConfig,sft as isClaudeAiScopeSet,A_s as isStagingOauthConfig,Vdo as preservableScopesFrom};

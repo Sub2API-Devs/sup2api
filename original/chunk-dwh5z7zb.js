@@ -1,0 +1,7 @@
+
+// @bun @bytecode
+// (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
+
+// Version: 2.1.316
+import{ro,lI,ue}from"./chunk-aepeg2w5.js";import{p}from"./chunk-kpa9nk58.js";import{ePs,tPs}from"./chunk-zv6whf9m.js";import{BE}from"./chunk-3w159cb0.js";import{me,kn,ts,fr,xt}from"./chunk-j2t139r9.js";var m=p(()=>fr(xt({id:me(),title:me().optional(),text:me(),textIfUnusedLimitReset:me().optional().catch(void 0),footer:me().optional(),priority:kn().default(0),maxImpressions:kn().default(3),accentBar:ts().default(!0),requiresModel:me().optional()})).default([])),o=[];function i(){let e=lI("tengu_startup_announcements",o),t=m().safeParse(e);return t.success?t.data:o}function s(e){return e.requiresModel===void 0||ro(e.requiresModel)}function u(){let e=ue().announcementImpressions??{};return i().filter((t)=>(e[t.id]??0)<t.maxImpressions&&s(t))}function ADe(e){let t=BE();if(t.startupAnnouncementPick!==void 0)return t.startupAnnouncementPick;let n=u().sort((a,c)=>c.priority-a.priority)[0],r=n?.textIfUnusedLimitReset&&ePs()?{...n,text:n.textIfUnusedLimitReset}:n;if(e&&r!==void 0)t.startupAnnouncementPick=r;return r}function lxs(e,t){if(u().some((n)=>n.textIfUnusedLimitReset))tPs(e,t)}function dxs(){let e=i().filter(s).sort((t,n)=>n.priority-t.priority)[0];if(e===void 0)return!1;return JSON.stringify({id:e.id,title:e.title,text:e.text,footer:e.footer})}
+export{ADe,lxs,dxs};
