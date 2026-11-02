@@ -19,7 +19,7 @@ fs.mkdirSync(path.dirname(outFile), { recursive: true });
 const REF_ROOT = 'references/claude-code-analysis/src';
 const readJsonl = (p) => fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
-const matches = readJsonl(path.join(A, 'match/decl-map.jsonl')).filter((m) => m.ref);
+const matches = [...readJsonl(path.join(A, 'match/decl-map.jsonl')).filter((m) => m.ref), ...(fs.existsSync(path.join(A, 'match/local-map.jsonl')) ? readJsonl(path.join(A, 'match/local-map.jsonl')) : [])];
 const decls = new Map(readJsonl(path.join(A, 'scan/decls.jsonl')).map((d) => [`${d.file}#${d.names[0] ?? '@' + d.start}`, d]));
 const refDecls = new Map(readJsonl(path.join(A, 'reference/decls.jsonl')).map((r) => [`${r.file}#${r.names[0] ?? '@' + r.line}`, r]));
 
@@ -151,7 +151,7 @@ for (const m of matches) {
   const d = decls.get(m.id), r = refDecls.get(m.ref);
   if (!d || !r) continue;
   stats.pairs++;
-  const conf = m.method === 'fingerprint' ? Math.min(0.99, 0.5 + m.score / 2) : m.method === 'fingerprint-shared' ? 0.6 : m.method === 'callgraph-witnessed' ? 0.7 : 0.55;
+  const conf = m.method === 'fingerprint' ? Math.min(0.99, 0.5 + m.score / 2) : m.method === 'fingerprint-shared' ? 0.6 : m.method === 'callgraph-witnessed' ? 0.7 : m.method === 'file-local' ? 0.45 + Math.min(0.3, m.score / 3) : m.method === 'file-last-pair' ? 0.4 : 0.55;
   let n316, nRef;
   try { n316 = topNode316(d.file, d.start); nRef = topNodeRef(r.file, r.line); } catch { stats.skippedParse++; continue; }
   if (!n316 || !nRef) { stats.skippedParse++; continue; }

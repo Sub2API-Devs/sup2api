@@ -12,3 +12,10 @@
   - 发现：调用图"唯一候选即匹配"会误配（恒等函数 `b` 被配成 `shouldUseSessionMemoryCompaction`），改成"两个独立见证，或一个见证 + 指纹分 ≥0.15"。
   - 发现：一个 chunk 里混着第三方和一方代码（如 chunk-1ny7cxrt 前 1.3 MB 是 openid-client/jose/zod 等）；CommonJS 依赖有显式包裹 `x(function(exports,module){…})`，可直接作为模块边界。
 - 04:10 确定分层设计与团队分工，见 `docs/PLAN.md`。
+- 04:12 启动第一阶段团队：vendor（第三方识别）、rename（作用域安全改名 + α 校验）、runtime（Bun 运行与对拍）；lead 做切分与生成。
+- 04:13 发现 Bun 按顶层语句粒度拆 chunk：1,711 个旧版文件中 728 个跨 chunk 出现（如 `bootstrap/state.ts` 分在两个 chunk）。阅读树改为"按归属文件把各 chunk 的部分重新聚合"，`runnable/` 保持 chunk 布局。见 `docs/process/lead.md` 第 4 节。
+- 04:15 `tools/segment/segment.mjs`（切分）、`tools/naming/reference-names.mjs`（旧版顶层名/参数名/局部名对齐）、`tools/q.mjs`（查询：find/show/callers/callees/module/where）。
+- 04:18 匹配器加"形状一致"检查（只对一对多的 shared 匹配、单绑定语句生效；多声明 var 语句里形状不可靠，一刀切会丢 449 个正确匹配）。
+- 04:22 `tools/naming/resolve.mjs`：多来源合并（semantic > vendor > reference > auto），顶层名在 chunk 内和重组模块内都唯一，导入别名跟随导出方；`tools/naming/auto-names.mjs`：基于代码证据的兜底命名 94,453 条（解构键、catch、成员/方法名、已知调用、字符串常量、Error 类名……）。
+- 04:30 `tools/emit/readable.mjs`：阅读树生成（模块头、每个声明前的出处行 `//@ chunk:start-end 方法 = 旧版名`、按使用边合成 import/export、prettier 格式化）；改名统一调用 rename 成员的库（放弃了自写的第二套改名器，避免两套实现）。
+- 04:33 `tools/ast/match-local.mjs`：文件内二次匹配 529 对；旧版命名合计顶层 8,353、参数 5,824、局部 17,816。
