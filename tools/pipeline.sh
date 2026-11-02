@@ -23,7 +23,7 @@ step reference-names;   $N tools/naming/reference-names.mjs
 step auto-names;        $N tools/naming/auto-names.mjs
 step resolve;           $N tools/naming/resolve.mjs | head -10
 step runnable;          $N tools/rename/apply.mjs original naming/final runnable --force --report artifacts/tmp/rename-report.json --check | tail -6
-step readable;          $N tools/emit/readable.mjs --out build/readable | tail -6
+step readable;          rm -rf reconstructed && $N tools/emit/readable.mjs --out reconstructed | tail -6
 if [ "${VERIFY:-0}" = 1 ]; then
   step verify;          npm run -s verify:runnable | tail -5
 fi

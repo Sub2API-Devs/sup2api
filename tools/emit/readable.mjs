@@ -22,7 +22,7 @@ import prettier from 'prettier';
 
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
-const OUT = opt('--out', 'build/readable');
+const OUT = opt('--out', 'reconstructed');
 const ONLY = opt('--only', null);
 const FORMAT = !argv.includes('--no-format');
 const readJsonl = (p) => fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
