@@ -53,9 +53,18 @@ for (const f of fs.existsSync('naming') ? fs.readdirSync('naming') : []) {
 }
 const docLines = (text) => String(text).split(/\r?\n/).map((l) => ' * ' + l.replaceAll('*/', '*\\/'));
 const jsdoc = (text) => ['/**', ...docLines(text), ' */'].join('\n');
+const refFileSet = new Set(JSON.parse(fs.readFileSync('analysis/reference/files.json', 'utf8')).map((f) => f.file));
+const vendorPkgs = fs.existsSync('analysis/vendor/packages.json') ? JSON.parse(fs.readFileSync('analysis/vendor/packages.json', 'utf8')).packages : {};
+const symbols = []; // {name, file, line, id, source, kind, doc?}
+function vendorLine(from) {
+  const pk = Object.keys(vendorPkgs).filter((k) => from === k || from.startsWith(k + '/')).sort((a, b) => b.length - a.length)[0];
+  const v = pk && vendorPkgs[pk];
+  return ` * third-party: ${pk ?? from}${v?.version ? '@' + v.version : ''}${v?.kind && v.kind !== 'npm' ? ' (' + v.kind + ')' : ''}`;
+}
 const idOf = (d) => `${d.file}#${d.names[0] ?? '@' + d.start}`;
 const byId = new Map(D.map((d) => [idOf(d), d]));
 const declByLocal = new Map();
+const declAt = new Map(D.map((d) => [d.file + ':' + d.start, d]));
 const declsByFile = new Map();
 for (const d of D) {
   for (const n of d.names) declByLocal.set(`${d.file}#${n}`, d);
@@ -180,7 +189,9 @@ for (const [file, info] of Object.entries(manifest)) {
     ` * ${info.from}`,
     ...(moduleDocs.has(info.from) ? [' *', ...docLines(moduleDocs.get(info.from)), ' *'] : []),
     ` * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).`,
-    ` * kind: ${info.kind}${info.kind === 'first-party' ? `   reference path: src/${info.from}` : ''}`,
+    info.kind === 'first-party'
+      ? (refFileSet.has(info.from) ? ` * 2.1.88 counterpart: references/claude-code-analysis/src/${info.from}` : ' * new in 2.1.316 (2.1.88 has no file at this path)')
+      : info.kind === 'vendor' ? vendorLine(info.from) : ` * kind: ${info.kind}`,
     ` * pieces: ${Object.entries(info.chunks).map(([c, n]) => `${c} (${n})`).join(', ')}`,
     ` * attribution: ${Object.entries(info.methods).map(([k, n]) => `${k} ${n}`).join(', ')}`,
     ' */',
@@ -201,6 +212,18 @@ for (const [file, info] of Object.entries(manifest)) {
   const dest = path.join(OUT, file);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.writeFileSync(dest, text);
+  // symbol index: the provenance marker precedes each declaration
+  text.split(/\r?\n/).forEach((ln, i) => {
+    const mk = /^\/\/@ (\S+?):(\d+)-\d+ /.exec(ln);
+    const d = mk && declAt.get(mk[1] + ':' + mk[2]);
+    if (!d) return;
+    d.names.forEach((n, k) => {
+      const t = topByMin.get(d.file)?.get(n);
+      const rec = { name: t?.rec.name ?? n, file, line: i + 2, id: idOf(d), source: t?.rec.source ?? 'minified', kind: info.kind };
+      if (k === 0 && declDocs.has(idOf(d))) rec.doc = declDocs.get(idOf(d));
+      symbols.push(rec);
+    });
+  });
   info.exports = ex;
   delete info.lines;
   delete info.exportsPending;
@@ -212,6 +235,7 @@ for (const r of resources) {
   if (fs.existsSync(path.join('original', r))) fs.copyFileSync(path.join('original', r), dest);
 }
 fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 1));
+fs.writeFileSync(path.join(OUT, 'symbols.jsonl'), symbols.map((x) => JSON.stringify(x)).join('\n') + '\n');
 console.log({ written, formatFailures, resources: resources.size, renameConflicts: conflicts });
 
 function addImport(map, spec, imported, local) {
