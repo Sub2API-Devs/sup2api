@@ -143,7 +143,7 @@ function statusOf(a: Account): StatusView {
   }
   const reason = a.orphaned ? t('accounts.orphanedHint', { plugin: a.plugin_key }) : (cooling && a.cooldown_reason) || statusReason
   const view: StatusView = { tone: accountStatusTone(a), label: t(`accounts.status.${key}`), detail: reason || undefined }
-  // Auto-disabled reads as one yellow badge; why, and when it comes back, show in its
+  // Auto-disabled reads as one badge, yellow with a release time and red without; why, and when it comes back, show in its
   // tooltip (hover or keyboard focus) and in the detail drawer.
   if (key === 'auto_disabled' && a.auto_disabled_until) {
     const release = t('accounts.autoReleaseAt', { time: formatDateTime(a.auto_disabled_until) })

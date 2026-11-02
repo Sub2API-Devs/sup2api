@@ -15,13 +15,14 @@ export function accountStatusKey(a: Pick<Account, 'status' | 'schedulable'>): Ac
 }
 
 /**
- * Enabled is green, auto-disabled yellow (it comes back by itself or after a
- * fix), what an operator did red: disabled, or an active account taken out of
- * scheduling by hand, which files under auto-disabled (CONTRACTS §73.4).
+ * Enabled is green; auto-disabled with a release time yellow (it comes back by
+ * itself); red what needs a person: auto-disabled without a release time,
+ * disabled, or an active account taken out of scheduling by hand, which files
+ * under auto-disabled (CONTRACTS §73.4).
  */
-export function accountStatusTone(a: Pick<Account, 'status' | 'schedulable' | 'orphaned'>) {
+export function accountStatusTone(a: Pick<Account, 'status' | 'schedulable' | 'orphaned' | 'auto_disabled_until'>) {
   if (a.orphaned) return 'gray'
   const key = accountStatusKey(a)
   if (key === 'active') return 'success'
-  return key === 'auto_disabled' && a.status !== 'active' ? 'warning' : 'danger'
+  return key === 'auto_disabled' && a.status !== 'active' && a.auto_disabled_until ? 'warning' : 'danger'
 }
