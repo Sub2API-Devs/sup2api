@@ -98,6 +98,14 @@ AccountQuotaView(ctx context.Context, ids []int64) (core.QuotaView, error)
 
 启动时异步全量加载所有声明了 `modelAvailability` 的账号类型下未删除账号的快照，失败按 1→30 s 退避重试，之后每 60 s 按 §4.2 的规则重载。加载完成前的未命中按"没有条目"处理。
 
+实施时的调整（2026-11-02）：
+- 插件在 `account.Run` 之后才启动（`app/phases.go`），启动预热时还没有类型声明 `modelAvailability`，等于空加载。所以插件代次切换除了失效，还立即触发一次全量重载（2 s 后再一次），真正的预热在插件就绪时完成。
+- "新鲜"期定为 75 s（大于 60 s 重载周期），避免条目在下次重载前刚好过期、请求路径频繁回填。超过新鲜期又没等到回填的条目同样标为 `Stale`。
+- `AccountQuotaView` 的错误约定：err 非空当且仅当 `Missing` 非空，其余 id 的 `Snapshots` 照常填好；1 s 退避期内返回 `errQuotaMirrorBackoff`。
+- 能否写入缓存的版本在回填真正开始时（与"进行中读取数"同一次加锁）记下，而不是发起时，防止发起到开始之间的失效被旧读取覆盖。
+- `EnsureAccountQuota` 只要写了行就返回 true（含只改 `auto_refresh`），多发的通知无害；`executeQuotaQuery` 里的 Ensure 现在也发通知。
+- 总线重连以"接收或 ping 失败之后收到的第一条消息"判定（go-redis 内部静默重连），经 `core.BusReconnects` 回调。
+
 ### 4.5 代次（generation）
 
 - 镜像只镜像 PG 的 generation，不自己生成。
