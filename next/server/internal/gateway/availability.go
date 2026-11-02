@@ -138,6 +138,9 @@ type quotaRead struct {
 type availabilityCallFailure struct {
 	code string
 	err  error
+	// unasked: the shared budget ran out before this batch was sent, so
+	// the plugin itself did not fail; the breaker does not count it.
+	unasked bool
 }
 
 func (g *Gateway) quotaSource() core.AccountQuotaSource {
@@ -347,19 +350,20 @@ func (c *call) checkAvailability(ctx, pctx context.Context, refs []core.AccountR
 	checker, ok := rt.binding.Client.(core.AccountModelAvailabilityPlugin)
 	switch {
 	case !ok:
-		failure = availabilityCallFailure{availReasonPluginError, errAvailabilityNoChecker}
+		failure = availabilityCallFailure{code: availReasonPluginError, err: errAvailabilityNoChecker}
 	case c.availabilityOpen[plugin]:
 		// Asking again would wait for the same failure on every attempt.
-		failure = availabilityCallFailure{availReasonPluginError, errAvailabilityFailedOpen}
+		failure = availabilityCallFailure{code: availReasonPluginError, err: errAvailabilityFailedOpen}
 	default:
 		allowed, probe := c.g.availabilityBreakers.allow(plugin, now)
 		if !allowed {
-			failure = availabilityCallFailure{availReasonPluginError, errAvailabilityBreakerOpen}
+			failure = availabilityCallFailure{code: availReasonPluginError, err: errAvailabilityBreakerOpen}
 			break
 		}
 		seen, failure = availabilityResults(pctx, checker, in)
-		if ctx.Err() != nil {
-			// The client went away: no verdict on the plugin.
+		if ctx.Err() != nil || failure.unasked {
+			// The client went away, or the budget was spent before the
+			// plugin was asked: no verdict on the plugin.
 			c.g.availabilityBreakers.abandon(plugin, probe)
 		} else {
 			c.g.availabilityBreakers.done(plugin, c.g.now(), failure.code != "", probe)
@@ -435,19 +439,19 @@ func availabilityResults(ctx context.Context, checker core.AccountModelAvailabil
 	seen := map[availabilityKey]*pluginv1.ModelAvailability{}
 	for offset := 0; offset < len(in.Candidates); offset += availabilityBatchSize {
 		if err := ctx.Err(); err != nil {
-			return seen, availabilityCallFailure{availReasonPluginTimeout, err}
+			return seen, availabilityCallFailure{code: availReasonPluginTimeout, err: err, unasked: true}
 		}
 		batch := &pluginv1.CheckModelAvailabilityRequest{NowUnix: in.NowUnix, Candidates: in.Candidates[offset:min(offset+availabilityBatchSize, len(in.Candidates))]}
 		out, err := checker.CheckModelAvailability(ctx, batch)
 		if err != nil {
 			if ctx.Err() != nil {
-				return seen, availabilityCallFailure{availReasonPluginTimeout, err}
+				return seen, availabilityCallFailure{code: availReasonPluginTimeout, err: err}
 			}
-			return seen, availabilityCallFailure{availReasonPluginError, err}
+			return seen, availabilityCallFailure{code: availReasonPluginError, err: err}
 		}
 		got, err := validAvailabilityBatch(batch, out)
 		if err != nil {
-			return seen, availabilityCallFailure{availReasonBadResponse, err}
+			return seen, availabilityCallFailure{code: availReasonBadResponse, err: err}
 		}
 		for key, result := range got {
 			seen[key] = result
@@ -819,7 +823,9 @@ func (c *call) logAvailability(ctx context.Context, entries []availabilityEntry,
 			"model", c.model, "candidates", tr.Candidates, "admitted", tr.Admitted, "counts", tr.Counts, "samples", samples)
 		return
 	}
-	ok, suppressed := c.g.availabilityWarns.allow(fmt.Sprintf("blocked|%d|%s|%s", group, c.model, primary), c.g.now())
+	// The key leaves out the model: it comes from the client, and a key per
+	// model name would let a client defeat the sampling.
+	ok, suppressed := c.g.availabilityWarns.allow(fmt.Sprintf("blocked|%d|%s", group, primary), c.g.now())
 	if !ok {
 		return
 	}

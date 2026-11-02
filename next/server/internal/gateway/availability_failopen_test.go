@@ -598,3 +598,38 @@ func TestAvailabilityWarnLogsThrottled(t *testing.T) {
 	require.Len(t, blocked, 1)
 	require.Contains(t, blocked[0], "account=1 reason=unavailable")
 }
+
+// A batch left unsent because earlier batches spent the shared budget is not
+// a plugin failure: it fails open without opening the breaker.
+func TestAvailabilityUnaskedBatchDoesNotOpenBreaker(t *testing.T) {
+	e := newEnv(t)
+	p, _ := enableAvailability(e, 0)
+	e.gw.availabilityPluginTimeout = 50 * time.Millisecond
+	slow := true
+	p.fn = func(ctx context.Context, in *pluginv1.CheckModelAvailabilityRequest) (*pluginv1.CheckModelAvailabilityResponse, error) {
+		if slow {
+			<-ctx.Done() // spend the budget, then answer the batch anyway
+		}
+		out := &pluginv1.CheckModelAvailabilityResponse{}
+		for _, c := range in.Candidates {
+			out.Results = append(out.Results, &pluginv1.ModelAvailability{AccountId: c.AccountId, Model: c.Model, State: pluginv1.ModelAvailability_AVAILABLE})
+		}
+		return out, nil
+	}
+	refs := make([]core.AccountRef, 140)
+	for i := range refs {
+		refs[i] = core.AccountRef{ID: int64(i + 1), PluginKey: "anthropic", Type: "apikey"}
+	}
+	cl := availabilityCall(t, e)
+	out, failure := cl.filterAvailability(context.Background(), refs)
+	require.Nil(t, failure)
+	require.Len(t, out, 140)
+	require.Len(t, p.calls, 1, "the second batch was never sent")
+	require.Equal(t, availReasonPluginTimeout, cl.availability[140].reason)
+	slow = false
+	cl = availabilityCall(t, e)
+	_, failure = cl.filterAvailability(context.Background(), refs)
+	require.Nil(t, failure)
+	require.Len(t, p.calls, 3, "breaker still closed: both batches asked")
+	require.Empty(t, cl.availability[140].reason)
+}
