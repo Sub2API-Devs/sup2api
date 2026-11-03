@@ -85,6 +85,26 @@ service HostService {
   // effort, e.g. "rules changed, reload". Payload at most 64 KiB.
   rpc Publish(PublishRequest) returns (PublishResponse);
 
+  // jobs (grant "jobs", Host API 9): runtime tasks, the plugin's own
+  // scheduled tasks besides manifest jobs[] (CONTRACTS §77.8). Each is the
+  // cluster task plugin.<key>.<id>; a run calls AppService.RunJob with its
+  // id, scope "cluster" and the task's args. Only the instance of the
+  // plugin's active version changes them: the calls of an older or newer
+  // version during a rollout succeed and change nothing.
+  //
+  // SyncTasks replaces all runtime tasks of the plugin with the given ones
+  // (declarative; repeating it is harmless).
+  rpc SyncTasks(SyncTasksRequest) returns (SyncTasksResponse);
+  // UpsertTask adds or changes one runtime task.
+  rpc UpsertTask(UpsertTaskRequest) returns (UpsertTaskResponse);
+  // DeleteTask removes one runtime task; runs already queued do not run.
+  rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
+  // ListTasks returns the runtime tasks of the plugin.
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  // EnqueueTask submits one run of a runtime task or a cluster manifest job,
+  // with its own args.
+  rpc EnqueueTask(EnqueueTaskRequest) returns (EnqueueTaskResponse);
+
   // lock (grant "lock"): short cross-node mutual exclusion on the host's
   // Redis, for work that must not run on two nodes at once. Periodic work
   // belongs in manifest jobs[] instead (each trigger runs once cluster-wide).
@@ -346,6 +366,61 @@ message PublishRequest {
 }
 
 message PublishResponse {}
+
+// PluginTask is one runtime task of a plugin.
+message PluginTask {
+  string id = 1;                       // ^[a-z0-9][a-z0-9_.-]{0,63}$, not a manifest job id
+  // "@every <duration>" (at least 10s) or a 5-field cron (UTC); empty for a
+  // task that only runs what EnqueueTask submits.
+  string schedule = 2;
+  bytes args = 3;                      // JSON passed to every periodic run, at most 64 KiB
+  int32 timeout_sec = 4;               // 0: 60; at most 3600
+  // Read only: the console's switch (permission task:manage). A stopped task
+  // is not run; SyncTasks and UpsertTask keep the switch as it is.
+  bool enabled = 5;
+}
+
+message SyncTasksRequest {
+  repeated PluginTask tasks = 1;       // at most 200
+}
+
+message SyncTasksResponse {
+  bool ignored = 1;                    // not the active version: nothing changed
+}
+
+message UpsertTaskRequest {
+  PluginTask task = 1;
+}
+
+message UpsertTaskResponse {
+  bool ignored = 1;
+}
+
+message DeleteTaskRequest {
+  string id = 1;
+}
+
+message DeleteTaskResponse {
+  bool ignored = 1;
+  bool deleted = 2;
+}
+
+message ListTasksRequest {}
+
+message ListTasksResponse {
+  repeated PluginTask tasks = 1;
+}
+
+message EnqueueTaskRequest {
+  string id = 1;                       // a runtime task or a cluster manifest job
+  bytes args = 2;                      // JSON, at most 64 KiB
+  int64 run_at_unix = 3;               // 0: now
+  // Keeps one unfinished run per task and key: a second EnqueueTask with
+  // the same key while one waits or runs submits nothing.
+  string unique_key = 4;
+}
+
+message EnqueueTaskResponse {}
 
 message LockAcquireRequest {
   string name = 1;                     // ^[A-Za-z0-9._:/-]{1,128}$

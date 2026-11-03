@@ -22,7 +22,9 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AppServiceClient interface {
-	// Called on exactly one node per scheduled slot.
+	// A cluster job ("scope": "cluster", the default) is called on one node
+	// per scheduled slot; a node job ("scope": "node") on every node. A run
+	// may be repeated (retry, rescue, rolling upgrade): jobs are idempotent.
 	RunJob(ctx context.Context, in *RunJobRequest, opts ...grpc.CallOption) (*RunJobResponse, error)
 	// At-least-once, in event id order, batched. Plugins must be idempotent
 	// on Event.id.
@@ -71,7 +73,9 @@ func (c *appServiceClient) OnBroadcast(ctx context.Context, in *OnBroadcastReque
 // All implementations must embed UnimplementedAppServiceServer
 // for forward compatibility
 type AppServiceServer interface {
-	// Called on exactly one node per scheduled slot.
+	// A cluster job ("scope": "cluster", the default) is called on one node
+	// per scheduled slot; a node job ("scope": "node") on every node. A run
+	// may be repeated (retry, rescue, rolling upgrade): jobs are idempotent.
 	RunJob(context.Context, *RunJobRequest) (*RunJobResponse, error)
 	// At-least-once, in event id order, batched. Plugins must be idempotent
 	// on Event.id.

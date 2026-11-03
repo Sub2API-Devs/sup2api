@@ -18,7 +18,7 @@
 //	TaskMonitor -> PlatformService.Monitor ("platform.monitor.v1")
 //	Poller     -> PlatformService.Poll ("platform.poll.v1")
 //	Hook       -> HookService       ("gateway.hook.v1")
-//	JobRunner  -> AppService.RunJob ("app.jobs.v1")
+//	JobRunner  -> AppService.RunJob ("app.jobs.v1", see JobMux)
 //	EventHandler -> AppService.OnEvents ("app.events.v1")
 //	BroadcastHandler -> AppService.OnBroadcast ("app.broadcast.v1", see BroadcastMux)
 //	HTTP       -> HTTPService       ("http.routes.v1")

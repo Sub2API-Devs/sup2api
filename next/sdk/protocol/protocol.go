@@ -16,8 +16,12 @@ const ProtocolVersion = 1
 // HostAPIVersion is sent in InitHostRequest.host_api_version. Version 6 adds
 // automatic account state changes and timed recovery; version 8 adds sticky
 // binding clearing, notifications, environment variables (CONTRACTS §74) and
-// user lookup (§75.3); the wire protocol stays at 1.
-const HostAPIVersion = 8
+// user lookup (§75.3); version 9 adds runtime tasks (SyncTasks, UpsertTask,
+// DeleteTask, ListTasks, EnqueueTask, CONTRACTS §77.8); the wire protocol
+// stays at 1.
+const HostAPIVersion = 9
+
+const TasksHostAPIVersion = 9
 
 const StickyClearHostAPIVersion = 8
 const NotificationHostAPIVersion = 8

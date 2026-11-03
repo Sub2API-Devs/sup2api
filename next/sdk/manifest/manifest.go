@@ -737,7 +737,23 @@ type Job struct {
 	ID         string `json:"id"`
 	Schedule   string `json:"schedule"` // cron (5 fields) or "@every <duration>"
 	TimeoutSec int    `json:"timeoutSec,omitempty"`
+	// Scope is JobScopeCluster (the default: one run per slot in the
+	// cluster) or JobScopeNode (every node runs it on its own instance;
+	// core 0.1.237 and later).
+	Scope string `json:"scope,omitempty"`
+	// Title names the job on the console's scheduled task page; without it
+	// the console shows the plugin name and the job id.
+	Title LocalizedText `json:"title,omitempty"`
 }
+
+// Job scopes (manifest jobs[].scope).
+const (
+	JobScopeCluster = "cluster"
+	JobScopeNode    = "node"
+)
+
+// NodeScope reports whether every node runs the job.
+func (j Job) NodeScope() bool { return j.Scope == JobScopeNode }
 
 type Database struct {
 	Schema     string `json:"schema"`     // must be "plg_" + key

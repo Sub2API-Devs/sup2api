@@ -81,6 +81,10 @@ type Host interface {
 	// work belongs in manifest jobs[] instead. The locks are not fenced:
 	// the guarded work must still be idempotent. See Locks.
 	Locks() Locks
+	// Tasks manages the plugin's runtime tasks, scheduled tasks it registers
+	// while running besides manifest jobs[] (grant "jobs", Host API 9; on an
+	// older core every call returns ErrTasksUnimplemented). See Tasks.
+	Tasks() Tasks
 	// ListAccounts returns one page of the accounts of THIS plugin's own
 	// account types (grant "accounts.read"), ordered by id and never
 	// carrying credentials. Pass the returned cursor to continue; "" means

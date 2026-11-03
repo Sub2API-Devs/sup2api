@@ -9,7 +9,9 @@ option go_package = "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1;plugi
 // AppService covers background jobs ("app.jobs.v1"), event subscriptions
 // ("app.events.v1") and cluster broadcasts ("app.broadcast.v1").
 service AppService {
-  // Called on exactly one node per scheduled slot.
+  // A cluster job ("scope": "cluster", the default) is called on one node
+  // per scheduled slot; a node job ("scope": "node") on every node. A run
+  // may be repeated (retry, rescue, rolling upgrade): jobs are idempotent.
   rpc RunJob(RunJobRequest) returns (RunJobResponse);
   // At-least-once, in event id order, batched. Plugins must be idempotent
   // on Event.id.
@@ -31,10 +33,21 @@ message RunJobRequest {
   string job_id = 1;
   int64 scheduled_at_unix = 2;
   bool manual = 3;                     // triggered from the console
+  // Fields 4-7 are sent by core 0.1.237 and later; older cores leave them
+  // empty.
+  bytes args = 4;                      // JSON arguments of a one-off run; empty for a periodic run
+  string scope = 5;                    // "cluster" | "node"
+  int32 attempt = 6;                   // from 1; always 1 for node jobs
+  string run_id = 7;                   // identifies the run on the console
 }
 
 message RunJobResponse {
   string message = 1;                  // stored in plugin_job_runs
+  // Fields 2-3 are read by core 0.1.237 and later.
+  int32 count = 2;                     // items handled, shown with the run
+  // > 0: the run did nothing yet; a cluster job is run again after this
+  // delay without counting as a failure, a node job is recorded as skipped.
+  int64 retry_after_ms = 3;
 }
 
 message Event {

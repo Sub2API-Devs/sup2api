@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
+	"unicode/utf8"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/robfig/cron/v3"
@@ -647,6 +649,7 @@ func (v *validator) jobs() {
 	v.needCap("jobs", manifest.CapAppJobs)
 	v.needPerm("jobs", "jobs", "background jobs")
 	ids := map[string]bool{}
+	nodeJobs := 0
 	for i, j := range v.m.Jobs {
 		f := fmt.Sprintf("jobs[%d]", i)
 		if !idRe.MatchString(j.ID) {
@@ -655,14 +658,54 @@ func (v *validator) jobs() {
 			v.add(f+".id", "duplicate", "job %q declared twice", j.ID)
 		}
 		ids[j.ID] = true
-		if _, err := cronParser.Parse(j.Schedule); err != nil {
+		sched, err := cronParser.Parse(j.Schedule)
+		if err != nil {
 			v.add(f+".schedule", "invalid", "invalid schedule %q: %v", j.Schedule, err)
 		}
 		if j.TimeoutSec < 0 || j.TimeoutSec > 24*3600 {
 			v.add(f+".timeoutSec", "out_of_range", "timeoutSec must be between 0 and 86400")
 		}
+		for lang, text := range j.Title {
+			if strings.TrimSpace(text) == "" || utf8.RuneCountInString(text) > maxJobTitle {
+				v.add(f+".title."+lang, "invalid", "a job title is 1 to %d characters", maxJobTitle)
+			}
+		}
+		switch j.Scope {
+		case "", manifest.JobScopeCluster:
+		case manifest.JobScopeNode:
+			nodeJobs++
+			if j.TimeoutSec > maxNodeJobTimeout {
+				v.add(f+".timeoutSec", "out_of_range", "a node job times out after at most %d seconds", maxNodeJobTimeout)
+			}
+			if every, ok := sched.(cron.ConstantDelaySchedule); ok && every.Delay < minNodeJobEvery {
+				v.add(f+".schedule", "out_of_range", "a node job runs at most every %s", minNodeJobEvery)
+			}
+		default:
+			v.add(f+".scope", "invalid", "job scope must be %q or %q", manifest.JobScopeCluster, manifest.JobScopeNode)
+		}
+	}
+	if nodeJobs > maxNodeJobs {
+		v.add("jobs", "out_of_range", "at most %d node jobs", maxNodeJobs)
+	}
+	// Older cores ignore scope and would run a node job once per cluster.
+	if nodeJobs > 0 {
+		if ok, err := HostCompatible(v.m.HostCompat, lastClusterOnlyJobsCore); err == nil && ok {
+			v.add("hostCompat", "below_node_jobs_core", "hostCompat %q admits core %s, which runs node jobs once per cluster (node jobs start at core %s)",
+				v.m.HostCompat, lastClusterOnlyJobsCore, firstNodeJobsCore)
+		}
 	}
 }
+
+// Limits of node jobs (TASK-FRAMEWORK-DESIGN §11.1) and the cores that run
+// them: 0.1.236 is the last core that runs every job once per cluster.
+const (
+	maxJobTitle             = 100
+	maxNodeJobs             = 10
+	maxNodeJobTimeout       = 600
+	minNodeJobEvery         = 5 * time.Second
+	lastClusterOnlyJobsCore = "0.1.236"
+	firstNodeJobsCore       = "0.1.237"
+)
 
 func (v *validator) database() {
 	d := v.m.Database

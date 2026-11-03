@@ -86,6 +86,25 @@ type HostServiceClient interface {
 	// instances on every other live node (AppService.OnBroadcast), best
 	// effort, e.g. "rules changed, reload". Payload at most 64 KiB.
 	Publish(ctx context.Context, in *PublishRequest, opts ...grpc.CallOption) (*PublishResponse, error)
+	// jobs (grant "jobs", Host API 9): runtime tasks, the plugin's own
+	// scheduled tasks besides manifest jobs[] (CONTRACTS §77.8). Each is the
+	// cluster task plugin.<key>.<id>; a run calls AppService.RunJob with its
+	// id, scope "cluster" and the task's args. Only the instance of the
+	// plugin's active version changes them: the calls of an older or newer
+	// version during a rollout succeed and change nothing.
+	//
+	// SyncTasks replaces all runtime tasks of the plugin with the given ones
+	// (declarative; repeating it is harmless).
+	SyncTasks(ctx context.Context, in *SyncTasksRequest, opts ...grpc.CallOption) (*SyncTasksResponse, error)
+	// UpsertTask adds or changes one runtime task.
+	UpsertTask(ctx context.Context, in *UpsertTaskRequest, opts ...grpc.CallOption) (*UpsertTaskResponse, error)
+	// DeleteTask removes one runtime task; runs already queued do not run.
+	DeleteTask(ctx context.Context, in *DeleteTaskRequest, opts ...grpc.CallOption) (*DeleteTaskResponse, error)
+	// ListTasks returns the runtime tasks of the plugin.
+	ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error)
+	// EnqueueTask submits one run of a runtime task or a cluster manifest job,
+	// with its own args.
+	EnqueueTask(ctx context.Context, in *EnqueueTaskRequest, opts ...grpc.CallOption) (*EnqueueTaskResponse, error)
 	// lock (grant "lock"): short cross-node mutual exclusion on the host's
 	// Redis, for work that must not run on two nodes at once. Periodic work
 	// belongs in manifest jobs[] instead (each trigger runs once cluster-wide).
@@ -383,6 +402,51 @@ func (c *hostServiceClient) Publish(ctx context.Context, in *PublishRequest, opt
 	return out, nil
 }
 
+func (c *hostServiceClient) SyncTasks(ctx context.Context, in *SyncTasksRequest, opts ...grpc.CallOption) (*SyncTasksResponse, error) {
+	out := new(SyncTasksResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/SyncTasks", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) UpsertTask(ctx context.Context, in *UpsertTaskRequest, opts ...grpc.CallOption) (*UpsertTaskResponse, error) {
+	out := new(UpsertTaskResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/UpsertTask", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) DeleteTask(ctx context.Context, in *DeleteTaskRequest, opts ...grpc.CallOption) (*DeleteTaskResponse, error) {
+	out := new(DeleteTaskResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/DeleteTask", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ListTasksResponse, error) {
+	out := new(ListTasksResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/ListTasks", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hostServiceClient) EnqueueTask(ctx context.Context, in *EnqueueTaskRequest, opts ...grpc.CallOption) (*EnqueueTaskResponse, error) {
+	out := new(EnqueueTaskResponse)
+	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/EnqueueTask", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *hostServiceClient) LockAcquire(ctx context.Context, in *LockAcquireRequest, opts ...grpc.CallOption) (*LockAcquireResponse, error) {
 	out := new(LockAcquireResponse)
 	err := c.cc.Invoke(ctx, "/sub2api.plugin.v1.HostService/LockAcquire", in, out, opts...)
@@ -505,6 +569,25 @@ type HostServiceServer interface {
 	// instances on every other live node (AppService.OnBroadcast), best
 	// effort, e.g. "rules changed, reload". Payload at most 64 KiB.
 	Publish(context.Context, *PublishRequest) (*PublishResponse, error)
+	// jobs (grant "jobs", Host API 9): runtime tasks, the plugin's own
+	// scheduled tasks besides manifest jobs[] (CONTRACTS §77.8). Each is the
+	// cluster task plugin.<key>.<id>; a run calls AppService.RunJob with its
+	// id, scope "cluster" and the task's args. Only the instance of the
+	// plugin's active version changes them: the calls of an older or newer
+	// version during a rollout succeed and change nothing.
+	//
+	// SyncTasks replaces all runtime tasks of the plugin with the given ones
+	// (declarative; repeating it is harmless).
+	SyncTasks(context.Context, *SyncTasksRequest) (*SyncTasksResponse, error)
+	// UpsertTask adds or changes one runtime task.
+	UpsertTask(context.Context, *UpsertTaskRequest) (*UpsertTaskResponse, error)
+	// DeleteTask removes one runtime task; runs already queued do not run.
+	DeleteTask(context.Context, *DeleteTaskRequest) (*DeleteTaskResponse, error)
+	// ListTasks returns the runtime tasks of the plugin.
+	ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error)
+	// EnqueueTask submits one run of a runtime task or a cluster manifest job,
+	// with its own args.
+	EnqueueTask(context.Context, *EnqueueTaskRequest) (*EnqueueTaskResponse, error)
 	// lock (grant "lock"): short cross-node mutual exclusion on the host's
 	// Redis, for work that must not run on two nodes at once. Periodic work
 	// belongs in manifest jobs[] instead (each trigger runs once cluster-wide).
@@ -648,6 +731,21 @@ func (UnimplementedHostServiceServer) LedgerDebit(context.Context, *LedgerChange
 }
 func (UnimplementedHostServiceServer) Publish(context.Context, *PublishRequest) (*PublishResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Publish not implemented")
+}
+func (UnimplementedHostServiceServer) SyncTasks(context.Context, *SyncTasksRequest) (*SyncTasksResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SyncTasks not implemented")
+}
+func (UnimplementedHostServiceServer) UpsertTask(context.Context, *UpsertTaskRequest) (*UpsertTaskResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpsertTask not implemented")
+}
+func (UnimplementedHostServiceServer) DeleteTask(context.Context, *DeleteTaskRequest) (*DeleteTaskResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteTask not implemented")
+}
+func (UnimplementedHostServiceServer) ListTasks(context.Context, *ListTasksRequest) (*ListTasksResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListTasks not implemented")
+}
+func (UnimplementedHostServiceServer) EnqueueTask(context.Context, *EnqueueTaskRequest) (*EnqueueTaskResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method EnqueueTask not implemented")
 }
 func (UnimplementedHostServiceServer) LockAcquire(context.Context, *LockAcquireRequest) (*LockAcquireResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method LockAcquire not implemented")
@@ -1130,6 +1228,96 @@ func _HostService_Publish_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HostService_SyncTasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SyncTasksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).SyncTasks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/SyncTasks",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).SyncTasks(ctx, req.(*SyncTasksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_UpsertTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpsertTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).UpsertTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/UpsertTask",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).UpsertTask(ctx, req.(*UpsertTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_DeleteTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).DeleteTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/DeleteTask",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).DeleteTask(ctx, req.(*DeleteTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_ListTasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTasksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).ListTasks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/ListTasks",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).ListTasks(ctx, req.(*ListTasksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _HostService_EnqueueTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnqueueTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).EnqueueTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sub2api.plugin.v1.HostService/EnqueueTask",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).EnqueueTask(ctx, req.(*EnqueueTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _HostService_LockAcquire_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(LockAcquireRequest)
 	if err := dec(in); err != nil {
@@ -1344,6 +1532,26 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Publish",
 			Handler:    _HostService_Publish_Handler,
+		},
+		{
+			MethodName: "SyncTasks",
+			Handler:    _HostService_SyncTasks_Handler,
+		},
+		{
+			MethodName: "UpsertTask",
+			Handler:    _HostService_UpsertTask_Handler,
+		},
+		{
+			MethodName: "DeleteTask",
+			Handler:    _HostService_DeleteTask_Handler,
+		},
+		{
+			MethodName: "ListTasks",
+			Handler:    _HostService_ListTasks_Handler,
+		},
+		{
+			MethodName: "EnqueueTask",
+			Handler:    _HostService_EnqueueTask_Handler,
 		},
 		{
 			MethodName: "LockAcquire",
