@@ -40,6 +40,7 @@ node --max-old-space-size=3000 tools/naming/annotate.mjs check naming/semantic-l
 
 ## 续做（上下文用尽或中断后由新成员接手）
 
+- 第二批接手（2026-11-03 21:50 起）用 `analysis/segments/naming-round4c.json` + `artifacts/tmp/lead/final5`；剩余量大的组拆成两半，后半段的成员写独立文件 `naming/semantic-l<N>x.jsonl`（`show` 的 from 从派活消息给的位置开始）。不要用 Write 工具整体重写已有的命名表（l17 因此丢过 2,353 行），只追加。
 - 清单换成 `analysis/segments/naming-round4b.json`（同样的下标，只含仍有压缩名的声明，`unnamed` 已按当前进度重算），名字表用 `artifacts/tmp/lead/final4`（已含各组截至接手时写入的名字）：
   ```bash
   node --max-old-space-size=3000 tools/naming/annotate.mjs show analysis/segments/naming-round4b.json <N> <from> <count> artifacts/tmp/lead/final4
