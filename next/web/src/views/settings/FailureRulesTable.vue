@@ -109,7 +109,6 @@ function summary(rule: FailureRule) {
           <SInput
             v-model="row.match.status_codes"
             :disabled="disabled || row.match.source === 'transport'"
-            :placeholder="t('failurePolicy.codes')"
             :aria-label="t('failurePolicy.codes')"
             data-testid="rule-codes"
           />
@@ -124,7 +123,6 @@ function summary(rule: FailureRule) {
             :model-value="row.match.keywords.join('\n')"
             :disabled="disabled"
             :rows="3"
-            :placeholder="t(row.match.keyword_regex ? 'failurePolicy.regexPlaceholder' : 'failurePolicy.keywords')"
             :aria-label="t(row.match.keyword_regex ? 'failurePolicy.regexPlaceholder' : 'failurePolicy.keywords')"
             data-testid="rule-keywords"
             @update:model-value="setKeywords(row, $event)"

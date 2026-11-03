@@ -325,6 +325,7 @@ describe('explanations', () => {
     await wrapper.setProps({ modelValue: [rule] })
     expect(wrapper.get('[data-testid="rule-summary"]').text()).toBe('所有连接或网络错误（没有收到上游响应）都命中。')
     expect(wrapper.get('[data-testid="rule-codes"]').attributes('disabled')).toBeDefined()
+    for (const field of wrapper.findAll('[data-testid="rule-codes"], [data-testid="rule-keywords"]')) expect(field.attributes('placeholder')).toBeUndefined()
     rule.match.source = 'upstream'
     await wrapper.setProps({ modelValue: [rule] })
     expect(wrapper.get('[data-testid="rule-summary"]').text()).toBe('还没有填写错误码或关键词，这条规则不会命中。')
