@@ -124,9 +124,6 @@
 {"id":"chunk-18hwfzwa.js#s0o","ref":"utils/powershell/staticPrefix.ts#wordAlignedLCP","refName":"wordAlignedLCP","refFile":"utils/powershell/staticPrefix.ts","score":1,"method":"file-local"}
 {"id":"chunk-18hwfzwa.js#uWo","ref":"components/TeammateViewHeader.tsx#_temp","refName":"_temp","refFile":"components/TeammateViewHeader.tsx","score":0,"method":"file-last-pair"}
 {"id":"chunk-18hwfzwa.js#mWo","ref":"hooks/useNotifyAfterTimeout.ts#getTimeSinceLastInteraction","refName":"getTimeSinceLastInteraction","refFile":"hooks/useNotifyAfterTimeout.ts","score":0.667,"method":"file-local"}
-{"id":"chunk-9h8dr0qb.js#Tf","ref":"components/Stats.tsx#_temp8","refName":"_temp8","refFile":"components/Stats.tsx","score":1,"method":"file-local"}
-{"id":"chunk-9h8dr0qb.js#ns","ref":"components/Stats.tsx#getNextDateRange","refName":"getNextDateRange","refFile":"components/Stats.tsx","score":1,"method":"file-local"}
-{"id":"chunk-9h8dr0qb.js#Ai","ref":"components/Stats.tsx#_temp7","refName":"_temp7","refFile":"components/Stats.tsx","score":0.241,"method":"file-local"}
 {"id":"chunk-18hwfzwa.js#AKo","ref":"hooks/notifs/useFastModeNotification.tsx#_temp3","refName":"_temp3","refFile":"hooks/notifs/useFastModeNotification.tsx","score":0.207,"method":"file-local"}
 {"id":"chunk-18hwfzwa.js#PKo","ref":"hooks/notifs/useFastModeNotification.tsx#_temp2","refName":"_temp2","refFile":"hooks/notifs/useFastModeNotification.tsx","score":0.133,"method":"file-local"}
 {"id":"chunk-18hwfzwa.js#IKo","ref":"hooks/notifs/useFastModeNotification.tsx#_temp","refName":"_temp","refFile":"hooks/notifs/useFastModeNotification.tsx","score":0,"method":"file-last-pair"}
@@ -140,12 +137,16 @@
 {"id":"chunk-1dkfja46.js#r0t","ref":"components/design-system/Tabs.tsx#useTabsWidth","refName":"useTabsWidth","refFile":"components/design-system/Tabs.tsx","score":1,"method":"file-local"}
 {"id":"chunk-1dp9p908.js#it","ref":"utils/task/diskOutput.ts#getTaskOutputSize","refName":"getTaskOutputSize","refFile":"utils/task/diskOutput.ts","score":0.667,"method":"file-local"}
 {"id":"chunk-1dp9p908.js#$En","ref":"utils/task/diskOutput.ts#initTaskOutput","refName":"initTaskOutput","refFile":"utils/task/diskOutput.ts","score":0.325,"method":"file-local"}
+{"id":"chunk-awy329vy.js#yGi","ref":"upstreamproxy/upstreamproxy.ts#initUpstreamProxy","refName":"initUpstreamProxy","refFile":"upstreamproxy/upstreamproxy.ts","score":0.171,"method":"file-local"}
+{"id":"chunk-awy329vy.js#ue","ref":"upstreamproxy/upstreamproxy.ts#readToken","refName":"readToken","refFile":"upstreamproxy/upstreamproxy.ts","score":0.125,"method":"file-local"}
 {"id":"chunk-g54kbxqw.js#Ua","ref":"services/api/promptCacheBreakDetection.ts#getSystemCharCount","refName":"getSystemCharCount","refFile":"services/api/promptCacheBreakDetection.ts","score":0.667,"method":"file-local"}
 {"id":"chunk-g54kbxqw.js#qs","ref":"services/api/promptCacheBreakDetection.ts#cleanupAgentTracking","refName":"cleanupAgentTracking","refFile":"services/api/promptCacheBreakDetection.ts","score":0.4,"method":"file-local"}
+{"id":"chunk-aepeg2w5.js#J3","ref":"services/analytics/metadata.ts#getFileExtensionForAnalytics","refName":"getFileExtensionForAnalytics","refFile":"services/analytics/metadata.ts","score":1,"method":"file-local"}
 {"id":"chunk-8y02x996.js#tzi","ref":"services/mcp/xaaIdpLogin.ts#saveIdpIdTokenFromJwt","refName":"saveIdpIdTokenFromJwt","refFile":"services/mcp/xaaIdpLogin.ts","score":1,"method":"file-local"}
 {"id":"chunk-7fw14qgv.js#JLi","ref":"interactiveHelpers.tsx#completeOnboarding","refName":"completeOnboarding","refFile":"interactiveHelpers.tsx","score":0.262,"method":"file-local"}
 {"id":"chunk-22r83hv0.js#lCt","ref":"tools/SyntheticOutputTool/SyntheticOutputTool.ts#createSyntheticOutputTool","refName":"createSyntheticOutputTool","refFile":"tools/SyntheticOutputTool/SyntheticOutputTool.ts","score":1,"method":"file-local"}
 {"id":"chunk-23fm9f0d.js#V","ref":"utils/cleanup.ts#cleanupOldVersionsThrottled","refName":"cleanupOldVersionsThrottled","refFile":"utils/cleanup.ts","score":0.126,"method":"file-local"}
+{"id":"chunk-23fm9f0d.js#tr","ref":"utils/cleanup.ts#cleanupNpmCacheForAnthropicPackages","refName":"cleanupNpmCacheForAnthropicPackages","refFile":"utils/cleanup.ts","score":0.123,"method":"file-local"}
 {"id":"chunk-24t3dkzb.js#E","ref":"ink/terminal.ts#hasCursorUpViewportYankBug","refName":"hasCursorUpViewportYankBug","refFile":"ink/terminal.ts","score":0.209,"method":"file-local"}
 {"id":"chunk-bzr73sfg.js#qy","ref":"ink/dom.ts#shallowEqual","refName":"shallowEqual","refFile":"ink/dom.ts","score":0.8,"method":"file-local"}
 {"id":"chunk-bzr73sfg.js#jy","ref":"ink/dom.ts#measureRawAnsiNode","refName":"measureRawAnsiNode","refFile":"ink/dom.ts","score":0.289,"method":"file-local"}
@@ -174,6 +175,7 @@
 {"id":"chunk-38axkkfw.js#Kkt","ref":"utils/bash/commands.ts#detectCommandSubstitution","refName":"detectCommandSubstitution","refFile":"utils/bash/commands.ts","score":0.286,"method":"file-local"}
 {"id":"chunk-38axkkfw.js#ASn","ref":"utils/bash/commands.ts#isUnsafeCompoundCommand_DEPRECATED","refName":"isUnsafeCompoundCommand_DEPRECATED","refFile":"utils/bash/commands.ts","score":0.143,"method":"file-local"}
 {"id":"chunk-38axkkfw.js#TSn","ref":"utils/bash/commands.ts#needsQuoting","refName":"needsQuoting","refFile":"utils/bash/commands.ts","score":0.143,"method":"file-local"}
+{"id":"chunk-r01896cg.js#an","ref":"utils/bash/parser.ts#stripQuotes","refName":"stripQuotes","refFile":"utils/bash/parser.ts","score":1,"method":"file-local"}
 {"id":"chunk-3g0djq3w.js#Fin","ref":"utils/processUserInput/processSlashCommand.tsx#looksLikeCommand","refName":"looksLikeCommand","refFile":"utils/processUserInput/processSlashCommand.tsx","score":1,"method":"file-local"}
 {"id":"chunk-3h9nvmn3.js#E2","ref":"tools/ToolSearchTool/prompt.ts#formatDeferredToolLine","refName":"formatDeferredToolLine","refFile":"tools/ToolSearchTool/prompt.ts","score":1,"method":"file-local"}
 {"id":"chunk-3n6ygrtf.js#T","ref":"services/api/metricsOptOut.ts#checkMetricsEnabled","refName":"checkMetricsEnabled","refFile":"services/api/metricsOptOut.ts","score":0.421,"method":"file-local"}
@@ -237,6 +239,8 @@
 {"id":"chunk-e6aww6q8.js#AGo","ref":"utils/sessionStorage.ts#saveTaskSummary","refName":"saveTaskSummary","refFile":"utils/sessionStorage.ts","score":0.295,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#ORt","ref":"utils/sessionStorage.ts#findUnresolvedToolUse","refName":"findUnresolvedToolUse","refFile":"utils/sessionStorage.ts","score":0.211,"method":"file-local"}
 {"id":"chunk-66jn0ssz.js#K","ref":"components/permissions/shellPermissionHelpers.tsx#commandListDisplay","refName":"commandListDisplay","refFile":"components/permissions/shellPermissionHelpers.tsx","score":0,"method":"file-last-pair"}
+{"id":"chunk-xr4xc2mq.js#Ur","ref":"services/extractMemories/extractMemories.ts#getWrittenFilePath","refName":"getWrittenFilePath","refFile":"services/extractMemories/extractMemories.ts","score":0.258,"method":"file-local"}
+{"id":"chunk-xr4xc2mq.js#Rr","ref":"services/extractMemories/extractMemories.ts#extractWrittenPaths","refName":"extractWrittenPaths","refFile":"services/extractMemories/extractMemories.ts","score":0.143,"method":"file-local"}
 {"id":"chunk-6mwt0myy.js#F","ref":"utils/taggedId.ts#base58Encode","refName":"base58Encode","refFile":"utils/taggedId.ts","score":0.459,"method":"file-local"}
 {"id":"chunk-m3arwd1y.js#k","ref":"skills/bundled/scheduleRemoteAgents.ts#sanitizeConnectorName","refName":"sanitizeConnectorName","refFile":"skills/bundled/scheduleRemoteAgents.ts","score":1,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#Igo","ref":"utils/plugins/lspPluginIntegration.ts#validatePathWithinPlugin","refName":"validatePathWithinPlugin","refFile":"utils/plugins/lspPluginIntegration.ts","score":1,"method":"file-local"}
@@ -308,6 +312,9 @@
 {"id":"chunk-vrb44rx7.js#Rv","ref":"commands/plugin/PluginSettings.tsx#_temp4","refName":"_temp4","refFile":"commands/plugin/PluginSettings.tsx","score":1,"method":"file-local"}
 {"id":"chunk-vrb44rx7.js#Tv","ref":"commands/plugin/PluginSettings.tsx#_temp5","refName":"_temp5","refFile":"commands/plugin/PluginSettings.tsx","score":1,"method":"file-local"}
 {"id":"chunk-vrb44rx7.js#Ev","ref":"commands/plugin/PluginSettings.tsx#_temp9","refName":"_temp9","refFile":"commands/plugin/PluginSettings.tsx","score":1,"method":"file-local"}
+{"id":"chunk-9h8dr0qb.js#Tf","ref":"components/Stats.tsx#_temp8","refName":"_temp8","refFile":"components/Stats.tsx","score":1,"method":"file-local"}
+{"id":"chunk-9h8dr0qb.js#ns","ref":"components/Stats.tsx#getNextDateRange","refName":"getNextDateRange","refFile":"components/Stats.tsx","score":1,"method":"file-local"}
+{"id":"chunk-9h8dr0qb.js#Ai","ref":"components/Stats.tsx#_temp7","refName":"_temp7","refFile":"components/Stats.tsx","score":0.241,"method":"file-local"}
 {"id":"chunk-zfbhezv9.js#G","ref":"utils/permissions/permissionSetup.ts#formatPermissionSource","refName":"formatPermissionSource","refFile":"utils/permissions/permissionSetup.ts","score":1,"method":"file-local"}
 {"id":"chunk-kswt4qha.js#ve","ref":"utils/permissions/permissionSetup.ts#parseToolListFromCLI","refName":"parseToolListFromCLI","refFile":"utils/permissions/permissionSetup.ts","score":0.6,"method":"file-local"}
 {"id":"chunk-kswt4qha.js#jZo","ref":"utils/permissions/permissionSetup.ts#parseBaseToolsFromCLI","refName":"parseBaseToolsFromCLI","refFile":"utils/permissions/permissionSetup.ts","score":0.333,"method":"file-local"}
@@ -356,7 +363,6 @@
 {"id":"chunk-aepeg2w5.js#xD","ref":"services/analytics/growthbook.ts#refreshGrowthBookFeatures","refName":"refreshGrowthBookFeatures","refFile":"services/analytics/growthbook.ts","score":0.255,"method":"file-local"}
 {"id":"chunk-aepeg2w5.js#qi","ref":"services/analytics/growthbook.ts#getGrowthBookClient","refName":"getGrowthBookClient","refFile":"services/analytics/growthbook.ts","score":0.136,"method":"file-local"}
 {"id":"chunk-aepeg2w5.js#vR","ref":"types/generated/google/protobuf/timestamp.ts#isSet","refName":"isSet","refFile":"types/generated/google/protobuf/timestamp.ts","score":0,"method":"file-last-pair"}
-{"id":"chunk-aepeg2w5.js#J3","ref":"services/analytics/metadata.ts#getFileExtensionForAnalytics","refName":"getFileExtensionForAnalytics","refFile":"services/analytics/metadata.ts","score":1,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#JWr","ref":"utils/worktree.ts#generateTmuxSessionName","refName":"generateTmuxSessionName","refFile":"utils/worktree.ts","score":1,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#Fot","ref":"utils/worktree.ts#flattenSlug","refName":"flattenSlug","refFile":"utils/worktree.ts","score":1,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#Vpn","ref":"utils/worktree.ts#parsePRReference","refName":"parsePRReference","refFile":"utils/worktree.ts","score":1,"method":"file-local"}
@@ -385,8 +391,6 @@
 {"id":"chunk-anrta56w.js#v","ref":"utils/permissions/permissionsLoader.ts#SUPPORTED_RULE_BEHAVIORS","refName":"SUPPORTED_RULE_BEHAVIORS","refFile":"utils/permissions/permissionsLoader.ts","score":1,"method":"file-local"}
 {"id":"chunk-awy329vy.js#tt","ref":"upstreamproxy/relay.ts#encodeChunk","refName":"encodeChunk","refFile":"upstreamproxy/relay.ts","score":1,"method":"file-local"}
 {"id":"chunk-awy329vy.js#cn","ref":"upstreamproxy/relay.ts#startUpstreamProxyRelay","refName":"startUpstreamProxyRelay","refFile":"upstreamproxy/relay.ts","score":0.199,"method":"file-local"}
-{"id":"chunk-awy329vy.js#yGi","ref":"upstreamproxy/upstreamproxy.ts#initUpstreamProxy","refName":"initUpstreamProxy","refFile":"upstreamproxy/upstreamproxy.ts","score":0.171,"method":"file-local"}
-{"id":"chunk-awy329vy.js#ue","ref":"upstreamproxy/upstreamproxy.ts#readToken","refName":"readToken","refFile":"upstreamproxy/upstreamproxy.ts","score":0.125,"method":"file-local"}
 {"id":"chunk-b79vwm1h.js#Eo","ref":"components/ui/TreeSelect.tsx#_temp","refName":"_temp","refFile":"components/ui/TreeSelect.tsx","score":0,"method":"file-last-pair"}
 {"id":"chunk-b79vwm1h.js#Lo","ref":"components/LogSelector.tsx#normalizeAndTruncateToWidth","refName":"normalizeAndTruncateToWidth","refFile":"components/LogSelector.tsx","score":1,"method":"file-local"}
 {"id":"chunk-bajxb7bf.js#Mr","ref":"components/hooks/SelectMatcherMode.tsx#_temp","refName":"_temp","refFile":"components/hooks/SelectMatcherMode.tsx","score":1,"method":"file-local"}
@@ -425,6 +429,7 @@
 {"id":"chunk-c55mbvfz.js#eo","ref":"commands/memory/memory.tsx#call","refName":"call","refFile":"commands/memory/memory.tsx","score":0,"method":"file-last-pair"}
 {"id":"chunk-c5gdqf78.js#uYi","ref":"utils/cliArgs.ts#extractArgsAfterDoubleDash","refName":"extractArgsAfterDoubleDash","refFile":"utils/cliArgs.ts","score":0.444,"method":"file-local"}
 {"id":"chunk-cg10fy59.js#v","ref":"ink/components/ClockContext.tsx#ClockProvider","refName":"ClockProvider","refFile":"ink/components/ClockContext.tsx","score":0.434,"method":"file-local"}
+{"id":"chunk-cg2r2hy6.js#_r","ref":"bridge/initReplBridge.ts#deriveTitle","refName":"deriveTitle","refFile":"bridge/initReplBridge.ts","score":1,"method":"file-local"}
 {"id":"chunk-cgr0tezp.js#qDn","ref":"utils/sanitization.ts#recursivelySanitizeUnicode","refName":"recursivelySanitizeUnicode","refFile":"utils/sanitization.ts","score":0.286,"method":"file-local"}
 {"id":"chunk-cgr0tezp.js#fi","ref":"utils/slowOperations.ts#NOOP_LOGGER","refName":"NOOP_LOGGER","refFile":"utils/slowOperations.ts","score":1,"method":"file-local"}
 {"id":"chunk-cgr0tezp.js#Jo","ref":"utils/slowOperations.ts#SLOW_OPERATION_THRESHOLD_MS","refName":"SLOW_OPERATION_THRESHOLD_MS","refFile":"utils/slowOperations.ts","score":0.394,"method":"file-local"}
@@ -434,6 +439,11 @@
 {"id":"chunk-cwwxybjc.js#Me","ref":"native-ts/color-diff/index.ts#findAdjacentPairs","refName":"findAdjacentPairs","refFile":"native-ts/color-diff/index.ts","score":1,"method":"file-local"}
 {"id":"chunk-cwwxybjc.js#Le","ref":"native-ts/color-diff/index.ts#wrapText","refName":"wrapText","refFile":"native-ts/color-diff/index.ts","score":0.224,"method":"file-local"}
 {"id":"chunk-n4bsg1hp.js#vn","ref":"bridge/inboundAttachments.ts#resolveAndPrepend","refName":"resolveAndPrepend","refFile":"bridge/inboundAttachments.ts","score":0.286,"method":"file-local"}
+{"id":"chunk-fq0cr76a.js#Pce","ref":"utils/sandbox/sandbox-adapter.ts#resolvePathPatternForSandbox","refName":"resolvePathPatternForSandbox","refFile":"utils/sandbox/sandbox-adapter.ts","score":1,"method":"file-local"}
+{"id":"chunk-fq0cr76a.js#K4","ref":"utils/sandbox/sandbox-adapter.ts#resolveSandboxFilesystemPath","refName":"resolveSandboxFilesystemPath","refFile":"utils/sandbox/sandbox-adapter.ts","score":1,"method":"file-local"}
+{"id":"chunk-fq0cr76a.js#cb","ref":"utils/sandbox/sandbox-adapter.ts#isSandboxingEnabled","refName":"isSandboxingEnabled","refFile":"utils/sandbox/sandbox-adapter.ts","score":1,"method":"file-local"}
+{"id":"chunk-fq0cr76a.js#jv","ref":"utils/sandbox/sandbox-adapter.ts#scrubBareGitRepoFiles","refName":"scrubBareGitRepoFiles","refFile":"utils/sandbox/sandbox-adapter.ts","score":0.915,"method":"file-local"}
+{"id":"chunk-fq0cr76a.js#r$","ref":"utils/sandbox/sandbox-adapter.ts#initialize","refName":"initialize","refFile":"utils/sandbox/sandbox-adapter.ts","score":0.175,"method":"file-local"}
 {"id":"chunk-mvhmq2z8.js#wn","ref":"commands/model/model.tsx#_temp7","refName":"_temp7","refFile":"commands/model/model.tsx","score":1,"method":"file-local"}
 {"id":"chunk-mvhmq2z8.js#Re","ref":"commands/model/model.tsx#isKnownAlias","refName":"isKnownAlias","refFile":"commands/model/model.tsx","score":0.286,"method":"file-local"}
 {"id":"chunk-d3jaf8bt.js#K","ref":"services/mcp/channelPermissions.ts#shortRequestId","refName":"shortRequestId","refFile":"services/mcp/channelPermissions.ts","score":1,"method":"file-local"}
@@ -514,6 +524,10 @@
 {"id":"chunk-e6aww6q8.js#wIo","ref":"tools/BashTool/pathValidation.ts#skipStdbufFlags","refName":"skipStdbufFlags","refFile":"tools/BashTool/pathValidation.ts","score":1,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#TIo","ref":"tools/BashTool/pathValidation.ts#skipEnvFlags","refName":"skipEnvFlags","refFile":"tools/BashTool/pathValidation.ts","score":1,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#UIo","ref":"tools/BashTool/readOnlyValidation.ts#READONLY_COMMAND_REGEXES","refName":"READONLY_COMMAND_REGEXES","refFile":"tools/BashTool/readOnlyValidation.ts","score":1,"method":"file-local"}
+{"id":"chunk-r01896cg.js#Si","ref":"utils/bash/ast.ts#containsAnyPlaceholder","refName":"containsAnyPlaceholder","refFile":"utils/bash/ast.ts","score":1,"method":"file-local"}
+{"id":"chunk-r01896cg.js#bt","ref":"utils/bash/ast.ts#maskBracesInQuotedContexts","refName":"maskBracesInQuotedContexts","refFile":"utils/bash/ast.ts","score":1,"method":"file-local"}
+{"id":"chunk-r01896cg.js#$e","ref":"utils/bash/ast.ts#collectCommandSubstitution","refName":"collectCommandSubstitution","refFile":"utils/bash/ast.ts","score":1,"method":"file-local"}
+{"id":"chunk-r01896cg.js#jt","ref":"utils/bash/ast.ts#stripRawString","refName":"stripRawString","refFile":"utils/bash/ast.ts","score":1,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#tDo","ref":"tools/BashTool/modeValidation.ts#isFilesystemCommand","refName":"isFilesystemCommand","refFile":"tools/BashTool/modeValidation.ts","score":1,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#uDo","ref":"tools/BashTool/bashPermissions.ts#suggestionForPrefix","refName":"suggestionForPrefix","refFile":"tools/BashTool/bashPermissions.ts","score":1,"method":"file-local"}
 {"id":"chunk-e6aww6q8.js#eYt","ref":"tools/BashTool/bashPermissions.ts#stripCommentLines","refName":"stripCommentLines","refFile":"tools/BashTool/bashPermissions.ts","score":1,"method":"file-local"}
@@ -599,11 +613,6 @@
 {"id":"chunk-f8r3h98t.js#Xze","ref":"utils/mcpValidation.ts#getContentSizeEstimate","refName":"getContentSizeEstimate","refFile":"utils/mcpValidation.ts","score":0.857,"method":"file-local"}
 {"id":"chunk-gvva3ecm.js#GSi","ref":"utils/hooks/sessionHooks.ts#getSessionFunctionHooks","refName":"getSessionFunctionHooks","refFile":"utils/hooks/sessionHooks.ts","score":0.347,"method":"file-local"}
 {"id":"chunk-k7ve8htw.js#Ro","ref":"commands/bridge/bridge.tsx#_temp1","refName":"_temp1","refFile":"commands/bridge/bridge.tsx","score":1,"method":"file-local"}
-{"id":"chunk-fq0cr76a.js#Pce","ref":"utils/sandbox/sandbox-adapter.ts#resolvePathPatternForSandbox","refName":"resolvePathPatternForSandbox","refFile":"utils/sandbox/sandbox-adapter.ts","score":1,"method":"file-local"}
-{"id":"chunk-fq0cr76a.js#K4","ref":"utils/sandbox/sandbox-adapter.ts#resolveSandboxFilesystemPath","refName":"resolveSandboxFilesystemPath","refFile":"utils/sandbox/sandbox-adapter.ts","score":1,"method":"file-local"}
-{"id":"chunk-fq0cr76a.js#cb","ref":"utils/sandbox/sandbox-adapter.ts#isSandboxingEnabled","refName":"isSandboxingEnabled","refFile":"utils/sandbox/sandbox-adapter.ts","score":1,"method":"file-local"}
-{"id":"chunk-fq0cr76a.js#jv","ref":"utils/sandbox/sandbox-adapter.ts#scrubBareGitRepoFiles","refName":"scrubBareGitRepoFiles","refFile":"utils/sandbox/sandbox-adapter.ts","score":0.915,"method":"file-local"}
-{"id":"chunk-fq0cr76a.js#r$","ref":"utils/sandbox/sandbox-adapter.ts#initialize","refName":"initialize","refFile":"utils/sandbox/sandbox-adapter.ts","score":0.175,"method":"file-local"}
 {"id":"chunk-fq0cr76a.js#wde","ref":"utils/permissions/pathValidation.ts#isDangerousRemovalPath","refName":"isDangerousRemovalPath","refFile":"utils/permissions/pathValidation.ts","score":0.364,"method":"file-local"}
 {"id":"chunk-fw249fsw.js#Orr","ref":"utils/swarm/teamHelpers.ts#sanitizeName","refName":"sanitizeName","refFile":"utils/swarm/teamHelpers.ts","score":1,"method":"file-local"}
 {"id":"chunk-fw249fsw.js#l6o","ref":"utils/swarm/teamHelpers.ts#registerTeamForSessionCleanup","refName":"registerTeamForSessionCleanup","refFile":"utils/swarm/teamHelpers.ts","score":1,"method":"file-local"}
@@ -622,6 +631,7 @@
 {"id":"chunk-hnzqng4j.js#De","ref":"utils/cronTasksLock.ts#readLock","refName":"readLock","refFile":"utils/cronTasksLock.ts","score":1,"method":"file-local"}
 {"id":"chunk-hq88884p.js#Jne","ref":"utils/caCerts.ts#getCACertificates","refName":"getCACertificates","refFile":"utils/caCerts.ts","score":0.24,"method":"file-local"}
 {"id":"chunk-hwmsct5x.js#F_","ref":"utils/model/modelOptions.ts#getHaiku35Option","refName":"getHaiku35Option","refFile":"utils/model/modelOptions.ts","score":0.182,"method":"file-local"}
+{"id":"chunk-j0y6ypnr.js#Lai","ref":"utils/idePathConversion.ts#checkWSLDistroMatch","refName":"checkWSLDistroMatch","refFile":"utils/idePathConversion.ts","score":1,"method":"file-local"}
 {"id":"chunk-j3rk1cz4.js#Ywo","ref":"utils/sinks.ts#initSinks","refName":"initSinks","refFile":"utils/sinks.ts","score":0,"method":"file-last-pair"}
 {"id":"chunk-jde8wnzx.js#Uo","ref":"screens/ResumeConversation.tsx#_temp","refName":"_temp","refFile":"screens/ResumeConversation.tsx","score":1,"method":"file-local"}
 {"id":"chunk-jde8wnzx.js#$o","ref":"screens/ResumeConversation.tsx#_temp2","refName":"_temp2","refFile":"screens/ResumeConversation.tsx","score":1,"method":"file-local"}
@@ -684,11 +694,6 @@
 {"id":"chunk-pjm08t7p.js#be","ref":"bridge/sessionRunner.ts#inputPreview","refName":"inputPreview","refFile":"bridge/sessionRunner.ts","score":1,"method":"file-local"}
 {"id":"chunk-pp50kewz.js#EDe","ref":"services/plugins/pluginOperations.ts#isInstallableScope","refName":"isInstallableScope","refFile":"services/plugins/pluginOperations.ts","score":1,"method":"file-local"}
 {"id":"chunk-pp50kewz.js#ii","ref":"services/plugins/pluginOperations.ts#getProjectPathForScope","refName":"getProjectPathForScope","refFile":"services/plugins/pluginOperations.ts","score":0.303,"method":"file-local"}
-{"id":"chunk-r01896cg.js#an","ref":"utils/bash/parser.ts#stripQuotes","refName":"stripQuotes","refFile":"utils/bash/parser.ts","score":1,"method":"file-local"}
-{"id":"chunk-r01896cg.js#Si","ref":"utils/bash/ast.ts#containsAnyPlaceholder","refName":"containsAnyPlaceholder","refFile":"utils/bash/ast.ts","score":1,"method":"file-local"}
-{"id":"chunk-r01896cg.js#bt","ref":"utils/bash/ast.ts#maskBracesInQuotedContexts","refName":"maskBracesInQuotedContexts","refFile":"utils/bash/ast.ts","score":1,"method":"file-local"}
-{"id":"chunk-r01896cg.js#$e","ref":"utils/bash/ast.ts#collectCommandSubstitution","refName":"collectCommandSubstitution","refFile":"utils/bash/ast.ts","score":1,"method":"file-local"}
-{"id":"chunk-r01896cg.js#jt","ref":"utils/bash/ast.ts#stripRawString","refName":"stripRawString","refFile":"utils/bash/ast.ts","score":1,"method":"file-local"}
 {"id":"chunk-s3fw2t2g.js#b","ref":"components/shell/OutputLine.tsx#tryJsonFormatContent","refName":"tryJsonFormatContent","refFile":"components/shell/OutputLine.tsx","score":1,"method":"file-local"}
 {"id":"chunk-s3fw2t2g.js#f","ref":"components/shell/OutputLine.tsx#tryFormatJson","refName":"tryFormatJson","refFile":"components/shell/OutputLine.tsx","score":1,"method":"file-local"}
 {"id":"chunk-s3fw2t2g.js#M","ref":"components/shell/OutputLine.tsx#linkifyUrlsInText","refName":"linkifyUrlsInText","refFile":"components/shell/OutputLine.tsx","score":0.667,"method":"file-local"}
@@ -741,8 +746,6 @@
 {"id":"chunk-x1mwqya5.js#Kn","ref":"keybindings/validate.ts#isValidContext","refName":"isValidContext","refFile":"keybindings/validate.ts","score":1,"method":"file-local"}
 {"id":"chunk-x1mwqya5.js#Exe","ref":"keybindings/match.ts#modifiersMatch","refName":"modifiersMatch","refFile":"keybindings/match.ts","score":0.645,"method":"file-local"}
 {"id":"chunk-xe7zq1p4.js#me","ref":"context/mailbox.tsx#MailboxProvider","refName":"MailboxProvider","refFile":"context/mailbox.tsx","score":0.011,"method":"file-last-pair"}
-{"id":"chunk-xr4xc2mq.js#Ur","ref":"services/extractMemories/extractMemories.ts#getWrittenFilePath","refName":"getWrittenFilePath","refFile":"services/extractMemories/extractMemories.ts","score":0.258,"method":"file-local"}
-{"id":"chunk-xr4xc2mq.js#Rr","ref":"services/extractMemories/extractMemories.ts#extractWrittenPaths","refName":"extractWrittenPaths","refFile":"services/extractMemories/extractMemories.ts","score":0.143,"method":"file-local"}
 {"id":"chunk-yjaa68dq.js#x8r","ref":"skills/bundledSkills.ts#writeSkillFiles","refName":"writeSkillFiles","refFile":"skills/bundledSkills.ts","score":0.133,"method":"file-local"}
 {"id":"chunk-ymw5z3js.js#mt","ref":"tools/AgentTool/constants.ts#ONE_SHOT_BUILTIN_AGENT_TYPES","refName":"ONE_SHOT_BUILTIN_AGENT_TYPES","refFile":"tools/AgentTool/constants.ts","score":0.141,"method":"file-local"}
 {"id":"chunk-znr63w8n.js#Y","ref":"components/AwsAuthStatusBox.tsx#_temp","refName":"_temp","refFile":"components/AwsAuthStatusBox.tsx","score":0.857,"method":"file-local"}
