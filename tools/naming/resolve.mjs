@@ -21,6 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse } from '@babel/parser';
+import { bindingsOf } from '../rename/lib/rename.mjs';
 
 const A = process.argv[2] ?? 'analysis';
 const OUT = process.argv[3] ?? 'naming/final';
@@ -129,6 +130,11 @@ for (const file of files) {
     if (n?.type === 'VariableDeclaration') n.declarations.forEach((d) => pat(d.id));
     else if ((n?.type === 'FunctionDeclaration' || n?.type === 'ClassDeclaration') && n.id) addId(n.id);
   }
+  // A direct eval freezes every module-scope binding (the rename engine keeps
+  // them as they are), so no entry is written for them, imports included.
+  if (/\beval\s*\(/.test(src)) {
+    for (const fb of bindingsOf(file, src)) if (fb.scope === 'top' && fb.frozen && bindings.has(fb.declStart)) bindings.get(fb.declStart).frozen = true;
+  }
   top.set(file, bindings);
   exportsOf.set(file, new Map([...ex].map(([e, l]) => [e, byName.get(l)?.off])));
   importsOf.set(file, im);
@@ -153,10 +159,11 @@ decided.sort((x, y) => ((PRIORITY[y.c?.source] ?? 0) - (PRIORITY[x.c?.source] ??
 // A kept minified name can still clash inside a reconstructed module that
 // gathers declarations from several chunks; the later one gets a chunk tag.
 for (const { file, b, c } of decided) {
-  if (c) continue;
+  if (c && !b.frozen) continue;
   const [chunkScope, modScope] = scopesOf(file, b);
   take(chunkScope, b.min);
   if (!modScope) continue;
+  if (b.frozen) { take(modScope, b.min); continue; }
   if (isTaken(modScope, b.min)) {
     const tag = file.replace(/^chunk-|\.m?js$/g, '').slice(0, 4);
     let name = `${b.min}_${tag}`, i = 2;
@@ -168,6 +175,7 @@ for (const { file, b, c } of decided) {
   } else take(modScope, b.min);
 }
 for (const { file, b, c } of decided) {
+  if (b.frozen) { stats.frozen = (stats.frozen ?? 0) + 1; continue; }
   let rec;
   if (!c) { rec = b.renameTo ? { name: b.renameTo, min: b.min, source: 'auto', confidence: 0.1, declId: b.declId, kind: 'decl', via: 'module-clash' } : { name: b.min, min: b.min, source: 'minified', confidence: 0, declId: b.declId, kind: 'decl' }; stats.kept++; }
   else {
@@ -188,6 +196,7 @@ for (const [file, im] of importsOf) {
   const m = final.get(file) ?? new Map();
   final.set(file, m);
   for (const b of im) {
+    if (b.frozen) { take(`chunk:${file}`, b.min); stats.frozen = (stats.frozen ?? 0) + 1; continue; }
     let want = b.min;
     const exOff = exportsOf.get(b.from)?.get(b.imported);
     const target = exOff !== undefined ? final.get(b.from)?.get(exOff) : null;
