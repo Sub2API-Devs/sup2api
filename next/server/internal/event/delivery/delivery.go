@@ -44,7 +44,7 @@ type Options struct {
 	GapMinWait        time.Duration
 	GapMaxWait        time.Duration
 	RetentionAge      time.Duration // events older than this may be deleted (7d)
-	RetentionInterval time.Duration // retention period (1h)
+	RetentionInterval time.Duration // retention period (1h), the schedule of core.events.retention
 }
 
 func (o *Options) defaults() {
@@ -145,9 +145,8 @@ func (s *Service) Start(ctx context.Context) error {
 		s.unsubs = append(s.unsubs, s.bus.Subscribe(ChannelEventsAppended, func([]byte) { s.WakeAll() }))
 	}
 	s.reconcileLocked(s.registry.Current())
-	s.wg.Add(2)
+	s.wg.Add(1)
 	go s.watch()
-	go s.retentionLoop()
 	return nil
 }
 

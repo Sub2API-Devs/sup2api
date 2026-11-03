@@ -53,8 +53,6 @@ type Options struct {
 	// recording its outcome). The app's teardown shares a 90s budget
 	// (app.run); the plugin instances are stopped after this service.
 	DrainTimeout time.Duration
-	// Locker elects the node that purges; nil purges on every node.
-	Locker core.Locker
 }
 
 func (o *Options) defaults() {

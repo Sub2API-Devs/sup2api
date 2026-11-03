@@ -580,7 +580,6 @@ func (s *Service) Run(ctx context.Context) {
 		defer s.Bus.Subscribe(core.ChannelAccountChanged, s.onAccountChanged)()
 		defer s.Bus.Subscribe(core.ChannelConfigChanged, s.onConfigChanged)()
 	}
-	go s.runSweep(ctx)
 	ticker := time.NewTicker(reconcileEvery)
 	defer ticker.Stop()
 	for {

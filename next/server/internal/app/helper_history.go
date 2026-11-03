@@ -9,8 +9,12 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usage"
 )
 
+// HelperPayloadExpiryTask clears expired helper history content.
+const HelperPayloadExpiryTask = "core.helper.payload_expiry"
+
 // A replay may run on any ready node. The receipt/usage transaction and outbox
-// digest make concurrent delivery idempotent; expiry keeps ownership tombstones.
+// digest make concurrent delivery idempotent. (It moves to the task
+// framework with the billing tasks.)
 func startHelperHistoryMaintenance(parent context.Context, settler *usage.Service, store core.HelperHistory, admitted func() bool) func(context.Context) {
 	ctx, cancel := context.WithCancel(context.WithoutCancel(parent))
 	done := make(chan struct{})
@@ -30,9 +34,6 @@ func startHelperHistoryMaintenance(parent context.Context, settler *usage.Servic
 				if err := settler.DrainHelperHistoryUsage(work, store); err != nil && ctx.Err() == nil {
 					slog.ErrorContext(work, "helper history usage replay failed", "error", err)
 				}
-				if err := store.ExpirePayloads(work); err != nil && ctx.Err() == nil {
-					slog.ErrorContext(work, "helper history expiry failed", "error", err)
-				}
 				stop()
 			}
 		}
@@ -43,5 +44,24 @@ func startHelperHistoryMaintenance(parent context.Context, settler *usage.Servic
 		case <-done:
 		case <-wait.Done():
 		}
+	}
+}
+
+// helperPayloadExpirySpec clears expired helper content once a minute on one
+// node; the ownership tombstones stay.
+func helperPayloadExpirySpec(store core.HelperHistory) core.TaskSpec {
+	return core.TaskSpec{
+		Name:  HelperPayloadExpiryTask,
+		Title: core.LocalizedText{"en": "Clear expired helper payloads", "zh": "清空过期 helper 负载"},
+		Description: core.LocalizedText{
+			"en": "Clears the content of expired helper history entries, keeping their ownership records.",
+			"zh": "清空已过期 helper 历史记录的内容，保留归属记录。",
+		},
+		Scope:   core.TaskCluster,
+		Every:   time.Minute,
+		Timeout: 50 * time.Second,
+		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+			return core.TaskResult{}, store.ExpirePayloads(ctx)
+		},
 	}
 }

@@ -610,57 +610,86 @@ func TestQuotaMirrorReconnectAndPluginSwitch(t *testing.T) {
 	waitUntil(t, "refill", func() bool { return !stale(1) && !stale(2) })
 }
 
-func TestQuotaMirrorRunWarmsUpWithBackoff(t *testing.T) {
-	oldMin, oldMax, oldReload := quotaMirrorWarmMin, quotaMirrorWarmMax, quotaMirrorReload
-	quotaMirrorWarmMin, quotaMirrorWarmMax, quotaMirrorReload = 10*time.Millisecond, 20*time.Millisecond, 50*time.Millisecond
-	defer func() { quotaMirrorWarmMin, quotaMirrorWarmMax, quotaMirrorReload = oldMin, oldMax, oldReload }()
+func TestQuotaMirrorWarmsUpWithBackoffThenRegistersItsTask(t *testing.T) {
+	oldMin, oldMax := quotaMirrorWarmMin, quotaMirrorWarmMax
+	quotaMirrorWarmMin, quotaMirrorWarmMax = 10*time.Millisecond, 20*time.Millisecond
+	defer func() { quotaMirrorWarmMin, quotaMirrorWarmMax = oldMin, oldMax }()
 	db := newFakeQuotaDB()
 	db.set(1, 10, 1)
 	db.covered = []int64{1, 2}
 	db.err = errors.New("no plugin generation loaded yet")
-	m := db.mirror()
+	tasks := newFakeTasks()
+	s := &Service{quotaMirror: db.mirror()}
+	s.tasks.Store(&[]core.Tasks{tasks}[0])
+	m := s.quotaMirror
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
-	go func() { m.run(ctx); close(done) }()
+	go func() { s.runQuotaMirror(ctx); close(done) }()
 	waitUntil(t, "retries", func() bool { return db.reloads.Load() >= 3 })
+	require.False(t, tasks.registered(QuotaMirrorTask), "registered before the mirror was warm")
 	db.mu.Lock()
 	db.err = nil
 	db.mu.Unlock()
-	waitUntil(t, "warm-up", func() bool { has, _ := entryState(m, 2); return has })
+	<-done
+	require.True(t, tasks.registered(QuotaMirrorTask))
+	spec := tasks.spec(t, QuotaMirrorTask)
+	require.Equal(t, core.TaskNode, spec.Scope)
+	require.Equal(t, quotaMirrorReload, spec.Every)
+	require.False(t, spec.RequireWork)
 	v, err := m.view(t.Context(), []int64{1, 2}, m.staleWait)
 	require.NoError(t, err)
 	require.NotNil(t, v.Snapshots[1])
 	require.Nil(t, v.Snapshots[2], "a covered account without a row is a negative entry")
 	require.Zero(t, db.loads.Load(), "the warm-up answered both ids")
-	// Then it keeps reloading.
+	// Then the task reloads it.
 	n := db.reloads.Load()
-	waitUntil(t, "periodic reload", func() bool { return db.reloads.Load() > n })
+	_, err = tasks.run(t, t.Context(), QuotaMirrorTask)
+	require.NoError(t, err)
+	require.Equal(t, n+1, db.reloads.Load())
 	cancel()
-	<-done
 }
 
-func TestQuotaMirrorReloadSoon(t *testing.T) {
-	oldReload := quotaMirrorReload
-	quotaMirrorReload = time.Hour
-	defer func() { quotaMirrorReload = oldReload }()
+func TestQuotaMirrorReloadSoonTriggersItsTask(t *testing.T) {
 	db := newFakeQuotaDB()
 	db.covered = []int64{1}
 	reg := &changingRegistry{}
+	tasks := newFakeTasks()
 	s := &Service{d: Deps{Registry: reg}, quotaMirror: db.mirror()}
+	s.tasks.Store(&[]core.Tasks{tasks}[0])
 	ctx, cancel := context.WithCancel(t.Context())
-	done := make(chan struct{})
-	go func() { s.quotaMirror.run(ctx); close(done) }()
-	defer func() { cancel(); <-done }()
+	defer cancel()
 	defer s.watchChanges(ctx)()
-	waitUntil(t, "first load", func() bool { return db.reloads.Load() == 1 })
+	s.runQuotaMirror(ctx)
+	require.Equal(t, int32(1), db.reloads.Load())
 	// Plugins start after the service: their generation switch loads the
-	// account types they declare at once, not an hour later.
+	// account types they declare at once, not a minute later.
 	db.set(1, 10, 1)
 	reg.publish()
-	waitUntil(t, "reload on switch", func() bool { has, _ := entryState(s.quotaMirror, 1); return has })
+	waitUntil(t, "trigger on switch", func() bool { return tasks.triggered(QuotaMirrorTask) == 1 })
+	_, err := tasks.run(t, t.Context(), QuotaMirrorTask)
+	require.NoError(t, err)
+	has, _ := entryState(s.quotaMirror, 1)
+	require.True(t, has)
 	v, err := s.AccountQuotaView(t.Context(), []int64{1})
 	require.NoError(t, err)
 	require.NotNil(t, v.Snapshots[1])
+}
+
+// A reload asked for while the task runs (its trigger is skipped) is done
+// by the same run.
+func TestQuotaMirrorTaskRepeatsAReloadAskedDuringIt(t *testing.T) {
+	db := newFakeQuotaDB()
+	db.covered = []int64{1}
+	m := db.mirror()
+	gate := make(chan struct{})
+	db.setHold(gate)
+	done := make(chan error, 1)
+	go func() { _, err := m.reloadTask(t.Context(), core.TaskRun{}); done <- err }()
+	waitUntil(t, "first reload started", func() bool { return db.reloads.Load() == 1 })
+	m.reloadSoon()
+	close(gate)
+	require.NoError(t, <-done)
+	require.Equal(t, int32(2), db.reloads.Load())
 }
 
 func TestPublishAccountQuotaChangedPayload(t *testing.T) {

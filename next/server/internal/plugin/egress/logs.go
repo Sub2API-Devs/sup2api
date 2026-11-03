@@ -186,8 +186,10 @@ func (w *logWriter) run() {
 	}
 	t := time.NewTicker(w.interval)
 	defer t.Stop()
-	prune := time.NewTicker(time.Hour)
-	defer prune.Stop()
+	// The domain list's counters are this node's memory; the log table is
+	// pruned by core.egress.logs_prune.
+	evict := time.NewTicker(time.Hour)
+	defer evict.Stop()
 	buf := make([]logItem, 0, w.batch)
 	flush := func() error {
 		if len(buf) == 0 {
@@ -228,8 +230,7 @@ func (w *logWriter) run() {
 			w.flushDomains(false)
 		case <-w.kick:
 			w.flushDomains(false)
-		case <-prune.C:
-			w.prune()
+		case <-evict.C:
 			w.domains.evict(time.Now())
 		case reply := <-w.flushReq:
 			drain()
@@ -382,15 +383,12 @@ func (w *logWriter) flushDomains(force bool) error {
 	return err
 }
 
-func (w *logWriter) prune() {
+// prune deletes the log rows past the retention.
+func (w *logWriter) prune(ctx context.Context) error {
 	if w.st == nil || w.retention < 0 {
-		return
+		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	if err := w.st.prune(ctx, time.Now().Add(-w.retention)); err != nil {
-		w.log.Warn("egress log prune failed", "err", err)
-	}
+	return w.st.prune(ctx, time.Now().Add(-w.retention))
 }
 
 func (w *logWriter) flushNow(ctx context.Context) error {

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
@@ -287,17 +288,13 @@ func TestSweepRemovesAbandonedDrafts(t *testing.T) {
 	ctl.created[orphanYoung] = time.Now()
 	ctl.mu.Unlock()
 
-	// Another node holds the sweep: nothing happens here.
-	lk, ok, _ := f.s.Locker.TryLock(ctx, sweepLockKey, time.Minute)
-	if !ok {
-		t.Fatal("lock")
+	// Through the task entry, as the framework runs it.
+	spec := draftSweepSpec(f.s)
+	if spec.Name != DraftSweepTask || spec.Scope != core.TaskCluster || spec.Every != time.Minute {
+		t.Fatalf("draft sweep spec: %+v", spec)
 	}
-	if n, err := f.s.SweepDrafts(ctx); n != 0 || err != nil || len(ctl.seen("DELETE")) != 0 {
-		t.Fatalf("sweep without the lock: %d %v %v", n, err, ctl.seen("DELETE"))
-	}
-	lk.Release()
-
-	n, err := f.s.SweepDrafts(ctx)
+	res, err := spec.Handler(ctx, core.TaskRun{Name: spec.Name})
+	n := res.Count
 	if err != nil || n != 3 {
 		t.Fatalf("sweep: %d %v (deletes %v)", n, err, ctl.seen("DELETE"))
 	}

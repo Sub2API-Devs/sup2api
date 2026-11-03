@@ -3,10 +3,12 @@ package notify
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -72,21 +74,9 @@ func (s *Service) loop(claim, deliver context.Context, done chan struct{}) {
 	defer close(done)
 	tick := time.NewTicker(s.opts.PollInterval)
 	defer tick.Stop()
-	nextPurge := time.Now()
 	for {
 		if s.opts.CanRun == nil || s.opts.CanRun() {
 			for claim.Err() == nil && s.step(deliver) {
-			}
-			if claim.Err() == nil && time.Now().After(nextPurge) {
-				// One node per period: the lock is left to expire.
-				held := s.opts.Locker == nil
-				if !held {
-					_, held, _ = s.opts.Locker.TryLock(claim, "notify:purge", time.Hour-time.Hour/10)
-				}
-				if held {
-					s.purge(claim)
-				}
-				nextPurge = time.Now().Add(time.Hour)
 			}
 		}
 		select {
@@ -216,18 +206,42 @@ func (s *Service) backoff(attempt int) time.Duration {
 	return min(d, s.opts.BackoffMax)
 }
 
+// PurgeTask is the cluster task that runs purge.
+const PurgeTask = "core.notify.purge"
+
+// PurgeTaskSpec runs purge hourly on one node.
+func (s *Service) PurgeTaskSpec() core.TaskSpec {
+	return core.TaskSpec{
+		Name:  PurgeTask,
+		Title: core.LocalizedText{"en": "Purge old notifications", "zh": "清理旧通知"},
+		Description: core.LocalizedText{
+			"en": "Fails notifications whose last delivery attempt never finished and deletes sent or failed ones past their retention.",
+			"zh": "把最后一次投递没有完成的通知标为失败，并删除超过保留期的已发送或失败通知。",
+		},
+		Scope:   core.TaskCluster,
+		Every:   time.Hour,
+		Timeout: 5 * time.Minute,
+		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+			n, err := s.purge(ctx)
+			return core.TaskResult{Count: int(n)}, err
+		},
+	}
+}
+
 // purge fails the rows whose last attempt never finished (the lease ran out:
 // its node died mid-delivery), which step no longer claims, and deletes the
-// finished rows past the retention.
-func (s *Service) purge(ctx context.Context) {
+// finished rows past the retention; it returns how many it deleted.
+func (s *Service) purge(ctx context.Context) (int64, error) {
 	if _, err := s.db.Pool.Exec(ctx, `UPDATE notifications SET status = 'failed', last_error = 'the last attempt did not finish'
-		WHERE status = 'sending' AND attempts >= $1 AND next_attempt_at <= now()`, s.opts.MaxAttempts); err != nil && ctx.Err() == nil {
-		slog.WarnContext(ctx, "notify: fail expired rows", "err", err)
+		WHERE status = 'sending' AND attempts >= $1 AND next_attempt_at <= now()`, s.opts.MaxAttempts); err != nil {
+		return 0, fmt.Errorf("fail expired rows: %w", err)
 	}
-	if _, err := s.db.Pool.Exec(ctx, `DELETE FROM notifications WHERE status IN ('sent', 'failed')
-		AND created_at < now() - make_interval(secs => $1)`, s.opts.Retention.Seconds()); err != nil && ctx.Err() == nil {
-		slog.WarnContext(ctx, "notify: purge", "err", err)
+	tag, err := s.db.Pool.Exec(ctx, `DELETE FROM notifications WHERE status IN ('sent', 'failed')
+		AND created_at < now() - make_interval(secs => $1)`, s.opts.Retention.Seconds())
+	if err != nil {
+		return 0, fmt.Errorf("delete old rows: %w", err)
 	}
+	return tag.RowsAffected(), nil
 }
 
 func truncate(s string) string {

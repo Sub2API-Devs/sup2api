@@ -167,12 +167,18 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	b.settler = usage.New(b.db, bill, bill, b.events, usage.Options{CanRetry: b.canWork, Environment: b.env})
 	b.settler.Start(b.ctx)
 	b.stopper.add("settler", b.settler.Stop)
-	b.ntf = notify.New(b.db, b.reg, notify.Options{CanRun: b.canWork, Locker: b.cl.Locker})
+	b.ntf = notify.New(b.db, b.reg, notify.Options{CanRun: b.canWork})
+	if err := b.tasks.Register(b.ntf.PurgeTaskSpec()); err != nil {
+		return nil, fmt.Errorf("notify purge task: %w", err)
+	}
 	b.stopper.add("notifications", b.ntf.Stop)
 
 	az := authz.New(authz.Deps{DB: b.db, Bus: b.cl.Bus, Plugins: b.reg})
 	if err := az.Start(b.ctx); err != nil {
 		return nil, fmt.Errorf("authz: %w", err)
+	}
+	if err := az.RegisterTasks(b.tasks); err != nil {
+		return nil, fmt.Errorf("authz tasks: %w", err)
 	}
 	b.az = az
 	b.settler.Authz = az
@@ -200,7 +206,7 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	b.stopper.add("account-stats", b.stats.Close)
 	b.ccg = ccgateway.New(b.db, b.cipher)
 	// Draft proxy visibility and the one-node draft sweep (CONTRACTS §49).
-	b.ccg.Authorizer, b.ccg.Locker, b.ccg.CanWork = az, b.cl.Locker, b.canWork
+	b.ccg.Authorizer, b.ccg.Locker = az, b.cl.Locker
 	// Account, proxy and configuration changes reach the request cache and
 	// the reconciler of every node.
 	b.ccg.Bus = b.cl.Bus
@@ -233,6 +239,9 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	b.bill.SetSyncDeps(billing.SyncDeps{Cipher: b.cipher, Keys: b.keys})
 	go b.keys.Run(b.ctx)
 	go b.prx.Run(b.ctx)
+	if err := b.acc.RegisterTasks(b.tasks); err != nil {
+		return nil, fmt.Errorf("account tasks: %w", err)
+	}
 	go b.acc.Run(b.ctx)
 	if err := b.ccg.RegisterTasks(b.tasks); err != nil {
 		return nil, fmt.Errorf("ccgateway tasks: %w", err)
@@ -276,6 +285,9 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 	egress := egress.New(b.db, egress.Options{NodeID: cfg.NodeID, DatabaseAddrs: []string{pgAddr}, CoreAddrs: coreAddrs,
 		AllowPrivate: cfg.Plugins.EgressAllowPrivate, Events: b.events, Logger: b.log})
 	b.stopper.add("egress", func(context.Context) { egress.Close() })
+	if err := b.tasks.Register(egress.LogsPruneTaskSpec()); err != nil {
+		return fmt.Errorf("egress log prune task: %w", err)
+	}
 	launcher := sandbox.NewLauncher(sandbox.LauncherOptions{DisableWrap: cfg.Plugins.DevMode, Landlock: cfg.Plugins.Landlock, Logger: b.log})
 	schemas := dbschema.New(b.db, cfg.DatabaseURL, cfg.MasterKey, cfg.Plugins.DBRoleIsolation)
 
@@ -300,6 +312,9 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 	helpers := helperhistory.New(b.db, b.cipher, helperhistory.Options{})
 	stopHelperHistory := startHelperHistoryMaintenance(b.ctx, b.settler, helpers, b.canWork)
 	b.stopper.add("helper-history", stopHelperHistory)
+	if err := b.tasks.Register(helperPayloadExpirySpec(helpers)); err != nil {
+		return fmt.Errorf("helper payload expiry task: %w", err)
+	}
 	observations := observer.New(b.reg, b.stats, observer.Consumer{Namespace: observation.CoreNamespace, AllAccounts: true,
 		Phases: []string{observation.UsageFinalized, observation.AttemptFinished}, Metrics: observation.CoreMetrics, Client: account.StatsConsumer{}})
 	b.stopper.add("observations", observations.Close)
@@ -423,6 +438,13 @@ func (b *boot) buildBackground() {
 	b.jobs = job.New(b.db, b.cl.Locker, b.reg, b.log, b.cfg.NodeID, job.Options{Executor: b.work})
 	b.stopper.add("jobs", func(c context.Context) { _ = b.jobs.Stop(c) })
 	b.dlv = delivery.New(b.db, b.cl.Locker, b.cl.Bus, b.reg, b.log, b.cfg.NodeID, delivery.Options{CanRun: b.canWork, Subscriptions: b.acc.LifecycleSubscriptions})
+	if b.tasks != nil {
+		for _, spec := range []core.TaskSpec{b.jobs.RetentionTaskSpec(), b.dlv.RetentionTaskSpec()} {
+			if err := b.tasks.Register(spec); err != nil {
+				b.log.Error("register retention task", "task", spec.Name, "err", err)
+			}
+		}
+	}
 	b.stopper.add("delivery", func(c context.Context) { _ = b.dlv.Stop(c) })
 	// Extraction goroutines still call plugins and submit usage after their
 	// HTTP handler returns. Join them before stopping either dependency.
@@ -479,7 +501,10 @@ func (b *boot) registerRoutes(r *httpapi.Router) {
 		DB: b.db, Install: b.inst, Market: b.mkt, Rollout: b.ctl, Nodes: b.cl.Registry, Registry: b.reg,
 		Authz: b.az, Cipher: b.cipher, Bus: b.cl.Bus, Jobs: b.jobs, HookStats: b.gw, Plugins: cfg.Plugins,
 	}).RegisterRoutes(r)
-	writes := &audit.PluginWrites{DB: b.db, Locker: b.cl.Locker, CanRun: b.canWork}
+	writes := &audit.PluginWrites{DB: b.db}
+	if err := b.tasks.Register(writes.PurgeTask()); err != nil {
+		b.log.Error("register plugin audit purge task", "err", err)
+	}
 	writesCtx, stopWrites := context.WithCancel(b.ctx)
 	writesDone := make(chan struct{})
 	go func() {
@@ -535,7 +560,10 @@ func (b *boot) startHTTP() error {
 		return fmt.Errorf("console asset manifest: %w", err)
 	}
 	b.sharedAssets = sharedAssets
-	b.stopper.add("shared-assets", sharedAssets.Start(b.ctx))
+	// Registered before the routes: readiness waits for its first run.
+	if err := sharedAssets.RegisterTasks(b.tasks); err != nil {
+		return fmt.Errorf("console asset lease: %w", err)
+	}
 	if err := b.buildEngine(); err != nil {
 		return err
 	}

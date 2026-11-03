@@ -214,12 +214,9 @@ type Service struct {
 	// endpoints (CONTRACTS §21.4); nil: callers without account:create see
 	// no proxy.
 	Authorizer core.Authorizer
-	// Locker lets one node at a time sweep abandoned drafts (§49.13); nil:
-	// this node only (single-node tests).
+	// Locker lets one node at a time install the runtime; nil: this node
+	// only (single-node tests).
 	Locker core.Locker
-	// CanWork admits the draft sweep (managed cores sweep only once
-	// admitted); nil always allows.
-	CanWork func() bool
 	// kick feeds Kick; nil (zero Service in tests) disables it.
 	kick chan string
 	// installMu serializes runtime installs without a Locker.

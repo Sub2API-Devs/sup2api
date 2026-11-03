@@ -29,6 +29,7 @@ type memStore struct {
 	domains  map[domainKey]*domainDelta
 	upserts  [][]domainDelta
 	failDom  error
+	pruned   []time.Time // before of each prune
 }
 
 func newMemStore() *memStore {
@@ -83,7 +84,12 @@ func (m *memStore) closeRows(_ context.Context, rows []closedRow) error {
 	return nil
 }
 
-func (m *memStore) prune(context.Context, time.Time) error { return nil }
+func (m *memStore) prune(_ context.Context, before time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pruned = append(m.pruned, before)
+	return nil
+}
 
 func (m *memStore) upsertDomains(ctx context.Context, ds []domainDelta, onNew func(context.Context, pgx.Tx, []domainDelta) error) error {
 	m.mu.Lock()
@@ -256,6 +262,25 @@ func TestOpenRowsResetOnShutdown(t *testing.T) {
 	rows := st.find("h", "tcp")
 	if len(rows) != 1 || rows[0].Result != ResultReset {
 		t.Fatalf("rows after shutdown %+v", rows)
+	}
+}
+
+// The log table is pruned by the cluster task, with the retention.
+func TestLogsPruneTask(t *testing.T) {
+	st := newMemStore()
+	p := &Provider{logs: newLogWriter(st, Options{NodeID: "n", Logger: discardLogger(), FlushInterval: time.Hour, Retention: 48 * time.Hour})}
+	defer p.logs.shutdown()
+	spec := p.LogsPruneTaskSpec()
+	if spec.Name != LogsPruneTask || spec.Scope != core.TaskCluster || spec.Every != time.Hour {
+		t.Fatalf("prune task: %+v", spec)
+	}
+	if _, err := spec.Handler(context.Background(), core.TaskRun{Name: spec.Name}); err != nil {
+		t.Fatal(err)
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if len(st.pruned) != 1 || time.Since(st.pruned[0]) < 47*time.Hour {
+		t.Fatalf("pruned %v", st.pruned)
 	}
 }
 

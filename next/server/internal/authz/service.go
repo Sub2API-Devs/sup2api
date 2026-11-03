@@ -63,8 +63,9 @@ func New(d Deps) *Service {
 	return &Service{db: d.DB, bus: d.Bus, plugins: d.Plugins, poll: d.PollInterval, users: map[int64]core.PermissionSet{}}
 }
 
-// Start syncs the core catalog and built-in roles, subscribes to
-// authz:changed and starts the fallback version poller (stopped with ctx).
+// Start syncs the core catalog and built-in roles and subscribes to
+// authz:changed (stopped with ctx); the fallback version poll is the node
+// task RegisterTasks registers.
 func (s *Service) Start(ctx context.Context) error {
 	if err := s.SyncCore(ctx); err != nil {
 		return err
@@ -80,19 +81,35 @@ func (s *Service) Start(ctx context.Context) error {
 		})
 		go func() { <-ctx.Done(); cancel() }()
 	}
-	go func() {
-		t := time.NewTicker(s.poll)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-				s.refreshVersion(ctx)
-			}
-		}
-	}()
 	return nil
+}
+
+// VersionPollTask is the node task that reads the authz version, in case an
+// authz:changed broadcast was missed.
+const VersionPollTask = "core.authz.version_poll"
+
+// RegisterTasks registers the version poll (every PollInterval, on every
+// node from start).
+func (s *Service) RegisterTasks(tasks core.Tasks) error {
+	return tasks.Register(core.TaskSpec{
+		Name:  VersionPollTask,
+		Title: core.LocalizedText{"en": "Refresh the permission version", "zh": "刷新权限版本"},
+		Description: core.LocalizedText{
+			"en": "Reads the permission version so this node drops cached permissions even when it missed a change broadcast.",
+			"zh": "读取权限版本，即使本节点错过了变更广播，也会丢弃过期的权限缓存。",
+		},
+		Scope:   core.TaskNode,
+		Every:   s.poll,
+		Timeout: 10 * time.Second,
+		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+			v, err := s.currentVersion(ctx)
+			if err != nil {
+				return core.TaskResult{}, err
+			}
+			s.invalidate(v)
+			return core.TaskResult{}, nil
+		},
+	})
 }
 
 // OnChange registers fn to run (asynchronously) whenever the authz version

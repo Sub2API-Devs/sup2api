@@ -2,7 +2,6 @@ package account
 
 import (
 	"context"
-	"log/slog"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -62,39 +61,11 @@ const (
 	lifecycleStatusSweepPage = 50
 )
 
-func (s *Service) runLifecycleStatusSweep(ctx context.Context) {
-	ticker := time.NewTicker(lifecycleStatusSweepEvery)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-		if s.d.CanWork != nil && !s.d.CanWork() {
-			continue
-		}
-		if _, err := s.sweepLifecycleStatus(ctx); err != nil && ctx.Err() == nil {
-			slog.WarnContext(ctx, "account lifecycle synchronization recheck failed", "err", err)
-		}
-	}
-}
-
 // sweepLifecycleStatus rereads the synchronization of accounts not applied
 // for a while and returns how many changed. Every read is written back, so
 // unchanged rows move behind the others (oldest first) instead of filling
 // every page; a read that fails leaves the row as it is.
 func (s *Service) sweepLifecycleStatus(ctx context.Context) (int, error) {
-	if s.d.Locker != nil {
-		lock, ok, err := s.d.Locker.TryLock(ctx, "account:lifecycle-status:sweep", 2*time.Minute)
-		if err != nil || !ok {
-			return 0, err
-		}
-		defer lock.Release()
-		var cancel context.CancelFunc
-		ctx, cancel = core.KeepLock(ctx, lock)
-		defer cancel()
-	}
 	type stale struct {
 		id, generation int64
 		pluginKey, typ string

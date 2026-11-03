@@ -147,11 +147,12 @@ func TestAccountPreparationCleanupHonorsRenewal(t *testing.T) {
 	if _, err := e.db.Pool.Exec(ctx, `UPDATE account_preparations SET expires_at=now()-interval '1 minute' WHERE key=$1`, key); err != nil {
 		t.Fatal(err)
 	}
-	if err := e.svc.sweepPreparations(ctx); err != nil || resource.cancelled != 1 {
-		t.Fatalf("expired preparation was not swept: %v", err)
+	tasks := registerTasks(t, e.svc)
+	if res, err := tasks.run(t, ctx, PreparationCleanupTask); err != nil || res.Count != 1 || resource.cancelled != 1 {
+		t.Fatalf("expired preparation was not swept: %+v %v", res, err)
 	}
-	if err := e.svc.sweepPreparations(ctx); err != nil || resource.cancelled != 1 {
-		t.Fatalf("cleanup was not idempotent: %v", err)
+	if res, err := tasks.run(t, ctx, PreparationCleanupTask); err != nil || res.Count != 0 || resource.cancelled != 1 {
+		t.Fatalf("cleanup was not idempotent: %+v %v", res, err)
 	}
 }
 
@@ -241,9 +242,11 @@ func TestLifecycleStatusSweepRereadsStaleStates(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	tasks := registerTasks(t, e.svc)
 	sweep := func(want int, status, code string) {
 		t.Helper()
-		got, err := e.svc.sweepLifecycleStatus(ctx)
+		res, err := tasks.run(t, ctx, LifecycleStatusTask)
+		got := res.Count
 		var state core.AccountSynchronization
 		if err == nil {
 			err = e.db.Pool.QueryRow(ctx, `SELECT status,code FROM account_lifecycle_sync WHERE account_id=$1`, id).Scan(&state.Status, &state.Code)
@@ -278,7 +281,7 @@ func TestLifecycleStatusSweepRereadsStaleStates(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	if _, err := e.svc.sweepLifecycleStatus(ctx); err != nil {
+	if _, err := tasks.run(t, ctx, LifecycleStatusTask); err != nil {
 		t.Fatal(err)
 	}
 	reader.during = nil

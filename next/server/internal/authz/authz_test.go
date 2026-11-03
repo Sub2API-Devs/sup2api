@@ -320,13 +320,23 @@ func TestAuthorizerCacheInvalidation(t *testing.T) {
 	mustCan(t, a, uid, "user:read", true)
 	mustCan(t, b, uid, "user:read", true)
 
-	// Without a broadcast the poller catches up.
+	// Without a broadcast the version poll task catches up.
 	c := newService(t, db, nil, nil)
+	var poll core.TaskSpec
+	if err := c.RegisterTasks(taskRecorder(func(spec core.TaskSpec) { poll = spec })); err != nil {
+		t.Fatal(err)
+	}
+	if poll.Name != VersionPollTask || poll.Scope != core.TaskNode || poll.RequireWork || poll.Every != 100*time.Millisecond {
+		t.Fatalf("version poll spec: %+v", poll)
+	}
 	mustCan(t, c, uid, "user:read", true)
 	if _, err := a.SetRolePermissions(ctx, admin, roleID(t, a, RoleUser), userRolePermissions); err != nil {
 		t.Fatal(err)
 	}
-	eventually(t, func() bool { ok, _ := c.Can(ctx, uid, "user:read"); return !ok })
+	if _, err := poll.Handler(ctx, core.TaskRun{Name: poll.Name}); err != nil {
+		t.Fatal(err)
+	}
+	mustCan(t, c, uid, "user:read", false)
 
 	// Disabled users have no permissions.
 	su := addUser(t, a, "s@x.com", RoleSuperAdmin)
@@ -679,4 +689,14 @@ func TestCoreMenuSectionsMatchManifest(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Fatalf("coreMenus sections %v, manifest.CoreMenuSections %v", got, want)
 	}
+}
+
+// taskRecorder is a core.Tasks that hands each registered spec to fn.
+type taskRecorder func(core.TaskSpec)
+
+func (f taskRecorder) Register(spec core.TaskSpec) error                          { f(spec); return nil }
+func (taskRecorder) Trigger(context.Context, string) error                        { return nil }
+func (taskRecorder) Enqueue(context.Context, string, any, core.EnqueueOpts) error { return nil }
+func (taskRecorder) EnqueueTx(context.Context, pgx.Tx, string, any, core.EnqueueOpts) error {
+	return nil
 }

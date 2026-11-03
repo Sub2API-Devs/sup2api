@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/jackc/pgx/v5"
 )
@@ -225,33 +226,36 @@ func (s *SharedAssets) renew(ctx context.Context) error {
 	return err
 }
 
-func (s *SharedAssets) Start(ctx context.Context) func(context.Context) {
-	run, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		tick := time.NewTicker(s.opts.Interval)
-		defer tick.Stop()
-		for {
-			check, stop := context.WithTimeout(run, 30*time.Second)
-			var err error
-			if s.readyUntil.Load() == nil {
-				err = s.Publish(check)
-			} else {
-				err = s.renew(check)
-			}
-			stop()
-			if err != nil && run.Err() == nil {
-				s.opts.Logger.Warn("shared console assets are not converged", "err", err)
-			}
-			select {
-			case <-run.Done():
-				return
-			case <-tick.C:
-			}
-		}
-	}()
-	return func(context.Context) { cancel(); <-done }
+// AssetLeaseTask is the node task that publishes this node's console build
+// and renews its lease.
+const AssetLeaseTask = "core.webui.asset_lease"
+
+// RegisterTasks registers the asset lease task: on every node from start,
+// once at once (readiness waits for it) and then every Interval.
+func (s *SharedAssets) RegisterTasks(tasks core.Tasks) error {
+	return tasks.Register(core.TaskSpec{
+		Name:  AssetLeaseTask,
+		Title: core.LocalizedText{"en": "Renew the console asset lease", "zh": "续期前端资源租约"},
+		Description: core.LocalizedText{
+			"en": "Publishes this node's console build to the shared asset store and renews its lease, so every node can serve the assets of every running build.",
+			"zh": "把本节点的控制台构建发布到共享资源表并续期租约，让每个节点都能提供所有在运行版本的前端资源。",
+		},
+		Scope:      core.TaskNode,
+		Every:      s.opts.Interval,
+		Timeout:    30 * time.Second,
+		RunOnStart: true,
+		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+			return core.TaskResult{}, s.converge(ctx)
+		},
+	})
+}
+
+// converge publishes the build until it is ready, then renews its lease.
+func (s *SharedAssets) converge(ctx context.Context) error {
+	if s.readyUntil.Load() == nil {
+		return s.Publish(ctx)
+	}
+	return s.renew(ctx)
 }
 
 func (s *SharedAssets) Read(ctx context.Context, name string) ([]byte, error) {

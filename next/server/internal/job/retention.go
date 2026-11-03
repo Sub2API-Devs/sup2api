@@ -3,40 +3,34 @@ package job
 import (
 	"context"
 	"time"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 )
 
-// retentionLoop trims run history once per period on the node that wins
-// lock jobs:retention (left to expire so other nodes skip the period).
-func (s *Scheduler) retentionLoop() {
-	defer s.wg.Done()
-	t := time.NewTimer(min(time.Minute, s.opts.RetentionInterval))
-	defer t.Stop()
-	for {
-		select {
-		case <-s.ctx.Done():
-			return
-		case <-t.C:
-		}
-		t.Reset(s.opts.RetentionInterval)
-		if !s.opts.Executor.Allowed() {
-			continue
-		}
-		ttl := s.opts.RetentionInterval - s.opts.RetentionInterval/10
-		_, ok, err := s.locker.TryLock(s.ctx, "jobs:retention", ttl)
-		if err != nil || !ok {
-			continue
-		}
-		if n, err := s.PurgeRuns(s.ctx); err != nil {
-			s.log.Warn("job run retention failed", "err", err)
-		} else if n > 0 {
-			s.log.Info("job run retention purged runs", "count", n)
-		}
+// RetentionTask is the cluster task that trims plugin job run history.
+const RetentionTask = "core.jobs.retention"
+
+// RetentionTaskSpec runs PurgeRuns every RetentionInterval on one node.
+func (s *Scheduler) RetentionTaskSpec() core.TaskSpec {
+	return core.TaskSpec{
+		Name:  RetentionTask,
+		Title: core.LocalizedText{"en": "Trim plugin job runs", "zh": "清理插件任务记录"},
+		Description: core.LocalizedText{
+			"en": "Keeps the newest runs of every plugin job and marks runs whose node went away as failed.",
+			"zh": "每个插件任务只保留最近的运行记录，并把所在节点已消失的运行标为失败。",
+		},
+		Scope:   core.TaskCluster,
+		Every:   s.opts.RetentionInterval,
+		Timeout: 5 * time.Minute,
+		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+			n, err := s.PurgeRuns(ctx)
+			return core.TaskResult{Count: int(n)}, err
+		},
 	}
 }
 
 // PurgeRuns keeps the newest KeepRuns runs per (plugin, job) and marks runs
-// stuck in "running" for longer than StaleAfter as failed. It does not take
-// the retention lock.
+// stuck in "running" for longer than StaleAfter as failed.
 func (s *Scheduler) PurgeRuns(ctx context.Context) (int64, error) {
 	if _, err := s.db.Pool.Exec(ctx, `UPDATE plugin_job_runs
 		SET status = $1, finished_at = now(), message = 'abandoned: the node running it went away'

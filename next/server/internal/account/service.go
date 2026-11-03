@@ -97,8 +97,9 @@ type Service struct {
 	// node when there is no cluster Locker (CONTRACTS §48).
 	refreshLocal sync.Map // account id -> *sync.Mutex
 
-	// sweepRounds counts the rounds runAutomaticStateSweep finished.
-	sweepRounds atomic.Int64
+	// tasks registers the quota mirror's node task once it is warm
+	// (RegisterTasks; nil without the task framework).
+	tasks atomic.Pointer[core.Tasks]
 }
 
 type groupSnap struct {
@@ -185,13 +186,10 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 // passive quota samples and keeps the quota mirror loaded until ctx is done.
 func (s *Service) Run(ctx context.Context) {
 	go s.quota.run(ctx)
-	go s.quotas().run(ctx)
+	go s.runQuotaMirror(ctx)
 	go s.runQuotaSweep(ctx)
 	go s.runRefreshSweep(ctx)
-	go s.runAutomaticStateSweep(ctx)
 	go s.runUsageLimitsLoop(ctx)
-	go s.runPreparationSweep(ctx)
-	go s.runLifecycleStatusSweep(ctx)
 	defer s.watchChanges(ctx)()
 	tk := time.NewTicker(flushInterval)
 	defer tk.Stop()

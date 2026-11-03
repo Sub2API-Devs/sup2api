@@ -97,7 +97,11 @@ type quotaMirror struct {
 	failed   map[string]time.Time // id set -> when its read failed
 	flight   singleflight.Group
 	loggedAt atomic.Int64  // unix nanos of the last read failure logged
-	kick     chan struct{} // asks run for a full reload now
+	kick     chan struct{} // asks warm to retry now
+	// pending: a reload was asked for since the reload task last began;
+	// trigger runs the reload task now (set once it is registered).
+	pending atomic.Bool
+	trigger atomic.Pointer[func()]
 }
 
 type quotaMirrorEntry struct {
@@ -121,14 +125,22 @@ func newQuotaMirror(load quotaLoader, loadAll quotaScopeLoader) *quotaMirror {
 		entries: map[int64]*quotaMirrorEntry{}, failed: map[string]time.Time{}, kick: make(chan struct{}, 1)}
 }
 
-// reloadSoon asks run for a full reload now (the set of account types
-// declaring modelAvailability may have changed); it never blocks.
+// reloadSoon asks for a full reload now (the set of account types declaring
+// modelAvailability may have changed); it never blocks.
 func (m *quotaMirror) reloadSoon() {
+	m.pending.Store(true)
+	if trigger := m.trigger.Load(); trigger != nil {
+		go (*trigger)()
+		return
+	}
 	select {
 	case m.kick <- struct{}{}:
 	default:
 	}
 }
+
+// setTrigger makes reloadSoon run the reload task.
+func (m *quotaMirror) setTrigger(f func()) { m.trigger.Store(&f) }
 
 func (e *quotaMirrorEntry) version() uint64 {
 	if e == nil {
@@ -397,31 +409,44 @@ func (m *quotaMirror) reload(ctx context.Context) error {
 	return err
 }
 
-// run loads the mirror at start, retrying with backoff, then reloads it
-// every quotaMirrorReload, and at once when asked (reloadSoon), until ctx is
-// done.
-func (m *quotaMirror) run(ctx context.Context) {
+// warm loads the mirror at start, retrying with backoff (at once when asked
+// by reloadSoon), until a load succeeds (true) or ctx is done (false).
+func (m *quotaMirror) warm(ctx context.Context) bool {
 	delay := quotaMirrorWarmMin
 	for {
-		wait := quotaMirrorReload
-		if err := m.reload(ctx); err != nil {
-			if ctx.Err() != nil {
-				return
-			}
-			slog.WarnContext(ctx, "account: reload quota snapshots", "err", err, "retry_in", delay)
-			wait = delay
-			delay = min(delay*2, quotaMirrorWarmMax)
-		} else {
-			delay = quotaMirrorWarmMin
+		m.pending.Store(false)
+		err := m.reload(ctx)
+		if err == nil {
+			return true
 		}
-		t := time.NewTimer(wait)
+		if ctx.Err() != nil {
+			return false
+		}
+		slog.WarnContext(ctx, "account: reload quota snapshots", "err", err, "retry_in", delay)
+		t := time.NewTimer(delay)
+		delay = min(delay*2, quotaMirrorWarmMax)
 		select {
 		case <-ctx.Done():
 			t.Stop()
-			return
+			return false
 		case <-t.C:
 		case <-m.kick:
 			t.Stop()
+		}
+	}
+}
+
+// reloadTask is the handler of core.account.quota_mirror: one full reload,
+// repeated while reloadSoon asked for another during it (its trigger is
+// skipped while this run is going).
+func (m *quotaMirror) reloadTask(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+	for {
+		m.pending.Store(false)
+		if err := m.reload(ctx); err != nil {
+			return core.TaskResult{}, err
+		}
+		if !m.pending.Load() {
+			return core.TaskResult{}, nil
 		}
 	}
 }

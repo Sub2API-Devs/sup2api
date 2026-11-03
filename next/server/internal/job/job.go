@@ -46,7 +46,7 @@ type Options struct {
 	DefaultTimeout    time.Duration        // when timeoutSec is 0 (60s)
 	LockGrace         time.Duration        // slot lock TTL = timeout + LockGrace (60s)
 	KeepRuns          int                  // runs kept per (plugin, job) (1000)
-	RetentionInterval time.Duration        // retention period (1h)
+	RetentionInterval time.Duration        // retention period (1h), the schedule of core.jobs.retention
 	// StaleAfter marks "running" rows older than this as failed during
 	// retention (their node died). Must exceed the maximum job timeout (25h).
 	StaleAfter time.Duration
@@ -151,9 +151,8 @@ func (s *Scheduler) Start(ctx context.Context) error {
 		}
 	})
 	s.rebuildLocked(s.registry.Current(), time.Now())
-	s.wg.Add(2)
+	s.wg.Add(1)
 	go s.loop()
-	go s.retentionLoop()
 	return nil
 }
 

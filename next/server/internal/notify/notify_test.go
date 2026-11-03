@@ -294,7 +294,13 @@ func TestDeliveryLeaseAndMissingChannel(t *testing.T) {
 	if s.step(ctx) {
 		t.Fatal("claimed a row past MaxAttempts")
 	}
-	s.purge(ctx)
+	purge := s.PurgeTaskSpec()
+	if purge.Name != PurgeTask || purge.Scope != core.TaskCluster || purge.Every != time.Hour {
+		t.Fatalf("purge task: %+v", purge)
+	}
+	if _, err := purge.Handler(ctx, core.TaskRun{Name: purge.Name}); err != nil {
+		t.Fatal(err)
+	}
 	if st, attempts, e := status(t, db, last.ID); st != "failed" || attempts != 3 || e != "the last attempt did not finish" {
 		t.Fatalf("expired last attempt: %s %d %q", st, attempts, e)
 	}

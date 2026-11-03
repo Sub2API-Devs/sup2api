@@ -142,7 +142,11 @@ func TestPluginWritesAndList(t *testing.T) {
 	if !w.Flush(ctx) {
 		t.Fatal("flush")
 	}
-	if err := w.Purge(ctx); err != nil {
+	purge := w.PurgeTask()
+	if purge.Name != PluginWritesPurgeTask || purge.Scope != core.TaskCluster || purge.Every != time.Hour {
+		t.Fatalf("purge task: %+v", purge)
+	}
+	if _, err := purge.Handler(ctx, core.TaskRun{Name: purge.Name}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO audit_logs (action, target_type, target_id) VALUES ('plugin.enable', 'plugin', 'other')`); err != nil {

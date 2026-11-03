@@ -233,34 +233,6 @@ func (s *Service) afterStatusChange(ctx context.Context, id int64, pluginKey, ty
 	s.kickCCGateway(id, pluginKey, typ)
 }
 
-// runAutomaticStateSweep writes expired timed automatic disables back to
-// active, with their audit row and status event. Routing does not wait for
-// it: Candidates already serves an account whose release time has passed
-// (lazy expiry), so this is bookkeeping and runs rarely, once at start for
-// whatever expired while the core was down and then every
-// automaticStateSweepInterval. Usage limits keep their own, shorter loop.
-func (s *Service) runAutomaticStateSweep(ctx context.Context) {
-	ticker := time.NewTicker(automaticStateSweepInterval)
-	defer ticker.Stop()
-	for first := true; ; first = false {
-		if !first {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-			}
-		}
-		if s.d.CanWork == nil || s.d.CanWork() {
-			if n, err := s.SweepAutomaticState(ctx); err != nil && ctx.Err() == nil {
-				slog.WarnContext(ctx, "account: automatic state recovery", "err", err)
-			} else if n > 0 {
-				slog.InfoContext(ctx, "account: expired automatic disables written back", "accounts", n)
-			}
-		}
-		s.sweepRounds.Add(1)
-	}
-}
-
 func (s *Service) runUsageLimitsLoop(ctx context.Context) {
 	ticker := time.NewTicker(usageLimitsInterval)
 	defer ticker.Stop()

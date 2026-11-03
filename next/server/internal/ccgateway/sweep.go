@@ -14,7 +14,7 @@ import (
 )
 
 // Draft sweep (CONTRACTS §49.13): abandoned, failed or cancelled drafts are
-// removed every minute by one node at a time, and so are runtimes a
+// removed every minute by one node (core.ccgateway.draft_sweep), and so are runtimes a
 // re-authorization replaced (§49.17) once requests still running on them had
 // time to finish.
 var (
@@ -25,26 +25,27 @@ var (
 	retiredGrace = 70 * time.Minute // longer than the one-hour model request deadline
 )
 
-const sweepLockKey = "ccgateway:drafts:sweep"
+// DraftSweepTask is the cluster task that runs SweepDrafts.
+const DraftSweepTask = "core.ccgateway.draft_sweep"
 
-func (s *Service) runSweep(ctx context.Context) {
-	t := time.NewTicker(sweepEvery)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-		if s.CanWork != nil && !s.CanWork() {
-			continue
-		}
-		n, e := s.SweepDrafts(ctx)
-		if e != nil && ctx.Err() == nil {
-			slog.WarnContext(ctx, "CCGateway draft sweep", "err", e)
-		} else if n > 0 {
-			slog.InfoContext(ctx, "CCGateway draft sweep", "removed", n)
-		}
+func draftSweepSpec(s *Service) core.TaskSpec {
+	return core.TaskSpec{
+		Name:  DraftSweepTask,
+		Title: core.LocalizedText{"en": "Clean up abandoned drafts and orphaned runtimes", "zh": "清理废弃草稿和孤立运行环境"},
+		Description: core.LocalizedText{
+			"en": "Removes draft runtimes that were abandoned or are too old, runtimes a re-authorization replaced, and draft runtimes on the controller the core does not know.",
+			"zh": "删除被放弃或过旧的草稿运行环境、被重新授权替换的运行环境，以及控制器上核心不认识的草稿运行环境。",
+		},
+		Scope:   core.TaskCluster,
+		Every:   sweepEvery,
+		Timeout: 50 * time.Second,
+		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+			n, err := s.SweepDrafts(ctx)
+			if n > 0 {
+				slog.InfoContext(ctx, "CCGateway draft sweep", "removed", n)
+			}
+			return core.TaskResult{Count: n}, err
+		},
 	}
 }
 
@@ -53,21 +54,11 @@ func (s *Service) runSweep(ctx context.Context) {
 // table, (2) runtimes retired by a re-authorization more than retiredGrace
 // ago, and (3) draft runtimes the controller lists that the core does not
 // know, older than orphanAge. Runtimes an account uses are never touched. It
-// runs only with account runtimes on and, with a Locker, on one node at a
-// time. Returns how many runtimes were removed.
+// runs only with account runtimes on (core.ccgateway.draft_sweep runs it on
+// one node at a time). Returns how many runtimes were removed.
 func (s *Service) SweepDrafts(ctx context.Context) (int, error) {
 	if !s.runtimesOn(ctx) {
 		return 0, nil
-	}
-	if s.Locker != nil {
-		lk, ok, e := s.Locker.TryLock(ctx, sweepLockKey, 2*time.Minute)
-		if e != nil || !ok {
-			return 0, e
-		}
-		defer lk.Release()
-		var cancel context.CancelFunc
-		ctx, cancel = core.KeepLock(ctx, lk)
-		defer cancel()
 	}
 	// A failed query on the draft pass is a hard failure: nothing else runs,
 	// so a database that cannot be read never turns into remote deletions.

@@ -80,24 +80,22 @@ func TestTimedAutoDisableExpiresLazily(t *testing.T) {
 	}
 }
 
-// The sweep that writes expired disables back runs once at start, for what
-// expired while the core was down.
-func TestAutomaticStateSweepRunsAtStart(t *testing.T) {
+// The task that writes expired disables back runs once when a node takes
+// over, for what expired while the core was down.
+func TestAutomaticRecoveryTaskRunsAtStart(t *testing.T) {
 	e := setup(t)
 	id := e.mkRawAccount("anthropic", "apikey", "overdue", "sk-good-key-123", true)
 	if _, err := e.db.Pool.Exec(t.Context(), `UPDATE accounts SET status='auto_disabled',auto_disabled_until=clock_timestamp()-interval '1 hour' WHERE id=$1`, id); err != nil {
 		t.Fatal(err)
 	}
-	restarted := New(e.svc.d)
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
-	go restarted.runAutomaticStateSweep(ctx)
-	deadline := time.Now().Add(2 * time.Second)
-	for e.accountStatus(id) != "active" {
-		if time.Now().After(deadline) {
-			t.Fatal("expired disable not written back at start")
-		}
-		time.Sleep(20 * time.Millisecond)
+	tasks := registerTasks(t, New(e.svc.d))
+	spec := tasks.spec(t, AutomaticRecoveryTask)
+	if spec.Scope != core.TaskCluster || !spec.RunOnStart || spec.Every != time.Minute {
+		t.Fatalf("automatic recovery spec: %+v", spec)
+	}
+	res, err := spec.Handler(t.Context(), core.TaskRun{Name: spec.Name, Attempt: 1})
+	if err != nil || res.Count != 1 || e.accountStatus(id) != "active" {
+		t.Fatalf("expired disable not written back: %+v %v %s", res, err, e.accountStatus(id))
 	}
 }
 

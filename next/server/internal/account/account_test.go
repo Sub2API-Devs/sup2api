@@ -718,13 +718,21 @@ func setupWith(t *testing.T, authz fakeAuthz) *env {
 	e.prx = proxy.New(db, cipher, e.bus, proxy.Options{AllowPrivate: true})
 	e.svc = New(Deps{DB: db, Redis: rdb, Cipher: cipher, Registry: e.reg, Proxies: e.prx, Resolver: e.prx, Authorizer: authz,
 		Events: dbEvents{}, Slots: fakeSlots{}, Limiter: NewLimiter(rdb), Bus: e.bus, Converters: fakeConverters{}, AllowPrivateUpstream: true})
+	// Run warms the quota mirror, which reads the account types: wait for that
+	// first read so it does not race the types a test adds.
+	warmed := make(chan struct{})
+	var warmOnce sync.Once
+	e.svc.quotaMirror = newQuotaMirror(e.svc.readQuotas, func(ctx context.Context) (*store.QuotaRead, error) {
+		defer warmOnce.Do(func() { close(warmed) })
+		return e.svc.readAvailabilityQuotas(ctx)
+	})
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go e.svc.Run(ctx)
-	// Let the start-up recovery round pass, so it does not race the rows a
-	// test writes directly.
-	for deadline := time.Now().Add(5 * time.Second); e.svc.sweepRounds.Load() == 0 && time.Now().Before(deadline); {
-		time.Sleep(time.Millisecond)
+	select {
+	case <-warmed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("quota mirror not warmed")
 	}
 	engine := gin.New()
 	e.svc.RegisterRoutes(httpapi.NewRouter(engine, fakeTokens{}, authz))

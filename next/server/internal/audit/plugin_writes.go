@@ -35,8 +35,9 @@ const (
 	maxSummaryDepth  = 4
 )
 
-// purgeInterval is how often PluginWrites.Run deletes expired rows.
-const purgeInterval = time.Hour
+// PluginWritesPurgeTask is the cluster task that deletes expired plugin
+// route write rows.
+const PluginWritesPurgeTask = "core.audit.plugin_writes_purge"
 
 // Bounds of the background writer.
 const (
@@ -47,9 +48,9 @@ const (
 	drainTimeout = 5 * time.Second
 )
 
-// PluginWrites records core.PluginWrite rows (core.PluginWriteAuditor) and,
-// while Run runs, deletes them after Retention (default
-// PluginWriteRetention).
+// PluginWrites records core.PluginWrite rows (core.PluginWriteAuditor);
+// core.audit.plugin_writes_purge (PurgeTask) deletes them after Retention
+// (default PluginWriteRetention).
 //
 // AuditPluginWrite never waits on the database: it summarizes the body and
 // hands the row to a bounded queue that one background goroutine writes
@@ -58,10 +59,7 @@ const (
 // §75.2).
 type PluginWrites struct {
 	DB        *store.DB
-	Locker    core.Locker
 	Retention time.Duration
-	// CanRun gates the purge (background admission); nil always runs it.
-	CanRun func() bool
 	// QueueSize bounds the rows waiting to be written (default 1024).
 	QueueSize int
 
@@ -149,41 +147,36 @@ func (p *PluginWrites) Flush(ctx context.Context) bool {
 	}
 }
 
-// Run deletes expired rows once per purgeInterval, on the node that wins
-// lock audit:plugin-writes (left to expire so other nodes skip the period),
-// until ctx ends. Then it waits (at most drainTimeout) for the queued rows
+// Run waits until ctx ends, then (at most drainTimeout) for the queued rows
 // to be written, so a node shutting down keeps its last audit rows.
 func (p *PluginWrites) Run(ctx context.Context) {
-	defer func() {
-		dctx, cancel := context.WithTimeout(context.Background(), drainTimeout)
-		defer cancel()
-		if !p.Flush(dctx) {
-			slog.Warn("audit: plugin route writes still queued at shutdown")
-		}
-	}()
-	t := time.NewTimer(time.Minute)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-		t.Reset(purgeInterval)
-		if p.CanRun != nil && !p.CanRun() {
-			continue
-		}
-		if _, ok, err := p.Locker.TryLock(ctx, "audit:plugin-writes", purgeInterval-purgeInterval/10); err != nil || !ok {
-			continue
-		}
-		if err := p.Purge(ctx); err != nil {
-			slog.WarnContext(ctx, "audit: purge plugin route writes", "err", err)
-		}
+	<-ctx.Done()
+	dctx, cancel := context.WithTimeout(context.Background(), drainTimeout)
+	defer cancel()
+	if !p.Flush(dctx) {
+		slog.Warn("audit: plugin route writes still queued at shutdown")
 	}
 }
 
-// Purge deletes the rows older than the retention, 10000 at a time. It does
-// not take the lock.
+// PurgeTask runs Purge hourly on one node.
+func (p *PluginWrites) PurgeTask() core.TaskSpec {
+	return core.TaskSpec{
+		Name:  PluginWritesPurgeTask,
+		Title: core.LocalizedText{"en": "Purge old plugin audit rows", "zh": "清理旧插件审计"},
+		Description: core.LocalizedText{
+			"en": "Deletes the audit rows of plugin route writes older than their retention.",
+			"zh": "删除超过保留期的插件路由写操作审计记录。",
+		},
+		Scope:   core.TaskCluster,
+		Every:   time.Hour,
+		Timeout: 5 * time.Minute,
+		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+			return core.TaskResult{}, p.Purge(ctx)
+		},
+	}
+}
+
+// Purge deletes the rows older than the retention, 10000 at a time.
 func (p *PluginWrites) Purge(ctx context.Context) error {
 	retention := p.Retention
 	if retention <= 0 {

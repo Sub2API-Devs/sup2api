@@ -143,6 +143,28 @@ func newProvider(st logStore, opts Options) *Provider {
 	return p
 }
 
+// LogsPruneTask is the cluster task that deletes old egress log rows.
+const LogsPruneTask = "core.egress.logs_prune"
+
+// LogsPruneTaskSpec deletes the log rows past the retention hourly, on one
+// node (every node used to).
+func (p *Provider) LogsPruneTaskSpec() core.TaskSpec {
+	return core.TaskSpec{
+		Name:  LogsPruneTask,
+		Title: core.LocalizedText{"en": "Delete old egress logs", "zh": "删除 7 天前出口日志"},
+		Description: core.LocalizedText{
+			"en": "Deletes plugin egress connection logs older than their retention.",
+			"zh": "删除超过保留期的插件出口连接日志。",
+		},
+		Scope:   core.TaskCluster,
+		Every:   time.Hour,
+		Timeout: 5 * time.Minute,
+		Handler: func(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+			return core.TaskResult{}, p.logs.prune(ctx)
+		},
+	}
+}
+
 // addrKey normalizes "host:port" for comparisons.
 func addrKey(a string) (string, bool) {
 	h, port, err := net.SplitHostPort(strings.TrimSpace(a))

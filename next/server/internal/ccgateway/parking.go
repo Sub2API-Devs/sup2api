@@ -95,10 +95,9 @@ func mergeParking(c *Config, old Config) error {
 	return nil
 }
 
-// RegisterTasks registers the scheduled tasks of CCGateway.
-func (s *Service) RegisterTasks(tasks core.Tasks) error {
-	return tasks.Register(core.TaskSpec{
-		Name:  ParkRuntimesTask,
+// parkRuntimesSpec is the task that stops the runtimes of red accounts.
+func parkRuntimesSpec(s *Service) core.TaskSpec {
+	return core.TaskSpec{Name: ParkRuntimesTask,
 		Title: core.LocalizedText{"en": "Stop runtimes of red accounts", "zh": "停止红色账号的容器"},
 		Description: core.LocalizedText{
 			"en": "Stops the container of a CCGateway account that has been disabled (red) for the configured hours; testing or re-authorizing it starts it again.",
@@ -108,7 +107,7 @@ func (s *Service) RegisterTasks(tasks core.Tasks) error {
 		Every:   time.Minute,
 		Timeout: 50 * time.Second,
 		Handler: s.parkRuntimes,
-	})
+	}
 }
 
 type parkedRuntime struct {
