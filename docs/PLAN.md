@@ -22,8 +22,7 @@ original/             L0 从 ELF 提取的 2880 个模块，只读真值
 analysis/             L1 AST 事实（scan）、旧版事实（reference）、npm 指纹（vendor）、匹配结果（match）、模块切分（segments）
 naming/               L2 命名表（每个领域一个 JSON，人工/agent 维护，可复现）
 runnable/             L3a 改名后的 chunk 级代码，结构与 original 一一对应，可直接用 Bun 运行（验证改名正确）
-src/                  L3b 阅读用源码树：按原始模块切开、按旧版目录布局摆放、格式化、带出处注释
-vendor/               L3b 第三方包（按 npm 包/文件还原），与 src 分开
+reconstructed/        L3b 阅读树：src/（一方代码，按源文件重新聚合、按旧版目录布局摆放、格式化、带出处行）、vendor/（第三方包，按 npm 包/文件还原）、runtime/、assets/、manifest.json、symbols.jsonl
 docs/                 文档：总览、手册（按子系统）、过程记录、方法
 tools/                全部流水线工具
 ```
@@ -39,8 +38,8 @@ L3a 负责"证明改名没改坏"；L3b 负责"让人和 AI 读懂"。两者使�
 5. `tools/ast/match.mjs`：一方代码匹配（指纹 → 调用图传播 → chunk 布局插值）。
 6. `tools/segment/*`：把每个 chunk 切成源模块段，确定每段的目标路径。
 7. `tools/rename/*`：作用域安全改名 + α 等价校验（改名前后 AST 只差绑定名）。
-8. `tools/emit/*`：生成 `runnable/` 与 `src/`、`vendor/`。
-9. `tools/verify/*`：Bun 1.4.4 运行 `--version`/`--help`/离线假上游 `-p`，与官方二进制对拍请求体。
+8. `tools/rename/apply.mjs` 生成 `runnable/`，`tools/emit/readable.mjs` 生成 `reconstructed/`；全流程入口 `tools/pipeline.sh`。
+9. `tools/verify/*`：Bun 1.4.4 在隔离沙箱运行 original 与 runnable（54 个场景，假上游记录请求体逐字段对拍）；`readable-check.mjs` 静态校验阅读树。
 
 ## 4. 团队分工（一个目录只有一个写者）
 
@@ -60,3 +59,18 @@ L3a 负责"证明改名没改坏"；L3b 负责"让人和 AI 读懂"。两者使�
 - 可读：`src/` 一方代码按子系统目录组织，顶层符号有名字（来源标注：reference / vendor / semantic / auto）。
 - 可理解：手册覆盖启动、查询循环、API、工具、权限与沙箱、MCP/插件/Skill/Hook、UI、配置与会话、多代理、遥测，函数级入口可查。
 - AI 友好：`AGENTS.md`、`docs/INDEX.md`、`analysis/symbols.json`（符号 → 文件/行/说明）。
+
+## 6. 实际执行情况（2026-11-03）
+
+计划按三个阶段执行，团队共 24 个成员：
+
+| 阶段 | 成员 | 产出 |
+|---|---|---|
+| 一：基础设施 | vendor、rename、runtime | 第三方识别（255 个 npm 包）、作用域安全改名 + α 校验、Bun 隔离运行与 54 场景对拍 |
+| 二：领域 | dom-bootstrap、dom-query、dom-tools、dom-permissions、dom-extensions、dom-state、dom-ui、dom-ink、dom-agents、dom-commands | 10 本子系统手册、约 2 万条语义名、1.3 万条声明说明 |
+| 三：放置与整合 | place-g0…g7、place-rest、fixer、docs-writer | 把 2.1.316 新增的约 18 MB 一方代码放进约 4,000 个源文件；修正领域成员指出的 1,728 处切分错误与 175 处命名冲突；架构总览、变化总表、索引 |
+
+中途调整：
+- 发现 Bun 按顶层语句拆 chunk（第二节的"按 chunk 切段"改为"按源文件重新聚合"）。
+- 发现门面 chunk 给出原始导出名（来源优先级最高）。
+- 原计划由领域成员处理未归属代码，实际未归属部分（主要是 316 新功能）有 18 MB，改为单独的放置阶段。
