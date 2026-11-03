@@ -218,3 +218,28 @@
 {"file":"chunk-yf82ynbr.js","key":"@3230","name":"PATH_SEGMENT_SPLIT_RES","source":"semantic","confidence":0.97,"note":"原名 MAX_PATH_SEGMENT_LENGTH，初值 一组用于按分隔符切分的正则"}
 {"file":"chunk-yf82ynbr.js","key":"@3276","name":"REMOTE_PREFIX_RE","source":"semantic","confidence":0.97,"note":"原名 REMOTE_PREFIX_STRIP_FNS，初值 /~[^/~.][^/~]*$/；单条正则"}
 {"file":"chunk-yf82ynbr.js","key":"@3368","name":"BACKUP_OR_COPY_SUFFIX_REGEX","source":"semantic","confidence":0.97,"note":"原名 regExp_4，初值 拼 E3o 的备份/副本后缀正则；ae.test"}
+{"file":"chunk-63f0f3kd.js","key":"@8966","name":"GREP_BUNDLED_FLAG_RE","source":"semantic","confidence":0.97,"note":"原名 GREP_BUNDLED_FLAG_CHARS，初值 /[ABCEMTdefgjmrt]/；Gs 把它传给 Bn 做 test，是正则不是字符集字符串"}
+{"file":"chunk-c6bzd0wx.js","key":"@1026","name":"STATUS_DOT_RE","source":"semantic","confidence":0.97,"note":"原名 STATUS_DOT_CHARS，初值 一条字符类正则（U+20DD…U+1F7E4 的 emoji 圆点与圈形）；replace(F, 空格) 用作正则"}
+{"file":"chunk-cgr0tezp.js","key":"@12121","name":"MARKDOWN_BREAK_RE","source":"semantic","confidence":0.97,"note":"原名 MARKDOWN_BREAK_CHARS，初值 反引号、方括号与尖括号的字符类正则（全局）"}
+{"file":"chunk-cgr0tezp.js","key":"@66817","name":"SHELL_PUNCT_RE","source":"semantic","confidence":0.97,"note":"原名 SHELL_META_CHARS，初值 /[/.@:~*?\\]/；与同句 xs（SHELL_META_RE，含空白与 ;&<>）是两个不同的正则"}
+{"file":"chunk-cgr0tezp.js","key":"@75952","name":"URL_BREAK_RE","source":"semantic","confidence":0.97,"note":"原名 URL_BREAK_CHARS，初值 空白、引号、反引号与尖括号的字符类正则；dr.test(e) 判 URL 边界"}
+{"file":"chunk-r01896cg.js","key":"@19354","name":"DECLARE_FLAG_CHARS_RE","source":"semantic","confidence":0.97,"note":"原名 DECLARE_SEMANTIC_FLAG_CHARS，初值 只含标志字母的字符类正则；An.test(标志串)。同句 Ye 才是 EXIT 前缀敏感的 DECLARE_SEMANTIC_FLAG_RE"}
+{"file":"chunk-r01896cg.js","key":"@19398","name":"EXPORT_FLAG_CHARS_RE","source":"semantic","confidence":0.97,"note":"原名 EXPORT_SEMANTIC_FLAG_CHARS，初值 只含标志字母的字符类正则；$n.test(标志串)。同句 Sn 是带前缀的 EXPORT_SEMANTIC_FLAG_RE"}
+{"file":"chunk-yxnffbzs.js","key":"@14515","name":"QUOTE_LIKE_RE","source":"semantic","confidence":0.97,"note":"原名 QUOTE_LIKE_CHARS，初值 一条字符类正则；与同句 QUOTE_LIKE_MIRRORED_RE 一起拼进 regExp_2"}
+{"file":"chunk-ar2zwb92.js","key":"@2354","name":"VARIATION_SELECTOR_RE","source":"semantic","confidence":0.97,"note":"原名 VARIATION_SELECTOR_CHARS，初值 /^[‌‍︎️]$/；R.test(r) 判断单字符"}
+{"file":"chunk-hq88884p.js","key":"@51082","name":"FORBIDDEN_HOST_CHARS_RE","source":"semantic","confidence":0.97,"note":"原名 FORBIDDEN_HOST_CHARS，初值 主机名禁用字符正则；kt.test(e) 返回空串表示非法"}
+{"file":"chunk-hq88884p.js","key":"@51182","name":"IGNORABLE_HOST_CHARS_RE","source":"semantic","confidence":0.97,"note":"原名 IGNORABLE_HOST_CHARS，初值 可忽略字符正则；r.replace(Mn,\"\") 在规范化时删掉"}
+{"file":"chunk-e6aww6q8.js","key":"@2818166","name":"USER_TAG_UNSAFE_RE","source":"semantic","confidence":0.97,"note":"原名 USER_TAG_UNSAFE_CHARS，初值 /[^a-zA-Z0-9._-]/g；replace(akr,\"\") 清洗用户标签"}
+{"file":"chunk-82kqcve8.js","key":"@82469","name":"YAML_SPECIAL_CHARS_RE","source":"semantic","confidence":0.97,"note":"原名 YAML_SPECIAL_CHARS，初值 YAML 需加引号的特殊字符正则（含 “: ”）；Lm.test(w) 决定是否给值加引号"}
+{"file":"chunk-f25sswmp.js","key":"@14110","name":"SHA256_DIGEST_SUFFIX_RE","source":"semantic","confidence":0.97,"note":"原名 SHA256_DIGEST_SUFFIX，初值 /@sha256:[0-9a-f]{64}$/；dt() 用 ve.test"}
+{"file":"chunk-wyqg6m3h.js","key":"@15161","name":"HUNK_HEADER_RE","source":"semantic","confidence":0.97,"note":"原名 HUNK_HEADER，初值 unified diff 的 @@ -a,b +c,d @@ 头正则；Dt.test 与 Dt.exec 都用到"}
+{"file":"chunk-x1mwqya5.js","key":"@22215","name":"SAFE_FALLBACK_TEXT_RE","source":"semantic","confidence":0.97,"note":"原名 SAFE_FALLBACK_TEXT，初值 1 到 32 个安全字符的整串正则；Un() 里 zn.test(n)"}
+{"file":"chunk-dsy6gyxv.js","key":"@1565","name":"XCODE_COMMAND_PREFIX_RE","source":"semantic","confidence":0.97,"note":"原名 XCODE_COMMAND_PREFIX，初值 /\bsimctl\b|-sdk iphonesimulator|…/ 正则"}
+{"file":"chunk-bc20zedk.js","key":"@30852","name":"KEY_NAME_PAIRS","source":"semantic","confidence":0.97,"note":"原名 KEY_NAME_MAP，初值 成对的 [按键名, 简单名] 数组；vo.find(([f])=>p[f]) 按数组查，不是 Map"}
+{"file":"chunk-mvhmq2z8.js","key":"@17763","name":"CLOUD_MODEL_LIST_TIMEOUT_MESSAGE","source":"semantic","confidence":0.97,"note":"原名 CLOUD_MODEL_LIST_TIMEOUT，初值 \"Stopped waiting for the cloud session’s model list …\"；超时时展示的文案，超时数值是 No"}
+{"file":"chunk-xndtzje6.js","key":"@224","name":"COMPACT_FAILED_CONTEXT_LIMIT_MESSAGE","source":"semantic","confidence":0.97,"note":"原名 COMPACT_FAILED_CONTEXT_LIMIT，初值 \"Compaction failed · conversation could not be reduced below the context limit\""}
+{"file":"chunk-xndtzje6.js","key":"@311","name":"COMPACT_FAILED_MEDIA_LIMIT_MESSAGE","source":"semantic","confidence":0.97,"note":"原名 COMPACT_FAILED_MEDIA_LIMIT，初值 \"Compaction failed · attached media exceeds size limits\""}
+{"file":"chunk-tkqbtg0j.js","key":"@15594","name":"ENABLE_TOOL_OUTPUT_INSTRUCTIONS","source":"semantic","confidence":0.97,"note":"原名 ENABLE_TOOL_OUTPUT_SCHEMA，初值 一段告诉模型“名字不在列表就别调用/加载”的说明；真正的 schema 是 E 与 q"}
+{"file":"chunk-tkqbtg0j.js","key":"@18358","name":"ENABLE_COMPUTER_TOOL_NAME_PREFIX","source":"semantic","confidence":0.97,"note":"原名 ENABLE_COMPUTER_OUTPUT_SCHEMA，初值 `mcp__${ls}__computer_`；电脑工具名前缀"}
+{"file":"chunk-tmx5d02z.js","key":"@34740","name":"INPUT_TAB_REFUSAL_MESSAGE","source":"semantic","confidence":0.97,"note":"原名 APPIFACT_REPL_INPUT_SCHEMA，初值 \"input contains a raw tab …\"；schema 是 kn"}
+{"file":"chunk-hntsfzas.js","key":"@4843","name":"osReleaseClientPerHost","source":"semantic","confidence":0.97,"note":"原名 getOsRelease，初值 new W(()=>new L({platform,readOsRelease,…}))；是按 host 缓存的操作系统探测客户端槽，y() 返回 ee.of(host)，不是函数"}
