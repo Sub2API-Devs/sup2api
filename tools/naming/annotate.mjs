@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import prettier from 'prettier';
 import { renameModule, bindingsOf } from '../rename/lib/rename.mjs';
+import { RESERVED } from './lib/reserved.mjs';
 
 const readJsonl = (p) => fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 const [cmd, ...args] = process.argv.slice(2);
@@ -139,6 +140,12 @@ if (cmd === 'show') {
       if (!b) bad.push(`${file}${l.key}: no binding at this offset`);
       else if (b.frozen) bad.push(`${file}${l.key}: frozen (${b.frozen})`);
       else if (!/^[A-Za-z_$][\w$]*$/.test(l.name ?? '')) bad.push(`${file}${l.key}: invalid name ${l.name}`);
+      // names tools/naming/resolve.mjs drops on merge (reserved words, globals a
+      // binding must not shadow, annotate placeholders, the minified name itself)
+      else if (RESERVED.has(l.name)) bad.push(`${file}${l.key}: reserved or global name ${l.name} (dropped on merge)`);
+      else if (/(?<![\w$])[\w$]{1,3}_K\d+(?!\d)/.test(l.name)) bad.push(`${file}${l.key}: contains an annotate placeholder (${l.name})`);
+      // the minified name kept on purpose (a loop index `i`, a short original) is allowed
+      else if (l.name === b.name && b.name.length <= 3 && !/^[ijkn]$/.test(l.name)) bad.push(`${file}${l.key}: name equals the minified name ${l.name}`);
       else entry[l.key] = l.name;
     }
     const r = renameModule(file, src, entry, null);
