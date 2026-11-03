@@ -75,7 +75,12 @@ for (const file of files) {
     const src0 = b.scope === 'top' ? top[file]?.[b.key]?.source : localSource.get(`${file}${b.key}`);
     const authentic = AUTHENTIC.has(src0) && final !== b.name;
     if (authentic && looksMinified(final, b.name, minifiedModule)) bump(`${tree}.${scope}.authenticShort`, 1);
-    const bad = !authentic && looksMinified(final, b.name, minifiedModule);
+    // A short name a naming member chose on purpose (different from the minified
+    // one, two or more letters: ids, pin, ttl, jwt, mcp …, or a/b/c/d for
+    // comparator-style pairs) is a reading decision, not leftover minification.
+    const chosen = !authentic && src0 && src0 !== "minified" && final !== b.name && !/_d+$/.test(final) && (/^[A-Za-z][A-Za-z0-9]+$/.test(final) || /^[abcd]$/.test(final));
+    if (chosen && looksMinified(final, b.name, minifiedModule)) bump(`${tree}.${scope}.chosenShort`, 1);
+    const bad = !authentic && !chosen && looksMinified(final, b.name, minifiedModule);
     let f = perFile.get(out);
     if (!f) perFile.set(out, (f = { path: out, tree, bindings: 0, minified: 0, top: 0, params: 0, locals: 0, refs: 0, minifiedRefs: 0 }));
     f.bindings++;
@@ -106,7 +111,7 @@ for (const tree of new Set(Object.keys(totals).map((k) => k.split('.')[0]))) {
     const m = totals[`${tree}.${scope}.minified`] ?? 0;
     const tr = totals[`${tree}.${scope}.totalRefs`] ?? 0;
     const mr = totals[`${tree}.${scope}.minifiedRefs`] ?? 0;
-    summary[tree][scope] = { bindings: t, minified: m, authenticShort: totals[`${tree}.${scope}.authenticShort`] ?? 0, readable: t ? +((1 - m / t) * 100).toFixed(1) : 100, readableByRefs: tr ? +((1 - mr / tr) * 100).toFixed(1) : 100 };
+    summary[tree][scope] = { bindings: t, minified: m, authenticShort: totals[`${tree}.${scope}.authenticShort`] ?? 0, chosenShort: totals[`${tree}.${scope}.chosenShort`] ?? 0, readable: t ? +((1 - m / t) * 100).toFixed(1) : 100, readableByRefs: tr ? +((1 - mr / tr) * 100).toFixed(1) : 100 };
   }
 }
 fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 1));
