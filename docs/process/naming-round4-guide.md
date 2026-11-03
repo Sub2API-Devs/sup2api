@@ -4,7 +4,7 @@
 
 ## 你的范围
 
-`analysis/segments/naming-round4.json` 是数组，第 N 项（N = 你的组号）：`{dirs, unnamed, decls:[{id, file, start, end, path, unnamed, refs}]}`，按阅读树路径排好序。
+`analysis/segments/naming-round4.json` 是数组，**下标从 0 开始，你的组号 N 就是数组下标 N**（第 0 组是 `[0]`；上一轮有成员把组号当成从 1 数，做了别人的清单）。第 N 项：`{dirs, unnamed, decls:[{id, file, start, end, path, unnamed, refs}]}`，按阅读树路径排好序。开工前打印 `dirs` 的首尾，确认与派活消息里写的一致。
 
 ## 工具
 
@@ -23,7 +23,7 @@ node --max-old-space-size=3000 tools/naming/annotate.mjs check naming/semantic-l
 {"file":"chunk-ag5x7vhf.js","key":"@17884","name":"rowStart","source":"semantic","confidence":0.8}
 ```
 
-建议每次 `show` 20–40 个声明，读完一批写一批（追加到 `naming/semantic-l<N>.jsonl`），每写完约 2,000 行跑一次 `check`。
+建议每次 `show` 30–50 个声明，读完一批写一批（追加到 `naming/semantic-l<N>.jsonl`；`note` 可省略，不写说明），每写完约 2,000 行跑一次 `check`。清单很长（约 1–1.7 万个绑定），请保持节奏：读一批、写一批，不要为单个名字反复查证。
 
 ## 命名规则
 
