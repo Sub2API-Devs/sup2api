@@ -1,0 +1,5630 @@
+[
+ {
+  "path": "_new/planSegmentState.ts",
+  "chunks": {
+   "chunk-0089hrfm.js": 17
+  },
+  "bytes": 4439,
+  "decls": [
+   "chunk-0089hrfm.js#R",
+   "chunk-0089hrfm.js#f",
+   "chunk-0089hrfm.js#qEo",
+   "chunk-0089hrfm.js#sHs",
+   "chunk-0089hrfm.js#g",
+   "chunk-0089hrfm.js#S",
+   "chunk-0089hrfm.js#_",
+   "chunk-0089hrfm.js#zHi",
+   "chunk-0089hrfm.js#YEo",
+   "chunk-0089hrfm.js#iHs",
+   "chunk-0089hrfm.js#TIr",
+   "chunk-0089hrfm.js#y",
+   "chunk-0089hrfm.js#AIr",
+   "chunk-0089hrfm.js#XEo",
+   "chunk-0089hrfm.js#CIr",
+   "chunk-0089hrfm.js#EGi",
+   "chunk-0089hrfm.js#JEo"
+  ]
+ },
+ {
+  "path": "_misplaced/bootstrap/state.ts",
+  "chunks": {
+   "chunk-0089hrfm.js": 1
+  },
+  "bytes": 57,
+  "decls": [
+   "chunk-0089hrfm.js#P"
+  ]
+ },
+ {
+  "path": "_misplaced/services/SessionMemory/sessionMemory.ts",
+  "chunks": {
+   "chunk-0089hrfm.js": 1
+  },
+  "bytes": 240,
+  "decls": [
+   "chunk-0089hrfm.js#x"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-01p2saxj/part-001.js",
+  "chunks": {
+   "chunk-01p2saxj.js": 2
+  },
+  "bytes": 236,
+  "decls": [
+   "chunk-01p2saxj.js#MGn",
+   "chunk-01p2saxj.js#p"
+  ]
+ },
+ {
+  "path": "_new/driveMcpTask.ts",
+  "chunks": {
+   "chunk-01rphnc1.js": 13
+  },
+  "bytes": 7571,
+  "decls": [
+   "chunk-01rphnc1.js#T$r",
+   "chunk-01rphnc1.js#G2i",
+   "chunk-01rphnc1.js#Q0i",
+   "chunk-01rphnc1.js#ee",
+   "chunk-01rphnc1.js#e2s",
+   "chunk-01rphnc1.js#o1t",
+   "chunk-01rphnc1.js#S",
+   "chunk-01rphnc1.js#ne",
+   "chunk-01rphnc1.js#q",
+   "chunk-01rphnc1.js#j",
+   "chunk-01rphnc1.js#BYn",
+   "chunk-01rphnc1.js#xZe",
+   "chunk-01rphnc1.js#YLo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-08945j39/part-001.js",
+  "chunks": {
+   "chunk-08945j39.js": 1
+  },
+  "bytes": 293,
+  "decls": [
+   "chunk-08945j39.js#oWe"
+  ]
+ },
+ {
+  "path": "_new/setChromeBrowserHints.ts",
+  "chunks": {
+   "chunk-09jqgwgm.js": 5
+  },
+  "bytes": 1044,
+  "decls": [
+   "chunk-09jqgwgm.js#ozi",
+   "chunk-09jqgwgm.js#FAo",
+   "chunk-09jqgwgm.js#UAo",
+   "chunk-09jqgwgm.js#BAo",
+   "chunk-09jqgwgm.js#jAo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-0e8j1zzj/part-001.js",
+  "chunks": {
+   "chunk-0e8j1zzj.js": 2
+  },
+  "bytes": 302,
+  "decls": [
+   "chunk-0e8j1zzj.js#Uo",
+   "chunk-0e8j1zzj.js#r$n"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-0eyv3mzk/part-001.js",
+  "chunks": {
+   "chunk-0eyv3mzk.js": 1
+  },
+  "bytes": 83,
+  "decls": [
+   "chunk-0eyv3mzk.js#YWn"
+  ]
+ },
+ {
+  "path": "_new/askStoreWhatItHolds.ts",
+  "chunks": {
+   "chunk-0f0jmzwa.js": 9
+  },
+  "bytes": 2152,
+  "decls": [
+   "chunk-0f0jmzwa.js#Nji",
+   "chunk-0f0jmzwa.js#wpo",
+   "chunk-0f0jmzwa.js#vpo",
+   "chunk-0f0jmzwa.js#g0n",
+   "chunk-0f0jmzwa.js#f",
+   "chunk-0f0jmzwa.js#kpo",
+   "chunk-0f0jmzwa.js#akr",
+   "chunk-0f0jmzwa.js#Tpo",
+   "chunk-0f0jmzwa.js#g"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-0h4e7gnq/part-001.js",
+  "chunks": {
+   "chunk-0h4e7gnq.js": 1
+  },
+  "bytes": 249,
+  "decls": [
+   "chunk-0h4e7gnq.js#Lxo"
+  ]
+ },
+ {
+  "path": "_new/registerToolHosts.ts",
+  "chunks": {
+   "chunk-0k89j1c1.js": 1
+  },
+  "bytes": 246,
+  "decls": [
+   "chunk-0k89j1c1.js#kgo"
+  ]
+ },
+ {
+  "path": "_new/validateExplicitMessagingSocketPath.ts",
+  "chunks": {
+   "chunk-0kp6eg01.js": 63
+  },
+  "bytes": 33535,
+  "decls": [
+   "chunk-0kp6eg01.js#Fe",
+   "chunk-0kp6eg01.js#he",
+   "chunk-0kp6eg01.js#Ne",
+   "chunk-0kp6eg01.js#Ke",
+   "chunk-0kp6eg01.js#qe",
+   "chunk-0kp6eg01.js#ye",
+   "chunk-0kp6eg01.js#u",
+   "chunk-0kp6eg01.js#dGi",
+   "chunk-0kp6eg01.js#cGi",
+   "chunk-0kp6eg01.js#we",
+   "chunk-0kp6eg01.js#IPr",
+   "chunk-0kp6eg01.js#le",
+   "chunk-0kp6eg01.js#OPr",
+   "chunk-0kp6eg01.js#uGi",
+   "chunk-0kp6eg01.js#Se",
+   "chunk-0kp6eg01.js#Ye",
+   "chunk-0kp6eg01.js#MPr",
+   "chunk-0kp6eg01.js#fGi",
+   "chunk-0kp6eg01.js#Oe",
+   "chunk-0kp6eg01.js#ze",
+   "chunk-0kp6eg01.js#Te",
+   "chunk-0kp6eg01.js#DPr",
+   "chunk-0kp6eg01.js#be",
+   "chunk-0kp6eg01.js#Qe",
+   "chunk-0kp6eg01.js#Je",
+   "chunk-0kp6eg01.js#Ze",
+   "chunk-0kp6eg01.js#en",
+   "chunk-0kp6eg01.js#pGi",
+   "chunk-0kp6eg01.js#Y",
+   "chunk-0kp6eg01.js#DHi",
+   "chunk-0kp6eg01.js#ODs",
+   "chunk-0kp6eg01.js#H",
+   "chunk-0kp6eg01.js#j",
+   "chunk-0kp6eg01.js#nn",
+   "chunk-0kp6eg01.js#me",
+   "chunk-0kp6eg01.js#ne",
+   "chunk-0kp6eg01.js#tn",
+   "chunk-0kp6eg01.js#sn",
+   "chunk-0kp6eg01.js#rn",
+   "chunk-0kp6eg01.js#mGi",
+   "chunk-0kp6eg01.js#q",
+   "chunk-0kp6eg01.js#on",
+   "chunk-0kp6eg01.js#M",
+   "chunk-0kp6eg01.js#an",
+   "chunk-0kp6eg01.js#V",
+   "chunk-0kp6eg01.js#xe",
+   "chunk-0kp6eg01.js#dn",
+   "chunk-0kp6eg01.js#cn",
+   "chunk-0kp6eg01.js#se",
+   "chunk-0kp6eg01.js#Ee",
+   "chunk-0kp6eg01.js#X",
+   "chunk-0kp6eg01.js#De",
+   "chunk-0kp6eg01.js#$e",
+   "chunk-0kp6eg01.js#Re",
+   "chunk-0kp6eg01.js#LHi",
+   "chunk-0kp6eg01.js#HHi",
+   "chunk-0kp6eg01.js#ln",
+   "chunk-0kp6eg01.js#mn",
+   "chunk-0kp6eg01.js#pn",
+   "chunk-0kp6eg01.js#MDs",
+   "chunk-0kp6eg01.js#Ae",
+   "chunk-0kp6eg01.js#ce",
+   "chunk-0kp6eg01.js#DDs"
+  ]
+ },
+ {
+  "path": "_misplaced/costHook.ts",
+  "chunks": {
+   "chunk-0kp6eg01.js": 1
+  },
+  "bytes": 81,
+  "decls": [
+   "chunk-0kp6eg01.js#gn"
+  ]
+ },
+ {
+  "path": "_new/applyCoordinatorToolFilter.ts",
+  "chunks": {
+   "chunk-0nt1vzp1.js": 9
+  },
+  "bytes": 1009,
+  "decls": [
+   "chunk-0nt1vzp1.js#c",
+   "chunk-0nt1vzp1.js#QEo",
+   "chunk-0nt1vzp1.js#f",
+   "chunk-0nt1vzp1.js#a",
+   "chunk-0nt1vzp1.js#Ejn",
+   "chunk-0nt1vzp1.js#ZEo",
+   "chunk-0nt1vzp1.js#RIr",
+   "chunk-0nt1vzp1.js#Ton",
+   "chunk-0nt1vzp1.js#Aon"
+  ]
+ },
+ {
+  "path": "_new/MESSAGE_REVEAL_NOTICE.ts",
+  "chunks": {
+   "chunk-0q2rgdq2.js": 2
+  },
+  "bytes": 385,
+  "decls": [
+   "chunk-0q2rgdq2.js#eHt",
+   "chunk-0q2rgdq2.js#tHt"
+  ]
+ },
+ {
+  "path": "_new/bundledFileStemForAnalytics_KNOWN_IS_BUILD_TIME.ts",
+  "chunks": {
+   "chunk-0wqny7vr.js": 16
+  },
+  "bytes": 689,
+  "decls": [
+   "chunk-0wqny7vr.js#r",
+   "chunk-0wqny7vr.js#b",
+   "chunk-0wqny7vr.js#c",
+   "chunk-0wqny7vr.js#de",
+   "chunk-0wqny7vr.js#Xr",
+   "chunk-0wqny7vr.js#ZY",
+   "chunk-0wqny7vr.js#Sf",
+   "chunk-0wqny7vr.js#cvr",
+   "chunk-0wqny7vr.js#pa",
+   "chunk-0wqny7vr.js#PS",
+   "chunk-0wqny7vr.js#Gn",
+   "chunk-0wqny7vr.js#NE",
+   "chunk-0wqny7vr.js#wks",
+   "chunk-0wqny7vr.js#Gre",
+   "chunk-0wqny7vr.js#rye",
+   "chunk-0wqny7vr.js#Uuo"
+  ]
+ },
+ {
+  "path": "_new/uploadRulesForRequest.ts",
+  "chunks": {
+   "chunk-11e3jmt7.js": 4
+  },
+  "bytes": 487,
+  "decls": [
+   "chunk-11e3jmt7.js#sye",
+   "chunk-11e3jmt7.js#uji",
+   "chunk-11e3jmt7.js#s",
+   "chunk-11e3jmt7.js#n"
+  ]
+ },
+ {
+  "path": "_new/startKitSwitchOn.ts",
+  "chunks": {
+   "chunk-11fv1n21.js": 2
+  },
+  "bytes": 105,
+  "decls": [
+   "chunk-11fv1n21.js#t",
+   "chunk-11fv1n21.js#X$t"
+  ]
+ },
+ {
+  "path": "_new/pluginTestRefusal.ts",
+  "chunks": {
+   "chunk-16wxtfnh.js": 17
+  },
+  "bytes": 2408,
+  "decls": [
+   "chunk-16wxtfnh.js#Fwo",
+   "chunk-16wxtfnh.js#@703",
+   "chunk-16wxtfnh.js#Hwo",
+   "chunk-16wxtfnh.js#C1n",
+   "chunk-16wxtfnh.js#R1n",
+   "chunk-16wxtfnh.js#x1n",
+   "chunk-16wxtfnh.js#P1n",
+   "chunk-16wxtfnh.js#I1n",
+   "chunk-16wxtfnh.js#O1n",
+   "chunk-16wxtfnh.js#M1n",
+   "chunk-16wxtfnh.js#D1n",
+   "chunk-16wxtfnh.js#L1n",
+   "chunk-16wxtfnh.js#H1n",
+   "chunk-16wxtfnh.js#N1n",
+   "chunk-16wxtfnh.js#$1n",
+   "chunk-16wxtfnh.js#Nwo",
+   "chunk-16wxtfnh.js#$wo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-18hwfzwa/part-001.js",
+  "chunks": {
+   "chunk-18hwfzwa.js": 3
+  },
+  "bytes": 671,
+  "decls": [
+   "chunk-18hwfzwa.js#LQe",
+   "chunk-18hwfzwa.js#DW",
+   "chunk-18hwfzwa.js#@686687"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-18hwfzwa/part-002.js",
+  "chunks": {
+   "chunk-18hwfzwa.js": 1
+  },
+  "bytes": 137,
+  "decls": [
+   "chunk-18hwfzwa.js#s5"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-18hwfzwa/part-003.js",
+  "chunks": {
+   "chunk-18hwfzwa.js": 1
+  },
+  "bytes": 78,
+  "decls": [
+   "chunk-18hwfzwa.js#CN"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-18hwfzwa/part-004.js",
+  "chunks": {
+   "chunk-18hwfzwa.js": 2
+  },
+  "bytes": 112,
+  "decls": [
+   "chunk-18hwfzwa.js#Ipo",
+   "chunk-18hwfzwa.js#ytt"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-18hwfzwa/part-005.js",
+  "chunks": {
+   "chunk-18hwfzwa.js": 2
+  },
+  "bytes": 127,
+  "decls": [
+   "chunk-18hwfzwa.js#ybt",
+   "chunk-18hwfzwa.js#rMe"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-18hwfzwa/part-006.js",
+  "chunks": {
+   "chunk-18hwfzwa.js": 2
+  },
+  "bytes": 100,
+  "decls": [
+   "chunk-18hwfzwa.js#@1661153",
+   "chunk-18hwfzwa.js#jV"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-18hwfzwa/part-007.js",
+  "chunks": {
+   "chunk-18hwfzwa.js": 5
+  },
+  "bytes": 754,
+  "decls": [
+   "chunk-18hwfzwa.js#oCt",
+   "chunk-18hwfzwa.js#KIe",
+   "chunk-18hwfzwa.js#u1o",
+   "chunk-18hwfzwa.js#sCt",
+   "chunk-18hwfzwa.js#p1o"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-18hwfzwa/part-008.js",
+  "chunks": {
+   "chunk-18hwfzwa.js": 2
+  },
+  "bytes": 8,
+  "decls": [
+   "chunk-18hwfzwa.js#@1667001",
+   "chunk-18hwfzwa.js#@1667005"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-18hwfzwa/part-009.js",
+  "chunks": {
+   "chunk-18hwfzwa.js": 5
+  },
+  "bytes": 580,
+  "decls": [
+   "chunk-18hwfzwa.js#WVo",
+   "chunk-18hwfzwa.js#jVo",
+   "chunk-18hwfzwa.js#f_t",
+   "chunk-18hwfzwa.js#p_t",
+   "chunk-18hwfzwa.js#YVo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-18hwfzwa/part-010.js",
+  "chunks": {
+   "chunk-18hwfzwa.js": 11
+  },
+  "bytes": 5519,
+  "decls": [
+   "chunk-18hwfzwa.js#gRt",
+   "chunk-18hwfzwa.js#IGo",
+   "chunk-18hwfzwa.js#EGo",
+   "chunk-18hwfzwa.js#DGo",
+   "chunk-18hwfzwa.js#qEe",
+   "chunk-18hwfzwa.js#$Ee",
+   "chunk-18hwfzwa.js#@1797385",
+   "chunk-18hwfzwa.js#VEe",
+   "chunk-18hwfzwa.js#@1797521",
+   "chunk-18hwfzwa.js#yRt",
+   "chunk-18hwfzwa.js#OGo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-19av2vh6/part-001.js",
+  "chunks": {
+   "chunk-19av2vh6.js": 1
+  },
+  "bytes": 95,
+  "decls": [
+   "chunk-19av2vh6.js#s"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-19av2vh6/part-002.js",
+  "chunks": {
+   "chunk-19av2vh6.js": 1
+  },
+  "bytes": 98,
+  "decls": [
+   "chunk-19av2vh6.js#C"
+  ]
+ },
+ {
+  "path": "_misplaced/utils/swarm/backends/detection.ts",
+  "chunks": {
+   "chunk-1de6ar4n.js": 1
+  },
+  "bytes": 45,
+  "decls": [
+   "chunk-1de6ar4n.js#Zje"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-1nk4j4sn/part-001.js",
+  "chunks": {
+   "chunk-1nk4j4sn.js": 1
+  },
+  "bytes": 543,
+  "decls": [
+   "chunk-1nk4j4sn.js#I"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-1ny7cxrt/part-001.js",
+  "chunks": {
+   "chunk-1ny7cxrt.js": 1
+  },
+  "bytes": 114,
+  "decls": [
+   "chunk-1ny7cxrt.js#Ff"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-1ny7cxrt/part-002.js",
+  "chunks": {
+   "chunk-1ny7cxrt.js": 2
+  },
+  "bytes": 302,
+  "decls": [
+   "chunk-1ny7cxrt.js#mE",
+   "chunk-1ny7cxrt.js#cE"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-1qpz7qcd/part-001.js",
+  "chunks": {
+   "chunk-1qpz7qcd.js": 3
+  },
+  "bytes": 455,
+  "decls": [
+   "chunk-1qpz7qcd.js#y_i",
+   "chunk-1qpz7qcd.js#M",
+   "chunk-1qpz7qcd.js#me"
+  ]
+ },
+ {
+  "path": "_new/followServiceSessionName.ts",
+  "chunks": {
+   "chunk-1r7cdak2.js": 3
+  },
+  "bytes": 409,
+  "decls": [
+   "chunk-1r7cdak2.js#f",
+   "chunk-1r7cdak2.js#Gpo",
+   "chunk-1r7cdak2.js#zpo"
+  ]
+ },
+ {
+  "path": "_new/handleSetCwdControlRequest.ts",
+  "chunks": {
+   "chunk-1wvrnct9.js": 14
+  },
+  "bytes": 11131,
+  "decls": [
+   "chunk-1wvrnct9.js#b",
+   "chunk-1wvrnct9.js#D",
+   "chunk-1wvrnct9.js#F",
+   "chunk-1wvrnct9.js#B",
+   "chunk-1wvrnct9.js#ITe",
+   "chunk-1wvrnct9.js#G",
+   "chunk-1wvrnct9.js#Gxr",
+   "chunk-1wvrnct9.js#zxr",
+   "chunk-1wvrnct9.js#U",
+   "chunk-1wvrnct9.js#_Nt",
+   "chunk-1wvrnct9.js#Kxr",
+   "chunk-1wvrnct9.js#Vxr",
+   "chunk-1wvrnct9.js#PHi",
+   "chunk-1wvrnct9.js#nGi"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-20nqyqvq/part-001.js",
+  "chunks": {
+   "chunk-20nqyqvq.js": 1
+  },
+  "bytes": 150,
+  "decls": [
+   "chunk-20nqyqvq.js#r"
+  ]
+ },
+ {
+  "path": "_new/sampleCpuAndPageFaults.ts",
+  "chunks": {
+   "chunk-21bgerjr.js": 9
+  },
+  "bytes": 6589,
+  "decls": [
+   "chunk-21bgerjr.js#_",
+   "chunk-21bgerjr.js#f",
+   "chunk-21bgerjr.js#Eon",
+   "chunk-21bgerjr.js#N",
+   "chunk-21bgerjr.js#P",
+   "chunk-21bgerjr.js#B",
+   "chunk-21bgerjr.js#wGi",
+   "chunk-21bgerjr.js#y",
+   "chunk-21bgerjr.js#j"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-24t3dkzb/part-001.js",
+  "chunks": {
+   "chunk-24t3dkzb.js": 1
+  },
+  "bytes": 45,
+  "decls": [
+   "chunk-24t3dkzb.js#XRr"
+  ]
+ },
+ {
+  "path": "_new/adoptStorageV5EnvPin.ts",
+  "chunks": {
+   "chunk-256aw479.js": 4
+  },
+  "bytes": 950,
+  "decls": [
+   "chunk-256aw479.js#Qns",
+   "chunk-256aw479.js#Zns",
+   "chunk-256aw479.js#dZr",
+   "chunk-256aw479.js#cZr"
+  ]
+ },
+ {
+  "path": "_new/ensureFastPathSettingsLoaded.ts",
+  "chunks": {
+   "chunk-25mxxtgv.js": 6
+  },
+  "bytes": 1382,
+  "decls": [
+   "chunk-25mxxtgv.js#s",
+   "chunk-25mxxtgv.js#p",
+   "chunk-25mxxtgv.js#l",
+   "chunk-25mxxtgv.js#H5t",
+   "chunk-25mxxtgv.js#Ecr",
+   "chunk-25mxxtgv.js#ues"
+  ]
+ },
+ {
+  "path": "_new/wrapClaudeDocsCreateWake.ts",
+  "chunks": {
+   "chunk-287bzc1g.js": 4
+  },
+  "bytes": 1155,
+  "decls": [
+   "chunk-287bzc1g.js#C",
+   "chunk-287bzc1g.js#Mqn",
+   "chunk-287bzc1g.js#G0i",
+   "chunk-287bzc1g.js#S2i"
+  ]
+ },
+ {
+  "path": "_new/main.helpers-2am8.ts",
+  "chunks": {
+   "chunk-2am86wgd.js": 1
+  },
+  "bytes": 155,
+  "decls": [
+   "chunk-2am86wgd.js#Bhi"
+  ]
+ },
+ {
+  "path": "_new/handleAutoDefaultNudgeEventFromHost.ts",
+  "chunks": {
+   "chunk-2b4rzray.js": 2
+  },
+  "bytes": 882,
+  "decls": [
+   "chunk-2b4rzray.js#rgo",
+   "chunk-2b4rzray.js#ogo"
+  ]
+ },
+ {
+  "path": "_new/primeFileDescriptorCredentials.ts",
+  "chunks": {
+   "chunk-2dh0g62b.js": 1
+  },
+  "bytes": 238,
+  "decls": [
+   "chunk-2dh0g62b.js#u6t"
+  ]
+ },
+ {
+  "path": "_new/endPluginTest.ts",
+  "chunks": {
+   "chunk-2m7289t6.js": 3
+  },
+  "bytes": 208,
+  "decls": [
+   "chunk-2m7289t6.js#Vwo",
+   "chunk-2m7289t6.js#@279",
+   "chunk-2m7289t6.js#F1n"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-2nmyajw8/part-001.js",
+  "chunks": {
+   "chunk-2nmyajw8.js": 2
+  },
+  "bytes": 46,
+  "decls": [
+   "chunk-2nmyajw8.js#@3234",
+   "chunk-2nmyajw8.js#NDe"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-2nmyq07e/part-001.js",
+  "chunks": {
+   "chunk-2nmyq07e.js": 2
+  },
+  "bytes": 133,
+  "decls": [
+   "chunk-2nmyq07e.js#e",
+   "chunk-2nmyq07e.js#c"
+  ]
+ },
+ {
+  "path": "_new/validateIngressOrigin.ts",
+  "chunks": {
+   "chunk-2nwtj5hg.js": 6
+  },
+  "bytes": 1072,
+  "decls": [
+   "chunk-2nwtj5hg.js#VIr",
+   "chunk-2nwtj5hg.js#t",
+   "chunk-2nwtj5hg.js#r",
+   "chunk-2nwtj5hg.js#jce",
+   "chunk-2nwtj5hg.js#Lvo",
+   "chunk-2nwtj5hg.js#Hvo"
+  ]
+ },
+ {
+  "path": "_new/walkCcrSessionList.ts",
+  "chunks": {
+   "chunk-2ny09dd0.js": 4
+  },
+  "bytes": 1992,
+  "decls": [
+   "chunk-2ny09dd0.js#u",
+   "chunk-2ny09dd0.js#y",
+   "chunk-2ny09dd0.js#Xsr",
+   "chunk-2ny09dd0.js#mVi"
+  ]
+ },
+ {
+  "path": "_new/artifactOpeningPrefetchContent.ts",
+  "chunks": {
+   "chunk-2r828m87.js": 25
+  },
+  "bytes": 8081,
+  "decls": [
+   "chunk-2r828m87.js#O",
+   "chunk-2r828m87.js#H",
+   "chunk-2r828m87.js#OMr",
+   "chunk-2r828m87.js#j",
+   "chunk-2r828m87.js#MMr",
+   "chunk-2r828m87.js#F",
+   "chunk-2r828m87.js#B",
+   "chunk-2r828m87.js#yGn",
+   "chunk-2r828m87.js#DMr",
+   "chunk-2r828m87.js#W",
+   "chunk-2r828m87.js#LMr",
+   "chunk-2r828m87.js#PAo",
+   "chunk-2r828m87.js#u",
+   "chunk-2r828m87.js#K",
+   "chunk-2r828m87.js#G",
+   "chunk-2r828m87.js#LGi",
+   "chunk-2r828m87.js#q",
+   "chunk-2r828m87.js#HMr",
+   "chunk-2r828m87.js#Y",
+   "chunk-2r828m87.js#z",
+   "chunk-2r828m87.js#M",
+   "chunk-2r828m87.js#L",
+   "chunk-2r828m87.js#X",
+   "chunk-2r828m87.js#V",
+   "chunk-2r828m87.js#S"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-2sw13wfh/part-001.js",
+  "chunks": {
+   "chunk-2sw13wfh.js": 1
+  },
+  "bytes": 44,
+  "decls": [
+   "chunk-2sw13wfh.js#_Yn"
+  ]
+ },
+ {
+  "path": "_new/isCustomizationDisabled.ts",
+  "chunks": {
+   "chunk-2xdyp70v.js": 3
+  },
+  "bytes": 986,
+  "decls": [
+   "chunk-2xdyp70v.js#t",
+   "chunk-2xdyp70v.js#ar",
+   "chunk-2xdyp70v.js#Ex"
+  ]
+ },
+ {
+  "path": "_new/getDefaultAppState.ts",
+  "chunks": {
+   "chunk-30s1dxp3.js": 2
+  },
+  "bytes": 1347,
+  "decls": [
+   "chunk-30s1dxp3.js#XCr",
+   "chunk-30s1dxp3.js#g0t"
+  ]
+ },
+ {
+  "path": "_new/query.helpers-32qj.ts",
+  "chunks": {
+   "chunk-32qjrk8h.js": 1
+  },
+  "bytes": 25,
+  "decls": [
+   "chunk-32qjrk8h.js#vHs"
+  ]
+ },
+ {
+  "path": "_new/getClaudeInChromePermissionOverrides.ts",
+  "chunks": {
+   "chunk-38x90rmj.js": 23
+  },
+  "bytes": 13538,
+  "decls": [
+   "chunk-38x90rmj.js#O",
+   "chunk-38x90rmj.js#Z",
+   "chunk-38x90rmj.js#x",
+   "chunk-38x90rmj.js#F",
+   "chunk-38x90rmj.js#Y",
+   "chunk-38x90rmj.js#B",
+   "chunk-38x90rmj.js#ee",
+   "chunk-38x90rmj.js#W",
+   "chunk-38x90rmj.js#V2i",
+   "chunk-38x90rmj.js#N",
+   "chunk-38x90rmj.js#oe",
+   "chunk-38x90rmj.js#se",
+   "chunk-38x90rmj.js#Q",
+   "chunk-38x90rmj.js#H",
+   "chunk-38x90rmj.js#j",
+   "chunk-38x90rmj.js#U",
+   "chunk-38x90rmj.js#G",
+   "chunk-38x90rmj.js#L",
+   "chunk-38x90rmj.js#@7399",
+   "chunk-38x90rmj.js#V",
+   "chunk-38x90rmj.js#fe",
+   "chunk-38x90rmj.js#pe",
+   "chunk-38x90rmj.js#aHo"
+  ]
+ },
+ {
+  "path": "_new/getClaudeInChromePermissionOverrides.helpers-38x9.ts",
+  "chunks": {
+   "chunk-38x90rmj.js": 5
+  },
+  "bytes": 1205,
+  "decls": [
+   "chunk-38x90rmj.js#z",
+   "chunk-38x90rmj.js#de",
+   "chunk-38x90rmj.js#ue",
+   "chunk-38x90rmj.js#me",
+   "chunk-38x90rmj.js#X"
+  ]
+ },
+ {
+  "path": "_new/WORKFLOW_JOURNAL_HOST_COPY_FLAG.ts",
+  "chunks": {
+   "chunk-39r7st4c.js": 1
+  },
+  "bytes": 108,
+  "decls": [
+   "chunk-39r7st4c.js#Uu"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-3b05zaw0/part-001.js",
+  "chunks": {
+   "chunk-3b05zaw0.js": 3
+  },
+  "bytes": 257,
+  "decls": [
+   "chunk-3b05zaw0.js#G",
+   "chunk-3b05zaw0.js#M",
+   "chunk-3b05zaw0.js#mbi"
+  ]
+ },
+ {
+  "path": "_new/chunk-p13a1b4d.ts",
+  "chunks": {
+   "chunk-3gvas51j.js": 14
+  },
+  "bytes": 10580,
+  "decls": [
+   "chunk-3gvas51j.js#j",
+   "chunk-3gvas51j.js#N",
+   "chunk-3gvas51j.js#Y",
+   "chunk-3gvas51j.js#Zt",
+   "chunk-3gvas51j.js#te",
+   "chunk-3gvas51j.js#at",
+   "chunk-3gvas51j.js#ee",
+   "chunk-3gvas51j.js#ht",
+   "chunk-3gvas51j.js#ut",
+   "chunk-3gvas51j.js#re",
+   "chunk-3gvas51j.js#mt",
+   "chunk-3gvas51j.js#U",
+   "chunk-3gvas51j.js#oe",
+   "chunk-3gvas51j.js#Ok"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-3h9nvmn3/part-001.js",
+  "chunks": {
+   "chunk-3h9nvmn3.js": 1
+  },
+  "bytes": 489,
+  "decls": [
+   "chunk-3h9nvmn3.js#y$e"
+  ]
+ },
+ {
+  "path": "_new/writeStartupFrames.ts",
+  "chunks": {
+   "chunk-3hsy16d3.js": 9
+  },
+  "bytes": 967,
+  "decls": [
+   "chunk-3hsy16d3.js#l",
+   "chunk-3hsy16d3.js#V6t",
+   "chunk-3hsy16d3.js#iEe",
+   "chunk-3hsy16d3.js#d",
+   "chunk-3hsy16d3.js#c",
+   "chunk-3hsy16d3.js#q6t",
+   "chunk-3hsy16d3.js#yUe",
+   "chunk-3hsy16d3.js#I4",
+   "chunk-3hsy16d3.js#bat"
+  ]
+ },
+ {
+  "path": "_new/settlePlainCallAsk.ts",
+  "chunks": {
+   "chunk-3kqfccv7.js": 16
+  },
+  "bytes": 4299,
+  "decls": [
+   "chunk-3kqfccv7.js#bZt",
+   "chunk-3kqfccv7.js#wji",
+   "chunk-3kqfccv7.js#W",
+   "chunk-3kqfccv7.js#tXe",
+   "chunk-3kqfccv7.js#R",
+   "chunk-3kqfccv7.js#Nvr",
+   "chunk-3kqfccv7.js#$vr",
+   "chunk-3kqfccv7.js#e0n",
+   "chunk-3kqfccv7.js#v",
+   "chunk-3kqfccv7.js#g",
+   "chunk-3kqfccv7.js#S",
+   "chunk-3kqfccv7.js#j",
+   "chunk-3kqfccv7.js#Q",
+   "chunk-3kqfccv7.js#Rfo",
+   "chunk-3kqfccv7.js#h",
+   "chunk-3kqfccv7.js#l"
+  ]
+ },
+ {
+  "path": "_new/ARTIFACTS_MCP_GET_TOOL.ts",
+  "chunks": {
+   "chunk-3sqbw5c7.js": 12
+  },
+  "bytes": 875,
+  "decls": [
+   "chunk-3sqbw5c7.js#PFe",
+   "chunk-3sqbw5c7.js#kte",
+   "chunk-3sqbw5c7.js#dme",
+   "chunk-3sqbw5c7.js#Ylr",
+   "chunk-3sqbw5c7.js#xd",
+   "chunk-3sqbw5c7.js#U7o",
+   "chunk-3sqbw5c7.js#EVi",
+   "chunk-3sqbw5c7.js#vVi",
+   "chunk-3sqbw5c7.js#kVi",
+   "chunk-3sqbw5c7.js#n",
+   "chunk-3sqbw5c7.js#cJr",
+   "chunk-3sqbw5c7.js#mkn"
+  ]
+ },
+ {
+  "path": "_new/CONTEXT_FILE_NAME.ts",
+  "chunks": {
+   "chunk-3v3wzg2e.js": 4
+  },
+  "bytes": 7222,
+  "decls": [
+   "chunk-3v3wzg2e.js#eqn",
+   "chunk-3v3wzg2e.js#LMo",
+   "chunk-3v3wzg2e.js#sZ",
+   "chunk-3v3wzg2e.js#jln"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-3xb70ww4/part-001.js",
+  "chunks": {
+   "chunk-3xb70ww4.js": 1
+  },
+  "bytes": 306,
+  "decls": [
+   "chunk-3xb70ww4.js#$gt"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-4121qate/part-001.js",
+  "chunks": {
+   "chunk-4121qate.js": 4
+  },
+  "bytes": 131,
+  "decls": [
+   "chunk-4121qate.js#sr",
+   "chunk-4121qate.js#ir",
+   "chunk-4121qate.js#jt",
+   "chunk-4121qate.js#R3"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-4121qate/part-002.js",
+  "chunks": {
+   "chunk-4121qate.js": 1
+  },
+  "bytes": 321,
+  "decls": [
+   "chunk-4121qate.js#na"
+  ]
+ },
+ {
+  "path": "_new/query.helpers-4163.ts",
+  "chunks": {
+   "chunk-4163ksv9.js": 6
+  },
+  "bytes": 564,
+  "decls": [
+   "chunk-4163ksv9.js#d",
+   "chunk-4163ksv9.js#r",
+   "chunk-4163ksv9.js#l",
+   "chunk-4163ksv9.js#a",
+   "chunk-4163ksv9.js#hMs",
+   "chunk-4163ksv9.js#yMs"
+  ]
+ },
+ {
+  "path": "_new/primeWorkspaceRoots.ts",
+  "chunks": {
+   "chunk-43p9vp1g.js": 1
+  },
+  "bytes": 223,
+  "decls": [
+   "chunk-43p9vp1g.js#e7r"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-4m46mxx9/part-001.js",
+  "chunks": {
+   "chunk-4m46mxx9.js": 1
+  },
+  "bytes": 150,
+  "decls": [
+   "chunk-4m46mxx9.js#me"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-4m46mxx9/part-002.js",
+  "chunks": {
+   "chunk-4m46mxx9.js": 1
+  },
+  "bytes": 1488,
+  "decls": [
+   "chunk-4m46mxx9.js#de"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-4m46mxx9/part-003.js",
+  "chunks": {
+   "chunk-4m46mxx9.js": 1
+  },
+  "bytes": 87,
+  "decls": [
+   "chunk-4m46mxx9.js#ve"
+  ]
+ },
+ {
+  "path": "_new/isViolinFretEnabled.ts",
+  "chunks": {
+   "chunk-4qkxr5m3.js": 3
+  },
+  "bytes": 145,
+  "decls": [
+   "chunk-4qkxr5m3.js#n",
+   "chunk-4qkxr5m3.js#LLi",
+   "chunk-4qkxr5m3.js#lpo"
+  ]
+ },
+ {
+  "path": "_new/dialingLauncherFrom.ts",
+  "chunks": {
+   "chunk-4r034kvt.js": 5
+  },
+  "bytes": 1558,
+  "decls": [
+   "chunk-4r034kvt.js#kfo",
+   "chunk-4r034kvt.js#h",
+   "chunk-4r034kvt.js#gji",
+   "chunk-4r034kvt.js#m",
+   "chunk-4r034kvt.js#hji"
+  ]
+ },
+ {
+  "path": "_new/apply3PDefaultFallbacks.ts",
+  "chunks": {
+   "chunk-4r745zza.js": 12
+  },
+  "bytes": 6486,
+  "decls": [
+   "chunk-4r745zza.js#P",
+   "chunk-4r745zza.js#D",
+   "chunk-4r745zza.js#SM",
+   "chunk-4r745zza.js#qFt",
+   "chunk-4r745zza.js#_",
+   "chunk-4r745zza.js#O",
+   "chunk-4r745zza.js#SHr",
+   "chunk-4r745zza.js#nIo",
+   "chunk-4r745zza.js#L",
+   "chunk-4r745zza.js#I",
+   "chunk-4r745zza.js#M",
+   "chunk-4r745zza.js#N"
+  ]
+ },
+ {
+  "path": "_misplaced/utils/secureStorage/fallbackStorage.ts",
+  "chunks": {
+   "chunk-4r745zza.js": 1
+  },
+  "bytes": 163,
+  "decls": [
+   "chunk-4r745zza.js#A"
+  ]
+ },
+ {
+  "path": "_new/DESCRIPTION.ts",
+  "chunks": {
+   "chunk-4y7fknwa.js": 7,
+   "chunk-afjz283a.js": 1,
+   "chunk-fppkdgy4.js": 1,
+   "chunk-kfxfsh2y.js": 1,
+   "chunk-ydxavk0r.js": 1
+  },
+  "bytes": 11778,
+  "decls": [
+   "chunk-4y7fknwa.js#eVn",
+   "chunk-4y7fknwa.js#r",
+   "chunk-4y7fknwa.js#n",
+   "chunk-4y7fknwa.js#i",
+   "chunk-4y7fknwa.js#l",
+   "chunk-4y7fknwa.js#y0r",
+   "chunk-4y7fknwa.js#qzi",
+   "chunk-afjz283a.js#qp",
+   "chunk-fppkdgy4.js#aot",
+   "chunk-kfxfsh2y.js#Tln",
+   "chunk-ydxavk0r.js#kln"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-530hfzwb/part-001.js",
+  "chunks": {
+   "chunk-530hfzwb.js": 1
+  },
+  "bytes": 49,
+  "decls": [
+   "chunk-530hfzwb.js#Be"
+  ]
+ },
+ {
+  "path": "_new/adoptSubagentPublishArms.ts",
+  "chunks": {
+   "chunk-59vafc9k.js": 7
+  },
+  "bytes": 1577,
+  "decls": [
+   "chunk-59vafc9k.js#u",
+   "chunk-59vafc9k.js#VCo",
+   "chunk-59vafc9k.js#fDr",
+   "chunk-59vafc9k.js#l",
+   "chunk-59vafc9k.js#d",
+   "chunk-59vafc9k.js#m",
+   "chunk-59vafc9k.js#yzi"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-5aas12zq/part-001.js",
+  "chunks": {
+   "chunk-5aas12zq.js": 1
+  },
+  "bytes": 76,
+  "decls": [
+   "chunk-5aas12zq.js#ue"
+  ]
+ },
+ {
+  "path": "_new/listAgentsForModel.ts",
+  "chunks": {
+   "chunk-5cp2fssw.js": 30
+  },
+  "bytes": 13773,
+  "decls": [
+   "chunk-5cp2fssw.js#v",
+   "chunk-5cp2fssw.js#B",
+   "chunk-5cp2fssw.js#QAo",
+   "chunk-5cp2fssw.js#V",
+   "chunk-5cp2fssw.js#Y",
+   "chunk-5cp2fssw.js#R",
+   "chunk-5cp2fssw.js#ZAo",
+   "chunk-5cp2fssw.js#szi",
+   "chunk-5cp2fssw.js#D",
+   "chunk-5cp2fssw.js#M",
+   "chunk-5cp2fssw.js#U",
+   "chunk-5cp2fssw.js#Q",
+   "chunk-5cp2fssw.js#H",
+   "chunk-5cp2fssw.js#A",
+   "chunk-5cp2fssw.js#W",
+   "chunk-5cp2fssw.js#ne",
+   "chunk-5cp2fssw.js#X",
+   "chunk-5cp2fssw.js#L",
+   "chunk-5cp2fssw.js#I",
+   "chunk-5cp2fssw.js#C",
+   "chunk-5cp2fssw.js#te",
+   "chunk-5cp2fssw.js#se",
+   "chunk-5cp2fssw.js#ie",
+   "chunk-5cp2fssw.js#eCo",
+   "chunk-5cp2fssw.js#oe",
+   "chunk-5cp2fssw.js#ae",
+   "chunk-5cp2fssw.js#N",
+   "chunk-5cp2fssw.js#G",
+   "chunk-5cp2fssw.js#S",
+   "chunk-5cp2fssw.js#re"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-5dq2r0r3/part-001.js",
+  "chunks": {
+   "chunk-5dq2r0r3.js": 2
+  },
+  "bytes": 193,
+  "decls": [
+   "chunk-5dq2r0r3.js#r",
+   "chunk-5dq2r0r3.js#Vkn"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-5jgfyd2q/part-001.js",
+  "chunks": {
+   "chunk-5jgfyd2q.js": 1
+  },
+  "bytes": 554,
+  "decls": [
+   "chunk-5jgfyd2q.js#iwe"
+  ]
+ },
+ {
+  "path": "_new/setReplBridgeHandle.ts",
+  "chunks": {
+   "chunk-5ktj1vf9.js": 36
+  },
+  "bytes": 6595,
+  "decls": [
+   "chunk-5ktj1vf9.js#u",
+   "chunk-5ktj1vf9.js#hEn",
+   "chunk-5ktj1vf9.js#XS",
+   "chunk-5ktj1vf9.js#iir",
+   "chunk-5ktj1vf9.js#Rd",
+   "chunk-5ktj1vf9.js#I8r",
+   "chunk-5ktj1vf9.js#j4e",
+   "chunk-5ktj1vf9.js#rXo",
+   "chunk-5ktj1vf9.js#oXo",
+   "chunk-5ktj1vf9.js#sXo",
+   "chunk-5ktj1vf9.js#yEn",
+   "chunk-5ktj1vf9.js#iXo",
+   "chunk-5ktj1vf9.js#a",
+   "chunk-5ktj1vf9.js#d",
+   "chunk-5ktj1vf9.js#XFi",
+   "chunk-5ktj1vf9.js#m",
+   "chunk-5ktj1vf9.js#aXo",
+   "chunk-5ktj1vf9.js#S",
+   "chunk-5ktj1vf9.js#Z$e",
+   "chunk-5ktj1vf9.js#g4t",
+   "chunk-5ktj1vf9.js#lXo",
+   "chunk-5ktj1vf9.js#f",
+   "chunk-5ktj1vf9.js#W4e",
+   "chunk-5ktj1vf9.js#dXo",
+   "chunk-5ktj1vf9.js#cXo",
+   "chunk-5ktj1vf9.js#dwe",
+   "chunk-5ktj1vf9.js#uXo",
+   "chunk-5ktj1vf9.js#fXo",
+   "chunk-5ktj1vf9.js#O8r",
+   "chunk-5ktj1vf9.js#pXo",
+   "chunk-5ktj1vf9.js#air",
+   "chunk-5ktj1vf9.js#_En",
+   "chunk-5ktj1vf9.js#bEn",
+   "chunk-5ktj1vf9.js#mXo",
+   "chunk-5ktj1vf9.js#G4e",
+   "chunk-5ktj1vf9.js#p"
+  ]
+ },
+ {
+  "path": "_new/gatherHostInventory.ts",
+  "chunks": {
+   "chunk-5mav84cq.js": 3
+  },
+  "bytes": 952,
+  "decls": [
+   "chunk-5mav84cq.js#c",
+   "chunk-5mav84cq.js#Pxr",
+   "chunk-5mav84cq.js#BWi"
+  ]
+ },
+ {
+  "path": "_new/openSpill.ts",
+  "chunks": {
+   "chunk-5wx09b4h.js": 3
+  },
+  "bytes": 1136,
+  "decls": [
+   "chunk-5wx09b4h.js#S",
+   "chunk-5wx09b4h.js#wMo",
+   "chunk-5wx09b4h.js#V0r"
+  ]
+ },
+ {
+  "path": "_new/primeSettings.ts",
+  "chunks": {
+   "chunk-5x106wnr.js": 25
+  },
+  "bytes": 12665,
+  "decls": [
+   "chunk-5x106wnr.js#b",
+   "chunk-5x106wnr.js#v",
+   "chunk-5x106wnr.js#hts",
+   "chunk-5x106wnr.js#F",
+   "chunk-5x106wnr.js#R",
+   "chunk-5x106wnr.js#N",
+   "chunk-5x106wnr.js#T",
+   "chunk-5x106wnr.js#yts",
+   "chunk-5x106wnr.js#NTn",
+   "chunk-5x106wnr.js#x",
+   "chunk-5x106wnr.js#W",
+   "chunk-5x106wnr.js#B",
+   "chunk-5x106wnr.js#M",
+   "chunk-5x106wnr.js#O",
+   "chunk-5x106wnr.js#L",
+   "chunk-5x106wnr.js#P",
+   "chunk-5x106wnr.js#U",
+   "chunk-5x106wnr.js#A",
+   "chunk-5x106wnr.js#C",
+   "chunk-5x106wnr.js#H",
+   "chunk-5x106wnr.js#G",
+   "chunk-5x106wnr.js#Q",
+   "chunk-5x106wnr.js#X",
+   "chunk-5x106wnr.js#I",
+   "chunk-5x106wnr.js#E"
+  ]
+ },
+ {
+  "path": "_misplaced/services/claudeAiLimits.ts",
+  "chunks": {
+   "chunk-5x106wnr.js": 1
+  },
+  "bytes": 69,
+  "decls": [
+   "chunk-5x106wnr.js#y"
+  ]
+ },
+ {
+  "path": "_new/primeSettings.helpers-5x10.ts",
+  "chunks": {
+   "chunk-5x106wnr.js": 3
+  },
+  "bytes": 784,
+  "decls": [
+   "chunk-5x106wnr.js#q",
+   "chunk-5x106wnr.js#w",
+   "chunk-5x106wnr.js#k"
+  ]
+ },
+ {
+  "path": "_new/adoptRunnerDeclaration.ts",
+  "chunks": {
+   "chunk-5x3g79tf.js": 4
+  },
+  "bytes": 553,
+  "decls": [
+   "chunk-5x3g79tf.js#trs",
+   "chunk-5x3g79tf.js#bAn",
+   "chunk-5x3g79tf.js#rrs",
+   "chunk-5x3g79tf.js#XVi"
+  ]
+ },
+ {
+  "path": "_new/registerWorkflowAuthoringSkill.ts",
+  "chunks": {
+   "chunk-60vpedhe.js": 2
+  },
+  "bytes": 468,
+  "decls": [
+   "chunk-60vpedhe.js#oMr",
+   "chunk-60vpedhe.js#RGi"
+  ]
+ },
+ {
+  "path": "_new/CloudSessionReads.ts",
+  "chunks": {
+   "chunk-63n281q4.js": 9
+  },
+  "bytes": 7489,
+  "decls": [
+   "chunk-63n281q4.js#F",
+   "chunk-63n281q4.js#DLi",
+   "chunk-63n281q4.js#Wvr",
+   "chunk-63n281q4.js#Gvr",
+   "chunk-63n281q4.js#TZt",
+   "chunk-63n281q4.js#AZt",
+   "chunk-63n281q4.js#GR",
+   "chunk-63n281q4.js#x",
+   "chunk-63n281q4.js#P"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-648vry02/part-001.js",
+  "chunks": {
+   "chunk-648vry02.js": 2
+  },
+  "bytes": 464,
+  "decls": [
+   "chunk-648vry02.js#twr",
+   "chunk-648vry02.js#nwr"
+  ]
+ },
+ {
+  "path": "_new/controlRequest.ts",
+  "chunks": {
+   "chunk-6ffkpva1.js": 5
+  },
+  "bytes": 2685,
+  "decls": [
+   "chunk-6ffkpva1.js#Yh",
+   "chunk-6ffkpva1.js#v",
+   "chunk-6ffkpva1.js#Ytn",
+   "chunk-6ffkpva1.js#w",
+   "chunk-6ffkpva1.js#Cyo"
+  ]
+ },
+ {
+  "path": "_misplaced/buddy/sprites.ts",
+  "chunks": {
+   "chunk-6ht21p2a.js": 1
+  },
+  "bytes": 26,
+  "decls": [
+   "chunk-6ht21p2a.js#En"
+  ]
+ },
+ {
+  "path": "_new/credentialsStoreFor.ts",
+  "chunks": {
+   "chunk-6tm3rt42.js": 16
+  },
+  "bytes": 4621,
+  "decls": [
+   "chunk-6tm3rt42.js#f",
+   "chunk-6tm3rt42.js#N",
+   "chunk-6tm3rt42.js#P",
+   "chunk-6tm3rt42.js#T",
+   "chunk-6tm3rt42.js#g",
+   "chunk-6tm3rt42.js#B",
+   "chunk-6tm3rt42.js#m",
+   "chunk-6tm3rt42.js#w",
+   "chunk-6tm3rt42.js#v",
+   "chunk-6tm3rt42.js#E",
+   "chunk-6tm3rt42.js#y",
+   "chunk-6tm3rt42.js#R",
+   "chunk-6tm3rt42.js#A",
+   "chunk-6tm3rt42.js#YA",
+   "chunk-6tm3rt42.js#_Rt",
+   "chunk-6tm3rt42.js#I"
+  ]
+ },
+ {
+  "path": "_new/printRemoteControlHelp.ts",
+  "chunks": {
+   "chunk-6w5h3e35.js": 2
+  },
+  "bytes": 4679,
+  "decls": [
+   "chunk-6w5h3e35.js#oxr",
+   "chunk-6w5h3e35.js#hbo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-6zvepy0r/part-001.js",
+  "chunks": {
+   "chunk-6zvepy0r.js": 1
+  },
+  "bytes": 97,
+  "decls": [
+   "chunk-6zvepy0r.js#s2t"
+  ]
+ },
+ {
+  "path": "_new/parseExternalEventWake.ts",
+  "chunks": {
+   "chunk-71rdrfpa.js": 14
+  },
+  "bytes": 3389,
+  "decls": [
+   "chunk-71rdrfpa.js#W0i",
+   "chunk-71rdrfpa.js#oGs",
+   "chunk-71rdrfpa.js#O",
+   "chunk-71rdrfpa.js#c",
+   "chunk-71rdrfpa.js#s_e",
+   "chunk-71rdrfpa.js#v",
+   "chunk-71rdrfpa.js#h2i",
+   "chunk-71rdrfpa.js#B",
+   "chunk-71rdrfpa.js#D",
+   "chunk-71rdrfpa.js#I",
+   "chunk-71rdrfpa.js#Eze",
+   "chunk-71rdrfpa.js#ZVn",
+   "chunk-71rdrfpa.js#s_t",
+   "chunk-71rdrfpa.js#xMo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-79gnqwq0/part-001.js",
+  "chunks": {
+   "chunk-79gnqwq0.js": 1
+  },
+  "bytes": 47,
+  "decls": [
+   "chunk-79gnqwq0.js#r"
+  ]
+ },
+ {
+  "path": "_new/spawnForkFromDirective.ts",
+  "chunks": {
+   "chunk-7jbxc8kr.js": 1
+  },
+  "bytes": 2727,
+  "decls": [
+   "chunk-7jbxc8kr.js#Sin"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-7kpfrhzn/part-001.js",
+  "chunks": {
+   "chunk-7kpfrhzn.js": 5
+  },
+  "bytes": 2837,
+  "decls": [
+   "chunk-7kpfrhzn.js#Z",
+   "chunk-7kpfrhzn.js#wr",
+   "chunk-7kpfrhzn.js#Oe",
+   "chunk-7kpfrhzn.js#Er",
+   "chunk-7kpfrhzn.js#Sr"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-7sw8gya5/part-001.js",
+  "chunks": {
+   "chunk-7sw8gya5.js": 1
+  },
+  "bytes": 4,
+  "decls": [
+   "chunk-7sw8gya5.js#@909"
+  ]
+ },
+ {
+  "path": "_misplaced/services/api/errorUtils.ts",
+  "chunks": {
+   "chunk-7t4fmt2f.js": 3
+  },
+  "bytes": 419,
+  "decls": [
+   "chunk-7t4fmt2f.js#ai",
+   "chunk-7t4fmt2f.js#di",
+   "chunk-7t4fmt2f.js#li"
+  ]
+ },
+ {
+  "path": "_new/createTokenBucket.ts",
+  "chunks": {
+   "chunk-7y5e5tys.js": 2
+  },
+  "bytes": 282,
+  "decls": [
+   "chunk-7y5e5tys.js#lAe",
+   "chunk-7y5e5tys.js#cAe"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-847rdpmn/part-001.js",
+  "chunks": {
+   "chunk-847rdpmn.js": 1
+  },
+  "bytes": 54,
+  "decls": [
+   "chunk-847rdpmn.js#Uys"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-847rdpmn/part-002.js",
+  "chunks": {
+   "chunk-847rdpmn.js": 4
+  },
+  "bytes": 533,
+  "decls": [
+   "chunk-847rdpmn.js#we",
+   "chunk-847rdpmn.js#sV",
+   "chunk-847rdpmn.js#AMe",
+   "chunk-847rdpmn.js#Gut"
+  ]
+ },
+ {
+  "path": "_new/canonicalJson.ts",
+  "chunks": {
+   "chunk-869v6e0e.js": 12
+  },
+  "bytes": 2771,
+  "decls": [
+   "chunk-869v6e0e.js#k",
+   "chunk-869v6e0e.js#aUr",
+   "chunk-869v6e0e.js#E",
+   "chunk-869v6e0e.js#f",
+   "chunk-869v6e0e.js#m6n",
+   "chunk-869v6e0e.js#P",
+   "chunk-869v6e0e.js#tKi",
+   "chunk-869v6e0e.js#lUr",
+   "chunk-869v6e0e.js#xNo",
+   "chunk-869v6e0e.js#YZe",
+   "chunk-869v6e0e.js#v",
+   "chunk-869v6e0e.js#y"
+  ]
+ },
+ {
+  "path": "_new/reclaimSessionNameOnResume.ts",
+  "chunks": {
+   "chunk-897ngh1d.js": 27
+  },
+  "bytes": 6363,
+  "decls": [
+   "chunk-897ngh1d.js#Y",
+   "chunk-897ngh1d.js#A",
+   "chunk-897ngh1d.js#E",
+   "chunk-897ngh1d.js#D",
+   "chunk-897ngh1d.js#O",
+   "chunk-897ngh1d.js#F",
+   "chunk-897ngh1d.js#T",
+   "chunk-897ngh1d.js#I",
+   "chunk-897ngh1d.js#LA",
+   "chunk-897ngh1d.js#yYo",
+   "chunk-897ngh1d.js#_Yo",
+   "chunk-897ngh1d.js#LYr",
+   "chunk-897ngh1d.js#C",
+   "chunk-897ngh1d.js#P",
+   "chunk-897ngh1d.js#ibn",
+   "chunk-897ngh1d.js#U",
+   "chunk-897ngh1d.js#R",
+   "chunk-897ngh1d.js#Ort",
+   "chunk-897ngh1d.js#x",
+   "chunk-897ngh1d.js#b",
+   "chunk-897ngh1d.js#z",
+   "chunk-897ngh1d.js#_",
+   "chunk-897ngh1d.js#bYo",
+   "chunk-897ngh1d.js#cnr",
+   "chunk-897ngh1d.js#HYr",
+   "chunk-897ngh1d.js#fie",
+   "chunk-897ngh1d.js#SYo"
+  ]
+ },
+ {
+  "path": "_new/collectWorktreeState.ts",
+  "chunks": {
+   "chunk-8hayd0gw.js": 13
+  },
+  "bytes": 3640,
+  "decls": [
+   "chunk-8hayd0gw.js#pKs",
+   "chunk-8hayd0gw.js#sUr",
+   "chunk-8hayd0gw.js#CNo",
+   "chunk-8hayd0gw.js#k",
+   "chunk-8hayd0gw.js#T",
+   "chunk-8hayd0gw.js#u",
+   "chunk-8hayd0gw.js#O",
+   "chunk-8hayd0gw.js#S",
+   "chunk-8hayd0gw.js#D",
+   "chunk-8hayd0gw.js#_",
+   "chunk-8hayd0gw.js#c",
+   "chunk-8hayd0gw.js#x",
+   "chunk-8hayd0gw.js#R"
+  ]
+ },
+ {
+  "path": "_new/hasPolicyDiverged.ts",
+  "chunks": {
+   "chunk-8nbkhts5.js": 2
+  },
+  "bytes": 154,
+  "decls": [
+   "chunk-8nbkhts5.js#kFn",
+   "chunk-8nbkhts5.js#Ktn"
+  ]
+ },
+ {
+  "path": "_new/logFeatureBadAsync.ts",
+  "chunks": {
+   "chunk-8nhse09v.js": 13
+  },
+  "bytes": 901,
+  "decls": [
+   "chunk-8nhse09v.js#Fe",
+   "chunk-8nhse09v.js#W",
+   "chunk-8nhse09v.js#ke",
+   "chunk-8nhse09v.js#ODn",
+   "chunk-8nhse09v.js#hre",
+   "chunk-8nhse09v.js#r7",
+   "chunk-8nhse09v.js#g",
+   "chunk-8nhse09v.js#m",
+   "chunk-8nhse09v.js#f",
+   "chunk-8nhse09v.js#jr",
+   "chunk-8nhse09v.js#Yt",
+   "chunk-8nhse09v.js#da",
+   "chunk-8nhse09v.js#Yr"
+  ]
+ },
+ {
+  "path": "_new/productionUnboundCreatesDeps.ts",
+  "chunks": {
+   "chunk-8rjqe6hb.js": 8
+  },
+  "bytes": 1618,
+  "decls": [
+   "chunk-8rjqe6hb.js#b",
+   "chunk-8rjqe6hb.js#c",
+   "chunk-8rjqe6hb.js#m",
+   "chunk-8rjqe6hb.js#y",
+   "chunk-8rjqe6hb.js#v",
+   "chunk-8rjqe6hb.js#a2i",
+   "chunk-8rjqe6hb.js#oMo",
+   "chunk-8rjqe6hb.js#sMo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-93zax7h2/part-001.js",
+  "chunks": {
+   "chunk-93zax7h2.js": 1
+  },
+  "bytes": 862,
+  "decls": [
+   "chunk-93zax7h2.js#Lqe"
+  ]
+ },
+ {
+  "path": "_new/fetchInboxMessagePrompt.ts",
+  "chunks": {
+   "chunk-985e9jcx.js": 5
+  },
+  "bytes": 4328,
+  "decls": [
+   "chunk-985e9jcx.js#Tpe",
+   "chunk-985e9jcx.js#s",
+   "chunk-985e9jcx.js#g6r",
+   "chunk-985e9jcx.js#h6r",
+   "chunk-985e9jcx.js#r"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-9cjx5pnm/part-001.js",
+  "chunks": {
+   "chunk-9cjx5pnm.js": 2
+  },
+  "bytes": 144,
+  "decls": [
+   "chunk-9cjx5pnm.js#Se",
+   "chunk-9cjx5pnm.js#C"
+  ]
+ },
+ {
+  "path": "_new/encodeServedOutput.ts",
+  "chunks": {
+   "chunk-9fr8dc9p.js": 3
+  },
+  "bytes": 370,
+  "decls": [
+   "chunk-9fr8dc9p.js#Sji",
+   "chunk-9fr8dc9p.js#Hvr",
+   "chunk-9fr8dc9p.js#yLt"
+  ]
+ },
+ {
+  "path": "_new/encodeSymlinkReparseData.ts",
+  "chunks": {
+   "chunk-9gakhe7s.js": 14
+  },
+  "bytes": 6566,
+  "decls": [
+   "chunk-9gakhe7s.js#yk",
+   "chunk-9gakhe7s.js#Sze",
+   "chunk-9gakhe7s.js#G0r",
+   "chunk-9gakhe7s.js#E",
+   "chunk-9gakhe7s.js#p",
+   "chunk-9gakhe7s.js#IAe",
+   "chunk-9gakhe7s.js#L",
+   "chunk-9gakhe7s.js#$ln",
+   "chunk-9gakhe7s.js#hMo",
+   "chunk-9gakhe7s.js#D",
+   "chunk-9gakhe7s.js#T",
+   "chunk-9gakhe7s.js#f2i",
+   "chunk-9gakhe7s.js#_",
+   "chunk-9gakhe7s.js#y"
+  ]
+ },
+ {
+  "path": "_new/decodeHearthWorkerBinding.ts",
+  "chunks": {
+   "chunk-9wab212f.js": 4
+  },
+  "bytes": 1766,
+  "decls": [
+   "chunk-9wab212f.js#Tji",
+   "chunk-9wab212f.js#Zfo",
+   "chunk-9wab212f.js#p",
+   "chunk-9wab212f.js#Aji"
+  ]
+ },
+ {
+  "path": "_new/APPIFACT_REPL_TOOL_NAME.ts",
+  "chunks": {
+   "chunk-9xrq2pqv.js": 1
+  },
+  "bytes": 4104,
+  "decls": [
+   "chunk-9xrq2pqv.js#s5e"
+  ]
+ },
+ {
+  "path": "_new/POWERUP_DISCOVERY_COPY.ts",
+  "chunks": {
+   "chunk-a1p5y6g9.js": 2
+  },
+  "bytes": 436,
+  "decls": [
+   "chunk-a1p5y6g9.js#gWe",
+   "chunk-a1p5y6g9.js#tho"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-a2g5s7cw/part-001.js",
+  "chunks": {
+   "chunk-a2g5s7cw.js": 1
+  },
+  "bytes": 24,
+  "decls": [
+   "chunk-a2g5s7cw.js#jG"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-aat7wt0p/part-001.js",
+  "chunks": {
+   "chunk-aat7wt0p.js": 1
+  },
+  "bytes": 24,
+  "decls": [
+   "chunk-aat7wt0p.js#dt"
+  ]
+ },
+ {
+  "path": "_new/fetchOrgConfigRequiredFlagServedToBearer.ts",
+  "chunks": {
+   "chunk-ad1qk1kv.js": 6
+  },
+  "bytes": 592,
+  "decls": [
+   "chunk-ad1qk1kv.js#tQe",
+   "chunk-ad1qk1kv.js#n",
+   "chunk-ad1qk1kv.js#ywo",
+   "chunk-ad1qk1kv.js#sGi",
+   "chunk-ad1qk1kv.js#_wo",
+   "chunk-ad1qk1kv.js#bwo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-aepeg2w5/part-001.js",
+  "chunks": {
+   "chunk-aepeg2w5.js": 2
+  },
+  "bytes": 26,
+  "decls": [
+   "chunk-aepeg2w5.js#@129194",
+   "chunk-aepeg2w5.js#@129207"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-aepeg2w5/part-002.js",
+  "chunks": {
+   "chunk-aepeg2w5.js": 4
+  },
+  "bytes": 445,
+  "decls": [
+   "chunk-aepeg2w5.js#SD",
+   "chunk-aepeg2w5.js#wD",
+   "chunk-aepeg2w5.js#OD",
+   "chunk-aepeg2w5.js#La"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-aepeg2w5/part-003.js",
+  "chunks": {
+   "chunk-aepeg2w5.js": 1
+  },
+  "bytes": 152,
+  "decls": [
+   "chunk-aepeg2w5.js#kxt"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-aepeg2w5/part-004.js",
+  "chunks": {
+   "chunk-aepeg2w5.js": 1
+  },
+  "bytes": 310,
+  "decls": [
+   "chunk-aepeg2w5.js#Ri"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-aepeg2w5/part-005.js",
+  "chunks": {
+   "chunk-aepeg2w5.js": 1
+  },
+  "bytes": 27,
+  "decls": [
+   "chunk-aepeg2w5.js#vto"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-aepeg2w5/part-006.js",
+  "chunks": {
+   "chunk-aepeg2w5.js": 1
+  },
+  "bytes": 36,
+  "decls": [
+   "chunk-aepeg2w5.js#Lv"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-aepeg2w5/part-007.js",
+  "chunks": {
+   "chunk-aepeg2w5.js": 2
+  },
+  "bytes": 305,
+  "decls": [
+   "chunk-aepeg2w5.js#iki",
+   "chunk-aepeg2w5.js#yge"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-aepeg2w5/part-008.js",
+  "chunks": {
+   "chunk-aepeg2w5.js": 1
+  },
+  "bytes": 41,
+  "decls": [
+   "chunk-aepeg2w5.js#oR"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-aepeg2w5/part-009.js",
+  "chunks": {
+   "chunk-aepeg2w5.js": 5
+  },
+  "bytes": 962,
+  "decls": [
+   "chunk-aepeg2w5.js#W8t",
+   "chunk-aepeg2w5.js#WO",
+   "chunk-aepeg2w5.js#zO",
+   "chunk-aepeg2w5.js#hY",
+   "chunk-aepeg2w5.js#en"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-aepeg2w5/part-010.js",
+  "chunks": {
+   "chunk-aepeg2w5.js": 2
+  },
+  "bytes": 282,
+  "decls": [
+   "chunk-aepeg2w5.js#KY",
+   "chunk-aepeg2w5.js#GY"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-ag5x7vhf/part-001.js",
+  "chunks": {
+   "chunk-ag5x7vhf.js": 1
+  },
+  "bytes": 461,
+  "decls": [
+   "chunk-ag5x7vhf.js#Jgo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-ag5x7vhf/part-002.js",
+  "chunks": {
+   "chunk-ag5x7vhf.js": 1
+  },
+  "bytes": 11,
+  "decls": [
+   "chunk-ag5x7vhf.js#K$n"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-ag5x7vhf/part-003.js",
+  "chunks": {
+   "chunk-ag5x7vhf.js": 1
+  },
+  "bytes": 117,
+  "decls": [
+   "chunk-ag5x7vhf.js#hm"
+  ]
+ },
+ {
+  "path": "_new/FocusManager.ts",
+  "chunks": {
+   "chunk-agvt6ygy.js": 1
+  },
+  "bytes": 225,
+  "decls": [
+   "chunk-agvt6ygy.js#rr"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-ah34pb7m/part-001.js",
+  "chunks": {
+   "chunk-ah34pb7m.js": 3
+  },
+  "bytes": 250,
+  "decls": [
+   "chunk-ah34pb7m.js#gR",
+   "chunk-ah34pb7m.js#fR",
+   "chunk-ah34pb7m.js#hR"
+  ]
+ },
+ {
+  "path": "_misplaced/tools/NotebookEditTool/UI.tsx",
+  "chunks": {
+   "chunk-ah34pb7m.js": 1
+  },
+  "bytes": 533,
+  "decls": [
+   "chunk-ah34pb7m.js#rr"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-ah34pb7m/part-002.js",
+  "chunks": {
+   "chunk-ah34pb7m.js": 4
+  },
+  "bytes": 4605,
+  "decls": [
+   "chunk-ah34pb7m.js#Tc",
+   "chunk-ah34pb7m.js#Mc",
+   "chunk-ah34pb7m.js#yc",
+   "chunk-ah34pb7m.js#Ps"
+  ]
+ },
+ {
+  "path": "_new/resolvedRoot.ts",
+  "chunks": {
+   "chunk-ama6w91h.js": 2
+  },
+  "bytes": 237,
+  "decls": [
+   "chunk-ama6w91h.js#Rln",
+   "chunk-ama6w91h.js#xln"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-axmbhcjg/part-001.js",
+  "chunks": {
+   "chunk-axmbhcjg.js": 2
+  },
+  "bytes": 152,
+  "decls": [
+   "chunk-axmbhcjg.js#gn",
+   "chunk-axmbhcjg.js#ut"
+  ]
+ },
+ {
+  "path": "_new/getChromeServerPolicyRefusal.ts",
+  "chunks": {
+   "chunk-b8kdmzpq.js": 3
+  },
+  "bytes": 347,
+  "decls": [
+   "chunk-b8kdmzpq.js#Vce",
+   "chunk-b8kdmzpq.js#MTo",
+   "chunk-b8kdmzpq.js#TWn"
+  ]
+ },
+ {
+  "path": "_new/noteOwnerInboxNoticeDelivery.ts",
+  "chunks": {
+   "chunk-baf1th58.js": 6
+  },
+  "bytes": 3148,
+  "decls": [
+   "chunk-baf1th58.js#s",
+   "chunk-baf1th58.js#a",
+   "chunk-baf1th58.js#u",
+   "chunk-baf1th58.js#QVn",
+   "chunk-baf1th58.js#d",
+   "chunk-baf1th58.js#g2i"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-bhxaz9j0/part-001.js",
+  "chunks": {
+   "chunk-bhxaz9j0.js": 2
+  },
+  "bytes": 811,
+  "decls": [
+   "chunk-bhxaz9j0.js#Frt",
+   "chunk-bhxaz9j0.js#KC"
+  ]
+ },
+ {
+  "path": "_new/REPORT_MARK.ts",
+  "chunks": {
+   "chunk-bkss02w7.js": 3
+  },
+  "bytes": 94,
+  "decls": [
+   "chunk-bkss02w7.js#qwo",
+   "chunk-bkss02w7.js#@238",
+   "chunk-bkss02w7.js#ron"
+  ]
+ },
+ {
+  "path": "_new/registerPermissionsCommands.ts",
+  "chunks": {
+   "chunk-bm6cnxej.js": 4
+  },
+  "bytes": 6229,
+  "decls": [
+   "chunk-bm6cnxej.js#cJe",
+   "chunk-bm6cnxej.js#m",
+   "chunk-bm6cnxej.js#a",
+   "chunk-bm6cnxej.js#Myo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-bss4k1z9/part-001.js",
+  "chunks": {
+   "chunk-bss4k1z9.js": 1
+  },
+  "bytes": 139,
+  "decls": [
+   "chunk-bss4k1z9.js#He"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-bss4k1z9/part-002.js",
+  "chunks": {
+   "chunk-bss4k1z9.js": 1
+  },
+  "bytes": 9,
+  "decls": [
+   "chunk-bss4k1z9.js#ve"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-bss4k1z9/part-003.js",
+  "chunks": {
+   "chunk-bss4k1z9.js": 2
+  },
+  "bytes": 90,
+  "decls": [
+   "chunk-bss4k1z9.js#jt",
+   "chunk-bss4k1z9.js#gr"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-bwbq4xvm/part-001.js",
+  "chunks": {
+   "chunk-bwbq4xvm.js": 3
+  },
+  "bytes": 104,
+  "decls": [
+   "chunk-bwbq4xvm.js#s$",
+   "chunk-bwbq4xvm.js#foo",
+   "chunk-bwbq4xvm.js#nb"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-bzb0qnrm/part-001.js",
+  "chunks": {
+   "chunk-bzb0qnrm.js": 1
+  },
+  "bytes": 1329,
+  "decls": [
+   "chunk-bzb0qnrm.js#Cvr"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-c0cahhqh/part-001.js",
+  "chunks": {
+   "chunk-c0cahhqh.js": 1
+  },
+  "bytes": 132,
+  "decls": [
+   "chunk-c0cahhqh.js#E6"
+  ]
+ },
+ {
+  "path": "_new/flushAnalyticsSinks.ts",
+  "chunks": {
+   "chunk-c13g0cfa.js": 5
+  },
+  "bytes": 528,
+  "decls": [
+   "chunk-c13g0cfa.js#T4",
+   "chunk-c13g0cfa.js#o",
+   "chunk-c13g0cfa.js#u",
+   "chunk-c13g0cfa.js#t",
+   "chunk-c13g0cfa.js#gts"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-c55mbvfz/part-001.js",
+  "chunks": {
+   "chunk-c55mbvfz.js": 2
+  },
+  "bytes": 126,
+  "decls": [
+   "chunk-c55mbvfz.js#qo",
+   "chunk-c55mbvfz.js#Qe"
+  ]
+ },
+ {
+  "path": "_new/BROWSER_NOT_LISTED_TEXT.ts",
+  "chunks": {
+   "chunk-c8zmydch.js": 12
+  },
+  "bytes": 2367,
+  "decls": [
+   "chunk-c8zmydch.js#l",
+   "chunk-c8zmydch.js#yCr",
+   "chunk-c8zmydch.js#Tyo",
+   "chunk-c8zmydch.js#RPs",
+   "chunk-c8zmydch.js#_Cr",
+   "chunk-c8zmydch.js#Ayo",
+   "chunk-c8zmydch.js#qtn",
+   "chunk-c8zmydch.js#kWi",
+   "chunk-c8zmydch.js#DFn",
+   "chunk-c8zmydch.js#xPs",
+   "chunk-c8zmydch.js#bCr",
+   "chunk-c8zmydch.js#PPs"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-ca06bv0t/part-001.js",
+  "chunks": {
+   "chunk-ca06bv0t.js": 1
+  },
+  "bytes": 152,
+  "decls": [
+   "chunk-ca06bv0t.js#zTr"
+  ]
+ },
+ {
+  "path": "_new/resolveBridgeSlashOverride.ts",
+  "chunks": {
+   "chunk-ccc7emag.js": 8
+  },
+  "bytes": 3369,
+  "decls": [
+   "chunk-ccc7emag.js#TWi",
+   "chunk-ccc7emag.js#y",
+   "chunk-ccc7emag.js#_",
+   "chunk-ccc7emag.js#AWi",
+   "chunk-ccc7emag.js#CWi",
+   "chunk-ccc7emag.js#p",
+   "chunk-ccc7emag.js#S",
+   "chunk-ccc7emag.js#Oyo"
+  ]
+ },
+ {
+  "path": "_new/call.ts",
+  "chunks": {
+   "chunk-cefm4bvm.js": 1,
+   "chunk-kxw5j15d.js": 3,
+   "chunk-qfpyehtk.js": 7
+  },
+  "bytes": 13880,
+  "decls": [
+   "chunk-qfpyehtk.js#cDr",
+   "chunk-qfpyehtk.js#Y",
+   "chunk-qfpyehtk.js#J",
+   "chunk-qfpyehtk.js#q",
+   "chunk-qfpyehtk.js#z",
+   "chunk-qfpyehtk.js#Q",
+   "chunk-qfpyehtk.js#hzi",
+   "chunk-kxw5j15d.js#k",
+   "chunk-kxw5j15d.js#y",
+   "chunk-kxw5j15d.js#gPo",
+   "chunk-cefm4bvm.js#cho"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-cgr0tezp/part-001.js",
+  "chunks": {
+   "chunk-cgr0tezp.js": 1
+  },
+  "bytes": 226,
+  "decls": [
+   "chunk-cgr0tezp.js#hL"
+  ]
+ },
+ {
+  "path": "_new/checkManagedSettingsSecurity.ts",
+  "chunks": {
+   "chunk-cjtj3nae.js": 25
+  },
+  "bytes": 5921,
+  "decls": [
+   "chunk-cjtj3nae.js#y",
+   "chunk-cjtj3nae.js#v",
+   "chunk-cjtj3nae.js#R",
+   "chunk-cjtj3nae.js#w",
+   "chunk-cjtj3nae.js#C",
+   "chunk-cjtj3nae.js#r",
+   "chunk-cjtj3nae.js#xPo",
+   "chunk-cjtj3nae.js#Ean",
+   "chunk-cjtj3nae.js#D",
+   "chunk-cjtj3nae.js#zFt",
+   "chunk-cjtj3nae.js#Ayt",
+   "chunk-cjtj3nae.js#PPo",
+   "chunk-cjtj3nae.js#J2n",
+   "chunk-cjtj3nae.js#Cyt",
+   "chunk-cjtj3nae.js#aHr",
+   "chunk-cjtj3nae.js#IPo",
+   "chunk-cjtj3nae.js#OPo",
+   "chunk-cjtj3nae.js#KFt",
+   "chunk-cjtj3nae.js#MPo",
+   "chunk-cjtj3nae.js#DPo",
+   "chunk-cjtj3nae.js#p",
+   "chunk-cjtj3nae.js#S",
+   "chunk-cjtj3nae.js#LPo",
+   "chunk-cjtj3nae.js#Q2n",
+   "chunk-cjtj3nae.js#NPo"
+  ]
+ },
+ {
+  "path": "_new/cliArgvReader.ts",
+  "chunks": {
+   "chunk-cmr2yp8m.js": 3
+  },
+  "bytes": 99,
+  "decls": [
+   "chunk-cmr2yp8m.js#r",
+   "chunk-cmr2yp8m.js#pYi",
+   "chunk-cmr2yp8m.js#xbs"
+  ]
+ },
+ {
+  "path": "_new/checkBedrockDefaultAvailability.ts",
+  "chunks": {
+   "chunk-cnamfjf8.js": 16
+  },
+  "bytes": 7574,
+  "decls": [
+   "chunk-cnamfjf8.js#M",
+   "chunk-cnamfjf8.js#Fzi",
+   "chunk-cnamfjf8.js#Uzi",
+   "chunk-cnamfjf8.js#Bzi",
+   "chunk-cnamfjf8.js#jzi",
+   "chunk-cnamfjf8.js#S",
+   "chunk-cnamfjf8.js#w",
+   "chunk-cnamfjf8.js#O",
+   "chunk-cnamfjf8.js#B",
+   "chunk-cnamfjf8.js#nKn",
+   "chunk-cnamfjf8.js#A0i",
+   "chunk-cnamfjf8.js#P",
+   "chunk-cnamfjf8.js#K",
+   "chunk-cnamfjf8.js#I",
+   "chunk-cnamfjf8.js#bHr",
+   "chunk-cnamfjf8.js#L"
+  ]
+ },
+ {
+  "path": "_new/takeFileGrants.ts",
+  "chunks": {
+   "chunk-cp2ytehj.js": 5
+  },
+  "bytes": 321,
+  "decls": [
+   "chunk-cp2ytehj.js#t",
+   "chunk-cp2ytehj.js#dNo",
+   "chunk-cp2ytehj.js#J5n",
+   "chunk-cp2ytehj.js#J2i",
+   "chunk-cp2ytehj.js#cNo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-cqn8yadz/part-001.js",
+  "chunks": {
+   "chunk-cqn8yadz.js": 1
+  },
+  "bytes": 12,
+  "decls": [
+   "chunk-cqn8yadz.js#L"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-csq9ftr9/part-001.js",
+  "chunks": {
+   "chunk-csq9ftr9.js": 3
+  },
+  "bytes": 142,
+  "decls": [
+   "chunk-csq9ftr9.js#cie",
+   "chunk-csq9ftr9.js#Ce",
+   "chunk-csq9ftr9.js#nYo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-cyj440je/part-001.js",
+  "chunks": {
+   "chunk-cyj440je.js": 1
+  },
+  "bytes": 273,
+  "decls": [
+   "chunk-cyj440je.js#O9t"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-czffketc/part-001.js",
+  "chunks": {
+   "chunk-czffketc.js": 2
+  },
+  "bytes": 430,
+  "decls": [
+   "chunk-czffketc.js#a",
+   "chunk-czffketc.js#f"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-czx62zen/part-001.js",
+  "chunks": {
+   "chunk-czx62zen.js": 4
+  },
+  "bytes": 1113,
+  "decls": [
+   "chunk-czx62zen.js#Kmi",
+   "chunk-czx62zen.js#Vmi",
+   "chunk-czx62zen.js#ye",
+   "chunk-czx62zen.js#HYe"
+  ]
+ },
+ {
+  "path": "_new/runSteps.ts",
+  "chunks": {
+   "chunk-d6c8e5w8.js": 8
+  },
+  "bytes": 2772,
+  "decls": [
+   "chunk-d6c8e5w8.js#@375",
+   "chunk-d6c8e5w8.js#I",
+   "chunk-d6c8e5w8.js#U",
+   "chunk-d6c8e5w8.js#Emt",
+   "chunk-d6c8e5w8.js#MI",
+   "chunk-d6c8e5w8.js#b",
+   "chunk-d6c8e5w8.js#q",
+   "chunk-d6c8e5w8.js#O"
+  ]
+ },
+ {
+  "path": "_new/isPluginSkillToolEnabled.ts",
+  "chunks": {
+   "chunk-dbbfk5a2.js": 5
+  },
+  "bytes": 369,
+  "decls": [
+   "chunk-dbbfk5a2.js#r",
+   "chunk-dbbfk5a2.js#o",
+   "chunk-dbbfk5a2.js#yMo",
+   "chunk-dbbfk5a2.js#B7e",
+   "chunk-dbbfk5a2.js#p2i"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-dcmhvw5a/part-001.js",
+  "chunks": {
+   "chunk-dcmhvw5a.js": 3
+  },
+  "bytes": 280,
+  "decls": [
+   "chunk-dcmhvw5a.js#mm",
+   "chunk-dcmhvw5a.js#ci",
+   "chunk-dcmhvw5a.js#fm"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-dcmhvw5a/part-002.js",
+  "chunks": {
+   "chunk-dcmhvw5a.js": 2
+  },
+  "bytes": 52,
+  "decls": [
+   "chunk-dcmhvw5a.js#Eio",
+   "chunk-dcmhvw5a.js#ch"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-dcmhvw5a/part-003.js",
+  "chunks": {
+   "chunk-dcmhvw5a.js": 1
+  },
+  "bytes": 23,
+  "decls": [
+   "chunk-dcmhvw5a.js#yio"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-dcmhvw5a/part-004.js",
+  "chunks": {
+   "chunk-dcmhvw5a.js": 1
+  },
+  "bytes": 117,
+  "decls": [
+   "chunk-dcmhvw5a.js#YXt"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-dcmhvw5a/part-005.js",
+  "chunks": {
+   "chunk-dcmhvw5a.js": 1
+  },
+  "bytes": 577,
+  "decls": [
+   "chunk-dcmhvw5a.js#XXt"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-dcmhvw5a/part-006.js",
+  "chunks": {
+   "chunk-dcmhvw5a.js": 1
+  },
+  "bytes": 65,
+  "decls": [
+   "chunk-dcmhvw5a.js#hh"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-dcmhvw5a/part-007.js",
+  "chunks": {
+   "chunk-dcmhvw5a.js": 1
+  },
+  "bytes": 65,
+  "decls": [
+   "chunk-dcmhvw5a.js#qk"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-dcmhvw5a/part-008.js",
+  "chunks": {
+   "chunk-dcmhvw5a.js": 3
+  },
+  "bytes": 366,
+  "decls": [
+   "chunk-dcmhvw5a.js#BE",
+   "chunk-dcmhvw5a.js#GE",
+   "chunk-dcmhvw5a.js#NOt"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-dcmhvw5a/part-009.js",
+  "chunks": {
+   "chunk-dcmhvw5a.js": 1
+  },
+  "bytes": 22,
+  "decls": [
+   "chunk-dcmhvw5a.js#Pms"
+  ]
+ },
+ {
+  "path": "_new/withEditResult.ts",
+  "chunks": {
+   "chunk-dfyz39v9.js": 3
+  },
+  "bytes": 307,
+  "decls": [
+   "chunk-dfyz39v9.js#e",
+   "chunk-dfyz39v9.js#wfo",
+   "chunk-dfyz39v9.js#Efo"
+  ]
+ },
+ {
+  "path": "_new/isAppifactReplToolEnabled.ts",
+  "chunks": {
+   "chunk-djnrvf1b.js": 3
+  },
+  "bytes": 166,
+  "decls": [
+   "chunk-djnrvf1b.js#e",
+   "chunk-djnrvf1b.js#n",
+   "chunk-djnrvf1b.js#fHo"
+  ]
+ },
+ {
+  "path": "_new/ServedCallError.ts",
+  "chunks": {
+   "chunk-dnt9czc7.js": 1
+  },
+  "bytes": 68,
+  "decls": [
+   "chunk-dnt9czc7.js#Zft"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-dw613xrm/part-001.js",
+  "chunks": {
+   "chunk-dw613xrm.js": 1
+  },
+  "bytes": 94,
+  "decls": [
+   "chunk-dw613xrm.js#Hz"
+  ]
+ },
+ {
+  "path": "_new/writeUnattendedServingConsent.ts",
+  "chunks": {
+   "chunk-dw613xrm.js": 29
+  },
+  "bytes": 4693,
+  "decls": [
+   "chunk-dw613xrm.js#EKn",
+   "chunk-dw613xrm.js#v",
+   "chunk-dw613xrm.js#nUt",
+   "chunk-dw613xrm.js#IHr",
+   "chunk-dw613xrm.js#h",
+   "chunk-dw613xrm.js#sze",
+   "chunk-dw613xrm.js#N",
+   "chunk-dw613xrm.js#ize",
+   "chunk-dw613xrm.js#M",
+   "chunk-dw613xrm.js#i",
+   "chunk-dw613xrm.js#tZ",
+   "chunk-dw613xrm.js#c",
+   "chunk-dw613xrm.js#Oyt",
+   "chunk-dw613xrm.js#b",
+   "chunk-dw613xrm.js#rUt",
+   "chunk-dw613xrm.js#w",
+   "chunk-dw613xrm.js#x",
+   "chunk-dw613xrm.js#OHr",
+   "chunk-dw613xrm.js#x5",
+   "chunk-dw613xrm.js#MHr",
+   "chunk-dw613xrm.js#Van",
+   "chunk-dw613xrm.js#DHr",
+   "chunk-dw613xrm.js#gIo",
+   "chunk-dw613xrm.js#LHr",
+   "chunk-dw613xrm.js#R",
+   "chunk-dw613xrm.js#hIo",
+   "chunk-dw613xrm.js#C",
+   "chunk-dw613xrm.js#_7e",
+   "chunk-dw613xrm.js#oUt"
+  ]
+ },
+ {
+  "path": "_misplaced/context/notifications.tsx",
+  "chunks": {
+   "chunk-dwh5z7zb.js": 1
+  },
+  "bytes": 171,
+  "decls": [
+   "chunk-dwh5z7zb.js#dxs"
+  ]
+ },
+ {
+  "path": "_new/readSessionTunnelInput.ts",
+  "chunks": {
+   "chunk-e38pv7hv.js": 5
+  },
+  "bytes": 938,
+  "decls": [
+   "chunk-e38pv7hv.js#p",
+   "chunk-e38pv7hv.js#l",
+   "chunk-e38pv7hv.js#tvo",
+   "chunk-e38pv7hv.js#vGi",
+   "chunk-e38pv7hv.js#nvo"
+  ]
+ },
+ {
+  "path": "_new/answerToolOutputRequest.ts",
+  "chunks": {
+   "chunk-e3wfm0b3.js": 33
+  },
+  "bytes": 10193,
+  "decls": [
+   "chunk-e3wfm0b3.js#w",
+   "chunk-e3wfm0b3.js#b",
+   "chunk-e3wfm0b3.js#yji",
+   "chunk-e3wfm0b3.js#Ovr",
+   "chunk-e3wfm0b3.js#gLt",
+   "chunk-e3wfm0b3.js#I",
+   "chunk-e3wfm0b3.js#C",
+   "chunk-e3wfm0b3.js#_ji",
+   "chunk-e3wfm0b3.js#U",
+   "chunk-e3wfm0b3.js#Afo",
+   "chunk-e3wfm0b3.js#E",
+   "chunk-e3wfm0b3.js#_Zt",
+   "chunk-e3wfm0b3.js#hLt",
+   "chunk-e3wfm0b3.js#Cfo",
+   "chunk-e3wfm0b3.js#p",
+   "chunk-e3wfm0b3.js#D",
+   "chunk-e3wfm0b3.js#F",
+   "chunk-e3wfm0b3.js#v",
+   "chunk-e3wfm0b3.js#A",
+   "chunk-e3wfm0b3.js#bji",
+   "chunk-e3wfm0b3.js#M",
+   "chunk-e3wfm0b3.js#Mvr",
+   "chunk-e3wfm0b3.js#eXe",
+   "chunk-e3wfm0b3.js#Dvr",
+   "chunk-e3wfm0b3.js#k",
+   "chunk-e3wfm0b3.js#B",
+   "chunk-e3wfm0b3.js#T",
+   "chunk-e3wfm0b3.js#R",
+   "chunk-e3wfm0b3.js#j",
+   "chunk-e3wfm0b3.js#P",
+   "chunk-e3wfm0b3.js#S",
+   "chunk-e3wfm0b3.js#Lvr",
+   "chunk-e3wfm0b3.js#ept"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-001.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 4
+  },
+  "bytes": 958,
+  "decls": [
+   "chunk-e6aww6q8.js#Oht",
+   "chunk-e6aww6q8.js#Iht",
+   "chunk-e6aww6q8.js#jI",
+   "chunk-e6aww6q8.js#Dht"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-002.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 2
+  },
+  "bytes": 347,
+  "decls": [
+   "chunk-e6aww6q8.js#hyt",
+   "chunk-e6aww6q8.js#z3"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-003.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 3
+  },
+  "bytes": 258,
+  "decls": [
+   "chunk-e6aww6q8.js#cio",
+   "chunk-e6aww6q8.js#qde",
+   "chunk-e6aww6q8.js#fio"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-004.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 3
+  },
+  "bytes": 403,
+  "decls": [
+   "chunk-e6aww6q8.js#Rbt",
+   "chunk-e6aww6q8.js#Cbt",
+   "chunk-e6aww6q8.js#eue"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-005.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 3
+  },
+  "bytes": 755,
+  "decls": [
+   "chunk-e6aww6q8.js#WFe",
+   "chunk-e6aww6q8.js#rue",
+   "chunk-e6aww6q8.js#sue"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-006.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 1
+  },
+  "bytes": 148,
+  "decls": [
+   "chunk-e6aww6q8.js#QOt"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-007.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 1
+  },
+  "bytes": 58,
+  "decls": [
+   "chunk-e6aww6q8.js#jKr"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-008.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 1
+  },
+  "bytes": 40,
+  "decls": [
+   "chunk-e6aww6q8.js#Lme"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-009.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 3
+  },
+  "bytes": 194,
+  "decls": [
+   "chunk-e6aww6q8.js#yUt",
+   "chunk-e6aww6q8.js#ZAo",
+   "chunk-e6aww6q8.js#nhe"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-010.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 3
+  },
+  "bytes": 236,
+  "decls": [
+   "chunk-e6aww6q8.js#uGe",
+   "chunk-e6aww6q8.js#V0",
+   "chunk-e6aww6q8.js#Mxo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-011.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 2
+  },
+  "bytes": 205,
+  "decls": [
+   "chunk-e6aww6q8.js#Fze",
+   "chunk-e6aww6q8.js#Lye"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-012.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 1
+  },
+  "bytes": 285,
+  "decls": [
+   "chunk-e6aww6q8.js#p4t"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-013.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 1
+  },
+  "bytes": 252,
+  "decls": [
+   "chunk-e6aww6q8.js#jSe"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-014.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 1
+  },
+  "bytes": 39,
+  "decls": [
+   "chunk-e6aww6q8.js#L7t"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-015.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 1
+  },
+  "bytes": 148,
+  "decls": [
+   "chunk-e6aww6q8.js#uQt"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-016.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 2
+  },
+  "bytes": 117,
+  "decls": [
+   "chunk-e6aww6q8.js#$ee",
+   "chunk-e6aww6q8.js#ITe"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-017.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 2
+  },
+  "bytes": 224,
+  "decls": [
+   "chunk-e6aww6q8.js#u8s",
+   "chunk-e6aww6q8.js#Sln"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-018.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 2
+  },
+  "bytes": 626,
+  "decls": [
+   "chunk-e6aww6q8.js#Z9e",
+   "chunk-e6aww6q8.js#Pfr"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-019.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 1
+  },
+  "bytes": 176,
+  "decls": [
+   "chunk-e6aww6q8.js#dgr"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-020.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 1
+  },
+  "bytes": 287,
+  "decls": [
+   "chunk-e6aww6q8.js#jzr"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-021.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 1
+  },
+  "bytes": 69,
+  "decls": [
+   "chunk-e6aww6q8.js#Got"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-022.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 2
+  },
+  "bytes": 257,
+  "decls": [
+   "chunk-e6aww6q8.js#tzt",
+   "chunk-e6aww6q8.js#IWn"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-023.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 11
+  },
+  "bytes": 3975,
+  "decls": [
+   "chunk-e6aww6q8.js#ngs",
+   "chunk-e6aww6q8.js#ogs",
+   "chunk-e6aww6q8.js#t1n",
+   "chunk-e6aww6q8.js#n1n",
+   "chunk-e6aww6q8.js#rgs",
+   "chunk-e6aww6q8.js#sgs",
+   "chunk-e6aww6q8.js#igs",
+   "chunk-e6aww6q8.js#lIe",
+   "chunk-e6aww6q8.js#Mre",
+   "chunk-e6aww6q8.js#a1n",
+   "chunk-e6aww6q8.js#Q1o"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-024.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 1
+  },
+  "bytes": 168,
+  "decls": [
+   "chunk-e6aww6q8.js#Gre"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-e6aww6q8/part-025.js",
+  "chunks": {
+   "chunk-e6aww6q8.js": 2
+  },
+  "bytes": 174,
+  "decls": [
+   "chunk-e6aww6q8.js#zTs",
+   "chunk-e6aww6q8.js#X3n"
+  ]
+ },
+ {
+  "path": "_new/uploadTaskFile.ts",
+  "chunks": {
+   "chunk-edh48dyx.js": 19
+  },
+  "bytes": 4485,
+  "decls": [
+   "chunk-edh48dyx.js#pe",
+   "chunk-edh48dyx.js#me",
+   "chunk-edh48dyx.js#ke",
+   "chunk-edh48dyx.js#lji",
+   "chunk-edh48dyx.js#x",
+   "chunk-edh48dyx.js#dji",
+   "chunk-edh48dyx.js#z",
+   "chunk-edh48dyx.js#cji",
+   "chunk-edh48dyx.js#C",
+   "chunk-edh48dyx.js#I",
+   "chunk-edh48dyx.js#y",
+   "chunk-edh48dyx.js#dLt",
+   "chunk-edh48dyx.js#U",
+   "chunk-edh48dyx.js#j",
+   "chunk-edh48dyx.js#lfo",
+   "chunk-edh48dyx.js#D",
+   "chunk-edh48dyx.js#N",
+   "chunk-edh48dyx.js#b",
+   "chunk-edh48dyx.js#F"
+  ]
+ },
+ {
+  "path": "_new/startCrossSessionHoldReceipt.ts",
+  "chunks": {
+   "chunk-eeckpj27.js": 14
+  },
+  "bytes": 5657,
+  "decls": [
+   "chunk-eeckpj27.js#S",
+   "chunk-eeckpj27.js#Smo",
+   "chunk-eeckpj27.js#m",
+   "chunk-eeckpj27.js#v",
+   "chunk-eeckpj27.js#f",
+   "chunk-eeckpj27.js#g",
+   "chunk-eeckpj27.js#w",
+   "chunk-eeckpj27.js#C",
+   "chunk-eeckpj27.js#x",
+   "chunk-eeckpj27.js#k",
+   "chunk-eeckpj27.js#P",
+   "chunk-eeckpj27.js#T",
+   "chunk-eeckpj27.js#R",
+   "chunk-eeckpj27.js#y"
+  ]
+ },
+ {
+  "path": "_new/prepareDeviceBinder.ts",
+  "chunks": {
+   "chunk-ehqcegwt.js": 26
+  },
+  "bytes": 6260,
+  "decls": [
+   "chunk-ehqcegwt.js#c2e",
+   "chunk-ehqcegwt.js#gW",
+   "chunk-ehqcegwt.js#P",
+   "chunk-ehqcegwt.js#R",
+   "chunk-ehqcegwt.js#A",
+   "chunk-ehqcegwt.js#E",
+   "chunk-ehqcegwt.js#PNo",
+   "chunk-ehqcegwt.js#T",
+   "chunk-ehqcegwt.js#F",
+   "chunk-ehqcegwt.js#dUr",
+   "chunk-ehqcegwt.js#N",
+   "chunk-ehqcegwt.js#INo",
+   "chunk-ehqcegwt.js#M",
+   "chunk-ehqcegwt.js#K",
+   "chunk-ehqcegwt.js#ONo",
+   "chunk-ehqcegwt.js#q",
+   "chunk-ehqcegwt.js#I",
+   "chunk-ehqcegwt.js#xun",
+   "chunk-ehqcegwt.js#nKi",
+   "chunk-ehqcegwt.js#b",
+   "chunk-ehqcegwt.js#_",
+   "chunk-ehqcegwt.js#U",
+   "chunk-ehqcegwt.js#V",
+   "chunk-ehqcegwt.js#j",
+   "chunk-ehqcegwt.js#W",
+   "chunk-ehqcegwt.js#y"
+  ]
+ },
+ {
+  "path": "_new/useAttachFleetOwners.ts",
+  "chunks": {
+   "chunk-ejntaqp9.js": 5
+  },
+  "bytes": 1102,
+  "decls": [
+   "chunk-ejntaqp9.js#@336",
+   "chunk-ejntaqp9.js#n",
+   "chunk-ejntaqp9.js#i",
+   "chunk-ejntaqp9.js#Dpt",
+   "chunk-ejntaqp9.js#ngo"
+  ]
+ },
+ {
+  "path": "_new/readFileForRemote.ts",
+  "chunks": {
+   "chunk-es7wzebn.js": 23
+  },
+  "bytes": 8983,
+  "decls": [
+   "chunk-es7wzebn.js#re",
+   "chunk-es7wzebn.js#N",
+   "chunk-es7wzebn.js#oe",
+   "chunk-es7wzebn.js#D",
+   "chunk-es7wzebn.js#ae",
+   "chunk-es7wzebn.js#U",
+   "chunk-es7wzebn.js#I",
+   "chunk-es7wzebn.js#L",
+   "chunk-es7wzebn.js#j",
+   "chunk-es7wzebn.js#ce",
+   "chunk-es7wzebn.js#B",
+   "chunk-es7wzebn.js#ge",
+   "chunk-es7wzebn.js#we",
+   "chunk-es7wzebn.js#Re",
+   "chunk-es7wzebn.js#QNn",
+   "chunk-es7wzebn.js#Fe",
+   "chunk-es7wzebn.js#b",
+   "chunk-es7wzebn.js#A",
+   "chunk-es7wzebn.js#J",
+   "chunk-es7wzebn.js#G",
+   "chunk-es7wzebn.js#lWe",
+   "chunk-es7wzebn.js#Z",
+   "chunk-es7wzebn.js#Se"
+  ]
+ },
+ {
+  "path": "_new/configureProxyAuthHelperFromSettings.ts",
+  "chunks": {
+   "chunk-ez5bvzy2.js": 1
+  },
+  "bytes": 294,
+  "decls": [
+   "chunk-ez5bvzy2.js#AGe"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-f3qhjfah/part-001.js",
+  "chunks": {
+   "chunk-f3qhjfah.js": 1
+  },
+  "bytes": 119,
+  "decls": [
+   "chunk-f3qhjfah.js#Tkn"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-f3qhjfah/part-002.js",
+  "chunks": {
+   "chunk-f3qhjfah.js": 1
+  },
+  "bytes": 29,
+  "decls": [
+   "chunk-f3qhjfah.js#bit"
+  ]
+ },
+ {
+  "path": "_new/enqueueErrorLog.ts",
+  "chunks": {
+   "chunk-f5bay0pe.js": 10
+  },
+  "bytes": 2158,
+  "decls": [
+   "chunk-f5bay0pe.js#p",
+   "chunk-f5bay0pe.js#m",
+   "chunk-f5bay0pe.js#f",
+   "chunk-f5bay0pe.js#s",
+   "chunk-f5bay0pe.js#E",
+   "chunk-f5bay0pe.js#HTn",
+   "chunk-f5bay0pe.js#pts",
+   "chunk-f5bay0pe.js#h",
+   "chunk-f5bay0pe.js#mts",
+   "chunk-f5bay0pe.js#PVi"
+  ]
+ },
+ {
+  "path": "_new/verifyToolsBaselineIntact.ts",
+  "chunks": {
+   "chunk-fft78xw8.js": 41
+  },
+  "bytes": 4603,
+  "decls": [
+   "chunk-fft78xw8.js#sBs",
+   "chunk-fft78xw8.js#b0i",
+   "chunk-fft78xw8.js#n",
+   "chunk-fft78xw8.js#_M",
+   "chunk-fft78xw8.js#exo",
+   "chunk-fft78xw8.js#jLe",
+   "chunk-fft78xw8.js#txo",
+   "chunk-fft78xw8.js#Czi",
+   "chunk-fft78xw8.js#nxo",
+   "chunk-fft78xw8.js#i",
+   "chunk-fft78xw8.js#rxo",
+   "chunk-fft78xw8.js#Rzi",
+   "chunk-fft78xw8.js#xzi",
+   "chunk-fft78xw8.js#oxo",
+   "chunk-fft78xw8.js#qzn",
+   "chunk-fft78xw8.js#JDr",
+   "chunk-fft78xw8.js#Pzi",
+   "chunk-fft78xw8.js#Yzn",
+   "chunk-fft78xw8.js#e7e",
+   "chunk-fft78xw8.js#sxo",
+   "chunk-fft78xw8.js#qin",
+   "chunk-fft78xw8.js#ixo",
+   "chunk-fft78xw8.js#axo",
+   "chunk-fft78xw8.js#lxo",
+   "chunk-fft78xw8.js#dxo",
+   "chunk-fft78xw8.js#cxo",
+   "chunk-fft78xw8.js#uxo",
+   "chunk-fft78xw8.js#Izi",
+   "chunk-fft78xw8.js#Ozi",
+   "chunk-fft78xw8.js#Mzi",
+   "chunk-fft78xw8.js#fxo",
+   "chunk-fft78xw8.js#pxo",
+   "chunk-fft78xw8.js#mxo",
+   "chunk-fft78xw8.js#gxo",
+   "chunk-fft78xw8.js#s",
+   "chunk-fft78xw8.js#l",
+   "chunk-fft78xw8.js#hxo",
+   "chunk-fft78xw8.js#yxo",
+   "chunk-fft78xw8.js#d",
+   "chunk-fft78xw8.js#_xo",
+   "chunk-fft78xw8.js#bxo"
+  ]
+ },
+ {
+  "path": "_new/CLAUDE_AGENT.ts",
+  "chunks": {
+   "chunk-fgpf3f12.js": 1
+  },
+  "bytes": 2124,
+  "decls": [
+   "chunk-fgpf3f12.js#e"
+  ]
+ },
+ {
+  "path": "_new/setup.helpers-fhdz.ts",
+  "chunks": {
+   "chunk-fhdzwff4.js": 5
+  },
+  "bytes": 1194,
+  "decls": [
+   "chunk-fhdzwff4.js#j",
+   "chunk-fhdzwff4.js#re",
+   "chunk-fhdzwff4.js#se",
+   "chunk-fhdzwff4.js#N",
+   "chunk-fhdzwff4.js#X"
+  ]
+ },
+ {
+  "path": "_new/pluginDirsFromEnv.ts",
+  "chunks": {
+   "chunk-fj3y0bxk.js": 6
+  },
+  "bytes": 823,
+  "decls": [
+   "chunk-fj3y0bxk.js#kMr",
+   "chunk-fj3y0bxk.js#TMr",
+   "chunk-fj3y0bxk.js#SAo",
+   "chunk-fj3y0bxk.js#Jj",
+   "chunk-fj3y0bxk.js#qTe",
+   "chunk-fj3y0bxk.js#l"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-fj90tvf9/part-001.js",
+  "chunks": {
+   "chunk-fj90tvf9.js": 1
+  },
+  "bytes": 44,
+  "decls": [
+   "chunk-fj90tvf9.js#JE"
+  ]
+ },
+ {
+  "path": "_new/chunk-ytrjx25w.ts",
+  "chunks": {
+   "chunk-g13xw617.js": 2
+  },
+  "bytes": 56,
+  "decls": [
+   "chunk-g13xw617.js#d",
+   "chunk-g13xw617.js#gMo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-g4k0hvs5/part-001.js",
+  "chunks": {
+   "chunk-g4k0hvs5.js": 1
+  },
+  "bytes": 149,
+  "decls": [
+   "chunk-g4k0hvs5.js#W"
+  ]
+ },
+ {
+  "path": "_new/wrapArtifactsMcpLaptopPublishing.ts",
+  "chunks": {
+   "chunk-g62cc56z.js": 21
+  },
+  "bytes": 9339,
+  "decls": [
+   "chunk-g62cc56z.js#E",
+   "chunk-g62cc56z.js#R",
+   "chunk-g62cc56z.js#F",
+   "chunk-g62cc56z.js#U",
+   "chunk-g62cc56z.js#w",
+   "chunk-g62cc56z.js#Q2i",
+   "chunk-g62cc56z.js#gNo",
+   "chunk-g62cc56z.js#ZFr",
+   "chunk-g62cc56z.js#eUr",
+   "chunk-g62cc56z.js#hNo",
+   "chunk-g62cc56z.js#P",
+   "chunk-g62cc56z.js#x",
+   "chunk-g62cc56z.js#H",
+   "chunk-g62cc56z.js#q",
+   "chunk-g62cc56z.js#yNo",
+   "chunk-g62cc56z.js#Z2i",
+   "chunk-g62cc56z.js#eKi",
+   "chunk-g62cc56z.js#V",
+   "chunk-g62cc56z.js#dNi",
+   "chunk-g62cc56z.js#j",
+   "chunk-g62cc56z.js#Y"
+  ]
+ },
+ {
+  "path": "_new/waitForOwnFlagFetch.ts",
+  "chunks": {
+   "chunk-g8d4yw80.js": 21
+  },
+  "bytes": 1308,
+  "decls": [
+   "chunk-g8d4yw80.js#t",
+   "chunk-g8d4yw80.js#r",
+   "chunk-g8d4yw80.js#wO",
+   "chunk-g8d4yw80.js#vg",
+   "chunk-g8d4yw80.js#n",
+   "chunk-g8d4yw80.js#E6t",
+   "chunk-g8d4yw80.js#kg",
+   "chunk-g8d4yw80.js#U1",
+   "chunk-g8d4yw80.js#aG",
+   "chunk-g8d4yw80.js#Xwe",
+   "chunk-g8d4yw80.js#uK",
+   "chunk-g8d4yw80.js#w5e",
+   "chunk-g8d4yw80.js#Nts",
+   "chunk-g8d4yw80.js#qTn",
+   "chunk-g8d4yw80.js#$ts",
+   "chunk-g8d4yw80.js#i",
+   "chunk-g8d4yw80.js#oUi",
+   "chunk-g8d4yw80.js#sUi",
+   "chunk-g8d4yw80.js#k7r",
+   "chunk-g8d4yw80.js#YTn",
+   "chunk-g8d4yw80.js#v6t"
+  ]
+ },
+ {
+  "path": "_new/logOrgPolicyDeniedAsync.ts",
+  "chunks": {
+   "chunk-gevvgx0q.js": 4
+  },
+  "bytes": 310,
+  "decls": [
+   "chunk-gevvgx0q.js#n",
+   "chunk-gevvgx0q.js#r",
+   "chunk-gevvgx0q.js#GP",
+   "chunk-gevvgx0q.js#p1"
+  ]
+ },
+ {
+  "path": "_new/buildWorkspaceDiffResponse.helpers-gfa3.ts",
+  "chunks": {
+   "chunk-gfa3ceg6.js": 2
+  },
+  "bytes": 1380,
+  "decls": [
+   "chunk-gfa3ceg6.js#$e",
+   "chunk-gfa3ceg6.js#Qe"
+  ]
+ },
+ {
+  "path": "_misplaced/tools/shared/gitOperationTracking.ts",
+  "chunks": {
+   "chunk-gfa3ceg6.js": 1
+  },
+  "bytes": 810,
+  "decls": [
+   "chunk-gfa3ceg6.js#et"
+  ]
+ },
+ {
+  "path": "_new/buildWorkspaceDiffResponse.ts",
+  "chunks": {
+   "chunk-gfa3ceg6.js": 49
+  },
+  "bytes": 14737,
+  "decls": [
+   "chunk-gfa3ceg6.js#we",
+   "chunk-gfa3ceg6.js#Se",
+   "chunk-gfa3ceg6.js#rt",
+   "chunk-gfa3ceg6.js#_e",
+   "chunk-gfa3ceg6.js#ot",
+   "chunk-gfa3ceg6.js#G",
+   "chunk-gfa3ceg6.js#T",
+   "chunk-gfa3ceg6.js#st",
+   "chunk-gfa3ceg6.js#ut",
+   "chunk-gfa3ceg6.js#ft",
+   "chunk-gfa3ceg6.js#lt",
+   "chunk-gfa3ceg6.js#ye",
+   "chunk-gfa3ceg6.js#pt",
+   "chunk-gfa3ceg6.js#gt",
+   "chunk-gfa3ceg6.js#mt",
+   "chunk-gfa3ceg6.js#ht",
+   "chunk-gfa3ceg6.js#Et",
+   "chunk-gfa3ceg6.js#ke",
+   "chunk-gfa3ceg6.js#wt",
+   "chunk-gfa3ceg6.js#St",
+   "chunk-gfa3ceg6.js#de",
+   "chunk-gfa3ceg6.js#Re",
+   "chunk-gfa3ceg6.js#q",
+   "chunk-gfa3ceg6.js#pe",
+   "chunk-gfa3ceg6.js#Te",
+   "chunk-gfa3ceg6.js#De",
+   "chunk-gfa3ceg6.js#_t",
+   "chunk-gfa3ceg6.js#Tt",
+   "chunk-gfa3ceg6.js#Dt",
+   "chunk-gfa3ceg6.js#Oe",
+   "chunk-gfa3ceg6.js#M",
+   "chunk-gfa3ceg6.js#Ie",
+   "chunk-gfa3ceg6.js#O",
+   "chunk-gfa3ceg6.js#F",
+   "chunk-gfa3ceg6.js#It",
+   "chunk-gfa3ceg6.js#Pt",
+   "chunk-gfa3ceg6.js#V",
+   "chunk-gfa3ceg6.js#At",
+   "chunk-gfa3ceg6.js#Nt",
+   "chunk-gfa3ceg6.js#xt",
+   "chunk-gfa3ceg6.js#Fe",
+   "chunk-gfa3ceg6.js#Gt",
+   "chunk-gfa3ceg6.js#Lt",
+   "chunk-gfa3ceg6.js#Bt",
+   "chunk-gfa3ceg6.js#Ct",
+   "chunk-gfa3ceg6.js#Ht",
+   "chunk-gfa3ceg6.js#$t",
+   "chunk-gfa3ceg6.js#Bmo",
+   "chunk-gfa3ceg6.js#Ut"
+  ]
+ },
+ {
+  "path": "_new/withCpuReport.ts",
+  "chunks": {
+   "chunk-gg8n9khb.js": 9
+  },
+  "bytes": 2196,
+  "decls": [
+   "chunk-gg8n9khb.js#c",
+   "chunk-gg8n9khb.js#d",
+   "chunk-gg8n9khb.js#g",
+   "chunk-gg8n9khb.js#cfo",
+   "chunk-gg8n9khb.js#T",
+   "chunk-gg8n9khb.js#fji",
+   "chunk-gg8n9khb.js#pji",
+   "chunk-gg8n9khb.js#M",
+   "chunk-gg8n9khb.js#m"
+  ]
+ },
+ {
+  "path": "_new/evaluateProjectsReplyGate.ts",
+  "chunks": {
+   "chunk-ggn294th.js": 16
+  },
+  "bytes": 4073,
+  "decls": [
+   "chunk-ggn294th.js#O",
+   "chunk-ggn294th.js#Nxr",
+   "chunk-ggn294th.js#jWi",
+   "chunk-ggn294th.js#q",
+   "chunk-ggn294th.js#P",
+   "chunk-ggn294th.js#$xr",
+   "chunk-ggn294th.js#GWi",
+   "chunk-ggn294th.js#SSo",
+   "chunk-ggn294th.js#zWi",
+   "chunk-ggn294th.js#N",
+   "chunk-ggn294th.js#j",
+   "chunk-ggn294th.js#T",
+   "chunk-ggn294th.js#R",
+   "chunk-ggn294th.js#E",
+   "chunk-ggn294th.js#S",
+   "chunk-ggn294th.js#_"
+  ]
+ },
+ {
+  "path": "_new/isStoredLoginRefused.ts",
+  "chunks": {
+   "chunk-gkzv6xmy.js": 5
+  },
+  "bytes": 1388,
+  "decls": [
+   "chunk-gkzv6xmy.js#jie",
+   "chunk-gkzv6xmy.js#uwe",
+   "chunk-gkzv6xmy.js#L",
+   "chunk-gkzv6xmy.js#qW",
+   "chunk-gkzv6xmy.js#S"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-gr2vfhah/part-001.js",
+  "chunks": {
+   "chunk-gr2vfhah.js": 1
+  },
+  "bytes": 504,
+  "decls": [
+   "chunk-gr2vfhah.js#xhr"
+  ]
+ },
+ {
+  "path": "_new/registerReplyYieldHolder.ts",
+  "chunks": {
+   "chunk-grx66nns.js": 18
+  },
+  "bytes": 9545,
+  "decls": [
+   "chunk-grx66nns.js#z",
+   "chunk-grx66nns.js#Z",
+   "chunk-grx66nns.js#_zi",
+   "chunk-grx66nns.js#te",
+   "chunk-grx66nns.js#q",
+   "chunk-grx66nns.js#NFs",
+   "chunk-grx66nns.js#y0i",
+   "chunk-grx66nns.js#j",
+   "chunk-grx66nns.js#H",
+   "chunk-grx66nns.js#eRo",
+   "chunk-grx66nns.js#tRo",
+   "chunk-grx66nns.js#nRo",
+   "chunk-grx66nns.js#oe",
+   "chunk-grx66nns.js#bzi",
+   "chunk-grx66nns.js#rRo",
+   "chunk-grx66nns.js#se",
+   "chunk-grx66nns.js#E",
+   "chunk-grx66nns.js#re"
+  ]
+ },
+ {
+  "path": "_new/isPewterOwlTool.ts",
+  "chunks": {
+   "chunk-gt4x42hj.js": 4
+  },
+  "bytes": 483,
+  "decls": [
+   "chunk-gt4x42hj.js#n",
+   "chunk-gt4x42hj.js#o",
+   "chunk-gt4x42hj.js#Mqe",
+   "chunk-gt4x42hj.js#d5o"
+  ]
+ },
+ {
+  "path": "_new/setJitPolicyAfterStartup.ts",
+  "chunks": {
+   "chunk-gwfxd7ar.js": 1
+  },
+  "bytes": 119,
+  "decls": [
+   "chunk-gwfxd7ar.js#_at"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-h6tjx705/part-001.js",
+  "chunks": {
+   "chunk-h6tjx705.js": 2
+  },
+  "bytes": 35,
+  "decls": [
+   "chunk-h6tjx705.js#rto",
+   "chunk-h6tjx705.js#pEe"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-hantmvxa/part-001.js",
+  "chunks": {
+   "chunk-hantmvxa.js": 5
+  },
+  "bytes": 1508,
+  "decls": [
+   "chunk-hantmvxa.js#Fn",
+   "chunk-hantmvxa.js#Bn",
+   "chunk-hantmvxa.js#We",
+   "chunk-hantmvxa.js#Ct",
+   "chunk-hantmvxa.js#_t"
+  ]
+ },
+ {
+  "path": "_new/warmShareEntry.ts",
+  "chunks": {
+   "chunk-hfg56cbz.js": 10
+  },
+  "bytes": 1900,
+  "decls": [
+   "chunk-hfg56cbz.js#h",
+   "chunk-hfg56cbz.js#qf",
+   "chunk-hfg56cbz.js#bqn",
+   "chunk-hfg56cbz.js#A",
+   "chunk-hfg56cbz.js#k",
+   "chunk-hfg56cbz.js#m",
+   "chunk-hfg56cbz.js#g",
+   "chunk-hfg56cbz.js#S",
+   "chunk-hfg56cbz.js#C",
+   "chunk-hfg56cbz.js#P"
+  ]
+ },
+ {
+  "path": "_misplaced/utils/permissions/PermissionPromptToolResultSchema.ts",
+  "chunks": {
+   "chunk-hgrqcyvx.js": 1
+  },
+  "bytes": 158,
+  "decls": [
+   "chunk-hgrqcyvx.js#nqn"
+  ]
+ },
+ {
+  "path": "_new/startGarbageCollectionCount.ts",
+  "chunks": {
+   "chunk-hh66v1ps.js": 5
+  },
+  "bytes": 1208,
+  "decls": [
+   "chunk-hh66v1ps.js#d",
+   "chunk-hh66v1ps.js#kYi",
+   "chunk-hh66v1ps.js#o",
+   "chunk-hh66v1ps.js#Eks",
+   "chunk-hh66v1ps.js#uvr"
+  ]
+ },
+ {
+  "path": "_new/servedBackgroundShellLines.ts",
+  "chunks": {
+   "chunk-hkmynrbn.js": 17
+  },
+  "bytes": 3470,
+  "decls": [
+   "chunk-hkmynrbn.js#Ybo",
+   "chunk-hkmynrbn.js#Xbo",
+   "chunk-hkmynrbn.js#vxr",
+   "chunk-hkmynrbn.js#kxr",
+   "chunk-hkmynrbn.js#kOs",
+   "chunk-hkmynrbn.js#THi",
+   "chunk-hkmynrbn.js#$Wi",
+   "chunk-hkmynrbn.js#FWi",
+   "chunk-hkmynrbn.js#UWi",
+   "chunk-hkmynrbn.js#m",
+   "chunk-hkmynrbn.js#l",
+   "chunk-hkmynrbn.js#h",
+   "chunk-hkmynrbn.js#D",
+   "chunk-hkmynrbn.js#v",
+   "chunk-hkmynrbn.js#P",
+   "chunk-hkmynrbn.js#f",
+   "chunk-hkmynrbn.js#c"
+  ]
+ },
+ {
+  "path": "_new/listDirectoryForRemote.ts",
+  "chunks": {
+   "chunk-htc3qf7e.js": 9
+  },
+  "bytes": 2747,
+  "decls": [
+   "chunk-htc3qf7e.js#i0n",
+   "chunk-htc3qf7e.js#Jfo",
+   "chunk-htc3qf7e.js#D",
+   "chunk-htc3qf7e.js#S",
+   "chunk-htc3qf7e.js#A",
+   "chunk-htc3qf7e.js#W",
+   "chunk-htc3qf7e.js#O",
+   "chunk-htc3qf7e.js#E",
+   "chunk-htc3qf7e.js#H"
+  ]
+ },
+ {
+  "path": "_new/findExecutableWindows.ts",
+  "chunks": {
+   "chunk-hvmek2df.js": 9
+  },
+  "bytes": 1271,
+  "decls": [
+   "chunk-hvmek2df.js#E",
+   "chunk-hvmek2df.js#f",
+   "chunk-hvmek2df.js#w",
+   "chunk-hvmek2df.js#u",
+   "chunk-hvmek2df.js#S",
+   "chunk-hvmek2df.js#b",
+   "chunk-hvmek2df.js#Cdo",
+   "chunk-hvmek2df.js#v",
+   "chunk-hvmek2df.js#jU"
+  ]
+ },
+ {
+  "path": "_new/setBgExitDetail.ts",
+  "chunks": {
+   "chunk-j3nx1xyn.js": 7
+  },
+  "bytes": 622,
+  "decls": [
+   "chunk-j3nx1xyn.js#f",
+   "chunk-j3nx1xyn.js#DE",
+   "chunk-j3nx1xyn.js#fYi",
+   "chunk-j3nx1xyn.js#ico",
+   "chunk-j3nx1xyn.js#kbs",
+   "chunk-j3nx1xyn.js#Tbs",
+   "chunk-j3nx1xyn.js#a"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-j51xvqzq/part-001.js",
+  "chunks": {
+   "chunk-j51xvqzq.js": 1
+  },
+  "bytes": 56,
+  "decls": [
+   "chunk-j51xvqzq.js#RPr"
+  ]
+ },
+ {
+  "path": "_new/getToolServingFlagAnsweredOff.ts",
+  "chunks": {
+   "chunk-j61dm7j5.js": 6
+  },
+  "bytes": 408,
+  "decls": [
+   "chunk-j61dm7j5.js#rLe",
+   "chunk-j61dm7j5.js#UBn",
+   "chunk-j61dm7j5.js#VJe",
+   "chunk-j61dm7j5.js#qJe",
+   "chunk-j61dm7j5.js#tGe",
+   "chunk-j61dm7j5.js#mSo"
+  ]
+ },
+ {
+  "path": "_new/classifiedToPostTurnSummary.ts",
+  "chunks": {
+   "chunk-j71j5cv7.js": 15
+  },
+  "bytes": 2862,
+  "decls": [
+   "chunk-j71j5cv7.js#l",
+   "chunk-j71j5cv7.js#f0i",
+   "chunk-j71j5cv7.js#XMr",
+   "chunk-j71j5cv7.js#izi",
+   "chunk-j71j5cv7.js#u",
+   "chunk-j71j5cv7.js#p0i",
+   "chunk-j71j5cv7.js#m0i",
+   "chunk-j71j5cv7.js#f",
+   "chunk-j71j5cv7.js#g0i",
+   "chunk-j71j5cv7.js#m",
+   "chunk-j71j5cv7.js#h0i",
+   "chunk-j71j5cv7.js#azi",
+   "chunk-j71j5cv7.js#a",
+   "chunk-j71j5cv7.js#lzi",
+   "chunk-j71j5cv7.js#dzi"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-j8bb1zkh/part-001.js",
+  "chunks": {
+   "chunk-j8bb1zkh.js": 2
+  },
+  "bytes": 463,
+  "decls": [
+   "chunk-j8bb1zkh.js#E",
+   "chunk-j8bb1zkh.js#kPs"
+  ]
+ },
+ {
+  "path": "_new/isCrossSessionMessagingEnabled.ts",
+  "chunks": {
+   "chunk-jbqx8bv9.js": 3
+  },
+  "bytes": 438,
+  "decls": [
+   "chunk-jbqx8bv9.js#Pa",
+   "chunk-jbqx8bv9.js#yae",
+   "chunk-jbqx8bv9.js#oTn"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-jcnpfn31/part-001.js",
+  "chunks": {
+   "chunk-jcnpfn31.js": 2
+  },
+  "bytes": 657,
+  "decls": [
+   "chunk-jcnpfn31.js#USe",
+   "chunk-jcnpfn31.js#crr"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-jhrww53q/part-001.js",
+  "chunks": {
+   "chunk-jhrww53q.js": 1
+  },
+  "bytes": 9,
+  "decls": [
+   "chunk-jhrww53q.js#P"
+  ]
+ },
+ {
+  "path": "_new/writeUnattendedRunGrant.ts",
+  "chunks": {
+   "chunk-karvvxmx.js": 8
+  },
+  "bytes": 1468,
+  "decls": [
+   "chunk-karvvxmx.js#v",
+   "chunk-karvvxmx.js#l",
+   "chunk-karvvxmx.js#a",
+   "chunk-karvvxmx.js#Vzi",
+   "chunk-karvvxmx.js#yIo",
+   "chunk-karvvxmx.js#z",
+   "chunk-karvvxmx.js#j",
+   "chunk-karvvxmx.js#B"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-kcvmr83c/part-001.js",
+  "chunks": {
+   "chunk-kcvmr83c.js": 2
+  },
+  "bytes": 156,
+  "decls": [
+   "chunk-kcvmr83c.js#A",
+   "chunk-kcvmr83c.js#NCo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-kcvmr83c/part-002.js",
+  "chunks": {
+   "chunk-kcvmr83c.js": 1
+  },
+  "bytes": 577,
+  "decls": [
+   "chunk-kcvmr83c.js#Gye"
+  ]
+ },
+ {
+  "path": "_new/cliCarriesSessionConfig.ts",
+  "chunks": {
+   "chunk-kqfm73k5.js": 4
+  },
+  "bytes": 1231,
+  "decls": [
+   "chunk-kqfm73k5.js#zKo",
+   "chunk-kqfm73k5.js#ANe",
+   "chunk-kqfm73k5.js#KKo",
+   "chunk-kqfm73k5.js#gyn"
+  ]
+ },
+ {
+  "path": "_new/startDeviceRegistration.ts",
+  "chunks": {
+   "chunk-ksxq075c.js": 30
+  },
+  "bytes": 27259,
+  "decls": [
+   "chunk-ksxq075c.js#Z",
+   "chunk-ksxq075c.js#ae",
+   "chunk-ksxq075c.js#se",
+   "chunk-ksxq075c.js#we",
+   "chunk-ksxq075c.js#Ae",
+   "chunk-ksxq075c.js#ne",
+   "chunk-ksxq075c.js#Oe",
+   "chunk-ksxq075c.js#Pe",
+   "chunk-ksxq075c.js#Be",
+   "chunk-ksxq075c.js#ee",
+   "chunk-ksxq075c.js#Me",
+   "chunk-ksxq075c.js#pe",
+   "chunk-ksxq075c.js#he",
+   "chunk-ksxq075c.js#Ie",
+   "chunk-ksxq075c.js#le",
+   "chunk-ksxq075c.js#xe",
+   "chunk-ksxq075c.js#Ne",
+   "chunk-ksxq075c.js#He",
+   "chunk-ksxq075c.js#ze",
+   "chunk-ksxq075c.js#Ke",
+   "chunk-ksxq075c.js#Ve",
+   "chunk-ksxq075c.js#qe",
+   "chunk-ksxq075c.js#xZt",
+   "chunk-ksxq075c.js#Ye",
+   "chunk-ksxq075c.js#Je",
+   "chunk-ksxq075c.js#ge",
+   "chunk-ksxq075c.js#Qe",
+   "chunk-ksxq075c.js#Xe",
+   "chunk-ksxq075c.js#Ze",
+   "chunk-ksxq075c.js#en"
+  ]
+ },
+ {
+  "path": "_new/continueInProjectsTargetDialog.ts",
+  "chunks": {
+   "chunk-ktgzv6n7.js": 3
+  },
+  "bytes": 490,
+  "decls": [
+   "chunk-ktgzv6n7.js#N$t",
+   "chunk-ktgzv6n7.js#$$t",
+   "chunk-ktgzv6n7.js#n"
+  ]
+ },
+ {
+  "path": "_new/RAWTEXT_MODES.ts",
+  "chunks": {
+   "chunk-ktx79ksk.js": 4
+  },
+  "bytes": 4062,
+  "decls": [
+   "chunk-ktx79ksk.js#q2i",
+   "chunk-ktx79ksk.js#uHo",
+   "chunk-ktx79ksk.js#ee",
+   "chunk-ktx79ksk.js#M"
+  ]
+ },
+ {
+  "path": "_new/showStandaloneSecurityDialog.ts",
+  "chunks": {
+   "chunk-kz1epgqe.js": 2
+  },
+  "bytes": 921,
+  "decls": [
+   "chunk-kz1epgqe.js#RDe",
+   "chunk-kz1epgqe.js#d"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-m5det47h/part-001.js",
+  "chunks": {
+   "chunk-m5det47h.js": 1
+  },
+  "bytes": 52,
+  "decls": [
+   "chunk-m5det47h.js#UTe"
+  ]
+ },
+ {
+  "path": "_new/mcpInboundDoorOnFetch.ts",
+  "chunks": {
+   "chunk-ma4kr1qn.js": 11
+  },
+  "bytes": 4227,
+  "decls": [
+   "chunk-ma4kr1qn.js#U",
+   "chunk-ma4kr1qn.js#T",
+   "chunk-ma4kr1qn.js#Xee",
+   "chunk-ma4kr1qn.js#E",
+   "chunk-ma4kr1qn.js#gwn",
+   "chunk-ma4kr1qn.js#z",
+   "chunk-ma4kr1qn.js#I",
+   "chunk-ma4kr1qn.js#S",
+   "chunk-ma4kr1qn.js#b",
+   "chunk-ma4kr1qn.js#H",
+   "chunk-ma4kr1qn.js#C"
+  ]
+ },
+ {
+  "path": "_new/restoreGatewayAuthForFastPath.ts",
+  "chunks": {
+   "chunk-mf4z1bxv.js": 1
+  },
+  "bytes": 106,
+  "decls": [
+   "chunk-mf4z1bxv.js#Ksn"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-mjyddqh1/part-001.js",
+  "chunks": {
+   "chunk-mjyddqh1.js": 1
+  },
+  "bytes": 60,
+  "decls": [
+   "chunk-mjyddqh1.js#l0t"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-mketzrwm/part-001.js",
+  "chunks": {
+   "chunk-mketzrwm.js": 1
+  },
+  "bytes": 172,
+  "decls": [
+   "chunk-mketzrwm.js#T9o"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-mthxbav8/part-001.js",
+  "chunks": {
+   "chunk-mthxbav8.js": 5
+  },
+  "bytes": 714,
+  "decls": [
+   "chunk-mthxbav8.js#wr",
+   "chunk-mthxbav8.js#Qe",
+   "chunk-mthxbav8.js#Hn",
+   "chunk-mthxbav8.js#Sr",
+   "chunk-mthxbav8.js#yt"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-mvvq2nx1/part-001.js",
+  "chunks": {
+   "chunk-mvvq2nx1.js": 1
+  },
+  "bytes": 19,
+  "decls": [
+   "chunk-mvvq2nx1.js#Ee"
+  ]
+ },
+ {
+  "path": "_new/resumeWorkflowLaunch.ts",
+  "chunks": {
+   "chunk-n2x174m4.js": 21
+  },
+  "bytes": 8744,
+  "decls": [
+   "chunk-n2x174m4.js#Q",
+   "chunk-n2x174m4.js#z",
+   "chunk-n2x174m4.js#te",
+   "chunk-n2x174m4.js#C",
+   "chunk-n2x174m4.js#re",
+   "chunk-n2x174m4.js#uzi",
+   "chunk-n2x174m4.js#H",
+   "chunk-n2x174m4.js#fzi",
+   "chunk-n2x174m4.js#I",
+   "chunk-n2x174m4.js#JMr",
+   "chunk-n2x174m4.js#x",
+   "chunk-n2x174m4.js#se",
+   "chunk-n2x174m4.js#K",
+   "chunk-n2x174m4.js#Y",
+   "chunk-n2x174m4.js#D",
+   "chunk-n2x174m4.js#b",
+   "chunk-n2x174m4.js#U",
+   "chunk-n2x174m4.js#X",
+   "chunk-n2x174m4.js#j",
+   "chunk-n2x174m4.js#pzi",
+   "chunk-n2x174m4.js#mzi"
+  ]
+ },
+ {
+  "path": "_new/deviceToolNoticesTo.ts",
+  "chunks": {
+   "chunk-n3mhm88b.js": 3
+  },
+  "bytes": 343,
+  "decls": [
+   "chunk-n3mhm88b.js#u",
+   "chunk-n3mhm88b.js#eTr",
+   "chunk-n3mhm88b.js#WNn"
+  ]
+ },
+ {
+  "path": "_new/createHeadlessHearthMount.ts",
+  "chunks": {
+   "chunk-n501v0b7.js": 5
+  },
+  "bytes": 5326,
+  "decls": [
+   "chunk-n501v0b7.js#j",
+   "chunk-n501v0b7.js#Y",
+   "chunk-n501v0b7.js#Qfo",
+   "chunk-n501v0b7.js#F",
+   "chunk-n501v0b7.js#G"
+  ]
+ },
+ {
+  "path": "_new/readDaemonStatus.ts",
+  "chunks": {
+   "chunk-nbg7qs8b.js": 9
+  },
+  "bytes": 1906,
+  "decls": [
+   "chunk-nbg7qs8b.js#msn",
+   "chunk-nbg7qs8b.js#gsn",
+   "chunk-nbg7qs8b.js#xTo",
+   "chunk-nbg7qs8b.js#PTo",
+   "chunk-nbg7qs8b.js#WOr",
+   "chunk-nbg7qs8b.js#m",
+   "chunk-nbg7qs8b.js#S",
+   "chunk-nbg7qs8b.js#ITo",
+   "chunk-nbg7qs8b.js#OTo"
+  ]
+ },
+ {
+  "path": "_new/restoreGoalFromTranscript.ts",
+  "chunks": {
+   "chunk-nhtqnamp.js": 1
+  },
+  "bytes": 700,
+  "decls": [
+   "chunk-nhtqnamp.js#VEo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-p52gp8zk/part-001.js",
+  "chunks": {
+   "chunk-p52gp8zk.js": 2
+  },
+  "bytes": 72,
+  "decls": [
+   "chunk-p52gp8zk.js#Se",
+   "chunk-p52gp8zk.js#xe"
+  ]
+ },
+ {
+  "path": "_new/buildArtifactTypeAliasPrompt.ts",
+  "chunks": {
+   "chunk-p583jsvp.js": 7
+  },
+  "bytes": 4391,
+  "decls": [
+   "chunk-p583jsvp.js#n",
+   "chunk-p583jsvp.js#lMr",
+   "chunk-p583jsvp.js#dMr",
+   "chunk-p583jsvp.js#l",
+   "chunk-p583jsvp.js#U$t",
+   "chunk-p583jsvp.js#cMr",
+   "chunk-p583jsvp.js#uMr"
+  ]
+ },
+ {
+  "path": "_new/anchorOver.ts",
+  "chunks": {
+   "chunk-p5msxby3.js": 45
+  },
+  "bytes": 21754,
+  "decls": [
+   "chunk-p5msxby3.js#iMo",
+   "chunk-p5msxby3.js#F0i",
+   "chunk-p5msxby3.js#l2i",
+   "chunk-p5msxby3.js#wn",
+   "chunk-p5msxby3.js#gn",
+   "chunk-p5msxby3.js#q",
+   "chunk-p5msxby3.js#qe",
+   "chunk-p5msxby3.js#ce",
+   "chunk-p5msxby3.js#he",
+   "chunk-p5msxby3.js#Ye",
+   "chunk-p5msxby3.js#J",
+   "chunk-p5msxby3.js#oe",
+   "chunk-p5msxby3.js#we",
+   "chunk-p5msxby3.js#vn",
+   "chunk-p5msxby3.js#M0r",
+   "chunk-p5msxby3.js#Ge",
+   "chunk-p5msxby3.js#In",
+   "chunk-p5msxby3.js#ze",
+   "chunk-p5msxby3.js#U",
+   "chunk-p5msxby3.js#Qe",
+   "chunk-p5msxby3.js#Ze",
+   "chunk-p5msxby3.js#En",
+   "chunk-p5msxby3.js#en",
+   "chunk-p5msxby3.js#UWs",
+   "chunk-p5msxby3.js#je",
+   "chunk-p5msxby3.js#_n",
+   "chunk-p5msxby3.js#Nn",
+   "chunk-p5msxby3.js#Rn",
+   "chunk-p5msxby3.js#Bn",
+   "chunk-p5msxby3.js#ge",
+   "chunk-p5msxby3.js#Tn",
+   "chunk-p5msxby3.js#ye",
+   "chunk-p5msxby3.js#U0i",
+   "chunk-p5msxby3.js#B0i",
+   "chunk-p5msxby3.js#Sn",
+   "chunk-p5msxby3.js#Ln",
+   "chunk-p5msxby3.js#j0i",
+   "chunk-p5msxby3.js#Mn",
+   "chunk-p5msxby3.js#Ee",
+   "chunk-p5msxby3.js#xn",
+   "chunk-p5msxby3.js#d2i",
+   "chunk-p5msxby3.js#IVn",
+   "chunk-p5msxby3.js#c2i",
+   "chunk-p5msxby3.js#u2i",
+   "chunk-p5msxby3.js#Wn"
+  ]
+ },
+ {
+  "path": "_new/performSetColor.ts",
+  "chunks": {
+   "chunk-p7w1d1hp.js": 3
+  },
+  "bytes": 1019,
+  "decls": [
+   "chunk-p7w1d1hp.js#Xzi",
+   "chunk-p7w1d1hp.js#S0r",
+   "chunk-p7w1d1hp.js#p"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-pc1rmcr2/part-001.js",
+  "chunks": {
+   "chunk-pc1rmcr2.js": 2
+  },
+  "bytes": 250,
+  "decls": [
+   "chunk-pc1rmcr2.js#M",
+   "chunk-pc1rmcr2.js#w"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-pc1rmcr2/part-002.js",
+  "chunks": {
+   "chunk-pc1rmcr2.js": 1
+  },
+  "bytes": 45,
+  "decls": [
+   "chunk-pc1rmcr2.js#iUn"
+  ]
+ },
+ {
+  "path": "_new/uploadStartTaskFileAt.ts",
+  "chunks": {
+   "chunk-pcnabvxx.js": 29
+  },
+  "bytes": 13300,
+  "decls": [
+   "chunk-pcnabvxx.js#re",
+   "chunk-pcnabvxx.js#C",
+   "chunk-pcnabvxx.js#HGi",
+   "chunk-pcnabvxx.js#oe",
+   "chunk-pcnabvxx.js#NGi",
+   "chunk-pcnabvxx.js#ae",
+   "chunk-pcnabvxx.js#Y",
+   "chunk-pcnabvxx.js#de",
+   "chunk-pcnabvxx.js#$Gi",
+   "chunk-pcnabvxx.js#FGi",
+   "chunk-pcnabvxx.js#UGi",
+   "chunk-pcnabvxx.js#BGi",
+   "chunk-pcnabvxx.js#z",
+   "chunk-pcnabvxx.js#G",
+   "chunk-pcnabvxx.js#Z",
+   "chunk-pcnabvxx.js#$Mr",
+   "chunk-pcnabvxx.js#q",
+   "chunk-pcnabvxx.js#FMr",
+   "chunk-pcnabvxx.js#le",
+   "chunk-pcnabvxx.js#HAo",
+   "chunk-pcnabvxx.js#R",
+   "chunk-pcnabvxx.js#fe",
+   "chunk-pcnabvxx.js#I",
+   "chunk-pcnabvxx.js#U",
+   "chunk-pcnabvxx.js#M",
+   "chunk-pcnabvxx.js#b",
+   "chunk-pcnabvxx.js#Q",
+   "chunk-pcnabvxx.js#A",
+   "chunk-pcnabvxx.js#H"
+  ]
+ },
+ {
+  "path": "_new/CORE_HEAD_PARAGRAPH.ts",
+  "chunks": {
+   "chunk-pgmvyg3g.js": 15
+  },
+  "bytes": 27743,
+  "decls": [
+   "chunk-pgmvyg3g.js#i",
+   "chunk-pgmvyg3g.js#vNr",
+   "chunk-pgmvyg3g.js#kNr",
+   "chunk-pgmvyg3g.js#TNr",
+   "chunk-pgmvyg3g.js#__t",
+   "chunk-pgmvyg3g.js#f",
+   "chunk-pgmvyg3g.js#w2i",
+   "chunk-pgmvyg3g.js#_",
+   "chunk-pgmvyg3g.js#k",
+   "chunk-pgmvyg3g.js#A",
+   "chunk-pgmvyg3g.js#I",
+   "chunk-pgmvyg3g.js#RNr",
+   "chunk-pgmvyg3g.js#P",
+   "chunk-pgmvyg3g.js#N",
+   "chunk-pgmvyg3g.js#mDo"
+  ]
+ },
+ {
+  "path": "_new/applicableSessionRules.ts",
+  "chunks": {
+   "chunk-phzhvaxm.js": 5
+  },
+  "bytes": 838,
+  "decls": [
+   "chunk-phzhvaxm.js#i",
+   "chunk-phzhvaxm.js#mji",
+   "chunk-phzhvaxm.js#z",
+   "chunk-phzhvaxm.js#a",
+   "chunk-phzhvaxm.js#Sfo"
+  ]
+ },
+ {
+  "path": "_new/RENAME_NOTICE.ts",
+  "chunks": {
+   "chunk-pjtx3j3k.js": 1
+  },
+  "bytes": 199,
+  "decls": [
+   "chunk-pjtx3j3k.js#QGn"
+  ]
+ },
+ {
+  "path": "_new/runMonitorCommandHere.ts",
+  "chunks": {
+   "chunk-pzkdz9nx.js": 6
+  },
+  "bytes": 7424,
+  "decls": [
+   "chunk-pzkdz9nx.js#Tvr",
+   "chunk-pzkdz9nx.js#Pt",
+   "chunk-pzkdz9nx.js#Lt",
+   "chunk-pzkdz9nx.js#Nt",
+   "chunk-pzkdz9nx.js#zt",
+   "chunk-pzkdz9nx.js#dfo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-q6msdgx4/part-001.js",
+  "chunks": {
+   "chunk-q6msdgx4.js": 1
+  },
+  "bytes": 200,
+  "decls": [
+   "chunk-q6msdgx4.js#D2n"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-q7gky7a4/part-001.js",
+  "chunks": {
+   "chunk-q7gky7a4.js": 1
+  },
+  "bytes": 438,
+  "decls": [
+   "chunk-q7gky7a4.js#oos"
+  ]
+ },
+ {
+  "path": "_new/describeHandoverSource.ts",
+  "chunks": {
+   "chunk-q84dhc5d.js": 30
+  },
+  "bytes": 8199,
+  "decls": [
+   "chunk-q84dhc5d.js#Yye",
+   "chunk-q84dhc5d.js#M",
+   "chunk-q84dhc5d.js#qDr",
+   "chunk-q84dhc5d.js#CFt",
+   "chunk-q84dhc5d.js#T",
+   "chunk-q84dhc5d.js#Vin",
+   "chunk-q84dhc5d.js#dyt",
+   "chunk-q84dhc5d.js#Vzn",
+   "chunk-q84dhc5d.js#QQe",
+   "chunk-q84dhc5d.js#N",
+   "chunk-q84dhc5d.js#YRo",
+   "chunk-q84dhc5d.js#I",
+   "chunk-q84dhc5d.js#YDr",
+   "chunk-q84dhc5d.js#XRo",
+   "chunk-q84dhc5d.js#k",
+   "chunk-q84dhc5d.js#JRo",
+   "chunk-q84dhc5d.js#QRo",
+   "chunk-q84dhc5d.js#XDr",
+   "chunk-q84dhc5d.js#ZQe",
+   "chunk-q84dhc5d.js#D",
+   "chunk-q84dhc5d.js#ZRo",
+   "chunk-q84dhc5d.js#L",
+   "chunk-q84dhc5d.js#Azi",
+   "chunk-q84dhc5d.js#G",
+   "chunk-q84dhc5d.js#V",
+   "chunk-q84dhc5d.js#B",
+   "chunk-q84dhc5d.js#E",
+   "chunk-q84dhc5d.js#j",
+   "chunk-q84dhc5d.js#Y",
+   "chunk-q84dhc5d.js#Z"
+  ]
+ },
+ {
+  "path": "_new/materializeLocalPeerFiles.ts",
+  "chunks": {
+   "chunk-qcc88jq1.js": 16
+  },
+  "bytes": 3464,
+  "decls": [
+   "chunk-qcc88jq1.js#G",
+   "chunk-qcc88jq1.js#b",
+   "chunk-qcc88jq1.js#j7e",
+   "chunk-qcc88jq1.js#WVn",
+   "chunk-qcc88jq1.js#GVn",
+   "chunk-qcc88jq1.js#zVn",
+   "chunk-qcc88jq1.js#q0r",
+   "chunk-qcc88jq1.js#Ooe",
+   "chunk-qcc88jq1.js#Y0r",
+   "chunk-qcc88jq1.js#Uln",
+   "chunk-qcc88jq1.js#Y",
+   "chunk-qcc88jq1.js#K",
+   "chunk-qcc88jq1.js#EMo",
+   "chunk-qcc88jq1.js#vMo",
+   "chunk-qcc88jq1.js#L",
+   "chunk-qcc88jq1.js#m2i"
+  ]
+ },
+ {
+  "path": "_new/operatorGitSnapshotWarnings.ts",
+  "chunks": {
+   "chunk-qcqdqsn4.js": 34
+  },
+  "bytes": 17036,
+  "decls": [
+   "chunk-qcqdqsn4.js#w",
+   "chunk-qcqdqsn4.js#MHn",
+   "chunk-qcqdqsn4.js#se",
+   "chunk-qcqdqsn4.js#N1i",
+   "chunk-qcqdqsn4.js#L",
+   "chunk-qcqdqsn4.js#$1i",
+   "chunk-qcqdqsn4.js#Buo",
+   "chunk-qcqdqsn4.js#DHn",
+   "chunk-qcqdqsn4.js#fvr",
+   "chunk-qcqdqsn4.js#pvr",
+   "chunk-qcqdqsn4.js#CLi",
+   "chunk-qcqdqsn4.js#RLi",
+   "chunk-qcqdqsn4.js#F1i",
+   "chunk-qcqdqsn4.js#U1i",
+   "chunk-qcqdqsn4.js#ce",
+   "chunk-qcqdqsn4.js#B",
+   "chunk-qcqdqsn4.js#v",
+   "chunk-qcqdqsn4.js#B1i",
+   "chunk-qcqdqsn4.js#V",
+   "chunk-qcqdqsn4.js#j1i",
+   "chunk-qcqdqsn4.js#ue",
+   "chunk-qcqdqsn4.js#le",
+   "chunk-qcqdqsn4.js#y",
+   "chunk-qcqdqsn4.js#ge",
+   "chunk-qcqdqsn4.js#Kde",
+   "chunk-qcqdqsn4.js#W1i",
+   "chunk-qcqdqsn4.js#he",
+   "chunk-qcqdqsn4.js#W",
+   "chunk-qcqdqsn4.js#q",
+   "chunk-qcqdqsn4.js#fe",
+   "chunk-qcqdqsn4.js#de",
+   "chunk-qcqdqsn4.js#me",
+   "chunk-qcqdqsn4.js#pe",
+   "chunk-qcqdqsn4.js#G1i"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-qg0af0yq/part-001.js",
+  "chunks": {
+   "chunk-qg0af0yq.js": 1
+  },
+  "bytes": 280,
+  "decls": [
+   "chunk-qg0af0yq.js#X9t"
+  ]
+ },
+ {
+  "path": "_new/refuseOrgConfigEarlyAtStartup.ts",
+  "chunks": {
+   "chunk-r2x77faw.js": 9
+  },
+  "bytes": 3108,
+  "decls": [
+   "chunk-r2x77faw.js#p",
+   "chunk-r2x77faw.js#d",
+   "chunk-r2x77faw.js#VSo",
+   "chunk-r2x77faw.js#Rgt",
+   "chunk-r2x77faw.js#qSo",
+   "chunk-r2x77faw.js#oGi",
+   "chunk-r2x77faw.js#C",
+   "chunk-r2x77faw.js#l",
+   "chunk-r2x77faw.js#h"
+  ]
+ },
+ {
+  "path": "_new/resolveSetting.ts",
+  "chunks": {
+   "chunk-r5n7tcxe.js": 3
+  },
+  "bytes": 778,
+  "decls": [
+   "chunk-r5n7tcxe.js#qPe",
+   "chunk-r5n7tcxe.js#ei",
+   "chunk-r5n7tcxe.js#y3"
+  ]
+ },
+ {
+  "path": "_new/personProxyAuthHelper.ts",
+  "chunks": {
+   "chunk-rehfzw2n.js": 10
+  },
+  "bytes": 1373,
+  "decls": [
+   "chunk-rehfzw2n.js#zwo",
+   "chunk-rehfzw2n.js#@703",
+   "chunk-rehfzw2n.js#Uwo",
+   "chunk-rehfzw2n.js#Bwo",
+   "chunk-rehfzw2n.js#s",
+   "chunk-rehfzw2n.js#jwo",
+   "chunk-rehfzw2n.js#p",
+   "chunk-rehfzw2n.js#Wwo",
+   "chunk-rehfzw2n.js#Gwo",
+   "chunk-rehfzw2n.js#Fgt"
+  ]
+ },
+ {
+  "path": "_new/judgeToolSchemaSendability.ts",
+  "chunks": {
+   "chunk-rm24v4ew.js": 1
+  },
+  "bytes": 653,
+  "decls": [
+   "chunk-rm24v4ew.js#hdn"
+  ]
+ },
+ {
+  "path": "_new/BRIDGE_RESERVED_TOOL_NAMES.ts",
+  "chunks": {
+   "chunk-rmg81gxr.js": 7
+  },
+  "bytes": 833,
+  "decls": [
+   "chunk-rmg81gxr.js#gAe",
+   "chunk-rmg81gxr.js#kan",
+   "chunk-rmg81gxr.js#a",
+   "chunk-rmg81gxr.js#i",
+   "chunk-rmg81gxr.js#E",
+   "chunk-rmg81gxr.js#gHr",
+   "chunk-rmg81gxr.js#XGe"
+  ]
+ },
+ {
+  "path": "_new/stageFile.ts",
+  "chunks": {
+   "chunk-rqpqwy1q.js": 43
+  },
+  "bytes": 19207,
+  "decls": [
+   "chunk-rqpqwy1q.js#Ae",
+   "chunk-rqpqwy1q.js#ne",
+   "chunk-rqpqwy1q.js#Me",
+   "chunk-rqpqwy1q.js#oe",
+   "chunk-rqpqwy1q.js#se",
+   "chunk-rqpqwy1q.js#re",
+   "chunk-rqpqwy1q.js#ye",
+   "chunk-rqpqwy1q.js#Z",
+   "chunk-rqpqwy1q.js#Dji",
+   "chunk-rqpqwy1q.js#K",
+   "chunk-rqpqwy1q.js#Fe",
+   "chunk-rqpqwy1q.js#W",
+   "chunk-rqpqwy1q.js#Lji",
+   "chunk-rqpqwy1q.js#ze",
+   "chunk-rqpqwy1q.js#$e",
+   "chunk-rqpqwy1q.js#Re",
+   "chunk-rqpqwy1q.js#m0n",
+   "chunk-rqpqwy1q.js#cpt",
+   "chunk-rqpqwy1q.js#je",
+   "chunk-rqpqwy1q.js#fe",
+   "chunk-rqpqwy1q.js#q",
+   "chunk-rqpqwy1q.js#Hji",
+   "chunk-rqpqwy1q.js#_e",
+   "chunk-rqpqwy1q.js#Ge",
+   "chunk-rqpqwy1q.js#Ve",
+   "chunk-rqpqwy1q.js#qe",
+   "chunk-rqpqwy1q.js#Ye",
+   "chunk-rqpqwy1q.js#N",
+   "chunk-rqpqwy1q.js#me",
+   "chunk-rqpqwy1q.js#We",
+   "chunk-rqpqwy1q.js#Xe",
+   "chunk-rqpqwy1q.js#Je",
+   "chunk-rqpqwy1q.js#Pe",
+   "chunk-rqpqwy1q.js#ee",
+   "chunk-rqpqwy1q.js#pe",
+   "chunk-rqpqwy1q.js#Ze",
+   "chunk-rqpqwy1q.js#et",
+   "chunk-rqpqwy1q.js#Q",
+   "chunk-rqpqwy1q.js#tt",
+   "chunk-rqpqwy1q.js#nt",
+   "chunk-rqpqwy1q.js#j",
+   "chunk-rqpqwy1q.js#ot",
+   "chunk-rqpqwy1q.js#HLi"
+  ]
+ },
+ {
+  "path": "_new/awaitArtifactRosterForSchemaFreeze.ts",
+  "chunks": {
+   "chunk-rsfhsjj6.js": 10
+  },
+  "bytes": 2308,
+  "decls": [
+   "chunk-rsfhsjj6.js#z0i",
+   "chunk-rsfhsjj6.js#E2i",
+   "chunk-rsfhsjj6.js#Kqn",
+   "chunk-rsfhsjj6.js#UDo",
+   "chunk-rsfhsjj6.js#v2i",
+   "chunk-rsfhsjj6.js#k2i",
+   "chunk-rsfhsjj6.js#T2i",
+   "chunk-rsfhsjj6.js#A2i",
+   "chunk-rsfhsjj6.js#BDo",
+   "chunk-rsfhsjj6.js#R"
+  ]
+ },
+ {
+  "path": "_new/callUpgradeFromSurface.ts",
+  "chunks": {
+   "chunk-rw1dvz2v.js": 3
+  },
+  "bytes": 1780,
+  "decls": [
+   "chunk-rw1dvz2v.js#g",
+   "chunk-rw1dvz2v.js#Jji",
+   "chunk-rw1dvz2v.js#xXe"
+  ]
+ },
+ {
+  "path": "_new/preToolUseHookMayCoverArtifact.helpers-rxmp.ts",
+  "chunks": {
+   "chunk-rxmpx0xj.js": 2
+  },
+  "bytes": 290,
+  "decls": [
+   "chunk-rxmpx0xj.js#a",
+   "chunk-rxmpx0xj.js#c"
+  ]
+ },
+ {
+  "path": "_new/preToolUseHookMayCoverArtifact.ts",
+  "chunks": {
+   "chunk-rxmpx0xj.js": 6
+  },
+  "bytes": 979,
+  "decls": [
+   "chunk-rxmpx0xj.js#f",
+   "chunk-rxmpx0xj.js#l",
+   "chunk-rxmpx0xj.js#TDo",
+   "chunk-rxmpx0xj.js#ADo",
+   "chunk-rxmpx0xj.js#d",
+   "chunk-rxmpx0xj.js#CDo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-s61vbvea/part-001.js",
+  "chunks": {
+   "chunk-s61vbvea.js": 1
+  },
+  "bytes": 125,
+  "decls": [
+   "chunk-s61vbvea.js#Qf"
+  ]
+ },
+ {
+  "path": "_new/isStillHereOnCached.ts",
+  "chunks": {
+   "chunk-s7c33dbx.js": 1
+  },
+  "bytes": 71,
+  "decls": [
+   "chunk-s7c33dbx.js#dHt"
+  ]
+ },
+ {
+  "path": "_new/isListAuthError.ts",
+  "chunks": {
+   "chunk-s7nhrpfy.js": 2,
+   "chunk-zmmcqmt0.js": 2
+  },
+  "bytes": 809,
+  "decls": [
+   "chunk-s7nhrpfy.js#Pze",
+   "chunk-s7nhrpfy.js#mdn",
+   "chunk-zmmcqmt0.js#NQe",
+   "chunk-zmmcqmt0.js#$sn"
+  ]
+ },
+ {
+  "path": "_new/buildGitSessionContext.ts",
+  "chunks": {
+   "chunk-sn0v73kq.js": 2
+  },
+  "bytes": 1339,
+  "decls": [
+   "chunk-sn0v73kq.js#T7r",
+   "chunk-sn0v73kq.js#Fts"
+  ]
+ },
+ {
+  "path": "_new/searchPluginDirectory.ts",
+  "chunks": {
+   "chunk-snyt4d6y.js": 11
+  },
+  "bytes": 4990,
+  "decls": [
+   "chunk-snyt4d6y.js#U",
+   "chunk-snyt4d6y.js#uGn",
+   "chunk-snyt4d6y.js#N",
+   "chunk-snyt4d6y.js#EAo",
+   "chunk-snyt4d6y.js#V",
+   "chunk-snyt4d6y.js#IQe",
+   "chunk-snyt4d6y.js#PGi",
+   "chunk-snyt4d6y.js#IGi",
+   "chunk-snyt4d6y.js#vAo",
+   "chunk-snyt4d6y.js#L",
+   "chunk-snyt4d6y.js#z"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-spwda8nt/part-001.js",
+  "chunks": {
+   "chunk-spwda8nt.js": 1
+  },
+  "bytes": 63,
+  "decls": [
+   "chunk-spwda8nt.js#SKo"
+  ]
+ },
+ {
+  "path": "_new/createDialFailureLatch.ts",
+  "chunks": {
+   "chunk-sw4g2q2j.js": 4
+  },
+  "bytes": 1221,
+  "decls": [
+   "chunk-sw4g2q2j.js#u",
+   "chunk-sw4g2q2j.js#$oe",
+   "chunk-sw4g2q2j.js#d",
+   "chunk-sw4g2q2j.js#Wdn"
+  ]
+ },
+ {
+  "path": "_new/createServingReadiness.ts",
+  "chunks": {
+   "chunk-t28c2dsj.js": 5
+  },
+  "bytes": 1151,
+  "decls": [
+   "chunk-t28c2dsj.js#f",
+   "chunk-t28c2dsj.js#iSo",
+   "chunk-t28c2dsj.js#d",
+   "chunk-t28c2dsj.js#n",
+   "chunk-t28c2dsj.js#c"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-th02cny1/part-001.js",
+  "chunks": {
+   "chunk-th02cny1.js": 1
+  },
+  "bytes": 42,
+  "decls": [
+   "chunk-th02cny1.js#qLr"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-th8w37yz/part-001.js",
+  "chunks": {
+   "chunk-th8w37yz.js": 2
+  },
+  "bytes": 654,
+  "decls": [
+   "chunk-th8w37yz.js#v",
+   "chunk-th8w37yz.js#C"
+  ]
+ },
+ {
+  "path": "_new/END_CONVERSATION_GB_FLAG.ts",
+  "chunks": {
+   "chunk-tr8gk11f.js": 1
+  },
+  "bytes": 51,
+  "decls": [
+   "chunk-tr8gk11f.js#hD"
+  ]
+ },
+ {
+  "path": "_new/waitForOAuthRefreshBeforeExit.ts",
+  "chunks": {
+   "chunk-tss4qggm.js": 4
+  },
+  "bytes": 127,
+  "decls": [
+   "chunk-tss4qggm.js#e",
+   "chunk-tss4qggm.js#t",
+   "chunk-tss4qggm.js#qls",
+   "chunk-tss4qggm.js#Vxn"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-tyg7f3ek/part-001.js",
+  "chunks": {
+   "chunk-tyg7f3ek.js": 1
+  },
+  "bytes": 72,
+  "decls": [
+   "chunk-tyg7f3ek.js#Ry"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-tyg7f3ek/part-002.js",
+  "chunks": {
+   "chunk-tyg7f3ek.js": 1
+  },
+  "bytes": 90,
+  "decls": [
+   "chunk-tyg7f3ek.js#Rp"
+  ]
+ },
+ {
+  "path": "_new/recordIdleSubscription.ts",
+  "chunks": {
+   "chunk-v3mh8g28.js": 42
+  },
+  "bytes": 14998,
+  "decls": [
+   "chunk-v3mh8g28.js#R",
+   "chunk-v3mh8g28.js#U",
+   "chunk-v3mh8g28.js#d",
+   "chunk-v3mh8g28.js#dvo",
+   "chunk-v3mh8g28.js#MIr",
+   "chunk-v3mh8g28.js#P",
+   "chunk-v3mh8g28.js#Z",
+   "chunk-v3mh8g28.js#DIr",
+   "chunk-v3mh8g28.js#J",
+   "chunk-v3mh8g28.js#N",
+   "chunk-v3mh8g28.js#M",
+   "chunk-v3mh8g28.js#O",
+   "chunk-v3mh8g28.js#ee",
+   "chunk-v3mh8g28.js#Cjn",
+   "chunk-v3mh8g28.js#E",
+   "chunk-v3mh8g28.js#cvo",
+   "chunk-v3mh8g28.js#ie",
+   "chunk-v3mh8g28.js#te",
+   "chunk-v3mh8g28.js#Con",
+   "chunk-v3mh8g28.js#Rjn",
+   "chunk-v3mh8g28.js#uvo",
+   "chunk-v3mh8g28.js#re",
+   "chunk-v3mh8g28.js#C",
+   "chunk-v3mh8g28.js#LIr",
+   "chunk-v3mh8g28.js#HIr",
+   "chunk-v3mh8g28.js#NIr",
+   "chunk-v3mh8g28.js#$Ir",
+   "chunk-v3mh8g28.js#q",
+   "chunk-v3mh8g28.js#FIr",
+   "chunk-v3mh8g28.js#fvo",
+   "chunk-v3mh8g28.js#H",
+   "chunk-v3mh8g28.js#A",
+   "chunk-v3mh8g28.js#pvo",
+   "chunk-v3mh8g28.js#se",
+   "chunk-v3mh8g28.js#mvo",
+   "chunk-v3mh8g28.js#TGi",
+   "chunk-v3mh8g28.js#B",
+   "chunk-v3mh8g28.js#xjn",
+   "chunk-v3mh8g28.js#de",
+   "chunk-v3mh8g28.js#W",
+   "chunk-v3mh8g28.js#gvo",
+   "chunk-v3mh8g28.js#V"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-v517dzda/part-001.js",
+  "chunks": {
+   "chunk-v517dzda.js": 1
+  },
+  "bytes": 30,
+  "decls": [
+   "chunk-v517dzda.js#Ie"
+  ]
+ },
+ {
+  "path": "_new/noteSessionTaskListAfterClear.ts",
+  "chunks": {
+   "chunk-v5nznc39.js": 4
+  },
+  "bytes": 720,
+  "decls": [
+   "chunk-v5nznc39.js#tVn",
+   "chunk-v5nznc39.js#uln",
+   "chunk-v5nznc39.js#b0r",
+   "chunk-v5nznc39.js#Yzi"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-v6kts6xw/part-001.js",
+  "chunks": {
+   "chunk-v6kts6xw.js": 5
+  },
+  "bytes": 988,
+  "decls": [
+   "chunk-v6kts6xw.js#@411",
+   "chunk-v6kts6xw.js#D",
+   "chunk-v6kts6xw.js#N",
+   "chunk-v6kts6xw.js#_",
+   "chunk-v6kts6xw.js#PRr"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-v6kts6xw/part-002.js",
+  "chunks": {
+   "chunk-v6kts6xw.js": 4
+  },
+  "bytes": 436,
+  "decls": [
+   "chunk-v6kts6xw.js#X",
+   "chunk-v6kts6xw.js#g",
+   "chunk-v6kts6xw.js#G",
+   "chunk-v6kts6xw.js#J"
+  ]
+ },
+ {
+  "path": "_new/warmTypeCapabilities.ts",
+  "chunks": {
+   "chunk-v8nq54bj.js": 77
+  },
+  "bytes": 10578,
+  "decls": [
+   "chunk-v8nq54bj.js#b",
+   "chunk-v8nq54bj.js#E",
+   "chunk-v8nq54bj.js#I",
+   "chunk-v8nq54bj.js#sNr",
+   "chunk-v8nq54bj.js#XMo",
+   "chunk-v8nq54bj.js#KUt",
+   "chunk-v8nq54bj.js#iNr",
+   "chunk-v8nq54bj.js#JMo",
+   "chunk-v8nq54bj.js#iZ",
+   "chunk-v8nq54bj.js#QMo",
+   "chunk-v8nq54bj.js#k",
+   "chunk-v8nq54bj.js#cqn",
+   "chunk-v8nq54bj.js#Kln",
+   "chunk-v8nq54bj.js#VUt",
+   "chunk-v8nq54bj.js#aNr",
+   "chunk-v8nq54bj.js#g",
+   "chunk-v8nq54bj.js#ZMo",
+   "chunk-v8nq54bj.js#C",
+   "chunk-v8nq54bj.js#x",
+   "chunk-v8nq54bj.js#A",
+   "chunk-v8nq54bj.js#eDo",
+   "chunk-v8nq54bj.js#lNr",
+   "chunk-v8nq54bj.js#jz",
+   "chunk-v8nq54bj.js#aZ",
+   "chunk-v8nq54bj.js#uW",
+   "chunk-v8nq54bj.js#qUt",
+   "chunk-v8nq54bj.js#tDo",
+   "chunk-v8nq54bj.js#q7e",
+   "chunk-v8nq54bj.js#Y7e",
+   "chunk-v8nq54bj.js#nDo",
+   "chunk-v8nq54bj.js#rDo",
+   "chunk-v8nq54bj.js#YUt",
+   "chunk-v8nq54bj.js#uqn",
+   "chunk-v8nq54bj.js#X7e",
+   "chunk-v8nq54bj.js#R",
+   "chunk-v8nq54bj.js#oDo",
+   "chunk-v8nq54bj.js#sDo",
+   "chunk-v8nq54bj.js#iDo",
+   "chunk-v8nq54bj.js#fqn",
+   "chunk-v8nq54bj.js#dNr",
+   "chunk-v8nq54bj.js#D",
+   "chunk-v8nq54bj.js#cNr",
+   "chunk-v8nq54bj.js#rq",
+   "chunk-v8nq54bj.js#aDo",
+   "chunk-v8nq54bj.js#pue",
+   "chunk-v8nq54bj.js#J7e",
+   "chunk-v8nq54bj.js#f_t",
+   "chunk-v8nq54bj.js#p_t",
+   "chunk-v8nq54bj.js#lDo",
+   "chunk-v8nq54bj.js#DAe",
+   "chunk-v8nq54bj.js#cg",
+   "chunk-v8nq54bj.js#m_t",
+   "chunk-v8nq54bj.js#lZ",
+   "chunk-v8nq54bj.js#uNr",
+   "chunk-v8nq54bj.js#N",
+   "chunk-v8nq54bj.js#fNr",
+   "chunk-v8nq54bj.js#Moe",
+   "chunk-v8nq54bj.js#DC",
+   "chunk-v8nq54bj.js#y",
+   "chunk-v8nq54bj.js#dZ",
+   "chunk-v8nq54bj.js#g_t",
+   "chunk-v8nq54bj.js#l_e",
+   "chunk-v8nq54bj.js#U9",
+   "chunk-v8nq54bj.js#Yln",
+   "chunk-v8nq54bj.js#dDo",
+   "chunk-v8nq54bj.js#mue",
+   "chunk-v8nq54bj.js#mNr",
+   "chunk-v8nq54bj.js#Cze",
+   "chunk-v8nq54bj.js#cDo",
+   "chunk-v8nq54bj.js#dF",
+   "chunk-v8nq54bj.js#h_t",
+   "chunk-v8nq54bj.js#SHe",
+   "chunk-v8nq54bj.js#d_e",
+   "chunk-v8nq54bj.js#P",
+   "chunk-v8nq54bj.js#j",
+   "chunk-v8nq54bj.js#mqn",
+   "chunk-v8nq54bj.js#gNr"
+  ]
+ },
+ {
+  "path": "_new/workerEndingOf.ts",
+  "chunks": {
+   "chunk-vb0enkt7.js": 6
+  },
+  "bytes": 556,
+  "decls": [
+   "chunk-vb0enkt7.js#Kwo",
+   "chunk-vb0enkt7.js#@350",
+   "chunk-vb0enkt7.js#OHi",
+   "chunk-vb0enkt7.js#PPr",
+   "chunk-vb0enkt7.js#o",
+   "chunk-vb0enkt7.js#MHi"
+  ]
+ },
+ {
+  "path": "_new/buildChromeDialogResponse.ts",
+  "chunks": {
+   "chunk-vbhf914m.js": 2
+  },
+  "bytes": 611,
+  "decls": [
+   "chunk-vbhf914m.js#gCr",
+   "chunk-vbhf914m.js#vWi"
+  ]
+ },
+ {
+  "path": "_new/buildWorkspaceDiffResponse.helpers-vbr1.ts",
+  "chunks": {
+   "chunk-vbr14wv4.js": 1
+  },
+  "bytes": 349,
+  "decls": [
+   "chunk-vbr14wv4.js#S$s"
+  ]
+ },
+ {
+  "path": "_new/sessionRepositoryTrustReader.ts",
+  "chunks": {
+   "chunk-vgetxrm1.js": 1
+  },
+  "bytes": 207,
+  "decls": [
+   "chunk-vgetxrm1.js#SLt"
+  ]
+ },
+ {
+  "path": "_new/artifactFetchNoticeLane.ts",
+  "chunks": {
+   "chunk-vm0jn40f.js": 19
+  },
+  "bytes": 3623,
+  "decls": [
+   "chunk-vm0jn40f.js#qLe",
+   "chunk-vm0jn40f.js#sF",
+   "chunk-vm0jn40f.js#i7e",
+   "chunk-vm0jn40f.js#aan",
+   "chunk-vm0jn40f.js#YLe",
+   "chunk-vm0jn40f.js#iue",
+   "chunk-vm0jn40f.js#_oe",
+   "chunk-vm0jn40f.js#g",
+   "chunk-vm0jn40f.js#f",
+   "chunk-vm0jn40f.js#a7e",
+   "chunk-vm0jn40f.js#NLr",
+   "chunk-vm0jn40f.js#O2n",
+   "chunk-vm0jn40f.js#p",
+   "chunk-vm0jn40f.js#m",
+   "chunk-vm0jn40f.js#boe",
+   "chunk-vm0jn40f.js#M2n",
+   "chunk-vm0jn40f.js#aPo",
+   "chunk-vm0jn40f.js#Dzi",
+   "chunk-vm0jn40f.js#Lzi"
+  ]
+ },
+ {
+  "path": "_new/autoModeRefusedForServedCallsWhy.ts",
+  "chunks": {
+   "chunk-vpphf2a1.js": 3
+  },
+  "bytes": 675,
+  "decls": [
+   "chunk-vpphf2a1.js#mNt",
+   "chunk-vpphf2a1.js#gNt",
+   "chunk-vpphf2a1.js#wSo"
+  ]
+ },
+ {
+  "path": "_new/displayOnlyMcpToolUi.ts",
+  "chunks": {
+   "chunk-vq77wsrh.js": 8
+  },
+  "bytes": 1694,
+  "decls": [
+   "chunk-vq77wsrh.js#f",
+   "chunk-vq77wsrh.js#mce",
+   "chunk-vq77wsrh.js#y",
+   "chunk-vq77wsrh.js#d",
+   "chunk-vq77wsrh.js#g",
+   "chunk-vq77wsrh.js#T",
+   "chunk-vq77wsrh.js#c",
+   "chunk-vq77wsrh.js#l"
+  ]
+ },
+ {
+  "path": "_misplaced/tools/WebSearchTool/UI.tsx",
+  "chunks": {
+   "chunk-vrb44rx7.js": 1
+  },
+  "bytes": 77,
+  "decls": [
+   "chunk-vrb44rx7.js#Ol"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-vrb44rx7/part-001.js",
+  "chunks": {
+   "chunk-vrb44rx7.js": 9
+  },
+  "bytes": 6034,
+  "decls": [
+   "chunk-vrb44rx7.js#Vh",
+   "chunk-vrb44rx7.js#Hh",
+   "chunk-vrb44rx7.js#Ul",
+   "chunk-vrb44rx7.js#jl",
+   "chunk-vrb44rx7.js#qr",
+   "chunk-vrb44rx7.js#@101918",
+   "chunk-vrb44rx7.js#Zr",
+   "chunk-vrb44rx7.js#@103281",
+   "chunk-vrb44rx7.js#ey"
+  ]
+ },
+ {
+  "path": "_new/configureZodForStartup.ts",
+  "chunks": {
+   "chunk-vtcm47cy.js": 1
+  },
+  "bytes": 33,
+  "decls": [
+   "chunk-vtcm47cy.js#Kuo"
+  ]
+ },
+ {
+  "path": "_new/uploadForkDisplayHistory.ts",
+  "chunks": {
+   "chunk-vx1xamz5.js": 5
+  },
+  "bytes": 1455,
+  "decls": [
+   "chunk-vx1xamz5.js#y",
+   "chunk-vx1xamz5.js#wmo",
+   "chunk-vx1xamz5.js#v",
+   "chunk-vx1xamz5.js#Emo",
+   "chunk-vx1xamz5.js#vmo"
+  ]
+ },
+ {
+  "path": "_new/fetchSessionInboxMessage.ts",
+  "chunks": {
+   "chunk-w12gsta7.js": 12
+  },
+  "bytes": 4883,
+  "decls": [
+   "chunk-w12gsta7.js#Ebt",
+   "chunk-w12gsta7.js#h",
+   "chunk-w12gsta7.js#QHe",
+   "chunk-w12gsta7.js#d2e",
+   "chunk-w12gsta7.js#RNo",
+   "chunk-w12gsta7.js#p6n",
+   "chunk-w12gsta7.js#w",
+   "chunk-w12gsta7.js#N",
+   "chunk-w12gsta7.js#R",
+   "chunk-w12gsta7.js#C",
+   "chunk-w12gsta7.js#k",
+   "chunk-w12gsta7.js#P"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-wj577vf9/part-001.js",
+  "chunks": {
+   "chunk-wj577vf9.js": 4
+  },
+  "bytes": 183,
+  "decls": [
+   "chunk-wj577vf9.js#Se",
+   "chunk-wj577vf9.js#_e",
+   "chunk-wj577vf9.js#se",
+   "chunk-wj577vf9.js#oe"
+  ]
+ },
+ {
+  "path": "_new/startCapturingEarlyInput.ts",
+  "chunks": {
+   "chunk-wphjdnre.js": 20
+  },
+  "bytes": 1805,
+  "decls": [
+   "chunk-wphjdnre.js#a",
+   "chunk-wphjdnre.js#u",
+   "chunk-wphjdnre.js#f",
+   "chunk-wphjdnre.js#r",
+   "chunk-wphjdnre.js#AVi",
+   "chunk-wphjdnre.js#GN",
+   "chunk-wphjdnre.js#N5t",
+   "chunk-wphjdnre.js#iTn",
+   "chunk-wphjdnre.js#aTn",
+   "chunk-wphjdnre.js#Oit",
+   "chunk-wphjdnre.js#hQr",
+   "chunk-wphjdnre.js#yQr",
+   "chunk-wphjdnre.js#lTn",
+   "chunk-wphjdnre.js#dTn",
+   "chunk-wphjdnre.js#r5e",
+   "chunk-wphjdnre.js#Mit",
+   "chunk-wphjdnre.js#mes",
+   "chunk-wphjdnre.js#_Qr",
+   "chunk-wphjdnre.js#ges",
+   "chunk-wphjdnre.js#hes"
+  ]
+ },
+ {
+  "path": "_new/makeSetWebBrowserSlice.ts",
+  "chunks": {
+   "chunk-wy2s2mmv.js": 2
+  },
+  "bytes": 292,
+  "decls": [
+   "chunk-wy2s2mmv.js#fDo",
+   "chunk-wy2s2mmv.js#pDo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-wyqg6m3h/part-001.js",
+  "chunks": {
+   "chunk-wyqg6m3h.js": 1
+  },
+  "bytes": 90,
+  "decls": [
+   "chunk-wyqg6m3h.js#Te"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-wyqg6m3h/part-002.js",
+  "chunks": {
+   "chunk-wyqg6m3h.js": 1
+  },
+  "bytes": 231,
+  "decls": [
+   "chunk-wyqg6m3h.js#Ws"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-wyqg6m3h/part-003.js",
+  "chunks": {
+   "chunk-wyqg6m3h.js": 1
+  },
+  "bytes": 466,
+  "decls": [
+   "chunk-wyqg6m3h.js#Bo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-wyqg6m3h/part-004.js",
+  "chunks": {
+   "chunk-wyqg6m3h.js": 1
+  },
+  "bytes": 19,
+  "decls": [
+   "chunk-wyqg6m3h.js#Sn"
+  ]
+ },
+ {
+  "path": "_new/placeFilesByName.ts",
+  "chunks": {
+   "chunk-x1hcas72.js": 9
+  },
+  "bytes": 5179,
+  "decls": [
+   "chunk-x1hcas72.js#j",
+   "chunk-x1hcas72.js#rkr",
+   "chunk-x1hcas72.js#K",
+   "chunk-x1hcas72.js#okr",
+   "chunk-x1hcas72.js#skr",
+   "chunk-x1hcas72.js#ikr",
+   "chunk-x1hcas72.js#N",
+   "chunk-x1hcas72.js#Mji",
+   "chunk-x1hcas72.js#Y"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-x1mwqya5/part-001.js",
+  "chunks": {
+   "chunk-x1mwqya5.js": 2
+  },
+  "bytes": 291,
+  "decls": [
+   "chunk-x1mwqya5.js#Dbn",
+   "chunk-x1mwqya5.js#Lbn"
+  ]
+ },
+ {
+  "path": "_new/resolveAttachDeviceBinding.ts",
+  "chunks": {
+   "chunk-x1rd87x0.js": 14
+  },
+  "bytes": 5495,
+  "decls": [
+   "chunk-x1rd87x0.js#dpo",
+   "chunk-x1rd87x0.js#cpo",
+   "chunk-x1rd87x0.js#Iji",
+   "chunk-x1rd87x0.js#upo",
+   "chunk-x1rd87x0.js#fpo",
+   "chunk-x1rd87x0.js#ppo",
+   "chunk-x1rd87x0.js#k",
+   "chunk-x1rd87x0.js#nkr",
+   "chunk-x1rd87x0.js#Oji",
+   "chunk-x1rd87x0.js#mpo",
+   "chunk-x1rd87x0.js#gpo",
+   "chunk-x1rd87x0.js#hpo",
+   "chunk-x1rd87x0.js#y",
+   "chunk-x1rd87x0.js#B"
+  ]
+ },
+ {
+  "path": "_new/bindSupervisedPR.ts",
+  "chunks": {
+   "chunk-x4rjx7qa.js": 9
+  },
+  "bytes": 2716,
+  "decls": [
+   "chunk-x4rjx7qa.js#w",
+   "chunk-x4rjx7qa.js#v",
+   "chunk-x4rjx7qa.js#g",
+   "chunk-x4rjx7qa.js#l",
+   "chunk-x4rjx7qa.js#y2i",
+   "chunk-x4rjx7qa.js#_2i",
+   "chunk-x4rjx7qa.js#S",
+   "chunk-x4rjx7qa.js#p",
+   "chunk-x4rjx7qa.js#PMo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-x753sk9t/part-001.js",
+  "chunks": {
+   "chunk-x753sk9t.js": 3
+  },
+  "bytes": 234,
+  "decls": [
+   "chunk-x753sk9t.js#g",
+   "chunk-x753sk9t.js#T2t",
+   "chunk-x753sk9t.js#ex"
+  ]
+ },
+ {
+  "path": "_new/revokeStoredMcpTokens.ts",
+  "chunks": {
+   "chunk-xbm7kra6.js": 1
+  },
+  "bytes": 578,
+  "decls": [
+   "chunk-xbm7kra6.js#Qen"
+  ]
+ },
+ {
+  "path": "_new/isSleepNoticeOnCached.ts",
+  "chunks": {
+   "chunk-xdxvr4je.js": 1
+  },
+  "bytes": 72,
+  "decls": [
+   "chunk-xdxvr4je.js#ypo"
+  ]
+ },
+ {
+  "path": "_new/noteProcessStartTuning.ts",
+  "chunks": {
+   "chunk-xjnjbame.js": 4
+  },
+  "bytes": 652,
+  "decls": [
+   "chunk-xjnjbame.js#u",
+   "chunk-xjnjbame.js#vYi",
+   "chunk-xjnjbame.js#IHn",
+   "chunk-xjnjbame.js#OHn"
+  ]
+ },
+ {
+  "path": "_new/resetProviderBoundCaches.ts",
+  "chunks": {
+   "chunk-xsm5gfzq.js": 1
+  },
+  "bytes": 107,
+  "decls": [
+   "chunk-xsm5gfzq.js#Oan"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-xw83kd7e/part-001.js",
+  "chunks": {
+   "chunk-xw83kd7e.js": 2
+  },
+  "bytes": 187,
+  "decls": [
+   "chunk-xw83kd7e.js#Dts",
+   "chunk-xw83kd7e.js#O_i"
+  ]
+ },
+ {
+  "path": "_new/exitRefusingManagedConfig.ts",
+  "chunks": {
+   "chunk-y43msawm.js": 10
+  },
+  "bytes": 2241,
+  "decls": [
+   "chunk-y43msawm.js#g",
+   "chunk-y43msawm.js#y",
+   "chunk-y43msawm.js#w",
+   "chunk-y43msawm.js#u",
+   "chunk-y43msawm.js#f",
+   "chunk-y43msawm.js#pGe",
+   "chunk-y43msawm.js#gLe",
+   "chunk-y43msawm.js#JNt",
+   "chunk-y43msawm.js#m",
+   "chunk-y43msawm.js#WEo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-yqj79cx2/part-001.js",
+  "chunks": {
+   "chunk-yqj79cx2.js": 6
+  },
+  "bytes": 770,
+  "decls": [
+   "chunk-yqj79cx2.js#@858",
+   "chunk-yqj79cx2.js#@862",
+   "chunk-yqj79cx2.js#ie",
+   "chunk-yqj79cx2.js#Mmt",
+   "chunk-yqj79cx2.js#F",
+   "chunk-yqj79cx2.js#C"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-z0q4jgnc/part-001.js",
+  "chunks": {
+   "chunk-z0q4jgnc.js": 5
+  },
+  "bytes": 189,
+  "decls": [
+   "chunk-z0q4jgnc.js#Gr",
+   "chunk-z0q4jgnc.js#Kr",
+   "chunk-z0q4jgnc.js#X8e",
+   "chunk-z0q4jgnc.js#Br",
+   "chunk-z0q4jgnc.js#sdo"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-z1n5m6nf/part-001.js",
+  "chunks": {
+   "chunk-z1n5m6nf.js": 16
+  },
+  "bytes": 7225,
+  "decls": [
+   "chunk-z1n5m6nf.js#Ct",
+   "chunk-z1n5m6nf.js#mt",
+   "chunk-z1n5m6nf.js#qr",
+   "chunk-z1n5m6nf.js#St",
+   "chunk-z1n5m6nf.js#zr",
+   "chunk-z1n5m6nf.js#Wr",
+   "chunk-z1n5m6nf.js#At",
+   "chunk-z1n5m6nf.js#Ao",
+   "chunk-z1n5m6nf.js#ft",
+   "chunk-z1n5m6nf.js#It",
+   "chunk-z1n5m6nf.js#Oo",
+   "chunk-z1n5m6nf.js#Gr",
+   "chunk-z1n5m6nf.js#Do",
+   "chunk-z1n5m6nf.js#No",
+   "chunk-z1n5m6nf.js#xo",
+   "chunk-z1n5m6nf.js#lt"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-z1n5m6nf/part-002.js",
+  "chunks": {
+   "chunk-z1n5m6nf.js": 3
+  },
+  "bytes": 602,
+  "decls": [
+   "chunk-z1n5m6nf.js#zt",
+   "chunk-z1n5m6nf.js#$l",
+   "chunk-z1n5m6nf.js#rt"
+  ]
+ },
+ {
+  "path": "_unattributed/chunk-z1n5m6nf/part-003.js",
+  "chunks": {
+   "chunk-z1n5m6nf.js": 1
+  },
+  "bytes": 63,
+  "decls": [
+   "chunk-z1n5m6nf.js#ut"
+  ]
+ },
+ {
+  "path": "_new/applyAutoCompactWindow.ts",
+  "chunks": {
+   "chunk-z3fsn6g8.js": 6
+  },
+  "bytes": 2723,
+  "decls": [
+   "chunk-z3fsn6g8.js#v",
+   "chunk-z3fsn6g8.js#A",
+   "chunk-z3fsn6g8.js#uVn",
+   "chunk-z3fsn6g8.js#fVn",
+   "chunk-z3fsn6g8.js#I7e",
+   "chunk-z3fsn6g8.js#Jzi"
+  ]
+ },
+ {
+  "path": "_new/commitTheme.ts",
+  "chunks": {
+   "chunk-zj72psg9.js": 1
+  },
+  "bytes": 143,
+  "decls": [
+   "chunk-zj72psg9.js#dCr"
+  ]
+ },
+ {
+  "path": "_new/performRename.ts",
+  "chunks": {
+   "chunk-zmqmnh19.js": 4
+  },
+  "bytes": 1914,
+  "decls": [
+   "chunk-zmqmnh19.js#k0i",
+   "chunk-zmqmnh19.js#lPo",
+   "chunk-zmqmnh19.js#$Lr",
+   "chunk-zmqmnh19.js#Hzi"
+  ]
+ },
+ {
+  "path": "_new/precheckLaunchScope.helpers-zn8p.ts",
+  "chunks": {
+   "chunk-zn8pzrw0.js": 5
+  },
+  "bytes": 1788,
+  "decls": [
+   "chunk-zn8pzrw0.js#ce",
+   "chunk-zn8pzrw0.js#se",
+   "chunk-zn8pzrw0.js#ue",
+   "chunk-zn8pzrw0.js#we",
+   "chunk-zn8pzrw0.js#ve"
+  ]
+ },
+ {
+  "path": "_new/precheckLaunchScope.ts",
+  "chunks": {
+   "chunk-zn8pzrw0.js": 21
+  },
+  "bytes": 32379,
+  "decls": [
+   "chunk-zn8pzrw0.js#ge",
+   "chunk-zn8pzrw0.js#pe",
+   "chunk-zn8pzrw0.js#ULr",
+   "chunk-zn8pzrw0.js#can",
+   "chunk-zn8pzrw0.js#jLr",
+   "chunk-zn8pzrw0.js#Re",
+   "chunk-zn8pzrw0.js#$e",
+   "chunk-zn8pzrw0.js#ke",
+   "chunk-zn8pzrw0.js#uan",
+   "chunk-zn8pzrw0.js#Ee",
+   "chunk-zn8pzrw0.js#Se",
+   "chunk-zn8pzrw0.js#Ce",
+   "chunk-zn8pzrw0.js#WLr",
+   "chunk-zn8pzrw0.js#Be",
+   "chunk-zn8pzrw0.js#GLr",
+   "chunk-zn8pzrw0.js#fan",
+   "chunk-zn8pzrw0.js#Te",
+   "chunk-zn8pzrw0.js#pan",
+   "chunk-zn8pzrw0.js#ae",
+   "chunk-zn8pzrw0.js#be",
+   "chunk-zn8pzrw0.js#I"
+  ]
+ },
+ {
+  "path": "_new/classifyFailedOAuthRefresh.ts",
+  "chunks": {
+   "chunk-znt1ceq9.js": 1
+  },
+  "bytes": 125,
+  "decls": [
+   "chunk-znt1ceq9.js#gbo"
+  ]
+ },
+ {
+  "path": "_new/pinStorageV5.ts",
+  "chunks": {
+   "chunk-zxs3jrb9.js": 1
+  },
+  "bytes": 123,
+  "decls": [
+   "chunk-zxs3jrb9.js#w5"
+  ]
+ }
+]

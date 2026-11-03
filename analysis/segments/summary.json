@@ -1,26 +1,56 @@
 {
- "modules": 7005,
+ "modules": 7185,
  "decls": 81667,
  "bytes": 38921647,
  "byKind": {
-  "unattributed": {
-   "modules": 5293,
-   "decls": 62321,
-   "bytes": 28415635
+  "vendor": {
+   "modules": 1981,
+   "decls": 6432,
+   "bytes": 7215930
   },
   "first-party": {
-   "modules": 1712,
-   "decls": 19346,
-   "bytes": 10506012
+   "modules": 5028,
+   "decls": 74876,
+   "bytes": 31630349
+  },
+  "unattributed": {
+   "modules": 175,
+   "decls": 348,
+   "bytes": 74336
+  },
+  "runtime": {
+   "modules": 1,
+   "decls": 11,
+   "bytes": 1032
   }
  },
  "byMethod": {
-  "leftover": 62321,
-  "fingerprint": 6297,
-  "affinity": 2912,
-  "fingerprint-shared": 1820,
-  "callgraph-witnessed": 311,
-  "layout": 7569,
-  "callgraph-fingerprint": 437
+  "placement": 55590,
+  "affinity": 694,
+  "fingerprint": 5128,
+  "callgraph-witnessed": 233,
+  "layout": 6859,
+  "callgraph-fingerprint": 350,
+  "sole-consumer": 1640,
+  "facade-new": 957,
+  "sole-consumer-new": 540,
+  "leftover": 333,
+  "file-local": 437,
+  "esm-fingerprint": 3373,
+  "esm-layout": 1183,
+  "facade-exports": 1120,
+  "file-last-pair": 29,
+  "shared-adjacent": 17,
+  "facade-majority": 1696,
+  "cjs-fingerprint": 1236,
+  "cjs-require-graph": 132,
+  "cjs-unmatched+string-clue": 66,
+  "cjs-fingerprint+context": 13,
+  "cjs-unmatched": 12,
+  "cjs-layout": 6,
+  "native-addon": 2,
+  "resource-wrapper": 9,
+  "embedded-runtime": 1,
+  "helper:bun-runtime": 11
  }
 }
