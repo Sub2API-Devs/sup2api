@@ -4,6 +4,14 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-04 核心 **0.1.236**（`7d6b6e51b`，北京时间 02:30–02:32；核心 manifest `a3cd3499…d72e`，计划 `19ea72996b81a47516ffb840040b8533` completed/13，没有暂停；迁移 0076–0085，schema `c4cddb7f…` → `6100539c…`，Host API 8，内置插件为 0.1.234 的一套把 ccgateway 换成 0.1.126（线上已是该版本））：
+- **0.1.235 与 0.1.236 合并成一次发布**（用户 2026-11-04 选择）：清单 [TASK-FRAMEWORK-RELEASE-0.1.235](../../../docs/TASK-FRAMEWORK-RELEASE-0.1.235.md) + [0.1.236](../../../docs/TASK-FRAMEWORK-RELEASE-0.1.236.md)，没有单独发 0.1.235。另外带上同分支的界面改动：调度策略页说明与布局（触发规则、Go 正则单独一列、错误来源、去掉占位）、账号列表「重置状态」只留图标。
+- 内容（CONTRACTS §77）：gocron（每节点）+ River（全集群一次）定时任务框架；控制台「系统 → 定时任务」；20 个原有循环迁入（含计费对账、结算重试、凭证续期、用量限制、运行环境全量同步）；红色 CCGateway 账号满 `park_after_hours`=3 小时原地停容器（测试、重新授权、「启动」唤醒）；停用/停着的运行环境 `enabled:false` 去重记在 `ccgateway_runtimes`。
+- 发布前：Linux（`golang:1.27-bookworm` + 一次性 postgres:16 作 `TEST_DATABASE_URL`；容器里嵌入式 PG 起不来）核心 53 个包全过。老式容器核对（0.1.235 §5.3）：控制器状态里没记 CLI 的 8 个都是已删除账号 #22–#29（容器两周前已停），**无在用的老式容器**。
+- 核验：两节点 0.1.236、`/readyz` 200、api.prophey.ai 200；`river_leader` = sup2api-1；`scheduled_tasks` 17 行，每分钟任务全部 succeeded，每小时任务待第一个整点；每时段无重复运行；两节点各 5 个 node 任务全部 succeeded；`park_after_hours` 3；`parked_at` 0 个；`accounts.status_changed_at` 已回填（18:31:38 UTC，无 NULL），所以最早 21:31 UTC（北京 05:31）才停第一批，当时红色账号 21 个（#50、51、56–61、63、64、66–73、75、76、81）；数据库连接 26 → 30；计费积压与发布前相同（pending_settlements 0，failed 3）；核心 5 分钟 0 条 ERROR；账号容器 ID/镜像前后完全相同。旧 Redis 锁 `lock:{events:retention,jobs:retention,audit:plugin-writes,notify:purge}` 是 0.1.234 最后一轮留下的，TTL 到 19:12 UTC 过期，之后应不再出现。控制器日志没有按请求记录，`GET status` 次数这项没法比。
+- 回滚注意：跨 schema，不能自动回滚，手动回滚参照 0.1.186/0.1.195；旧核心 60 秒内会重新启动停着的容器。
+- 脚本 `stage/0.1.236/`（基准 `baseline-db.txt`、`containers-before.txt`）；备份 `backups/core-0.1.236`（`c92d0e3f…`）。
+
 2026-11-04 **失败策略：同账号先重试 1 次**（数据改动，`PUT /settings/failure-policy`，revision 3 → 4，旧版本由接口自动归档；脚本 [failure-policy-2026-11-04.py](failure-policy-2026-11-04.py)）：
 - `retries_per_account` 0 → **1**，`max_retries` 2 → **3**；其余不变（重试规则 408/429/5xx、切换账号开、重置粘性开、退避 200 ms）。
 - 效果：502/500/529 这类短暂错误先在原账号再试一次，再失败才换号并改绑会话（原账号 → 原账号 → 换号 → 再换号）。上游 5h 用满的 429 照旧直接换号：插件把账号禁用后 `blocked` 为真，跳过同账号重试（`dispatch.go applyPluginAccountState`、`failure_policy_runtime.go nextFailureAction`，§69 起就有，这次没改代码）。不禁用账号的 429（上游短时限流、老 Worker 的 "Gateway concurrency limit reached"）会先在原账号重试一次。
