@@ -49,6 +49,31 @@ for (const src of sources) {
   }
 }
 
+// ---- normalisation: React Compiler memo-cache arrays ----
+// `let X = w(N)` where w is the compiler runtime's cache hook (the only export
+// of the runtime chunk, see analysis/vendor) is named `$` everywhere, as in the
+// 2.1.88 source; members had also used cache / memo / memoCache.
+{
+  const RUNTIME_CHUNK = 'chunk-s89ma3n1.js';
+  let normalised = 0;
+  const srcCache = new Map();
+  for (const [file, m] of cands) {
+    for (const [off, c] of m) {
+      if (c.name === '$') continue;
+      let src = srcCache.get(file);
+      if (src === undefined) { srcCache.clear(); src = fs.readFileSync(path.join('original', file), 'utf8'); srcCache.set(file, src); }
+      const mm = /^[\w$]+=([\w$]+)\(\d+\)[,;]/.exec(src.slice(off, off + 40));
+      if (!mm) continue;
+      const imp = new RegExp(`import\\{[^}]*\\b(?:w as )?${mm[1].replace(/\$/g, '\\$')}\\b[^}]*\\}from"\\./${RUNTIME_CHUNK}"`);
+      if (!(mm[1] === 'w' || imp.test(src.slice(0, 20000)))) continue;
+      if (!new RegExp(`from"\\./${RUNTIME_CHUNK}"`).test(src.slice(0, 20000))) continue;
+      m.set(off, { ...c, name: '$', via: 'compiler-cache', note: `normalised from ${c.name}` });
+      normalised++;
+    }
+  }
+  console.log({ compilerCacheNormalised: normalised });
+}
+
 // ---- top-level bindings per chunk ----
 const decls = readJsonl(path.join(A, 'scan/decls.jsonl'));
 const declAt = new Map(); // file -> sorted [start,end,id]
