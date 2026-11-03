@@ -35,7 +35,11 @@ const looksMinified = (final, min, minifiedModule) => {
 
 const top = JSON.parse(fs.readFileSync(path.join(FINAL, 'top.json'), 'utf8'));
 const localName = new Map();
-for (const l of readJsonl(path.join(FINAL, 'locals.jsonl'))) localName.set(`${l.file}${l.key}`, l.name);
+const localSource = new Map();
+for (const l of readJsonl(path.join(FINAL, 'locals.jsonl'))) { localName.set(`${l.file}${l.key}`, l.name); localSource.set(`${l.file}${l.key}`, l.source); }
+// Short names taken from the original source (npm package or 2.1.88) are the
+// author's own names (ajv's `it`, tsc's `o`): readable, counted as `authentic`.
+const AUTHENTIC = new Set(['facade', 'vendor', 'reference']);
 
 const declsByFile = new Map();
 for (const d of readJsonl('analysis/scan/decls.jsonl')) {
@@ -68,7 +72,10 @@ for (const file of files) {
     const out = (declId && outOf.get(declId)) ?? '(unplaced)';
     const tree = out.split('/')[0];
     const scope = b.scope === 'top' ? 'top' : b.kind === 'param' ? 'param' : 'local';
-    const bad = looksMinified(final, b.name, minifiedModule);
+    const src0 = b.scope === 'top' ? top[file]?.[b.key]?.source : localSource.get(`${file}${b.key}`);
+    const authentic = AUTHENTIC.has(src0) && final !== b.name;
+    if (authentic && looksMinified(final, b.name, minifiedModule)) bump(`${tree}.${scope}.authenticShort`, 1);
+    const bad = !authentic && looksMinified(final, b.name, minifiedModule);
     let f = perFile.get(out);
     if (!f) perFile.set(out, (f = { path: out, tree, bindings: 0, minified: 0, top: 0, params: 0, locals: 0, refs: 0, minifiedRefs: 0 }));
     f.bindings++;
@@ -99,7 +106,7 @@ for (const tree of new Set(Object.keys(totals).map((k) => k.split('.')[0]))) {
     const m = totals[`${tree}.${scope}.minified`] ?? 0;
     const tr = totals[`${tree}.${scope}.totalRefs`] ?? 0;
     const mr = totals[`${tree}.${scope}.minifiedRefs`] ?? 0;
-    summary[tree][scope] = { bindings: t, minified: m, readable: t ? +((1 - m / t) * 100).toFixed(1) : 100, readableByRefs: tr ? +((1 - mr / tr) * 100).toFixed(1) : 100 };
+    summary[tree][scope] = { bindings: t, minified: m, authenticShort: totals[`${tree}.${scope}.authenticShort`] ?? 0, readable: t ? +((1 - m / t) * 100).toFixed(1) : 100, readableByRefs: tr ? +((1 - mr / tr) * 100).toFixed(1) : 100 };
   }
 }
 fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 1));
