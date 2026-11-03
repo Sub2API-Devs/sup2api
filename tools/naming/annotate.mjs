@@ -1,6 +1,6 @@
 // Work lists and annotated views for naming parameters and locals by hand.
 //
-//   node tools/naming/annotate.mjs plan <todo.jsonl> <groups> <out.json> [final=naming/final]
+//   node tools/naming/annotate.mjs plan <todo.jsonl> <groups> <out.json> [--tree src|vendor] [--top]
 //       todo.jsonl from tools/verify/readability.mjs; groups first-party
 //       declarations that still have minified params/locals into <groups>
 //       contiguous (by reconstructed path) work lists of similar size.
@@ -25,11 +25,14 @@ function declIndex() {
 
 if (cmd === 'plan') {
   const [todoPath, groupsArg, out] = args;
+  // --tree vendor: third-party code; --top: also top-level bindings
+  const TREE = args.includes('--tree') ? args[args.indexOf('--tree') + 1] : 'src';
+  const WITH_TOP = args.includes('--top');
   const G = +groupsArg;
   const decls = declIndex();
   const per = new Map();
   for (const t of readJsonl(todoPath)) {
-    if (t.scope === 'top' || !t.path.startsWith('src/') || !t.declId) continue;
+    if ((t.scope === 'top' && !WITH_TOP) || !t.path.startsWith(TREE + '/') || !t.declId) continue;
     let e = per.get(t.declId);
     if (!e) {
       const d = decls.get(t.declId);
@@ -46,7 +49,7 @@ if (cmd === 'plan') {
   let lastDir = null;
   for (const e of all) {
     const dir = e.path.split('/').slice(0, 3).join('/');
-    if (groups[g].unnamed >= target && g < G - 1 && dir !== lastDir) g++;
+    if (groups[g].unnamed >= target && g < G - 1 && (dir !== lastDir || groups[g].unnamed >= target * 1.3)) g++;
     if (!groups[g].dirs.includes(dir)) groups[g].dirs.push(dir);
     groups[g].decls.push(e);
     groups[g].unnamed += e.unnamed;
@@ -79,7 +82,9 @@ function annotatedChunk(file) {
     return { own, minified: own.filter((b) => b.name.length <= 3).length > own.length * 0.6 };
   })();
   for (const b of minifiedModule.own) {
-    if (b.scope === 'top' || entry[b.key] || b.frozen || !minifiedModule.minified || b.name.length > 3) continue;
+    if (b.frozen || !minifiedModule.minified || b.name.length > 3) continue;
+    // top-level bindings that kept their minified name are marked too
+    if (b.scope === 'top' ? !(top[file]?.[b.key] === undefined || top[file][b.key].name === b.name) || b.kind === 'import' : entry[b.key]) continue;
     entry[b.key] = `${b.name}_K${b.key.slice(1)}`;
   }
   const r = renameModule(file, src, entry, null);

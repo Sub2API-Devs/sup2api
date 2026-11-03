@@ -58,3 +58,10 @@ node --max-old-space-size=3000 tools/naming/annotate.mjs check naming/semantic-l
 ## 规则
 
 只写上述文件和 `artifacts/tmp/l<N>/`；不改 tools/、analysis/、naming/ 下其他文件、reconstructed/；不 git commit；不派生子代理；不运行 `tools/pipeline.sh`；node 内存 ≤3000 MB（同时有十几个成员在跑）。
+
+## 第三方代码（vendor）补名
+
+- 清单 `analysis/segments/naming-vendor.json`（`plan ... --tree vendor --top` 生成，下标从 0），名字表 `artifacts/tmp/lead/final8`；顶层绑定也显示为 `<压缩名>_K<偏移>`，同样用偏移键命名。
+- 命名表写 `naming/semantic-v<N>.jsonl`（只追加）。
+- 第三方代码按包的习惯命名：CommonJS 包裹变量用 `require_<文件或模块名>`，`x(...)` 懒初始化用 `init_<名>`，导出对象的属性名（`exports.foo = a` 里的 foo）就是 `a` 的名字的首选；私有包（private-unresolved，无 npm 源码）按代码行为和字符串命名。
+- 不要用 `_K<偏移>` 作为名字的一部分（合并时会被丢弃）。
