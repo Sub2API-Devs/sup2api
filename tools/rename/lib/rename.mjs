@@ -272,7 +272,7 @@ export function renameAnalyzed(file, source, an, entry, globalPlan, opts = {}) {
     if (t && gp.exportLocalNames[t] && Object.hasOwn(gp.exportLocalNames[t], s.imported)) want = gp.exportLocalNames[t][s.imported];
     else if (fi !== s.imported) want = fi;
     else if (autoImportNames && s.importedIsIdent && fi !== b.name && isValidBindingName(fi)) want = fi;
-    if (want && want !== b.name) {
+    if (want && want !== b.name && !b.frozen) {
       requested.add(b);
       P.request(b, want, { source: 'auto', origin: 'import-default' });
     }
