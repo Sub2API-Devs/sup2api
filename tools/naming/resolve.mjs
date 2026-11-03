@@ -78,6 +78,41 @@ for (const src of sources) {
   console.log({ compilerCacheNormalised: normalised });
 }
 
+// ---- normalisation: annotate.mjs placeholders copied into names ----
+// Naming members read code where unnamed bindings show as `<min>_K<offset>`
+// (tools/naming/annotate.mjs); a few copied that into a name (`x_K63187Element`).
+// The placeholder becomes the final name of the binding at that offset; a name
+// that is nothing but a placeholder is dropped.
+{
+  const PH = /(?<![\w$])[\w$]{1,3}_K(\d+)(?![\d])/g;
+  let fixed = 0, dropped = 0;
+  for (let pass = 0; pass < 3; pass++) {
+    for (const [file, m] of cands) {
+      for (const [off, c] of m) {
+        if (!PH.test(c.name)) continue;
+        PH.lastIndex = 0;
+        if (/^[\w$]{1,3}_K\d+$/.test(c.name)) { m.delete(off); dropped++; continue; }
+        let unresolved = false;
+        const name = c.name.replace(PH, (whole, k) => {
+          const t = m.get(+k);
+          if (!t || PH.test(t.name)) { PH.lastIndex = 0; unresolved = true; return whole; }
+          return t.name;
+        });
+        PH.lastIndex = 0;
+        if (unresolved) continue;
+        const camel = name.replace(/^([A-Z])(?=[a-z])/, (x) => x.toLowerCase());
+        if (validName(camel)) { m.set(off, { ...c, name: camel, note: `placeholder in ${c.name}` }); fixed++; }
+      }
+    }
+  }
+  // still unresolved after three passes: drop rather than ship a placeholder
+  for (const [, m] of cands) for (const [off, c] of m) {
+    if (/(?<![\w$])[\w$]{1,3}_K\d+(?!\d)/.test(c.name)) { m.delete(off); dropped++; }
+    else if (/_K\d{3,}$/.test(c.name) && validName(c.name.replace(/_K\d+$/, ''))) { m.set(off, { ...c, name: c.name.replace(/_K\d+$/, '') }); fixed++; }
+  }
+  console.log({ placeholderNamesFixed: fixed, placeholderNamesDropped: dropped });
+}
+
 // ---- top-level bindings per chunk ----
 const decls = readJsonl(path.join(A, 'scan/decls.jsonl'));
 const declAt = new Map(); // file -> sorted [start,end,id]
