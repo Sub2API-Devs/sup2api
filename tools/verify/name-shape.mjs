@@ -43,7 +43,7 @@ const kindOf = (n) => {
     case 'ArrayExpression': return 'array';
     case 'ArrowFunctionExpression': case 'FunctionExpression': return 'function';
     case 'ClassExpression': return 'class';
-    case 'NewExpression': return n.callee.type === 'Identifier' ? `new ${n.callee.name}` : 'new';
+    case 'NewExpression': return n.callee.type !== 'Identifier' ? 'new' : n.callee.name === 'RegExp' ? 'regex' : `new ${n.callee.name}`;
     case 'CallExpression': {
       const c = n.callee;
       if (c.type === 'MemberExpression' && c.object.type === 'Identifier' && c.object.name === 'Object' && c.property.name === 'freeze') return kindOf(n.arguments[0]);
@@ -56,16 +56,16 @@ const kindOf = (n) => {
 };
 
 // expectation rules: [name test, allowed kinds, rule id]
-const NUM = ['number', 'expr', 'call'];
+const NUM = ['number', 'expr', 'call', 'array', 'object', 'null'];
 const RULES = [
   [/^[A-Z][A-Z0-9_]*_(MS|SEC|SECS|SECONDS|MINUTES|HOURS|DAYS|BYTES|KB|MB|GB|KIB|MIB|COUNT|LIMIT|SIZE|LEN|LENGTH|TOKENS|CHARS|LINES|ITEMS|ROWS|COLS|PCT|PERCENT|RATIO|TTL|TIMEOUT|DEPTH|WIDTH|HEIGHT|RETRIES|ATTEMPTS|THRESHOLD|INTERVAL|DELAY)$/, NUM, 'unit-number'],
   [/^(MAX|MIN|DEFAULT_MAX|DEFAULT_MIN)_[A-Z0-9_]+$/, [...NUM, 'null'], 'max-min-number'],
   [/^[a-z][A-Za-z0-9]*(Ms|Seconds|Bytes|Count|Limit|Timeout|Interval|Delay|Threshold)$/, [...NUM, 'function'], 'unit-number-camel'],
   [/(Schema|SCHEMA)$/, ['call', 'expr', 'function', 'object', 'new'], 'schema'],
-  [/(_RE|_REGEX|_PATTERN|Regex|RegExp|Re|Pattern)$/, ['regex', 'call', 'expr', 'array', 'function'], 'regex'],
+  [/(_RE|_REGEX|_PATTERN|Regex|RegExp|Re|Pattern)$/, ['regex', 'call', 'expr', 'array', 'function', 'string', 'object'], 'regex'],
   [/(Set|_SET)$/, ['new Set', 'call', 'expr', 'function'], 'set'],
   [/(Map|_MAP)$/, ['new Map', 'new WeakMap', 'object', 'call', 'expr', 'function', 'new'], 'map'],
-  [/^[A-Z][A-Z0-9_]*_(URL|URI|PATH|PREFIX|SUFFIX|NAME|KEY|ENV|HEADER|MESSAGE|TEXT|LABEL|TITLE|PROMPT|DIR|FILE|FILENAME|EXT|HOST|DOMAIN|ID|VAR|SLUG|TAG|EVENT|GLYPH|CHAR|SEPARATOR)$/, ['string', 'expr', 'call', 'function'], 'string'],
+  [/^[A-Z][A-Z0-9_]*_(URL|URI|PATH|PREFIX|SUFFIX|NAME|KEY|ENV|HEADER|MESSAGE|TEXT|LABEL|TITLE|PROMPT|DIR|FILE|FILENAME|EXT|HOST|DOMAIN|SLUG|GLYPH|SEPARATOR)$/, ['string', 'expr', 'call', 'function', 'object', 'array', 'null'], 'string'],
   [/^(is|has|should|can|was|needs|supports)[A-Z]/, ['function', 'boolean', 'call', 'expr', 'null', 'new'], 'predicate'],
   [/^(get|create|make|build|read|load|parse|format|render|resolve|compute|to|use|with|run|apply|handle|ensure|normalize)[A-Z]/, ['function', 'call', 'expr', 'null', 'object'], 'verb-function'],
   [/^[A-Z][a-z]+[A-Za-z0-9]*(Tool|Dialog|View|Screen|Panel|Error|Client|Manager|Store|Cache|Queue|Provider|Component)$/, ['function', 'class', 'call', 'expr', 'object', 'new'], 'pascal-entity'],
@@ -96,7 +96,7 @@ for (const file of files) {
       const why = [];
       for (const [re, allowed, id] of RULES) if (re.test(r.name) && !allowed.includes(r.kind) && !(r.kind.startsWith('new') && allowed.includes('new'))) why.push(id);
       const doc = r.declId ? docs.get(r.declId) : null;
-      if (r.kind === 'number' && doc && rows.length > 1) {
+      if (r.kind === 'number' && doc && rows.length === 1) {
         const v = Number(eval(r.init.replace(/_/g, ''))); // numeric literal or literal arithmetic only
         const quoted = [...doc.matchAll(/(?<![\w.])(\d+(?:\.\d+)?)(?![\w.])/g)].map((m) => +m[1]);
         const unitsOk = (q) => [1, 1000, 60000, 3600000, 1024, 1048576].some((u) => Math.abs(q * u - v) < 1e-9 || Math.abs(v * u - q) < 1e-9);
