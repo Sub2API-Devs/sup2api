@@ -87,7 +87,7 @@ function hasScope(rule: FailureRule) {
           <SInput
             v-model="row.match.status_codes"
             :disabled="disabled || row.match.source === 'transport'"
-            placeholder="401,403,429,500-599"
+            :placeholder="t('failurePolicy.codes')"
             :aria-label="t('failurePolicy.codes')"
             data-testid="rule-codes"
           />
