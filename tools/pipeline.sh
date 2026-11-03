@@ -20,7 +20,10 @@ step facades;           $N tools/ast/facades.mjs
 step segment;           $N tools/segment/segment.mjs | head -30
 step domains;           $N tools/segment/domains.mjs | head -14
 step reference-names;   $N tools/naming/reference-names.mjs
+step reference-align;   $N tools/naming/reference-align.mjs | cut -c1-300
 step auto-names;        $N tools/naming/auto-names.mjs
+step vendor-names;      $N tools/naming/vendor-names.mjs | tail -5
+step propagate;         $N tools/naming/propagate.mjs | tail -5
 step resolve;           $N tools/naming/resolve.mjs | head -10
 step runnable;          $N tools/rename/apply.mjs original naming/final runnable --force --report artifacts/tmp/rename-report.json --check | tail -6
 step readable;          rm -rf reconstructed && $N tools/emit/readable.mjs --out reconstructed | tail -6
