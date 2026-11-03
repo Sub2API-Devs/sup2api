@@ -75,6 +75,7 @@ var coreMenus = []coreMenuSection{
 	}},
 	{"system", lt("System", "系统"), []coreMenuItem{
 		{"nodes", lt("Cluster nodes", "集群节点"), "node", "/nodes", []string{"node:read"}},
+		{"tasks", lt("Scheduled tasks", "定时任务"), "clock", "/system/tasks", []string{"task:read"}},
 		{"upgrades", lt("Core updates", "核心升级"), "refresh", "/system/upgrades", []string{"system:update:read"}},
 		{"audit", lt("Audit logs", "审计日志"), "clock", "/system/audit", []string{"audit:read"}},
 		{"settings", lt("Settings", "设置"), "settings", "/settings", []string{"settings:read", "sticky:read"}},

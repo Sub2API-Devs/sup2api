@@ -471,6 +471,7 @@ func (b *boot) registerRoutes(r *httpapi.Router) {
 	b.acc.RegisterRoutes(r)
 	b.bill.RegisterRoutes(r)
 	b.settler.RegisterRoutes(r)
+	b.tasks.RegisterRoutes(r, b.cl.Registry)
 	api.New(api.Deps{
 		DB: b.db, Install: b.inst, Market: b.mkt, Rollout: b.ctl, Nodes: b.cl.Registry, Registry: b.reg,
 		Authz: b.az, Cipher: b.cipher, Bus: b.cl.Bus, Jobs: b.jobs, HookStats: b.gw, Plugins: cfg.Plugins,

@@ -159,15 +159,7 @@ func ReadNodeRuns(ctx context.Context, rdb redis.UniversalClient, nodeID, name s
 	if err != nil {
 		return nil, err
 	}
-	out := make([]NodeTaskRun, 0, len(raw))
-	for _, v := range raw {
-		var r NodeTaskRun
-		if err := json.Unmarshal([]byte(v), &r); err != nil {
-			continue
-		}
-		out = append(out, r)
-	}
-	return out, nil
+	return decodeRuns(raw), nil
 }
 
 // truncate keeps at most maxTextLen bytes of s on a rune boundary.

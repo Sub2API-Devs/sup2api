@@ -114,6 +114,10 @@ var coreModules = []coreModule{
 		{"node:read", "View cluster nodes", "查看集群节点", false},
 		{"audit:read", "View audit logs", "查看审计日志", false},
 	}},
+	{"task", lt("Scheduled tasks", "定时任务"), []corePerm{
+		{"task:read", "View scheduled tasks", "查看定时任务", false},
+		{"task:run", "Run scheduled tasks manually", "手动运行定时任务", true},
+	}},
 	{"gateway", lt("Gateway", "网关"), []corePerm{
 		{"gateway:use", "Call the gateway", "调用网关", false},
 	}},
