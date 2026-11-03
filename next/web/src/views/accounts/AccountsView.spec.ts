@@ -186,7 +186,10 @@ describe('account status recovery', () => {
   it.each(['auto_disabled', 'error'])('offers a direct reset for %s without a cooldown', (status) => {
     list.items.value[0].status = status
     const w = render()
-    expect(w.get('[data-testid="account-reset-status"]').text()).toBe('重置状态')
+    const btn = w.get('[data-testid="account-reset-status"]')
+    expect(btn.text()).toBe('')
+    expect(btn.attributes('aria-label')).toBe('重置状态')
+    expect(btn.attributes('title')).toContain('重置状态')
   })
 
   it('leaves a manual disable to the switch', () => {

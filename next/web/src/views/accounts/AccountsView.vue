@@ -628,10 +628,11 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
           </span>
         </STooltip>
         <SBadge v-if="row.auto_disable === false" tone="gray" class="ml-1" :title="t('accounts.editorUi.autoDisableHint')">{{ t('accounts.noAutoDisable') }}</SBadge>
-        <SHint v-if="statusOf(row).note" size="xs" class="mt-0.5 block" data-testid="account-status-note">{{ statusOf(row).note }}</SHint>
-        <SLink v-if="(row.status !== 'active' || row.status_reason || coolingDown(row)) && canResetStatus(row)" as="button" class="mt-1 inline-flex items-center gap-1 text-xs" :title="t('accounts.resetStatusHint')" data-testid="account-reset-status" @click="resetStatus(row)">
-          <SIcon name="refresh" class="h-3.5 w-3.5" />{{ t('accounts.resetStatus') }}
+        <!-- Icon only, beside the badge, to keep the status column narrow; the name lives in the tooltip and aria-label. -->
+        <SLink v-if="(row.status !== 'active' || row.status_reason || coolingDown(row)) && canResetStatus(row)" as="button" class="ml-1 inline-flex items-center align-middle" :title="`${t('accounts.resetStatus')} · ${t('accounts.resetStatusHint')}`" :aria-label="t('accounts.resetStatus')" data-testid="account-reset-status" @click="resetStatus(row)">
+          <SIcon name="refresh" class="h-3.5 w-3.5" />
         </SLink>
+        <SHint v-if="statusOf(row).note" size="xs" class="mt-0.5 block" data-testid="account-status-note">{{ statusOf(row).note }}</SHint>
       </template>
       <template v-for="field in (['priority', 'weight'] as const)" :key="field" #[`cell-${field}`]="{ row }">
         <AccountNumberCell :account="row" :field="field" :editable="canUpdate(row) && !row.orphaned" @saved="patchAccount(row.id, $event)" />
