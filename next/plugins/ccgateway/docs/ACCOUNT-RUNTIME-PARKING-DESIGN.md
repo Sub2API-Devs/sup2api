@@ -38,6 +38,7 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS woken_at timestamptz;
 - 回填：迁移时把现有账号的 `status_changed_at` 设为迁移时间。不用 `updated_at`，否则第一次定时任务就会停掉一批；按迁移时间算，现有红色账号上线 3 小时后才停。
 - `ccgateway_runtimes.parked_at`：定时任务停掉这个容器的时间，即“已停止”标记。
 - `ccgateway_runtimes.woken_at`：手动唤醒（见 §5）的时间，从这里重新计 3 小时。
+- 同一迁移还加 `ccgateway_runtimes.blocked_revision`、`blocked_at`（可空）：全量同步改成定时任务框架的全集群任务后，§4.3 的阻断去重从节点内存移到这两列（框架设计 §14.1），0.1.236 起使用。
 - 旧版核心不认这三列，忽略即可；触发器对旧核心无影响。
 
 ## 4. 定时任务：满 3 小时仍是红色就停
