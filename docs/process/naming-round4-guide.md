@@ -38,6 +38,16 @@ node --max-old-space-size=3000 tools/naming/annotate.mjs check naming/semantic-l
 
 清单已按路径排序。先把整组过一遍（覆盖率优先），大函数（unnamed 多的）也要做完；时间不够时，跳过 `unnamed` ≤ 2 且 `refs` 很少的小声明。
 
+## 续做（上下文用尽或中断后由新成员接手）
+
+- 清单换成 `analysis/segments/naming-round4b.json`（同样的下标，只含仍有压缩名的声明，`unnamed` 已按当前进度重算），名字表用 `artifacts/tmp/lead/final4`（已含各组截至接手时写入的名字）：
+  ```bash
+  node --max-old-space-size=3000 tools/naming/annotate.mjs show analysis/segments/naming-round4b.json <N> <from> <count> artifacts/tmp/lead/final4
+  ```
+- **追加**到原来的 `naming/semantic-l<N>.jsonl`，不要重写或删除已有行。
+- 控制上下文：每批 `show` 不超过 30 个声明、输出不超过约 600 行；不要整文件读阅读树、不要反复打印同一段代码；每批写完就进下一批。上一任成员就是因为上下文超过上限而中止的。
+- 过程文档 `docs/process/naming-l<N>.md` 记两段：前任写到哪里（接手时表的行数）、你续写了多少。
+
 ## 交付物
 
 - `naming/semantic-l<N>.jsonl`（check 0 problems）
