@@ -2062,7 +2062,7 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 
 | key（Redis 里加前缀 `lock:`） | TTL | 释放 | 续期 | 第二重保护 |
 |---|---|---|---|---|
-| `usage:reconcile`（`usage/reconcile.go` `ReconcileDue`） | 30 秒（原 5 分钟） | 一轮扫描结束释放 | `KeepLock`，父 ctx = 2 分钟扫描预算，故最长持有约 2.5 分钟 | `claimDue` 用 `FOR UPDATE SKIP LOCKED` 领取并把 `next_check_at` 推后 3 分钟（租约）；结算事务内 `SELECT billing_status … FOR UPDATE` 重查；账本 `balance_ledger.idempotency_key` UNIQUE |
+| ~~`usage:reconcile`~~ | — | — | — | 0.1.236 起不再使用：改为全集群任务 `core.usage.reconcile`（§77.7）。第二重保护不变：`claimDue` 用 `FOR UPDATE SKIP LOCKED` 领取并把 `next_check_at` 推后 3 分钟（租约）；结算事务内 `SELECT billing_status … FOR UPDATE` 重查；账本 `balance_ledger.idempotency_key` UNIQUE |
 | `job:{plugin}:{job}:{slot}`（`job/job.go` `runScheduled`；`slot` = 触发时刻 Unix 秒） | 任务超时 + `LockGrace`（60 秒） | **故意不释放**：让时钟落后的节点在锁过期前也跳过这个触发点 | 无 | 迁移 `0015_job_runs_unique_slot.sql` 的唯一索引 `plugin_job_runs_slot_uniq (plugin_key, job_id, scheduled_at) WHERE NOT manual`；原先只有 `INSERT … WHERE NOT EXISTS`，没有唯一索引时它不是原子的。插入撞上唯一约束即视为「别的节点拿到了这个触发点」 |
 | `job:{plugin}:{job}:manual`（`job/job.go` `RunNow`） | 任务超时 + 60 秒 | 执行结束释放 | 无 | 锁本身就是「同一任务已有手动运行 → 409 `conflict`」语义的边界，没有数据库保护（手动运行的 `scheduled_at` 是点击时刻，不进唯一索引）。执行受任务超时约束，正常情况下锁比执行活得久；Redis 重启丢锁时可能出现两个手动运行，接受 |
 | ~~`jobs:retention`~~ | — | — | — | 0.1.235 起不再使用：改为全集群任务 `core.jobs.retention`（§77） |
@@ -3053,7 +3053,7 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 
 ### 48.3 核心流程（`account/refresh.go`）
 
-1. **定时扫描**：每 5 分钟一次，启动 30 秒后开始第一次。只有一个节点扫描（锁 `account:refresh:sweep`），托管核心要等准入后才扫（`CanWork`）。每次分页读取声明了 `refresh` 的类型下 `status = active` 的账号，每页 200 个，最多 4 个账号同时续期。
+1. **定时扫描**：全集群任务 `core.account.credential_refresh`，每 5 分钟一次，新主节点接手时先跑一次（0.1.236 起；之前是各节点启动 30 秒后开始、靠锁 `account:refresh:sweep` 只让一个节点扫，§77.7）。每次分页读取声明了 `refresh` 的类型下 `status = active` 的账号，每页 200 个，最多 4 个账号同时续期。
 2. **挑选**：过期时间在 `beforeExpirySec` 以内的账号。读不出过期时间的账号不会自动续期，只能手动。
 3. **单个账号续期**：
    - 先拿账号锁 `account:refresh:<id>`（TTL 1 分钟）。拿不到说明别处正在续期，跳过。
@@ -3125,7 +3125,7 @@ claude-oauth 插件原来有个每 30 分钟跑一次的 `refresh_tokens` 任务
 ### 49.3 已知限制
 
 - 多节点：`sync` / kick 落到任意节点都能工作（每个节点用同一份 SSH 配置连控制器；`Reconcile` 用 PG advisory 锁 `ccg-account:<key>` 串行——数字 key 与旧版的 `ccg-account:<id>` 相同，控制器内部也按 key 加锁）。拿不到锁时 `sync` 立即返回 `synced: true`（另一处正在同步），所以控制台必须以轮询 `status` 为准。
-- `Reconcile` 在整个远程调用期间（最长 90 秒）占着一个数据库连接和事务；所有节点每 60 秒（2026-10-11 前为 3 秒）对每个运行环境（账号 + 未认领草稿）各发一次 `GET status`，代理变更时立即多扫一轮（§49.18）。
+- `Reconcile` 在整个远程调用期间（最长 90 秒）占着一个数据库连接和事务；每 60 秒（2026-10-11 前为 3 秒）对每个运行环境（账号 + 未认领草稿）发一次 `GET status`：0.1.236 起是全集群任务 `core.ccgateway.runtime_sync`，一个节点跑、一轮并发 4 个（之前是每个节点各扫一遍，§77.7）；代理变更时立即手动运行一次（§49.18）。
 - ~~49.4 依赖业务容器的报错文字~~：已取消。核心不再匹配任何报错文字，只认业务容器 / 控制器的英文错误代码（§49.12）。
 
 ### 49.4 授权会话（已改）
@@ -3404,8 +3404,8 @@ ALTER TABLE ccgateway_runtimes ADD COLUMN IF NOT EXISTS retired_at  timestamptz;
   - 账号 CC 特性策略：上面写"转发请求不再每次读库"，但 A7 之前账号策略是例外——请求带分组且该分组允许账号覆盖（未配置或未启用的分组也算允许，`allowsAccountFeatures`）时，每个请求都 `LoadAccountFeaturePolicy` 查一次 `ccgateway_account_feature_policies`。现在由 `requestAccountFeatures` 按账号缓存，与期望状态同样 30 秒过期，`account:changed` 与本节点保存账号时（`AccountChanged`）清掉。
   - Worker 能力：`/v1/messages` 与 `/v1/ccgateway/probe` 发送前的 `/healthz` 核对（§53.18）原先每请求一次、不缓存；现在挂在路由上缓存 30 秒（`routeHealth`），Worker 原地更新后本节点丢弃该路由并发 `account:changed`（`workerChanged`）。缓存期间的旧答复只会推迟核心的拒绝，Worker 自己仍拒绝 CLI 做不到的策略。
   - 路由：A4 之前路由只按（运行环境 key, 修订号）缓存、**没有过期时间**，上面"30 秒过期"不包括它——漏掉总线消息的节点在控制器地址或密钥变化后仍连旧路由，直到 Worker 401、连接失败或修订号被拒。现在路由还记下取得它的控制器（模式、地址、根证书、管理密钥的摘要，`controllerEndpoint`），配置换了控制器就不再复用；并且最长使用 5 分钟（`routeMaxAge`），之后重新问控制器，答复不变时保留原路由和它的隧道。
-- **定时扫描**：`Run` 改为每 60 秒一轮，只用来发现控制器那边的意外变化（容器重启、被删）和漏掉的总线消息。kick 失败每 5 秒重试，最多 12 次。
-- **已阻断的运行环境不再反复写配置**（2026-10-21 起只有已删除账号会被阻断，§49.22）：控制器对已阻断的运行环境 `GET status` 报 `pending`，所以以前每个节点每轮都对停用账号 `PUT config`（线上 4 节点 × 每 3 秒 = 每分钟 80 次）。现在节点阻断成功后记下修订号，10 分钟内同一修订号不再阻断；任何 kick、账号/代理/配置变更都会清掉这个记录。
+- **定时扫描**：每 60 秒一轮（0.1.236 起是全集群任务 `core.ccgateway.runtime_sync`，§77.7），只用来发现控制器那边的意外变化（容器重启、被删）和漏掉的总线消息。kick 失败每 5 秒重试，最多 12 次。
+- **已阻断的运行环境不再反复写配置**（2026-10-21 起只有已删除账号会被阻断，§49.22）：控制器对已阻断的运行环境 `GET status` 报 `pending`，所以以前每个节点每轮都对停用账号 `PUT config`（线上 4 节点 × 每 3 秒 = 每分钟 80 次）。现在节点阻断成功后记下修订号，10 分钟内同一修订号不再阻断；任何 kick、账号/代理/配置变更都会清掉这个记录。0.1.236 起记录也写进 `ccgateway_runtimes.blocked_revision`/`blocked_at`（在运行环境的 advisory 锁内读写），所以换一个节点也不会重发；节点收到变更后，早于变更时刻的记录在本节点不再算数（§77.7）。
 
 ### 49.20 不绑代理即直连（2026-10-14，用户要求）
 
@@ -5463,7 +5463,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 ### 73.2 用量（核心统计）
 
 - 迁移 `0064_account_usage.sql`：`account_usage_hourly(account_id, hour, cost, raw_cost, requests, tokens)` 与 `account_usage_totals(account_id, …)`；首次迁移时回填全部历史行。回填期间以 `SHARE ROW EXCLUSIVE` 锁住 `usage_logs`（读不受影响，插入与结算更新排队到迁移提交），时长是对整张表做一次聚合：按 0064 编写时生产约 1.75 万行估计远小于 1 秒；表大到几百万行时部署前要先评估。回填只在小时表、累计表和 0068 的增量表都为空时执行（行要么已在汇总里，要么还在增量表里等待并入），重放不会重复计数。回填与触发器用同一个 `account_usage_raw_cost`（定义只在 0064 里，0068/0070 不再改它）：触发器退款或换账号时按当时的函数扣回原贡献，回填若用另一版算法就会留下残差。以后要改这个函数，必须同时锁表重算两张汇总表。
-- 迁移 `0068_account_usage_journal.sql`：`usage_logs` 上的触发器 `account_usage_track` 只往 `account_usage_deltas` 追加增量，不再在结算事务里改汇总行（结算按批写入，两批以不同顺序写同一批账号、或与同一用户的结算交错时会死锁，热门账号的写入也会排队在它的那一行上）。账号服务每 5 秒在一个节点上（advisory lock `account.usage_limits`）用 `account_usage_fold(n)` 把增量并入小时表和累计表，所以用量和限额最多滞后几秒。
+- 迁移 `0068_account_usage_journal.sql`：`usage_logs` 上的触发器 `account_usage_track` 只往 `account_usage_deltas` 追加增量，不再在结算事务里改汇总行（结算按批写入，两批以不同顺序写同一批账号、或与同一用户的结算交错时会死锁，热门账号的写入也会排队在它的那一行上）。全集群任务 `core.account.usage_limits` 每 5 秒在一个节点上（0.1.236 起；之前靠 advisory lock `account.usage_limits`，§77.7）用 `account_usage_fold(n)` 把增量并入小时表和累计表，所以用量和限额最多滞后几秒。
 - 口径与 §61 API Key 额度一致：`billed`/`reserved` 的行计入费用，转为 `free`/`failed` 时退回；`cost` 为计费后费用，`raw_cost` 为分组倍率前的费用（取 `billing_detail.cost`，须为非负数，任意位小数，四舍五入到 8 位；缺失或为负数时 `total_cost / rate_multiplier`，倍率 ≤ 0 时取 `total_cost`。负数会抵扣限额，所以不采用）。注意：使用记录统计页的「原价」(`standard_cost`) 一律是 `total_cost / rate_multiplier`，两者在 `billing_detail.cost` 与之不一致或倍率为 0 时会不同；`requests` 为成功行数；`tokens` 为五类 token 之和。行换账号时从旧账号扣回。删除历史日志不回退累计值。
 - 两张表不引用 `accounts`（触发器在结算事务里执行，已清除的账号不能让写入失败）。小时桶按 UTC 整点；半小时时区的日/周/月周期边界落在 UTC 半点，按所在小时桶近似（偏差半小时）；按小时的周期对齐 UTC 整点（73.3），不近似。
 - 迁移 `0070_account_usage_limit_source.sql`：`accounts.auto_disabled_source` 与被用量限制暂缓的自动禁用（73.3）。
@@ -5482,7 +5482,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
   - `anchor`：周期起点，2000–2100 年，按 `timezone` 的挂钟向下取整点后保存；null = 该时区 2024-01-01 00:00，即日/周一/月初的自然边界。`period=hour` 时起点改为向下取 UTC 整点：用量按 UTC 小时桶汇总，半小时/45 分时区的小时周期否则每个周期都会把两个桶各算一半；这类时区的小时周期因此比挂钟整点早 30/45 分钟。
   - `timezone`：IANA 时区，**保存时必填**（空字符串、`Local`、未知名称都是 `timezone` 字段错误）。周期按该时区挂钟计算，日/周跨夏令时仍从零点开始，月按日历，起点是 31 日时短月取月末。控制台取值规则见 73.4。
   - `none` 为总额度，按累计值计算、不重置。
-- 执行：账号服务每 5 秒（独立于自动禁用的状态回写）在一个节点上先汇总用量（73.2），再执行 `EnforceUsageLimits`（单个账号失败只记日志，不影响其它账号）。周期按数据库时钟（`clock_timestamp()`）计算，与到期解除用的是同一个时钟，节点时钟偏差不会让刚解除的账号按上一个周期再被禁用。限额与用量在事务外读取；每个账号的写入在一个事务里先锁账号行、再锁其 `account_usage_limits` 行，只有账号的状态/原因/来源/解除时间与配置的 `updated_at`、`waived_window` 都还是读到的值才写，否则跳过本轮（保存配置的那次请求会按新配置自己执行一遍）。所以另一节点的管理员调高限额时，巡检不会按旧限额误禁用：
+- 执行：`core.account.usage_limits` 每 5 秒（独立于自动禁用的状态回写）在一个节点上先汇总用量（73.2），再执行 `EnforceUsageLimits`（单个账号失败只记日志，不影响其它账号）。周期按数据库时钟（`clock_timestamp()`）计算，与到期解除用的是同一个时钟，节点时钟偏差不会让刚解除的账号按上一个周期再被禁用。限额与用量在事务外读取；每个账号的写入在一个事务里先锁账号行、再锁其 `account_usage_limits` 行，只有账号的状态/原因/来源/解除时间与配置的 `updated_at`、`waived_window` 都还是读到的值才写，否则跳过本轮（保存配置的那次请求会按新配置自己执行一遍）。所以另一节点的管理员调高限额时，巡检不会按旧限额误禁用：
   - 启用中的账号本周期用量 ≥ 限额 → `status=auto_disabled`，`status_reason="usage limit reached: $<used> / $<amount> (<per month|per 2 weeks|total>)"`，`auto_disabled_until` = 本周期结束（总额度为 null），`auto_disabled_source='usage_limit'`。不受账号「允许自动禁用」和全局自动禁用开关影响。
   - 周期结束由现有的自动状态巡检（§42）自动启用。
   - 被用量限制禁用、且现在不再超限（调高限额、关闭限制、改了周期）→ 立即恢复 `active`；但若有被暂缓的插件/失败策略禁用（见下）且尚未到期，改为切换成那个禁用。仍超限但限额或周期改了 → 更新原因和 `auto_disabled_until`；新的结束时间早于暂缓的禁用时，同样切换成那个禁用。
@@ -5976,7 +5976,7 @@ guard 只维护网桥规则，与 host 网络的 Python 控制器互不干扰，
   - `tasks:node:<node_id>:runs:<name>`：最近 100 次运行，TTL 24 小时。
 - 迁移 0085：
   - `ccgateway_runtimes.parked_at`、`woken_at`；
-  - `blocked_revision`、`blocked_at`，0.1.236 起使用；
+  - `blocked_revision`、`blocked_at`，0.1.236 起使用（§77.7）；
   - `accounts.status_changed_at` 及其触发器：只在 status、schedulable、auto_disabled_until 变化时写。
 - 0076–0085 都是幂等迁移，只加表、索引或可空/有默认值的列。旧核心忽略它们。
 
@@ -6029,7 +6029,7 @@ node 任务：
 
 不再使用的 Redis 锁：`account:lifecycle-status:sweep`、`account:preparations:sweep`、`ccgateway:drafts:sweep`、`audit:plugin-writes`、`events:retention`、`jobs:retention`、`notify:purge`。
 
-0.1.236 迁入（涉及计费和凭证，单独发布）：`core.account.usage_limits`、`core.account.credential_refresh`、`core.account.quota_sweep`、`core.helper.usage_replay`、`core.ccgateway.runtime_sync`、`core.usage.reconcile`、`core.usage.settlement_retry`。
+0.1.236 迁入的任务见 §77.7。
 
 ### 77.5 不再接受新的业务 ticker
 
@@ -6040,7 +6040,7 @@ node 任务：
 - 请求内等待；
 - 进程与集群控制回路（心跳、并发槽、准入、插件进程）。
 
-清单见设计 §14.3。`internal/task/ticker_guard_test.go` 按文件列出允许的 `time.NewTicker`/`time.Tick` 及原因：新增一个就失败，减少了也要同步改清单。
+清单见设计 §14.3；0.1.236 起白名单就是这份清单。`internal/task/ticker_guard_test.go` 按文件列出允许的 `time.NewTicker`/`time.Tick` 及原因：新增一个就失败，减少了也要同步改清单。
 
 ### 77.6 红色账号停容器
 
@@ -6069,3 +6069,28 @@ node 任务：
 
 - 账号视图有只读字段 `runtime_parked`，只有 ccgateway 账号带它。
 - 回滚到旧核心是安全的：旧核心认为这些容器都应运行，会在 60 秒内重新启动它们。
+
+### 77.7 0.1.236 的任务（计费、凭证、同步）
+
+cluster 任务：
+
+| 任务 | 计划 / 超时 | 原来 |
+| --- | --- | --- |
+| `core.account.usage_limits` | 5s / 1m | 每节点循环，会话 advisory 锁 `account.usage_limits` |
+| `core.account.credential_refresh`（接手时先跑一次） | 5m / 15m | 每节点循环，Redis 锁 `account:refresh:sweep`；每账号锁 `account:refresh:<id>` 保留 |
+| `core.helper.usage_replay` | 5s / 45s | 每个节点都回放，没有认领 |
+| `core.ccgateway.runtime_sync` | 1m / 10m | 每个节点各扫一遍，逐个同步 |
+| `core.usage.reconcile` | 10s / 2m30s | 每节点循环，Redis 锁 `usage:reconcile` |
+
+node 任务（可工作节点各跑，`RequireWork`）：
+
+| 任务 | 计划 / 超时 | 说明 |
+| --- | --- | --- |
+| `core.account.quota_sweep` | 5s / 5m | 额度行在 PG 里认领，各节点分摊 |
+| `core.usage.settlement_retry` | 30s / 5m | `SKIP LOCKED` + 幂等键，各节点分摊 |
+
+- `core.ccgateway.runtime_sync`：一轮并发 4 个，每个运行环境最长 90 秒，被别的节点锁着的跳过；结果 `count` 是这一轮的运行环境数，有失败时 `message` 写失败个数。代理变更等需要立刻全量同步时，对它发一次手动运行（`Trigger`，同一时间最多排一个）。
+- 阻断去重（§49.18）：`enabled:false` 下发成功后，在运行环境的 advisory 锁内写 `blocked_revision`（修订号前 16 位十六进制右移 1 位）和 `blocked_at`。10 分钟内同一修订号、且晚于本节点最近一次变更（kick、账号/代理/配置消息）的记录，任何节点都不再下发。没有 `ccgateway_runtimes` 行的旧式运行环境只用本节点内存记录。
+- `core.usage.reconcile`：运行等本轮领取的对账全部结束才返回，`count` 是领取条数，耗时是真实的一轮。行租约、幂等键、状态机不变。
+- 不再使用的锁：Redis `account:refresh:sweep`、`usage:reconcile`；PG 会话 advisory 锁 `account.usage_limits`。
+- 滚动升级：0.1.235 节点仍跑原循环，0.1.236 节点跑任务，同一件事可能各做一次，都幂等（对账靠行租约，用量汇总靠 `SKIP LOCKED`，用量限制写入前重查，结算靠幂等键，helper 回放靠回执事务与 outbox 摘要）。不改 schema，可以自动回滚。
