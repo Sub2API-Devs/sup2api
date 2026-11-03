@@ -4,6 +4,12 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-03 夜 **模型价格按官方价格页修正**（数据改动，经管理接口 `PATCH/DELETE /prices/:id`，改价历史在 `model_price_history`；依据 `platform.claude.com/docs/en/about-claude/pricing`，本机地区打不开，从 ovh 取）：
+- `claude-sonnet-5-5`（308）缓存读 0.2 → **0.1**（Opus 5.5 / Sonnet 5.5 缓存读是输入价 0.05 倍），表达式模式改为 per_token；`claude-sonnet-4-6`（124）缓存读 0.1 → **0.3**；`claude-haiku-4-5-20251001`（109）0.14/0.71 → **1/5**（缓存读 0.1、写 1.25/2；此前 405 次请求按约 1/7 计费）。
+- 删除官方没有的带日期 ID：`claude-opus-4-6-20260205`（116）、`claude-opus-4-7-20260416`（118），两者从未被请求过；原值都是 sync 来的 5/25/0.5/6.25/10。以后手动从 LiteLLM 同步可能再带回来，同步预览里不要勾。
+- 其余 Claude 价格逐项与官方一致；`claude-haiku-4-5` 与 `claude-haiku-4-5-20251001` 都是官方 ID，保留。脚本 [fixprices-2026-11-03.py](fixprices-2026-11-03.py)（在 ovh 上 `python3 -I … show|apply`，输出含改前值）。
+- 同时核对：每次请求的费用 = token × 单价，无误；Pro 账号 5h 用满按 API 价约 $9.4，费用 74% 是缓存整段重写，另行排查。
+
 2026-11-03 ccgateway **0.1.125**（`d0e4f7573`，北京时间 14:00 左右；插件包 `2a3656b5…07d3`，只发插件，核心仍 0.1.234）：
 - 内容：定制 CLI 2.1.316 升为 `ccgateway-v46-shape-prompt-text`（ELF `2125d0b0…0b41`）+ 新 Worker（`3cf2744a…d93`）。修复 0.1.124 在 #82 实测中发现的两处缺口：Worker 的应答观察器见到上游 `Content-Encoding`（CLI 写回的已是解压字节）就不读，导致续接请求缺 `diagnostics`、子代理配不上父线程；记忆改为读到 `message_stop` 时、写给客户端之前就记入并释放线程（否则客户端立刻发出的子代理请求会看到父线程"忙"）；CLI 派生 prompt id 的哈希去掉 `cache_control`，同一轮工具循环共用一个 prompt id。离线 e2e 假上游加 `FAKE_GZIP=1`。验证见迁移记录第 12 节。
 - 只对新账号生效；#82 按用户要求原地升到 v46（`runtimes/d4bc3f8af1a1028aa/worker {"components":["worker","cli"]}`，容器不重建）。
