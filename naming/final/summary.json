@@ -1,0 +1,33 @@
+{
+ "named": 43075,
+ "suffixed": 1497,
+ "kept": 57767,
+ "imports": 85832,
+ "moduleClashes": 132,
+ "locals": 112780,
+ "sources": [
+  "analysis/names/auto.jsonl",
+  "analysis/names/facade.jsonl",
+  "analysis/names/reference.jsonl",
+  "naming/semantic-agents.jsonl",
+  "naming/semantic-bootstrap.jsonl",
+  "naming/semantic-commands.jsonl",
+  "naming/semantic-extensions.jsonl",
+  "naming/semantic-ink.jsonl",
+  "naming/semantic-p0.jsonl",
+  "naming/semantic-p1.jsonl",
+  "naming/semantic-p2.jsonl",
+  "naming/semantic-p3.jsonl",
+  "naming/semantic-p4.jsonl",
+  "naming/semantic-p5.jsonl",
+  "naming/semantic-p6.jsonl",
+  "naming/semantic-p7.jsonl",
+  "naming/semantic-permissions.jsonl",
+  "naming/semantic-prest.jsonl",
+  "naming/semantic-query.jsonl",
+  "naming/semantic-state.jsonl",
+  "naming/semantic-tools.jsonl",
+  "naming/semantic-ui.jsonl",
+  "naming/semantic-zz-fixes.jsonl"
+ ]
+}

@@ -1,0 +1,5 @@
+{
+  "services/api/apiPath.ts": "2.1.316 新增：API 路径片段编码（`.`/`..` 双重转义，防止路径穿越）。",
+  "vendor/_unknown/bedrockRuntimeConfig.js": "第三方：@aws-sdk/client-bedrock-runtime 内部运行时配置片段（包内文件未确认）。",
+  "vendor/_unknown/anthropic-google-cloud-client.js": "第三方：Anthropic Google Cloud（Vertex）SDK 客户端片段（包名/版本未确认）。"
+}

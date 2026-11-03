@@ -65,6 +65,9 @@ if (fs.existsSync(namingDir)) {
       const d = byId.get(id);
       if (d) {
         const p = typeof target === 'string' ? target : target.path;
+        // "_misplaced/" means "wrong here, destination unknown": it must not undo
+        // a real placement made by another file
+        if (p.startsWith('_misplaced/') && label[d.i] && !label[d.i].path.startsWith('_misplaced/')) continue;
         const isPkgPath = p.startsWith('@') || vendorPkgNames.some((k) => p.startsWith(k + '/'));
         const kind = p.startsWith('vendor/') || isPkgPath ? 'vendor' : p.startsWith('_misplaced/') ? 'unattributed' : 'first-party';
         label[d.i] = { path: p.startsWith('vendor/') ? p.slice('vendor/'.length) : p, kind, method: 'placement', by: f };
