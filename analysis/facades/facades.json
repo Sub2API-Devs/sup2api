@@ -47,8 +47,8 @@
   }
  },
  "chunk-0crvnfjy.js": {
-  "path": "_new/rawSettingsKeyPresence.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/settings/settings.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "AUTO_MODE_TRUSTED_SOURCES": "chunk-q8cqcff6.js#Hle",
@@ -538,8 +538,8 @@
   }
  },
  "chunk-1qx2v2vg.js": {
-  "path": "_new/refreshBootstrapData.ts",
-  "pathMethod": "facade-new",
+  "path": "services/api/bootstrap.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "bootstrapFetchCanConvergeSlot": "chunk-mz6f608r.js#YNo",
@@ -809,8 +809,8 @@
   }
  },
  "chunk-3eyvtwsv.js": {
-  "path": "_new/createBridgeSession.ts",
-  "pathMethod": "facade-new",
+  "path": "bridge/createSession.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "SESSION_COLOR_TAG_PREFIX": "chunk-f25sswmp.js#ndi",
@@ -1330,8 +1330,8 @@
   }
  },
  "chunk-5051d7ze.js": {
-  "path": "_new/scanMemoryHeaders.ts",
-  "pathMethod": "facade-new",
+  "path": "memdir/memoryScan.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "formatMemoryManifest": "chunk-s61vbvea.js#jyn",
@@ -1493,8 +1493,8 @@
   }
  },
  "chunk-5bkgthks.js": {
-  "path": "_new/isAutoMemoryDisabledForCurrentMainLoopModel.ts",
-  "pathMethod": "facade-new",
+  "path": "memdir/paths.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "AUTO_MEM_WRITE_ALLOW_REASON": "chunk-aepeg2w5.js#mxn",
@@ -2008,8 +2008,8 @@
   }
  },
  "chunk-6phxatm7.js": {
-  "path": "_new/sendSessionHistoryEvents.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/teleport/api.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "CCR_BYOC_BETA": "chunk-aepeg2w5.js#$x",
@@ -2157,8 +2157,8 @@
   }
  },
  "chunk-7g8rqsne.js": {
-  "path": "_new/applyCoordinatorToolFilter.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/toolPool.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "applyCoordinatorToolFilter": "chunk-0nt1vzp1.js#RIr",
@@ -2757,8 +2757,8 @@
   }
  },
  "chunk-8j2cv8nm.js": {
-  "path": "_new/RESOURCE_EXHAUSTION_CODES.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/errors.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "AbortError": "chunk-2g090z7k.js#qe",
@@ -3060,8 +3060,8 @@
   }
  },
  "chunk-a3ex6w41.js": {
-  "path": "_new/iterateStreamUntilClose.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/process.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "STREAM_GONE_CODES": "chunk-j3nx1xyn.js#iEr",
@@ -4633,8 +4633,8 @@
   }
  },
  "chunk-et4cgz1y.js": {
-  "path": "_new/registerBundledSkill.ts",
-  "pathMethod": "facade-new",
+  "path": "skills/bundledSkills.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "extractAdditionalSkillFiles": "chunk-yjaa68dq.js#P8r",
@@ -4726,8 +4726,8 @@
   }
  },
  "chunk-f80am9t8.js": {
-  "path": "_new/NodeFsOperations.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/fsOperations.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "FileChangedDuringReadError": "chunk-cgr0tezp.js#kje",
@@ -5323,8 +5323,8 @@
   }
  },
  "chunk-gnfg7h3r.js": {
-  "path": "_new/exec.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/Shell.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "MissingWorkingDirectoryError": "chunk-e6aww6q8.js#Mpn",
@@ -5520,8 +5520,8 @@
   }
  },
  "chunk-gtq2y7h2.js": {
-  "path": "_new/countConcurrentSessions.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/concurrentSessions.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "ARTIFACT_YIELD_PEER_FEATURE": "chunk-aepeg2w5.js#cas",
@@ -5588,8 +5588,8 @@
   }
  },
  "chunk-h4wwf2p6.js": {
-  "path": "_new/startCapturingEarlyInput.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/earlyInput.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "consumeEarlyInput": "chunk-wphjdnre.js#N5t",
@@ -6731,8 +6731,8 @@
   }
  },
  "chunk-m7ezatv1.js": {
-  "path": "_new/readTranscriptForLoad.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/sessionStoragePortable.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "BACKUP_FILE_NAME_PATTERN_WITH_LEGACY": "chunk-f9pzpnqt.js#$Qt",
@@ -8990,8 +8990,8 @@
   }
  },
  "chunk-rd4xtrpj.js": {
-  "path": "_new/decideWithToolCheckHooks.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/permissions/permissions.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "PERMISSION_CHECK_CRASHED_REASON": "chunk-e6aww6q8.js#e2",
@@ -10026,8 +10026,8 @@
   }
  },
  "chunk-vvrhw27g.js": {
-  "path": "_new/precheckLaunchScope.ts",
-  "pathMethod": "facade-new",
+  "path": "commands/review/reviewRemote.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "POST_DISABLED_NOTE": "chunk-zn8pzrw0.js#ULr",
@@ -10068,8 +10068,8 @@
   }
  },
  "chunk-w27ej3rn.js": {
-  "path": "_new/createPluginFromPath.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/plugins/pluginLoader.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "GitHostFetchFailedError": "chunk-e6aww6q8.js#B2r",
@@ -10329,8 +10329,8 @@
   }
  },
  "chunk-wqa2f5xk.js": {
-  "path": "_new/performRename.ts",
-  "pathMethod": "facade-new",
+  "path": "commands/rename/rename.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "call": "chunk-zmqmnh19.js#Hzi",
@@ -10503,8 +10503,8 @@
   }
  },
  "chunk-x8fg5a1h.js": {
-  "path": "_new/processResumedConversation.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/sessionRestore.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "appendSlackTagResumeRecords": "chunk-08s5p3av.js#ONt",
@@ -10572,8 +10572,8 @@
   }
  },
  "chunk-xcbfjzhp.js": {
-  "path": "_new/VARIADIC_VALUE_FLAGS.ts",
-  "pathMethod": "facade-new",
+  "path": "utils/cliArgs.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "VARIADIC_VALUE_FLAGS": "chunk-c5gdqf78.js#a",
@@ -11019,8 +11019,8 @@
   }
  },
  "chunk-yvf1bnw9.js": {
-  "path": "_new/RemoteIO.ts",
-  "pathMethod": "facade-new",
+  "path": "cli/remoteIO.ts",
+  "pathMethod": "facade-majority",
   "own": 0,
   "exports": {
    "RemoteIO": "chunk-z4g2ta8k.js#Q$",

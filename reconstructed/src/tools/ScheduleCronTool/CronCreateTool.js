@@ -1,0 +1,175 @@
+/**
+ * tools/ScheduleCronTool/CronCreateTool.ts
+ *
+ * CronCreate 工具：创建循环/一次性定时 prompt，可选 durable 持久化
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ScheduleCronTool/CronCreateTool.ts
+ * pieces: chunk-kyk75gag.js (1)
+ * attribution: fingerprint 1
+ */
+import { DoctorLazy } from "../../cli/handlers/util.js";
+import { zodStrictObject, o, M, u, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { booleanishSchema } from "../../utils/spellcheck.js";
+import {
+  DEFAULT_MAX_AGE_DAYS,
+  buildDurableParamDescription,
+  isDurableCronEnabled,
+  NEXT_FIRE_AT_DESCRIPTION,
+  CRON_CREATE_TOOL_NAME,
+  isKairosCronEnabled,
+  buildCronCreateDescription,
+  buildCronCreatePrompt,
+} from "./prompt.js";
+import { buildTool } from "../../services/tools/permissionCheckGuard.js";
+import {
+  getCronFilePath,
+  nextCronRunMs,
+  listAllCronTasks,
+  addCronTask,
+  nextFireTimeForTask,
+  roundToMinute,
+} from "../../utils/cronTasks.js";
+import { isUnknownPluginSpawnedAgent, UNKNOWN_PLUGIN_AGENT_NOTE } from "../AgentTool/pluginSpawnNote.js";
+import { logForDebugging } from "../../utils/debug.js";
+import { parseCronExpression, cronToHuman } from "../../utils/cron.js";
+import { getTeammateContext } from "../../utils/teammate.js";
+import { getCronJitterConfig } from "../../utils/cronJitterConfig.js";
+import { setScheduledTasksEnabled } from "../../bootstrap/state.js";
+import { formatCronFireTime } from "../../hooks/useScheduledTasks.js";
+import { truncate } from "../../utils/format.js";
+
+/**
+ * CronCreate 工具（shouldDefer，enablesCodeExecution；isEnabled = isKairosCronEnabled）。输入 cron（5 字段本地时间）、prompt、recurring（默认 true）、durable（仅 tengu_kairos_cron_durable 开启时生效）。权限：auto 模式下 passthrough 交给分类器，否则直接允许。validateInput：特定上下文拒绝、表达式非法、一年内无匹配日期、已有任务 ≥50、队友不能建 durable 任务。call 写入任务（durable 写 .claude/scheduled_tasks.json，否则只在会话内存），按抖动配置算下次触发时间。
+ */
+//@ chunk-kyk75gag.js:5317-8204 fingerprint = CronCreateTool (0.774)
+var MAX_CRON_JOBS = 50,
+  cronCreateInputSchema = DoctorLazy(() =>
+    zodStrictObject({
+      cron: o().describe(
+        'Standard 5-field cron expression in local time: "M H DoM Mon DoW" (e.g. "*/5 * * * *" = every 5 minutes, "30 14 28 2 *" = Feb 28 at 2:30pm local once).',
+      ),
+      prompt: o().describe("The prompt to enqueue at each fire time."),
+      recurring: booleanishSchema(M().optional()).describe(
+        `true (default) = fire on every cron match until deleted or auto-expired after ${DEFAULT_MAX_AGE_DAYS} days. false = fire once at the next match, then auto-delete. Use false for "remind me at X" one-shot requests with pinned minute/hour/dom/month.`,
+      ),
+      durable: booleanishSchema(M().optional()).describe(
+        buildDurableParamDescription(isDurableCronEnabled()),
+      ),
+    }),
+  ),
+  cronCreateOutputSchema = DoctorLazy(() =>
+    u({
+      id: o(),
+      humanSchedule: o(),
+      recurring: M(),
+      durable: M().optional(),
+      nextFireAt: E().optional().describe(NEXT_FIRE_AT_DESCRIPTION),
+    }),
+  ),
+  CronCreateTool = buildTool({
+    name: CRON_CREATE_TOOL_NAME,
+    searchHint: "schedule a recurring or one-shot prompt",
+    enablesCodeExecution: !0,
+    backgrounding: "never",
+    maxResultSizeChars: 1e5,
+    shouldDefer: !0,
+    get inputSchema() {
+      return cronCreateInputSchema();
+    },
+    get outputSchema() {
+      return cronCreateOutputSchema();
+    },
+    isEnabled() {
+      return isKairosCronEnabled();
+    },
+    toAutoClassifierInput(e) {
+      return `${e.cron}: ${e.prompt}`;
+    },
+    async description() {
+      return buildCronCreateDescription(isDurableCronEnabled());
+    },
+    async prompt() {
+      return buildCronCreatePrompt(isDurableCronEnabled());
+    },
+    getPath() {
+      return getCronFilePath();
+    },
+    create(e) {
+      return {
+        async checkPermissions(r) {
+          if (e.permissions().mode === "auto")
+            return {
+              behavior: "passthrough",
+              message: "Scheduling a cron prompt requires classifier review.",
+            };
+          return { behavior: "allow", updatedInput: r };
+        },
+        async validateInput(r) {
+          let n = isUnknownPluginSpawnedAgent(e) ? UNKNOWN_PLUGIN_AGENT_NOTE : void 0;
+          if (n !== void 0)
+            return (logForDebugging(`CronCreate refused: ${n}`), { result: !1, message: n, errorCode: 5 });
+          if (!parseCronExpression(r.cron))
+            return {
+              result: !1,
+              message: `Invalid cron expression '${r.cron}'. Expected 5 fields: M H DoM Mon DoW.`,
+              errorCode: 1,
+            };
+          if (nextCronRunMs(r.cron, Date.now()) === null)
+            return {
+              result: !1,
+              message: `Cron expression '${r.cron}' does not match any calendar date in the next year.`,
+              errorCode: 2,
+            };
+          if ((await listAllCronTasks()).length >= MAX_CRON_JOBS)
+            return {
+              result: !1,
+              message: `Too many scheduled jobs (max ${MAX_CRON_JOBS}). Cancel one first.`,
+              errorCode: 3,
+            };
+          if (r.durable && getTeammateContext())
+            return {
+              result: !1,
+              message:
+                "durable crons are not supported for teammates (teammates do not persist across sessions)",
+              errorCode: 4,
+            };
+          return { result: !0 };
+        },
+        async call({ cron: r, prompt: n, recurring: s = !0, durable: c = !1 }) {
+          let a = c && isDurableCronEnabled(),
+            now = Date.now(),
+            l = await addCronTask(r, n, s, a, getTeammateContext()?.agentId, now, e),
+            m = nextFireTimeForTask({ id: l, cron: r, createdAt: now, recurring: s }, getCronJitterConfig());
+          return (
+            setScheduledTasksEnabled(!0),
+            {
+              data: {
+                id: l,
+                humanSchedule: cronToHuman(r),
+                recurring: s,
+                durable: a,
+                ...(m !== null && { nextFireAt: m }),
+              },
+            }
+          );
+        },
+      };
+    },
+    mapToolResultToToolResultBlockParam(e, r) {
+      let n = e.durable
+          ? "Persisted to .claude/scheduled_tasks.json"
+          : "Session-only (not written to disk, dies when Claude exits)",
+        s = e.nextFireAt === void 0 ? "" : ` Next run: ${formatCronFireTime(roundToMinute(e.nextFireAt))}.`;
+      return {
+        tool_use_id: r,
+        type: "tool_result",
+        content: e.recurring
+          ? `Scheduled recurring job ${e.id} (${e.humanSchedule}).${s} ${n}. Auto-expires after ${DEFAULT_MAX_AGE_DAYS} days. Use CronDelete to cancel sooner.`
+          : `Scheduled one-shot task ${e.id} (${e.humanSchedule}).${s} ${n}. It will fire once then auto-delete.`,
+      };
+    },
+    renderToolUseMessage(e) {
+      return `${e.cron ?? ""}${e.prompt ? `: ${truncate(e.prompt, 60, !0)}` : ""}`;
+    },
+  });

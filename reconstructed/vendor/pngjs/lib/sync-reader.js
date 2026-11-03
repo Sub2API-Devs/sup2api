@@ -1,0 +1,32 @@
+/**
+ * pngjs/lib/sync-reader.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: pngjs@5.0.0
+ * pieces: chunk-spjgqa4y.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { x } from "../../../runtime/bun-runtime.js";
+
+//@ chunk-spjgqa4y.js:45541-46188 cjs-fingerprint
+var Et = x(function (eu, gn) {
+  var pn = (gn.exports = function (t) {
+    ((this._buffer = t), (this._reads = []));
+  });
+  pn.prototype.read = function (t, e) {
+    this._reads.push({ length: Math.abs(t), allowLess: t < 0, func: e });
+  };
+  pn.prototype.process = function () {
+    while (this._reads.length > 0 && this._buffer.length) {
+      let t = this._reads[0];
+      if (this._buffer.length && (this._buffer.length >= t.length || t.allowLess)) {
+        this._reads.shift();
+        let _buffer = this._buffer;
+        ((this._buffer = _buffer.slice(t.length)), t.func.call(this, _buffer.slice(0, t.length)));
+      } else break;
+    }
+    if (this._reads.length > 0) return Error("There are some read requests waitng on finished stream");
+    if (this._buffer.length > 0) return Error("unrecognised content at end of stream");
+  };
+});
+
+export { Et };

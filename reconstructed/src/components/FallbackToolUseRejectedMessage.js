@@ -1,0 +1,20 @@
+/**
+ * components/FallbackToolUseRejectedMessage.tsx
+ *
+ * 工具被拒绝的兜底渲染（"User rejected …"）。
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * 2.1.88 counterpart: references/claude-code-analysis/src/components/FallbackToolUseRejectedMessage.tsx
+ * pieces: chunk-14ezrfvp.js (1)
+ * attribution: callgraph-fingerprint 1
+ */
+import { e } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { MessageResponse } from "./MessageResponse.js";
+import { Text } from "../ink/components/Text.js";
+
+//@ chunk-14ezrfvp.js:372-465 callgraph-fingerprint = FallbackToolUseRejectedMessage (0.196)
+function FallbackToolUseRejectedMessage() {
+  return e(MessageResponse, { height: 1, children: e(Text, { dimColor: !0, children: "Fetching\u2026" }) });
+}
+
+export { FallbackToolUseRejectedMessage };

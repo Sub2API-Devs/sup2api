@@ -507,7 +507,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
 | 位置 | 含义 |
 |---|---|
 | 顶层 `_new/<导出名>`（已清空） | 门面 chunk 推出、2.1.88 没有对应文件的模块，起初按最大导出名放在顶层 `_new/`（例如早期的 _new/applyCoordinatorToolFilter.ts，其中的 `mergeAndFilterTools` 现在在 `reconstructed/src/utils/toolPool.js`）；第三阶段放置后 197 个全部给出正式路径，顶层 `_new/` 已不存在。手册里若还写着这类路径，用声明 id 查当前位置 |
-| `<目录>/_new/<名>.js`、`<目录>/_new/<文件>.helpers-<chunk 前 4 位>.js` | `sole-consumer-new`（当前 `_new/` 子目录下 130 个文件，其中 86 个 helpers 文件）：只被同目录某个模块使用、但在 chunk 里不与它相邻的一段代码，独立成新模块放在使用者旁边；没有好名字时命名为 `<使用者>.helpers-<chunk 标记>`（例如 `reconstructed/src/cli/_new/print.helpers-tyg7.js` 是只给 `cli/print.js` 用的 77 个声明） |
+| `<目录>/_new/<名>.js`、`<目录>/_new/<文件>.helpers-<chunk 前 4 位>.js` | `sole-consumer-new`（当前 `_new/` 子目录下 146 个文件，其中 23 个 helpers 文件；第四阶段命名后多数已按主声明改名）：只被同目录某个模块使用、但在 chunk 里不与它相邻的一段代码，独立成新模块放在使用者旁边；没有好名字时命名为 `<使用者>.helpers-<chunk 标记>`（例如 `reconstructed/src/entrypoints/_new/init.helpers-xdkv.js` 是只给 `entrypoints/init.js` 用的代码） |
 | `_unattributed/<chunk>/part-NNN.js`（已清空） | 未归属代码按 chunk 内连续段切开的临时位置；place-rest 放置后已全部落位，当前阅读树没有这个目录 |
 | `_misplaced/<原路径>`（已清空） | fixer 确认归错、但当时去处不明的声明（`docs/process/fixer.md` 第 7 节），place-rest 已给出去处 |
 | `reconstructed/vendor/<包>/<文件>` | 第三方，按 npm 包内路径还原；`private-unresolved/` 是私有/未识别包 |
@@ -543,7 +543,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
 
 ## 10. 引用校验结果
 
-校验时间 2026-11-03 09:19（本机时间，阅读树生成于 09:15），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-03 02:55（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
 - 共检查 1026 处引用：路径 413/413，路径·函数 81/81，名字 379/380（另 1 个只在 2.1.88 中存在），声明id 62/62，字面量 89/90（另 1 个只在 2.1.88 中存在）；占位符与含空格的说明性文字 63 处未检查。
 - 只在 2.1.88 中存在（删除项或旧名，预期如此）：`contextModifier`、`tengu_sm_compact*`

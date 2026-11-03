@@ -1,0 +1,68 @@
+/**
+ * utils/caCertsConfig.ts
+ *
+ * 从设置或 ~/.claude.json 的 env 中读取 NODE_EXTRA_CA_CERTS 并注入 process.env。
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * 2.1.88 counterpart: references/claude-code-analysis/src/utils/caCertsConfig.ts
+ * pieces: chunk-v772wxfr.js (2)
+ * attribution: fingerprint 2
+ */
+import { env } from "./env.js";
+import { logForDebugging } from "./debug.js";
+import { isHostEntrypoint } from "./entrypointKinds.js";
+import { isTlsOrCertEnvVar } from "./managedEnvConstants.js";
+import { hasManagedSettings } from "./settings/managedRestrictionKeys.js";
+import { isStoredLoginPinned } from "../cli/headlessCloud/attachServe.js";
+import { isHttpMcpServeInvocation } from "../entrypoints/mcpServeArgs.js";
+import { getGlobalConfig } from "./config.js";
+import { withoutInvalidSettingsEnv } from "./managedEnvApply.js";
+import { isSettingSourceEnabled } from "./settings/constants.js";
+import { getSettingsForSource } from "./settings/settings.js";
+import { logFeatureSad } from "../services/analytics/featureTelemetry.js";
+
+/**
+ * 未设置 NODE_EXTRA_CA_CERTS 时，从 settings.env 或 ~/.claude.json env 读取并写入 process.env。
+ */
+//@ chunk-v772wxfr.js:556-728 fingerprint = applyExtraCACertsFromConfig (1)
+function applyExtraCACertsFromConfig() {
+  if (env.NODE_EXTRA_CA_CERTS) return;
+  let configPath = getExtraCertsPathFromConfig();
+  if (configPath)
+    ((process.env.NODE_EXTRA_CA_CERTS = configPath),
+      logForDebugging(`CA certs: Applied NODE_EXTRA_CA_CERTS from config to process.env: ${configPath}`));
+}
+/**
+ * 从用户设置或全局配置的 env 中找 NODE_EXTRA_CA_CERTS；宿主托管提供方、远程、diskless 时跳过。
+ */
+//@ chunk-v772wxfr.js:728-1463 fingerprint = getExtraCertsPathFromConfig (0.675)
+function getExtraCertsPathFromConfig() {
+  try {
+    if (
+      env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST &&
+      !isHostEntrypoint() &&
+      isTlsOrCertEnvVar("NODE_EXTRA_CA_CERTS")
+    ) {
+      logForDebugging("CA certs: skipping settings-sourced NODE_EXTRA_CA_CERTS under host-managed provider");
+      return;
+    }
+    if (hasManagedSettings()) return;
+    if (isStoredLoginPinned() || isHttpMcpServeInvocation()) return;
+    let globalConfig = getGlobalConfig(),
+      e = withoutInvalidSettingsEnv(globalConfig?.env, "globalConfig"),
+      s = isSettingSourceEnabled("userSettings") ? getSettingsForSource("userSettings") : void 0,
+      n = withoutInvalidSettingsEnv(s?.env, "userSettings");
+    logForDebugging(
+      `CA certs: Config fallback - globalEnv keys: ${e ? Object.keys(e).join(",") : "none"}, settingsEnv keys: ${n ? Object.keys(n).join(",") : "none"}`,
+    );
+    let path = n?.NODE_EXTRA_CA_CERTS || e?.NODE_EXTRA_CA_CERTS;
+    if (path) logForDebugging(`CA certs: Found NODE_EXTRA_CA_CERTS in config/settings: ${path}`);
+    return path;
+  } catch (error) {
+    (logForDebugging(`CA certs: Config fallback failed: ${error}`, { level: "error" }),
+      logFeatureSad("ca_certs_load", "config_read_failed"));
+    return;
+  }
+}
+
+export { applyExtraCACertsFromConfig };

@@ -1,0 +1,16 @@
+/**
+ * tools/EndConversationTool/constants.ts
+ *
+ * 2.1.316 新增。EndConversation 工具名。
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * new in 2.1.316 (2.1.88 has no file at this path)
+ * pieces: chunk-tr8gk11f.js (1)
+ * attribution: placement 1
+ */
+
+//@ chunk-tr8gk11f.js:191-242 placement
+var END_CONVERSATION_TOOL_NAME = "EndConversation",
+  END_CONVERSATION_GB_FLAG = "tengu_umber_kestrel";
+
+export { END_CONVERSATION_TOOL_NAME, END_CONVERSATION_GB_FLAG };

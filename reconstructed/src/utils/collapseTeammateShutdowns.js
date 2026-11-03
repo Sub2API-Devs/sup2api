@@ -1,0 +1,46 @@
+/**
+ * utils/collapseTeammateShutdowns.ts
+ *
+ * 把多条队友关闭通知合并为 teammate_shutdown_batch
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * 2.1.88 counterpart: references/claude-code-analysis/src/utils/collapseTeammateShutdowns.ts
+ * pieces: chunk-ag5x7vhf.js (2)
+ * attribution: fingerprint 2
+ */
+
+//@ chunk-ag5x7vhf.js:120290-120451 fingerprint = isTeammateShutdownAttachment (1)
+function isTeammateShutdownAttachment(msg) {
+  return (
+    msg.type === "attachment" &&
+    msg.attachment.type === "task_status" &&
+    msg.attachment.taskType === "in_process_teammate" &&
+    msg.attachment.status === "completed"
+  );
+}
+/**
+ * 把多条队友关闭通知合并为一个 teammate_shutdown_batch 附件。
+ */
+//@ chunk-ag5x7vhf.js:120451-120727 fingerprint = collapseTeammateShutdowns (1)
+function collapseTeammateShutdowns(messages) {
+  let result = [],
+    x = 0;
+  while (x < messages.length) {
+    let msg = messages[x];
+    if (isTeammateShutdownAttachment(msg)) {
+      let k = 0;
+      while (x < messages.length && isTeammateShutdownAttachment(messages[x])) (k++, x++);
+      if (k === 1) result.push(msg);
+      else
+        result.push({
+          type: "attachment",
+          uuid: msg.uuid,
+          timestamp: msg.timestamp,
+          attachment: { type: "teammate_shutdown_batch", count: k },
+        });
+    } else (result.push(msg), x++);
+  }
+  return result;
+}
+
+export { collapseTeammateShutdowns };

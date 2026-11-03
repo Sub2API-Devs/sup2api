@@ -1,0 +1,15 @@
+/**
+ * call-bind-apply-helpers/functionApply.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: call-bind-apply-helpers@1.0.2
+ * pieces: chunk-h6b7mazd.js (1)
+ * attribution: cjs-require-graph 1
+ */
+import { x } from "../../runtime/bun-runtime.js";
+
+//@ chunk-h6b7mazd.js:10996-11059 cjs-require-graph
+var sr = x(function (lp, Do) {
+  Do.exports = Function.prototype.apply;
+});
+
+export { sr };

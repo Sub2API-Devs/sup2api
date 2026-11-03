@@ -1,0 +1,250 @@
+/**
+ * commands/review/reviewAngles.ts
+ *
+ * 2.1.316 新增：code-review 技能的正确性审查角度（逐行扫描等）提示词
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * new in 2.1.316 (2.1.88 has no file at this path)
+ * pieces: chunk-hantmvxa.js (7)
+ * attribution: placement 7
+ */
+import { urlPatternToRegex, escapeControlChars, plural } from "../../utils/stringUtils.js";
+import { getAgentDepth } from "../../utils/agentContext.js";
+import { getMaxSubagentSpawnDepth } from "../../tools/AgentTool/spawnDepth.js";
+import { toolMatchesName } from "../../Tool.js";
+import { AGENT } from "../../tools/AgentTool/constants.js";
+import { DoctorLazy } from "../../cli/handlers/util.js";
+import { A, u, o, Ue, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { getPrintOutputFormat } from "../../bootstrap/state.js";
+import { safeParseJSON } from "../../utils/json.js";
+
+//@ chunk-hantmvxa.js:49051-49274 placement
+function extractFlags(e, n) {
+  let trimmed = e.trim(),
+    r = trimmed.split(/\s+/, 1)[0] ?? "",
+    h = new Set(),
+    y = trimmed;
+  for (let w of n) {
+    let replaced = y.replace(new RegExp(`(?:^|\\s)--${urlPatternToRegex(w)}(?=\\s|$)`, "g"), "");
+    if (replaced !== y) (h.add(w), (y = replaced.trim()));
+  }
+  return { rawFirstToken: r, flags: h, rest: y };
+}
+//@ chunk-hantmvxa.js:49274-49409 placement
+function canSpawnReviewAgents(e) {
+  if (e.agentContext && getAgentDepth(e.agentContext) >= getMaxSubagentSpawnDepth()) return !1;
+  let n = e.options?.tools;
+  if (!n) return !0;
+  return n.some((s) => toolMatchesName(s, AGENT));
+}
+//@ chunk-hantmvxa.js:49409-51848 placement
+var REVIEW_PHASE0_GATHER_DIFF =
+    "## Phase 0 \u2014 Gather the diff\n\nRun `git diff @{upstream}...HEAD` (or `git diff main...HEAD` / `git diff HEAD~1`\nif there's no upstream) to get the unified diff under review. If there are\nuncommitted changes, or the range diff is empty, also run `git diff HEAD` and\ninclude the working-tree changes in scope \u2014 the review often runs before the\ncommit. If a PR number, branch name, or file path was passed as an argument,\nreview that target instead. Treat this diff as the review scope.\n",
+  me = `Flag new code that re-implements something the codebase
+already has \u2014 Grep shared/utility modules and files adjacent to the change,
+and name the existing helper to call instead.
+`,
+  Z = `### Simplification
+
+Flag unnecessary complexity the diff adds: redundant or derivable state,
+copy-paste with slight variation, deep nesting, dead code left behind. Name
+the simpler form that does the same job.
+`,
+  oe = `### Efficiency
+
+Flag wasted work the diff introduces: redundant computation or repeated I/O,
+independent operations run sequentially, blocking work added to startup or
+hot paths. Also flag long-lived objects built from closures or captured
+environments \u2014 they keep the entire enclosing scope alive for the object's
+lifetime (a memory leak when that scope holds large values); prefer a
+class/struct that copies only the fields it needs. Name the cheaper
+alternative.
+`,
+  ce = `### Conventions (CLAUDE.md)
+
+Find the CLAUDE.md files that govern the changed code: the user-level
+~/.claude/CLAUDE.md, the repo-root CLAUDE.md, plus any CLAUDE.md or
+CLAUDE.local.md in a directory that is an ancestor of a changed file (a
+directory's CLAUDE.md only applies to files at or below it). Read each one
+that exists, then check the diff for clear violations of the rules they state.
+
+Only flag a violation when you can quote the exact rule and the exact line
+that breaks it \u2014 no style preferences, no vague "spirit of the doc"
+inferences. In the finding, name the CLAUDE.md path and quote the rule so the
+report can cite it. If no CLAUDE.md applies, return nothing for this angle.
+`,
+  ne = `### Altitude
+
+Check that each change fixes the root cause at the right depth rather than
+patching a symptom with a fragile bandaid. Special cases layered on shared
+infrastructure are a sign the fix isn't deep enough \u2014 prefer the simpler, more
+general change to the underlying mechanism over adding special cases, and name
+that change.
+`;
+//@ chunk-hantmvxa.js:51848-52000 placement
+var ReviewFindingsSchema = DoctorLazy(() =>
+    A(u({ file: o(), line: Ue([E(), o()]).nullish(), summary: o(), failure_scenario: o().nullish() })),
+  ),
+  JSON_FENCE_RE = /^```json[ \t]*\r?\n([\s\S]*?)^```[ \t]*$/gim;
+//@ chunk-hantmvxa.js:52000-52144 placement
+function formatReviewOutput(e) {
+  let n = getPrintOutputFormat();
+  if (n === "text" || n === "json") return e;
+  return (
+    (e.trimStart().startsWith("[") ? formatReviewFindings(e) : void 0) ??
+    e.replace(JSON_FENCE_RE, (r, h) => formatReviewFindings(h) ?? r)
+  );
+}
+//@ chunk-hantmvxa.js:52144-52613 placement
+function formatReviewFindings(e) {
+  let safeParse = ReviewFindingsSchema().safeParse(safeParseJSON(e.trim(), !1));
+  if (!safeParse.success) return;
+  let s = safeParse.data;
+  if (s.length === 0) return "No findings.";
+  let mapped = s.map((y, w) => {
+      let b = y.line ? `${y.file}:${y.line}` : y.file,
+        k = y.failure_scenario
+          ? `
+
+Failure scenario: ${y.failure_scenario}`
+          : "",
+        C = `${w + 1}. `;
+      return escapeControlChars(`${C}\`${b}\`: ${y.summary}${k}`).replace(
+        /\n(?=[^\n])/g,
+        `
+${" ".repeat(C.length)}`,
+      );
+    }),
+    h = s.length > 1 ? ", most severe first" : "";
+  return `${s.length} ${plural(s.length, "finding")}${h}:
+
+${mapped.join(`
+
+`)}`;
+}
+//@ chunk-hantmvxa.js:52613-57940 placement
+var REVIEW_ANGLE_LINE_SCAN = `### Angle A \u2014 line-by-line diff scan
+
+Read every hunk in the diff, line by line. Then Read the enclosing function for
+each hunk \u2014 bugs in unchanged lines of a touched function are in scope (the PR
+re-exposes or fails to fix them). For every line ask: what input, state, timing,
+or platform makes this line wrong? Look for inverted/wrong conditions,
+off-by-one, null/undefined deref, missing \`await\`, falsy-zero checks,
+wrong-variable copy-paste, error swallowed in catch, unescaped regex metachars.
+`,
+  fs = `### Angle B \u2014 removed-behavior auditor
+
+For every line the diff DELETES or replaces, name the invariant or behavior it
+enforced, then search the new code for where that invariant is re-established.
+If you can't find it, that's a candidate: a removed guard, a dropped error
+path, a narrowed validation, a deleted test that was covering a real case.
+`,
+  ys = `### Angle C \u2014 cross-file tracer
+
+For each function the diff changes, find its callers (Grep for the symbol) and
+check whether the change breaks any call site: a new precondition, a changed
+return shape, a new exception, a timing/ordering dependency. Also check callees:
+does a parallel change in the same PR make a call unsafe?
+`,
+  ws = `### Angle D \u2014 language-pitfall specialist
+
+Scan for the classic pitfalls of the diff's language/framework \u2014 for example:
+JS falsy-zero, \`==\` coercion, closure-captured loop var; Python mutable default
+args, late-binding closures; Go nil-map write, range-var capture; SQL injection;
+timezone/DST drift; float equality. Flag any instance the diff introduces.
+`,
+  vs = `### Angle E \u2014 wrapper/proxy correctness
+
+When the PR adds or modifies a type that wraps another (cache, proxy, decorator,
+adapter): check that every method routes to the wrapped instance and not back
+through a registry/session/global \u2014 e.g. a caching provider holding a
+\`delegate\` field that resolves IDs via \`session.get(...)\` instead of
+\`delegate.get(...)\` will re-enter the cache or recurse. Also check that the
+wrapper forwards all the methods the callers actually use.
+`,
+  Ke = `If the ${AGENT} tool is not available in your current tool set, do not error \u2014 perform each angle (and each verification) yourself, sequentially, in this context.`,
+  Ht = `${REVIEW_ANGLE_LINE_SCAN}
+${fs}
+${ys}`,
+  ks = `${Ht}
+${ws}
+${vs}`,
+  Gt = `### Reuse
+
+The angles above hunt for bugs; this one and the next two hunt for cleanup in
+the changed code. ${me}`,
+  le =
+    "Cleanup, altitude, and conventions candidates use the same\n`file`/`line`/`summary` shape; in `failure_scenario`, state the concrete\ncost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule\nis broken) instead of a crash. Correctness bugs always outrank cleanup,\naltitude, and conventions findings when the output cap forces a cut.\n",
+  Cs = `- **CONFIRMED** \u2014 can name the inputs/state that trigger it and the wrong
+  output or crash. Quote the line.
+- **PLAUSIBLE** \u2014 mechanism is real, trigger is uncertain (timing, env,
+  config). State what would confirm it.
+- **REFUTED** \u2014 factually wrong (code doesn't say that) or guarded elsewhere.
+  Quote the line that proves it.`,
+  _s = `**PLAUSIBLE by default** \u2014 do not refute a candidate for being "speculative" or
+"depends on runtime state" when the state is realistic: concurrency races,
+nil/undefined on a rare-but-reachable path (error handler, cold cache, missing
+optional field), falsy-zero treated as missing, off-by-one on a boundary the
+code does not exclude, retry storms / partial failures, regex/allowlist that
+lost an anchor. These are PLAUSIBLE.
+
+**REFUTED** only when constructible from the code: factually wrong (quote the
+actual line); provably impossible (type/constant/invariant \u2014 show it); already
+handled in this diff (cite the guard); or pure style with no observable effect.`,
+  Wt = `## Phase 2 \u2014 Verify (1-vote, 3-state)
+
+Dedup candidates that point at the same line/mechanism, keeping the one with
+the most concrete failure scenario. For each remaining candidate, run **one
+verifier** via the ${AGENT} tool: give it the diff, the relevant
+file(s), and the candidate, and have it return exactly one of:
+
+${Cs}
+
+Keep candidates where the vote is CONFIRMED or PLAUSIBLE.
+`,
+  Es = `## Phase 2 \u2014 Verify (1-vote, recall-biased)
+
+Dedup near-duplicates (same defect, same location, same reason \u2192 keep one). For
+each remaining candidate, run **one verifier** via the ${AGENT} tool:
+give it the diff, the relevant file(s), and the candidate; it returns exactly
+one of **CONFIRMED / PLAUSIBLE / REFUTED**.
+
+${_s}
+
+Keep **CONFIRMED and PLAUSIBLE**. Drop REFUTED.
+`,
+  qt = `moved/extracted code that dropped a guard
+or anchor; second-tier footguns (dataclass default evaluated once, \`hash()\`
+non-determinism, lock-scope shrink, predicate methods with side effects);
+setup/teardown asymmetry in tests; config defaults flipped.`,
+  Ss = `## Phase 3 \u2014 Sweep for gaps
+
+Run **one more finder** as a fresh reviewer who has the verified list. Re-read
+the diff and enclosing functions looking ONLY for defects not already listed.
+Do not re-derive or re-confirm anything already there \u2014 the job is gaps. Focus
+on what the first pass tends to miss: ${qt}
+
+Surface **up to 8 additional candidates**, each naming a defect not already on
+the list. If nothing new, return an empty sweep \u2014 do not pad.
+`;
+
+export {
+  Ht,
+  Gt,
+  Z,
+  oe,
+  ne,
+  ce,
+  REVIEW_PHASE0_GATHER_DIFF,
+  le,
+  Ke,
+  Wt,
+  Es,
+  ks,
+  qt,
+  Ss,
+  extractFlags,
+  canSpawnReviewAgents,
+  formatReviewOutput,
+  me,
+};

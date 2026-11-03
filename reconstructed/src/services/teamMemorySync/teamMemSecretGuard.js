@@ -1,0 +1,28 @@
+/**
+ * services/teamMemorySync/teamMemSecretGuard.ts
+ *
+ * 写共享记忆前的密钥检查，命中即拒绝写入。
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * 2.1.88 counterpart: references/claude-code-analysis/src/services/teamMemorySync/teamMemSecretGuard.ts
+ * pieces: chunk-a477qqne.js (1)
+ * attribution: fingerprint 1
+ */
+import { k7n } from "../memoryStore/memoryKeys.js";
+import { uniq } from "../../utils/collections.js";
+
+/**
+ * 写团队/共享记忆前检查密钥，命中则拒绝（reason=secret），提示记忆存储不是放凭证的地方。
+ */
+//@ chunk-a477qqne.js:26963-27326 fingerprint = checkTeamMemSecrets (0.518)
+function checkTeamMemSecrets(e) {
+  let matches = k7n(e);
+  if (matches.length === 0) return null;
+  return {
+    outcome: "refused",
+    reason: "secret",
+    message: `Content contains potential secrets (${uniq(matches.map((s) => s.label)).join(", ")}) and cannot be written to memory. Memory stores are never a place for credentials, and project stores are shared with every collaborator. Remove the sensitive content and try again.`,
+  };
+}
+
+export { checkTeamMemSecrets };

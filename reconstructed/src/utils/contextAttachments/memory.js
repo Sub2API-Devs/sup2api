@@ -1,0 +1,54 @@
+/**
+ * utils/contextAttachments/memory.ts
+ *
+ * 2.1.316 新增：记忆上下文附件
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * new in 2.1.316 (2.1.88 has no file at this path)
+ * pieces: chunk-e6aww6q8.js (2)
+ * attribution: placement 2
+ */
+import { DoctorLazy } from "../../cli/handlers/util.js";
+import { u, o, Ue, U, T, M, A } from "../../../vendor/zod/v4/classic/schemas.js";
+import { MEMORY_TYPE_VALUES } from "../memory/types.js";
+import { SESSION_CONTEXT_REASONS } from "./sessionContext.js";
+
+/**
+ * 记忆附件 schema：每个文件的路径、类型（AutoMemPinned 归为 AutoMem，未知为 User）、内容、是否未验证；附件含文件列表、移除的路径、是否增量与原因。
+ */
+//@ chunk-e6aww6q8.js:111569-111879 placement
+var memoryFileSchema = DoctorLazy(() =>
+    u({
+      path: o(),
+      type: Ue([U(MEMORY_TYPE_VALUES), T("AutoMemPinned").transform(() => "AutoMem")]).catch("User"),
+      content: o(),
+      unverified: M().optional().catch(!0),
+      startOnly: M()
+        .optional()
+        .catch(void 0),
+    }),
+  ),
+  memoryAttachmentSchema = DoctorLazy(() =>
+    u({
+      files: A(memoryFileSchema()),
+      removed: A(o()).optional(),
+      changed: M().optional(),
+      reason: U(SESSION_CONTEXT_REASONS)
+        .optional()
+        .catch(void 0),
+    }),
+  );
+/**
+ * 把记忆文件转换成附件条目（去掉首尾空白，未验证时附标记）。
+ */
+//@ chunk-e6aww6q8.js:111879-112007 placement
+function toMemoryFileEntries(e) {
+  return e.map(({ path: path, type: r, content: content, unverified: unverified }) => ({
+    path: path,
+    type: r,
+    content: content.trim(),
+    ...(unverified && { unverified: unverified }),
+  }));
+}
+
+export { memoryAttachmentSchema, toMemoryFileEntries };

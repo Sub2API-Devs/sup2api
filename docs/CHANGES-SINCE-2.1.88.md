@@ -366,7 +366,7 @@
 
 ## 4. 引用校验结果
 
-校验时间 2026-11-03 09:19（本机时间，阅读树生成于 09:15），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+校验时间 2026-11-03 02:55（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
 - 共检查 472 处引用：路径 180/182（另 2 个只在 2.1.88 中存在），字面量 138/146（另 8 个只在 2.1.88 中存在），名字 133/143（另 10 个只在 2.1.88 中存在），声明id 1/1；占位符与含空格的说明性文字 34 处未检查。
 - 只在 2.1.88 中存在（删除项或旧名，预期如此）：`CLAUDE_CODE_UNATTENDED_RETRY`、`contextModifier`、`--session-timeout`、`buddy/`、`bridge/replBridge.ts`、`tengu_sm_compact*`、`classify_result`、`CLAUDE_CODE_JSONL_TRANSCRIPT`、`CLAUDE_CODE_DUMP_AUTO_MODE`、`validateIFSInjection`、`validateBraceExpansion`、`assistantAutoBackgrounded`、`bypass_permissions_disabled`、`--computer-use-mcp`、`/think-back`、`/thinkback-play`、`/pr-comments`、`/init-verifiers`、`migrateFennecToOpus`

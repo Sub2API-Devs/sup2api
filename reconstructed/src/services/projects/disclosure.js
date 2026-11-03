@@ -1,0 +1,156 @@
+/**
+ * services/projects/disclosure.ts
+ *
+ * 2.1.316 新增：Projects 信息披露提示
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * new in 2.1.316 (2.1.88 has no file at this path)
+ * pieces: chunk-dz3q485w.js (9)
+ * attribution: placement 9
+ */
+import { factLabel } from "./contextFile.js";
+import { plural } from "../../utils/stringUtils.js";
+import { getOauthConfig } from "../../constants/oauth.js";
+import { HTTPS_CLAUDE_AI } from "../../constants/product.js";
+
+//@ chunk-dz3q485w.js:16805-16887 placement = formatPeakDay (1)
+function formatPeakDay(dateStr) {
+  return dateStr.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+/**
+ * 用一行文字描述目录的仓库情况：非 git、git 但 origin 不是 github.com，或 GitHub 仓库及其默认分支与访问状态（是否可达、是否安装了 Claude GitHub App）。
+ */
+//@ chunk-dz3q485w.js:16887-17641 placement
+function describeRepoFact(repo) {
+  switch (repo.kind) {
+    case "no-git":
+      return "not a git repository";
+    case "no-github-remote":
+      return `git repository on ${factLabel(repo.branch)} \xB7 ${repo.hasOrigin ? "origin is not a github.com repository" : "no origin remote"}`;
+    case "github": {
+      let access = repo.access,
+        s =
+          access?.defaultBranch != null && access.defaultBranch !== repo.branch
+            ? `git repository on ${factLabel(repo.branch)} (default ${factLabel(access.defaultBranch)})`
+            : `git repository on ${factLabel(repo.branch)}`;
+      if (access === null) return `${s} \xB7 github.com/${repo.owner}/${repo.name}`;
+      let r = access.transient
+        ? "couldn\u2019t check your access just now"
+        : !access.accessible
+          ? "your Claude account can\u2019t reach it"
+          : access.appInstalled
+            ? "you have access, Claude GitHub App installed"
+            : "you have access, Claude GitHub App not installed";
+      return `${s} \xB7 github.com/${repo.owner}/${repo.name} (${r})`;
+    }
+  }
+}
+/**
+ * 生成 /send-to-project 披露的事实行：仓库/分支与 GitHub 访问状态、仓库内子目录、读取的本地会话数与日期范围、未提交文件数、未推送提交、找到的文档。
+ */
+//@ chunk-dz3q485w.js:17641-18354 placement
+function disclosureFactsLine(context, sessionsRead) {
+  let facts = [describeRepoFact(context.repo)];
+  if (context.pathInRepo !== null && context.pathInRepo !== "")
+    facts.push(`folder ${factLabel(context.pathInRepo, 200)} inside it`);
+  if (sessionsRead === null);
+  else if (sessionsRead.count === 0) facts.push("no past local sessions read");
+  else {
+    let { count: count, span: span } = sessionsRead,
+      l =
+        span === null
+          ? ""
+          : formatPeakDay(span.oldest) === formatPeakDay(span.newest)
+            ? ` (${formatPeakDay(span.newest)})`
+            : ` (${formatPeakDay(span.oldest)}\u2013${formatPeakDay(span.newest)})`;
+    facts.push(`${count} recent local ${plural(count, "session")} read${l}`);
+  }
+  if (context.repo.kind !== "no-git") {
+    let r = context.uncommittedFileCount + context.untrackedFileCount;
+    if (r > 0) facts.push(`${r} uncommitted ${plural(r, "file")}`);
+    if (context.hasUnpushedCommits) facts.push("unpushed commits");
+  }
+  if (context.docs.length > 0) {
+    let sliced = context.docs.slice(0, 3),
+      a = context.docs.length - sliced.length;
+    facts.push(`${sliced.join(", ")}${a > 0 ? ` +${a} more` : ""} found`);
+  }
+  return facts.join(" \xB7 ");
+}
+//@ chunk-dz3q485w.js:18354-18386 placement
+var YOr = "Nothing else is sent.";
+/**
+ * 生成 /send-to-project 的"不会发送"说明：未提交/未跟踪文件、未推送提交、仓库外文件与凭据，以及线程将从 GitHub 内容还是无代码开始。
+ */
+//@ chunk-dz3q485w.js:18386-18943 placement
+function notSentLine(context, hasRepo) {
+  let items = [];
+  if (context.repo.kind === "no-git") items.push("this folder\u2019s files");
+  else {
+    let { uncommittedFileCount: uncommittedFileCount, untrackedFileCount: untrackedFileCount } = context;
+    if (uncommittedFileCount > 0 || untrackedFileCount > 0) {
+      let c = [];
+      if (uncommittedFileCount > 0) c.push(`${uncommittedFileCount} uncommitted`);
+      if (untrackedFileCount > 0) c.push(`${untrackedFileCount} untracked`);
+      let h = uncommittedFileCount + untrackedFileCount;
+      items.push(`${c.join(" and ")} ${plural(h, "file")}`);
+    }
+    if (context.hasUnpushedCommits) items.push("unpushed commits");
+    items.push("files outside the repository");
+  }
+  items.push("your credentials");
+  let threadsNote = hasRepo
+    ? "Threads start from what\u2019s on GitHub."
+    : "No repository is added, so threads start without this code.";
+  return `Not sent: ${items.join(", ")}. ${threadsNote}`;
+}
+//@ chunk-dz3q485w.js:18943-19026 placement
+function Ve(e) {
+  return getOauthConfig().CLAUDE_AI_ORIGIN + "/code/project/" + encodeURIComponent(e);
+}
+//@ chunk-dz3q485w.js:19026-19061 placement
+var HTTPS_PREVIEW_CLAUDE_AI = "https://preview.claude.ai";
+/**
+ * 解析项目引用：chan_ 开头的 id（可带 /cmsg_ 线程 id），或 claude.ai 的 /code/project/<id> 链接（可带 thread 参数），其他输入返回 null。
+ */
+//@ chunk-dz3q485w.js:19061-19530 placement
+function parseProjectReference(e) {
+  let match = /^(chan_[A-Za-z0-9_-]+)(?:\/(cmsg_[A-Za-z0-9_-]+))?$/.exec(e.trim());
+  if (match !== null) return { projectId: match[1] ?? "", threadId: match[2] ?? null };
+  let s;
+  try {
+    s = new URL(e.trim());
+  } catch {
+    return null;
+  }
+  let match_2 = /^\/code\/project\/(chan_[A-Za-z0-9_-]+)\/?$/.exec(s.pathname),
+    a = s.searchParams.get("thread"),
+    CLAUDE_AI_ORIGIN = getOauthConfig().CLAUDE_AI_ORIGIN;
+  if (
+    (s.origin !== CLAUDE_AI_ORIGIN &&
+      !(CLAUDE_AI_ORIGIN === HTTPS_CLAUDE_AI && s.origin === HTTPS_PREVIEW_CLAUDE_AI)) ||
+    match_2 === null ||
+    (a !== null && !/^cmsg_[A-Za-z0-9_-]+$/.test(a))
+  )
+    return null;
+  return { projectId: match_2[1] ?? "", threadId: a };
+}
+//@ chunk-dz3q485w.js:19691-19887 placement
+var LEADING_PUNCT_RUN_REGEX = /^\s*[^\p{L}\p{N}\s]{5}/u,
+  TRAILING_PUNCT_RUN_REGEX = /[^\p{L}\p{N}\s]{5}\s*$/u,
+  LETTER_REGEX = /\p{L}/u,
+  FENCE_MARKER_WORDS_REGEX =
+    /\b(BEGIN|END)\s+(LOCAL\s+(HISTORY|SETUP\s*PROPOSAL|TOOLS\s*USED)|CLOUD\s+SETUP\s*PROPOSAL|PROJECT\s+INSTRUCTIONS)\b/i;
+
+export {
+  parseProjectReference,
+  YOr,
+  notSentLine,
+  disclosureFactsLine,
+  LETTER_REGEX,
+  LEADING_PUNCT_RUN_REGEX,
+  TRAILING_PUNCT_RUN_REGEX,
+  FENCE_MARKER_WORDS_REGEX,
+  describeRepoFact,
+  Ve,
+};

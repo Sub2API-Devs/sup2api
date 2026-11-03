@@ -1,0 +1,665 @@
+/**
+ * @anthropic-ai/sandbox-runtime/dist/sandbox/sandbox-config.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: @anthropic-ai/sandbox-runtime@0.0.81
+ * pieces: chunk-ymy42xbh.js (3)
+ * attribution: esm-fingerprint 3
+ */
+import { isAbsolute, win32, posix } from "path";
+import {
+  create_2,
+  create_16,
+  create,
+  create_25,
+  create_15,
+  create_26,
+  create_6,
+  create_20,
+  create_3,
+  create_19,
+} from "../../../../zod/lib/index.mjs";
+import { N3r, $3r, isr, asr, y8o, Iie, Awn, Iqt } from "./domain-pattern.js";
+import { f8o } from "./address.js";
+import { arrayToEnum_2 } from "../../../../zod/v3/ZodError.js";
+import { nIn } from "../../../../zod/v3/types.js";
+import { zv } from "../utils/platform.js";
+import { PTt } from "./sandbox-utils.js";
+
+//@ chunk-ymy42xbh.js:427-23820 esm-fingerprint
+var refine = create_2().refine(N3r, { message: $3r }),
+  refine_2 = create_2().refine(isr, { message: asr }),
+  refine_3 = create_2().refine(
+    (e) => {
+      if (!y8o(e)) return !1;
+      let { hostPattern: hostPattern } = Iie(e);
+      return hostPattern === "*" || N3r(hostPattern);
+    },
+    {
+      message:
+        $3r +
+        ' In deniedDomains a bare "*" (deny-all) is also accepted, and an optional ":port" suffix (1-65535) restricts the entry to that port.',
+    },
+  ),
+  refine_4 = create_2().refine((e) => f8o(e) !== void 0, {
+    message:
+      'Invalid IP address or CIDR range. Use an IPv4/IPv6 literal or CIDR, e.g. "10.0.0.0/8", "192.168.1.10", "fc00::/7" (IPv6 unbracketed).',
+  }),
+  min = create_2().min(1, "Path cannot be empty"),
+  h = create_16([min, create({ path: min, literal: create_25(!0) }).strict()], {
+    errorMap: (e, a) =>
+      e.code === arrayToEnum_2.invalid_union
+        ? { message: 'Expected a path, or { "path": "<path>", "literal": true }' }
+        : { message: a.defaultError },
+  }),
+  refine_5 = create_2()
+    .min(1, "Path cannot be empty")
+    .refine((e) => isAbsolute(e), { message: "Binary path must be absolute" }),
+  N = create({
+    socketPath: create_2().min(1).describe("Unix socket path to the MITM proxy"),
+    domains: create_15(refine)
+      .min(1)
+      .describe('Domains to route through the MITM proxy (e.g., ["api.example.com", "*.internal.org"])'),
+  }),
+  D = create({
+    http: create_2().url().optional().describe("Upstream proxy URL for plain HTTP traffic"),
+    https: create_2()
+      .url()
+      .optional()
+      .describe("Upstream proxy URL for HTTPS/CONNECT traffic (falls back to http if unset)"),
+    noProxy: create_2()
+      .optional()
+      .describe(
+        "Comma-separated NO_PROXY list (hostname suffixes and CIDR ranges). Matching destinations connect directly instead of via the parent proxy.",
+      ),
+  }),
+  S = create_26(["deny", "mask"]),
+  regex = create_2().regex(
+    /^[A-Za-z_][A-Za-z0-9_]*$/,
+    "Environment variable name must start with a letter or underscore and contain only letters, digits, and underscores",
+  ),
+  superRefine = create_2().superRefine((e, a) => {
+    let l;
+    try {
+      l = new RegExp(e);
+    } catch (error) {
+      a.addIssue({
+        code: arrayToEnum_2.custom,
+        message: `extract is not a valid regular expression: ${error.message}`,
+      });
+      return;
+    }
+    if (new RegExp(l.source + "|").exec("").length - 1 < 1)
+      a.addIssue({
+        code: arrayToEnum_2.custom,
+        message:
+          "extract must contain at least one capturing group \u2014 group 1 is " +
+          'the credential value to mask (e.g. "token:\\s*(\\S+)").',
+      });
+  }),
+  W = create({
+    path: min.describe(
+      "Path to a credential file or directory. Supports the same path forms as a string in filesystem.denyRead (absolute paths and ~ expansion).",
+    ),
+    mode: S.describe("Access mode for this path"),
+    extract: superRefine
+      .optional()
+      .describe(
+        'Optional regex for structured masking. Applied globally; capture group 1 of each match is masked, the rest of the file is preserved. If the pattern matches nothing, behaviour is governed by onExtractNoMatch (default "warn"). Only meaningful when mode is "mask"; accepted but ignored for "deny".',
+      ),
+    onExtractNoMatch: create_26(["warn", "deny", "error"])
+      .optional()
+      .describe(
+        "What to do when extract matches nothing (or, with decode, no " +
+          'candidate verifies): "warn" (default \u2014 stderr warning, file left ' +
+          'readable), "deny" (degrade to mode "deny" \u2014 file unreadable), or ' +
+          '"error" (throw at wrap time). Only meaningful with mode "mask" and extract or decode set.',
+      ),
+    decode: create_26(["jwt"])
+      .optional()
+      .describe(
+        'Optional encoded-credential format. "jwt": decodes recognized JWTs so masking can target fields inside them (see maskClaims). Candidates are located with a built-in JWT regex (or the explicit extract pattern, if set) and verified to actually be JWTs before masking. Without maskClaims, the whole decoded value is treated as the credential and replaced with a structurally valid fake JWT, so client-side token parsing keeps working. If no candidate verifies, behaviour is governed by onExtractNoMatch (default "warn"). Only meaningful when mode is "mask"; accepted but ignored for "deny".',
+      ),
+    maskClaims: create_15(create_2().min(1))
+      .optional()
+      .describe(
+        'Names of top-level payload claims to mask inside each decoded value, instead of replacing the whole token. Each named claim present with a string value gets its own sentinel; all other claims are preserved so claim-reading clients keep working. Requires decode. If no named claim matches in any verified token, behaviour is governed by onExtractNoMatch (default "warn"). Only meaningful when mode is "mask"; accepted but ignored for "deny".',
+      ),
+    maskDuplicates: create_6()
+      .optional()
+      .describe(
+        "If true, verbatim occurrences of each captured credential value outside the regex-matched spans are also replaced with the " +
+          "corresponding sentinel \u2014 for a secret repeated where the regex " +
+          `does not reach (e.g. in a comment). Matches raw substrings: short or common credential values may corrupt unrelated content, so this is intended for long, high-entropy secrets. With decode, only values that passed verification are scanned; duplicates reuse the verified value's fake without re-verification. Defaults to false. Only meaningful with mode "mask" and extract or decode set; accepted but ignored otherwise.`,
+      ),
+    injectHosts: create_15(refine)
+      .optional()
+      .describe(
+        "Optional narrowing of where the proxy substitutes this credential. " +
+          "If unset, defaults to network.allowedDomains \u2014 the credential is " +
+          'injected at every reachable host. Only meaningful when mode is "mask"; accepted but ignored for "deny".',
+      ),
+  }),
+  j = create({
+    name: regex.describe("Environment variable name"),
+    mode: S.describe("Access mode for this environment variable"),
+    extract: superRefine
+      .optional()
+      .describe(
+        'Optional regex for structured masking. Applied globally; capture group 1 of each match is masked, the rest of the value is preserved. If the pattern matches nothing, behaviour is governed by onExtractNoMatch (default "warn"). Only meaningful when mode is "mask"; accepted but ignored for "deny".',
+      ),
+    onExtractNoMatch: create_26(["warn", "deny", "error"])
+      .optional()
+      .describe(
+        'What to do when extract matches nothing: "warn" (default \u2014 stderr ' +
+          'warning, variable passes through unmasked), "deny" (variable unset inside the sandbox), or "error" (throw at wrap time). Only meaningful with mode "mask" and extract set.',
+      ),
+    decode: create_26(["jwt"])
+      .optional()
+      .describe(
+        `Optional encoded-credential format. "jwt": the variable's whole value is verified to actually be a JWT and replaced with a structurally valid fake JWT so client-side token parsing keeps working; the proxy swaps the whole fake token on egress. If the value does not verify, the variable is left unmasked with a stderr warning (fail-open). Only meaningful when mode is "mask"; accepted but ignored for "deny".`,
+      ),
+    maskClaims: create_15(create_2().min(1))
+      .optional()
+      .describe(
+        'Names of top-level payload claims to mask inside the decoded value, instead of replacing the whole token. Each named claim present with a string value gets its own sentinel; all other claims are preserved so claim-reading clients keep working. Requires decode. If no named claim matches, the variable is left unmasked with a stderr warning (fail-open). Only meaningful when mode is "mask"; accepted but ignored for "deny".',
+      ),
+    injectHosts: create_15(refine)
+      .optional()
+      .describe(
+        "Optional narrowing of where the proxy substitutes this credential. " +
+          "If unset, defaults to network.allowedDomains \u2014 the credential is " +
+          'injected at every reachable host. Only meaningful when mode is "mask"; accepted but ignored for "deny".',
+      ),
+  }),
+  strict = create({
+    accessKeyIdVar: regex.describe("Name of the masked env var holding the AWS access key id."),
+    secretAccessKeyVar: regex.describe("Name of the masked env var holding the AWS secret access key."),
+    sessionTokenVar: regex
+      .optional()
+      .describe(
+        "Optional name of the masked env var holding the AWS session token (temporary credentials). When set, the proxy sends the real token as x-amz-security-token on re-signed requests and adds it to the signed header set if the client did not.",
+      ),
+  }).strict(),
+  g = create_26(["deny", "passthrough"]),
+  strict_2 = create({
+    streaming: g
+      .optional()
+      .describe(
+        'Policy for aws-chunked streaming uploads (x-amz-content-sha256: STREAMING-*): per-chunk signatures chain off the seed signature, so re-signing would require rewriting the body. Default "deny".',
+      ),
+    presigned: g
+      .optional()
+      .describe(
+        'Policy for presigned URLs (X-Amz-Algorithm/X-Amz-Signature in the query, no Authorization header): the signature lives in the URL itself. Default "deny".',
+      ),
+    sigv4a: g
+      .optional()
+      .describe(
+        'Policy for SigV4A (AWS4-ECDSA-P256-SHA256) asymmetric signatures: there is no shared-key HMAC to recompute. Default "deny".',
+      ),
+  }).strict(),
+  strict_3 = create({
+    files: create_15(W).optional().describe("Credential files or directories to protect"),
+    envVars: create_15(j).optional().describe("Environment variables to protect"),
+    allowPlaintextInject: create_6()
+      .optional()
+      .describe(
+        "Allow sentinel\u2192real substitution on the plain-HTTP proxy path. " +
+          "Defaults to false: without TLS termination the upstream identity is unverified and the credential travels in cleartext. Set only for trusted-network test fixtures.",
+      ),
+    awsPairs: create_15(strict)
+      .optional()
+      .describe(
+        "Explicit groupings of masked env vars into AWS credential pairs for SigV4 re-signing, for non-standard variable names. The conventional AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN trio is paired automatically when masked.",
+      ),
+    sigv4: strict_2
+      .optional()
+      .describe(
+        'Policies for AWS SigV4 request shapes the proxy cannot re-sign (streaming, presigned, sigv4a) when they reference a masked credential pair: "deny" (default) or "passthrough".',
+      ),
+  }).strict(),
+  q = create({
+    allowedDomains: create_15(refine_2).describe(
+      'List of allowed domains (e.g., ["github.com", "*.npmjs.org", "api.example.com:443"]). An optional ":port" suffix restricts the entry to that destination port.',
+    ),
+    deniedDomains: create_15(refine_3).describe(
+      'List of denied domains. Unlike allowedDomains, a bare "*" is accepted here (deny-all). An optional ":port" suffix (e.g., "*:22") restricts the entry to that destination port.',
+    ),
+    deniedDomainReasons: create_20(create_2(), create_2().min(1))
+      .optional()
+      .describe(
+        'Optional model-facing reason keyed by the exact deniedDomains entry it explains (e.g., {"github.com:22": "SSH pushes to GitHub are blocked; use an https remote"}). Reported in the <sandbox_violations> line when that entry denies a connection, and to the sandboxed client as the status phrase of the 403 that answers its CONNECT; entries without one use a generic reason. Keys are matched by exact entry string, so a key with no matching deniedDomains entry never fires.',
+      ),
+    strictAllowlist: create_6()
+      .optional()
+      .describe(
+        "If true, hosts not in allowedDomains are denied without consulting the ask callback, and a per-command allow list (registerCommandNetworkLists) is ignored. Set this when allowedDomains is policy enforcement, not a prompt-suppression hint.",
+      ),
+    deniedResolvedAddresses: create_15(refine_4)
+      .optional()
+      .describe(
+        'IP addresses / CIDR ranges (IPv4 or IPv6, unbracketed) that an allowed HOSTNAME must not resolve to, in addition to the built-in set (see README "Resolved-address check") and any IP literal listed in deniedDomains. A permitted name that resolves only into these is refused instead of dialed. A name may resolve to a denied address only if that IP literal (and port) is itself in allowedDomains. Not evaluated for connections routed through parentProxy (including one taken from HTTP_PROXY/HTTPS_PROXY) or mitmProxy (that hop resolves the name).',
+      ),
+    allowUnixSockets: create_15(create_2())
+      .optional()
+      .describe("macOS only: Unix socket paths to allow. Ignored on Linux (seccomp cannot filter by path)."),
+    allowAllUnixSockets: create_6()
+      .optional()
+      .describe(
+        "If true, allow all Unix sockets (disables blocking on both platforms). On Linux this also unblocks VM sockets (AF_VSOCK).",
+      ),
+    allowLocalBinding: create_6()
+      .optional()
+      .describe(
+        "Whether sandboxed commands may use local ports directly (default: false). macOS: allows binding and accepting on any local port and connecting to localhost on any port. Windows: allows connecting to loopback addresses (127.0.0.0/8, ::1) on any TCP or UDP port; it is part of the machine-wide filter set, so it MUST match how `srt-win install` was run (`--allow-loopback` or not) and a session that " +
+          "differs from the install is refused. Linux: ignored \u2014 the " +
+          "sandbox has its own network namespace, whose loopback is always usable and is not the host one. Every service listening on localhost becomes reachable, including any local proxy or forwarder that would carry traffic off the machine.",
+      ),
+    allowMachLookup: create_15(
+      create_2().refine((e) => !(e.endsWith("*") ? e.slice(0, -1) : e).includes("*"), {
+        message:
+          'Wildcards are only allowed as a single trailing "*" (e.g., "com.example.*" or "*" for all services).',
+      }),
+    )
+      .optional()
+      .describe(
+        'macOS only: Additional XPC/Mach service names to allow looking up. Supports trailing-wildcard prefix matching (e.g., "2BUA8C4S2C.com.1password.*"). Needed for tools like 1Password CLI, Playwright, or the iOS Simulator that communicate via XPC.',
+      ),
+    httpProxyPort: create_3()
+      .int()
+      .min(1)
+      .max(65535)
+      .optional()
+      .describe(
+        "Port of an external HTTP proxy to use instead of starting a local one. When provided, the library will skip starting its own HTTP proxy and use this port. The external proxy must handle domain filtering.",
+      ),
+    socksProxyPort: create_3()
+      .int()
+      .min(1)
+      .max(65535)
+      .optional()
+      .describe(
+        "Port of an external SOCKS proxy to use instead of starting a local one. When provided, the library will skip starting its own SOCKS proxy and use this port. The external proxy must handle domain filtering.",
+      ),
+    mitmProxy: N.optional().describe(
+      "Optional MITM proxy configuration. Routes matching domains through an upstream proxy via Unix socket while SRT still handles allow/deny filtering.",
+    ),
+    filterRequest: nIn((e) => typeof e === "function", { message: "filterRequest must be a function" })
+      .optional()
+      .describe(
+        "Per-request filter callback. Receives the parsed HTTP request (web-standard Request) and request details, and returns {action, reason?, status?} or, for an allow, header edits (removeHeaders, setHeaders) and an onResponse observer. Denied requests get the status (403 by default) with the reason. If the callback throws, the request is denied. Applies to plain HTTP through the proxy and, when tlsTerminate is configured, to terminated HTTPS. SRT does not provide a policy language; library consumers own matching. This and the five options after it are read when the proxy starts; updateConfig does not change them.",
+      ),
+    allowPlaintextHeaderSet: create_6()
+      .optional()
+      .describe(
+        "Let a filterRequest allow set headers on plain-HTTP requests. Off by default: a header set there travels in cleartext, so while it is off an allow that carries setHeaders is refused with 403 for every request the proxy receives in cleartext, an absolute https:// URI included. An allow without setHeaders is unaffected and removals always apply.",
+      ),
+    stripResponseHeaders: create_15(create_2().min(1))
+      .optional()
+      .describe(
+        'Response headers never passed back to the sandboxed client, matched case-insensitively with "-", "_" and "." folded (e.g. ["set-cookie"]).',
+      ),
+    refuseOpaqueTunnels: create_6()
+      .optional()
+      .describe(
+        "Refuse every tunnel filterRequest cannot see into: an HTTP CONNECT that would not be TLS-terminated or carries no TLS, and every SOCKS CONNECT (refused at the handshake). Requires tlsTerminate to serve HTTPS at all, and stops CONNECT-carried SSH such as GIT_SSH_COMMAND through the proxy. Refusals are recorded as violations.",
+      ),
+    requireHostMatch: create_6()
+      .optional()
+      .describe(
+        "Answer 421 to a request whose Host header, TLS server name or absolute-form authority does not name the host and port it is sent to, before filterRequest is asked. Refusals are recorded as violations.",
+      ),
+    ambiguousRequestTarget: create_26(["refuse", "asSpelled", "normalize"])
+      .optional()
+      .describe(
+        'While filterRequest is set: what becomes of a request whose target names another path once normalized than as the client spelled it (a dot segment, "%2e" included, leading slashes or "\\"), so that the upstream may act on another resource than the callback judged. "refuse" (default): 400 before filterRequest is asked, recorded as a violation. "asSpelled": forwarded as spelled; the callback has to hold for every reading of it, and gets requestTarget, normalizedRequestTarget and requestTargetIsAmbiguous. "normalize": forwarded normalized, which breaks a signature over the path and names another resource to an upstream that takes the path literally.',
+      ),
+    tlsTerminate: create({
+      caCertPath: create_2()
+        .min(1)
+        .optional()
+        .describe(
+          "Path to a PEM-encoded CA certificate. The sandboxed child is configured to trust this CA, and the TLS-terminating proxy uses it to sign per-host certificates. If omitted, on Windows SRT generates-if-absent a persistent CA under %ProgramData%\\sandbox-runtime\\ca\\ and trusts it in the sandbox user's Root store; on other platforms SRT generates an ephemeral CA into a temp directory for the lifetime of the session.",
+        ),
+      caKeyPath: create_2().min(1).optional().describe("Path to the PEM-encoded private key for caCertPath."),
+      excludeDomains: create_15(refine)
+        .optional()
+        .describe(
+          "Domain patterns (same syntax as allowedDomains) whose HTTPS connections are NOT terminated. Matching CONNECTs are opaque byte tunnels: still subject to the allow/deny domain lists, but the sandboxed client completes its own TLS handshake with the upstream, so filterRequest and credential injection do not apply to their HTTPS traffic (plain-HTTP requests to the same hosts keep the normal request pipeline). Use for hosts the proxy must not re-originate: mTLS upstreams (only the client holds the client certificate) and clients that pin the upstream certificate and would reject the MITM CA. Hosts still need to be reachable via allowedDomains; this list only changes how they are tunnelled.",
+        ),
+      extraCaCertPaths: create_15(create_2().min(1))
+        .optional()
+        .describe(
+          "Paths to PEM CA certificate files appended to the trust bundle the sandboxed child is pointed at, after the MITM CA and the host's regular roots. Use for site-local roots (e.g. an internal mTLS CA) presented by excluded/passthrough hosts, so the child can verify them itself. Only the CERTIFICATE blocks of each file are copied; files that are missing, unreadable, or contain no PEM CERTIFICATE block are skipped (with a debug log), so paths that exist on only some hosts are safe to list.",
+        ),
+      maxTunnels: create_3()
+        .int()
+        .min(1)
+        .max(65536)
+        .optional()
+        .describe(
+          'At most this many CONNECT tunnels are TLS-terminated at once (default 256); past it a CONNECT is answered 503 with "X-Proxy-Error: too-many-tunnels", and the refusal is recorded as a violation, once per command until half the slots are free again. A tunnel holds its slot from its CONNECT until it closes, so idle keep-alive tunnels count until they are closed (6 s after a response); one that turns out not to carry TLS frees it. The slot is taken before the first bytes are seen, so at the cap a non-TLS CONNECT (SSH, say) to a host that would be terminated is refused too. Hosts in excludeDomains do not count. Read at each CONNECT, so updateConfig changes it for the tunnels that follow.',
+        ),
+      handshakeTimeoutMs: create_3()
+        .int()
+        .min(100)
+        .max(600000)
+        .optional()
+        .describe(
+          "A tunnel to be TLS-terminated must finish its TLS handshake within this many milliseconds of its CONNECT (default 10000), or it is closed and its slot freed. A tunnel past its handshake is never timed out by it. Read at each CONNECT, so updateConfig changes it for the tunnels that follow.",
+        ),
+    })
+      .refine((e) => !e.caCertPath === !e.caKeyPath, {
+        message: "caCertPath and caKeyPath must be provided together",
+      })
+      .optional()
+      .describe(
+        "[EXPERIMENTAL] Enable in-process TLS termination so HTTPS request/response bodies are visible to SRT. Provide a CA cert+key, or omit both to have SRT generate an ephemeral one. Needs Node, or Bun 1.4 or later: SandboxManager.initialize throws on an older runtime.",
+      ),
+    parentProxy: D.optional().describe(
+      "Upstream HTTP proxy for outbound connections. When set, SRT's proxy tunnels non-mitmProxy traffic through this parent instead of connecting directly. Falls back to HTTP_PROXY/HTTPS_PROXY/NO_PROXY env vars if unset.",
+    ),
+  }),
+  V = create({
+    disabled: create_6()
+      .optional()
+      .describe(
+        "Disable all filesystem policy enforcement. When true, no read or write rules are emitted: denyRead/allowRead/allowWrite/denyWrite are ignored, and the built-in mandatory write protections (.git/hooks, .git/config, shell rc files, .mcp.json, .vscode/.idea, .claude/commands, .claude/agents) are NOT applied. Use only when the sandboxed process is trusted with full host filesystem access. Network and credential-env restrictions still apply. On Linux, /dev is still replaced by the bwrap minimal devtmpfs.",
+      ),
+    denyRead: create_15(h).describe("Paths denied for reading"),
+    allowRead: create_15(h)
+      .optional()
+      .describe(
+        "Paths to re-allow reading within denied regions (takes precedence over denyRead). Use with denyRead to deny a broad region then allow back specific subdirectories.",
+      ),
+    allowWrite: create_15(h).describe("Paths allowed for writing"),
+    denyWrite: create_15(h).describe("Paths denied for writing (takes precedence over allowWrite)"),
+    allowGitConfig: create_6()
+      .optional()
+      .describe(
+        "Allow writes to .git/config files (default: false). Enables git remote URL updates while keeping .git/hooks protected.",
+      ),
+  }),
+  describe = create_20(create_2(), create_15(create_2())).describe(
+    'Map of command patterns to filesystem paths to ignore violations for. Use "*" to match all commands',
+  ),
+  U = create({
+    command: create_2().describe("The ripgrep command to execute"),
+    args: create_15(create_2()).optional().describe("Additional arguments to pass before ripgrep args"),
+    argv0: create_2()
+      .optional()
+      .describe("Override argv[0] when spawning (for multicall binaries that dispatch on argv[0])"),
+  }),
+  G = create({
+    safeDirectories: create_15(create_2())
+      .default([])
+      .describe(
+        "Directories git should treat as safe (`safe.directory`) even though they're owned by a different user inside the sandbox. Use for the repo top-level when launching from a subdirectory. Does NOT grant write.",
+      ),
+  }),
+  Z = create({
+    path: create_2()
+      .min(1)
+      .describe(
+        "Path to the srt-win binary. Pass the exported VENDORED_SRT_WIN_EXE constant to use the packaged vendor/srt-win/<arch>/srt-win.exe (see its WARNING: in a dev checkout that file may sit inside your sandbox write grant). The binary is spawned with the `--srt-win` argv[1] sentinel so a multicall dispatcher can route to srt-win's CLI.",
+      ),
+  }),
+  K = create({
+    sandboxUser: create_2()
+      .min(1)
+      .max(20, "Windows local usernames are limited to 20 characters")
+      .optional()
+      .describe(
+        "Name for the dedicated sandbox user account that `srt-win install` creates and the sandboxed child runs as. Default: `srt-sandbox`. Install refuses if an account by this name already exists and srt-win did not create it (it will not rotate the password of an account it does not own). Must match what `srt-win install --sandbox-user` was run with.",
+      ),
+    sublayerGuid: create_2()
+      .uuid()
+      .optional()
+      .describe(
+        "WFP sublayer GUID under which the filters were installed. Omit to use the srt-win compile-time default. Set this when filters were installed by enterprise tooling under a custom sublayer.",
+      ),
+    wfpSublayerGuid: create_2().uuid().optional().describe("Deprecated alias for sublayerGuid."),
+    proxyPortRange: create_19([create_3().int().min(1), create_3().int().max(65535)])
+      .refine(([e, a]) => e <= a && a - e <= 64, {
+        message: "low must be \u2264 high and range width \u2264 64",
+      })
+      .optional()
+      .describe(
+        "Inclusive [low, high] port range the JS mux proxy listeners bind inside. MUST match the range passed to `srt-win install " +
+          "--proxy-port-range` (default 60080\u201360089) \u2014 the WFP loopback " +
+          "permit only covers ports in that range.",
+      ),
+    srtWin: Z.optional().describe(
+      "How to locate/invoke the srt-win helper binary. `srtWin.path` is " +
+        "required to use the Windows sandbox \u2014 your own (multicall) binary, " +
+        "or the exported VENDORED_SRT_WIN_EXE constant for the packaged exe.",
+    ),
+  }),
+  z = create({
+    applyPath: create_2().optional().describe("Path to the apply-seccomp binary"),
+    argv0: create_2()
+      .optional()
+      .describe(
+        "Invoke apply-seccomp as a multicall binary that dispatches on the ARGV0 environment variable. When set, applyPath is used verbatim (no existence check) and the invocation inside bwrap is prefixed with ARGV0=<this value>. The caller is responsible for ensuring applyPath resolves inside the bwrap namespace and that the target binary implements the apply-seccomp interface when ARGV0 matches.",
+      ),
+  });
+//@ chunk-ymy42xbh.js:23820-24244 esm-fingerprint
+function b(e, a, l) {
+  let o = zv() === "windows",
+    r = o ? /[\\/]+$/ : /\/+$/;
+  if (!r.test(e)) return;
+  if (!PTt(e)) return;
+  if (!(o ? win32.isAbsolute(e) : posix.isAbsolute(e)) && !e.startsWith("~")) return;
+  l.addIssue({
+    code: arrayToEnum_2.custom,
+    path: a,
+    message: `Deny glob "${e}" ends in a separator, so as a pattern it can match no path. Write "${e.replace(r, "")}", which is also read as the path of that name where it exists, or add a "**" segment to match at any depth.`,
+  });
+}
+//@ chunk-ymy42xbh.js:24244-32390 esm-fingerprint
+var superRefine_2 = create({
+  network: q.describe("Network restrictions configuration"),
+  filesystem: V.describe("Filesystem restrictions configuration"),
+  credentials: strict_3
+    .optional()
+    .describe(
+      "Credential handling configuration. Only the explicitly declared files and environment variables are restricted.",
+    ),
+  ignoreViolations: describe.optional().describe("Optional configuration for ignoring specific violations"),
+  enableWeakerNestedSandbox: create_6()
+    .optional()
+    .describe("Enable weaker nested sandbox mode (for Docker environments)"),
+  allowNestedUserNamespaces: create_6()
+    .optional()
+    .describe(
+      "Let the sandboxed command create user namespaces of its own (Linux only), as a browser sandbox, rootless podman or a nested bubblewrap does. This gives up the write denies against a hostile command, which can then take the read-only binds that enforce denyWrite and the mandatory denies out of its own view. Default: false.",
+    ),
+  enableWeakerNetworkIsolation: create_6()
+    .optional()
+    .describe(
+      "Enable weaker network isolation to allow access to com.apple.trustd.agent (macOS only). This is needed for Go programs (gh, gcloud, terraform, kubectl, etc.) to verify TLS certificates when using httpProxyPort with a MITM proxy and custom CA. Enabling this opens a potential data exfiltration vector through the trustd service. Only enable if you need Go TLS verification.",
+    ),
+  allowAppleEvents: create_6()
+    .optional()
+    .describe(
+      "Allow sending Apple Events and Launch Services open requests from the sandbox (macOS only). Needed for open, osascript, and anything that opens URLs or scripts other apps via AppleScript. This removes code-execution isolation: sandboxed commands can launch other applications unsandboxed with no user prompt (launched apps are not subject to the sandbox filesystem or network restrictions), and can script running apps subject to TCC automation consent. Default: false.",
+    ),
+  ripgrep: U.optional().describe('Custom ripgrep configuration (default: { command: "rg" })'),
+  mandatoryDenySearchDepth: create_3()
+    .int()
+    .min(1)
+    .max(10)
+    .optional()
+    .describe(
+      "How deep below the working directory dangerous names are looked for on Linux (default: 3): a dangerous file down to this depth, and a dangerous directory, or the hooks and config of a repository, one level higher up. Higher values provide more protection but slower performance.",
+    ),
+  allowPty: create_6().optional().describe("Allow pseudo-terminal (pty) operations (macOS only)"),
+  seccomp: z.optional().describe("Custom seccomp binary paths (Linux only)."),
+  bwrapPath: refine_5
+    .optional()
+    .describe(
+      'Linux only: absolute path to the bwrap (bubblewrap) binary. When set, this path is used directly instead of resolving "bwrap" via PATH.',
+    ),
+  socatPath: refine_5
+    .optional()
+    .describe(
+      'Linux only: absolute path to the socat binary. When set, this path is used directly instead of resolving "socat" via PATH.',
+    ),
+  javaAgentJarPath: refine_5
+    .optional()
+    .describe(
+      "macOS/Linux: absolute path to srt-proxy-agent.jar, the JVM agent injected via JAVA_TOOL_OPTIONS so Java tools honor the proxy. When set, used instead of looking under vendor/java-proxy-agent/. For consumers that bundle sandbox-runtime and ship the jar separately.",
+    ),
+  windows: K.optional().describe("Windows-specific settings (WFP sublayer, proxy port range)."),
+  git: G.optional().describe(
+    "Git configuration to inject via GIT_CONFIG_* env vars (cross-platform). `safeDirectories` marks paths as `safe.directory` without adding them to `filesystem.allowWrite`.",
+  ),
+}).superRefine((e, a) => {
+  let l = !e.filesystem.disabled;
+  if (l) {
+    for (let [s, t] of e.filesystem.denyRead.entries()) {
+      if (typeof t !== "string") continue;
+      b(t, ["filesystem", "denyRead", s], a);
+    }
+    for (let [s, t] of e.filesystem.denyWrite.entries()) {
+      if (typeof t !== "string") continue;
+      b(t, ["filesystem", "denyWrite", s], a);
+    }
+  }
+  let credentials = e.credentials;
+  if (!credentials) return;
+  let mapped = e.network.allowedDomains.map(Awn),
+    w = (s, t) => {
+      for (let [d, n] of s.entries())
+        if (!Iqt(n, mapped))
+          a.addIssue({
+            code: arrayToEnum_2.custom,
+            path: [...t, d],
+            message:
+              `injectHosts entry "${n}" is not reachable via ` +
+              `network.allowedDomains \u2014 add "${n}" (or a covering wildcard) to allowedDomains, or remove it from injectHosts.`,
+          });
+    },
+    v = !1,
+    k = (s, t) => {
+      if (s.injectHosts) w(s.injectHosts, [...t, "injectHosts"]);
+      if (s.mode !== "mask") return;
+      v = !0;
+      let d = e.network.tlsTerminate?.excludeDomains;
+      if (d?.length) {
+        if (s.injectHosts) {
+          for (let [n, i] of s.injectHosts.entries())
+            if (Iqt(i, d))
+              a.addIssue({
+                code: arrayToEnum_2.custom,
+                path: [...t, "injectHosts", n],
+                message: `injectHosts entry "${i}" is entirely covered by network.tlsTerminate.excludeDomains. Credential injection only runs on TLS-terminated connections, so this host would receive the placeholder instead of the credential. Remove it from one of the two lists.`,
+              });
+        } else if (mapped.length > 0 && mapped.every((n) => Iqt(n, d)))
+          a.addIssue({
+            code: arrayToEnum_2.custom,
+            path: t,
+            message:
+              "This masked credential has no injectHosts, so it defaults " +
+              "to network.allowedDomains \u2014 but " +
+              "network.tlsTerminate.excludeDomains covers every allowed domain, so it could never be injected anywhere. Credential injection only runs on TLS-terminated connections.",
+          });
+      }
+      if (s.injectHosts !== void 0 && s.injectHosts.length === 0)
+        a.addIssue({
+          code: arrayToEnum_2.custom,
+          path: t,
+          message:
+            "injectHosts is explicitly empty \u2014 the credential would be " +
+            "masked but never injected. Omit injectHosts to default to network.allowedDomains, or list the intended hosts.",
+        });
+    };
+  for (let [s, t] of (credentials.envVars ?? []).entries()) {
+    if ((k(t, ["credentials", "envVars", s]), t.maskClaims !== void 0 && t.decode === void 0))
+      a.addIssue({
+        code: arrayToEnum_2.custom,
+        path: ["credentials", "envVars", s, "maskClaims"],
+        message:
+          "maskClaims requires decode \u2014 it names claims inside the " +
+          'decoded payload. Set decode (e.g. "jwt"), or remove maskClaims to mask the whole value.',
+      });
+    if (t.maskClaims !== void 0 && t.maskClaims.length === 0)
+      a.addIssue({
+        code: arrayToEnum_2.custom,
+        path: ["credentials", "envVars", s, "maskClaims"],
+        message:
+          "maskClaims is explicitly empty \u2014 no claim would ever be " +
+          "masked. Omit maskClaims to mask the whole token, or list the claims to protect.",
+      });
+  }
+  for (let [s, t] of (credentials.files ?? []).entries()) {
+    if ((k(t, ["credentials", "files", s]), t.maskClaims !== void 0 && t.decode === void 0))
+      a.addIssue({
+        code: arrayToEnum_2.custom,
+        path: ["credentials", "files", s, "maskClaims"],
+        message:
+          "maskClaims requires decode \u2014 it names claims inside the " +
+          'decoded payload. Set decode (e.g. "jwt"), or remove maskClaims to mask the extracted value whole.',
+      });
+    if (t.maskClaims !== void 0 && t.maskClaims.length === 0)
+      a.addIssue({
+        code: arrayToEnum_2.custom,
+        path: ["credentials", "files", s, "maskClaims"],
+        message:
+          "maskClaims is explicitly empty \u2014 no claim would ever be " +
+          "masked. Omit maskClaims to mask the whole token, or list the claims to protect.",
+      });
+    if (t.mode === "mask" && t.path.endsWith("/"))
+      a.addIssue({
+        code: arrayToEnum_2.custom,
+        path: ["credentials", "files", s, "path"],
+        message: `Credential mode "mask" applies to a single file, not a directory. Use mode "deny" for "${t.path}", or point at the credential file inside it.`,
+      });
+    if (l && t.mode === "deny") b(t.path, ["credentials", "files", s, "path"], a);
+  }
+  let x = new Set();
+  for (let [s, t] of (credentials.awsPairs ?? []).entries()) {
+    let d = [
+      ["accessKeyIdVar", t.accessKeyIdVar],
+      ["secretAccessKeyVar", t.secretAccessKeyVar],
+    ];
+    if (t.sessionTokenVar !== void 0) d.push(["sessionTokenVar", t.sessionTokenVar]);
+    for (let [n, i] of d) {
+      let u = ["credentials", "awsPairs", s, n];
+      if (x.has(i)) {
+        a.addIssue({
+          code: arrayToEnum_2.custom,
+          path: u,
+          message:
+            `"${i}" appears in more than one awsPairs slot (within ` +
+            "or across pairs) \u2014 each variable can fill exactly one slot.",
+        });
+        continue;
+      }
+      x.add(i);
+      let found = (credentials.envVars ?? []).find((C) => C.name === i);
+      if (found === void 0 || found.mode !== "mask")
+        a.addIssue({
+          code: arrayToEnum_2.custom,
+          path: u,
+          message:
+            `"${i}" does not reference a credentials.envVars entry ` +
+            'with mode "mask" \u2014 an AWS pair links already-masked ' +
+            "variables; add the entry (masking is the opt-in for SigV4 re-signing).",
+        });
+      else if (found.extract !== void 0 || found.decode !== void 0)
+        a.addIssue({
+          code: arrayToEnum_2.custom,
+          path: u,
+          message: `"${i}" uses extract/decode, but an AWS pair member must be masked whole-value: the SigV4 trigger is an exact match of the fake access key id, and the signer needs the entire real value.`,
+        });
+    }
+  }
+  if (v && e.network.tlsTerminate === void 0 && !credentials.allowPlaintextInject)
+    a.addIssue({
+      code: arrayToEnum_2.custom,
+      path: ["credentials"],
+      message:
+        "Credential masking requires network.tlsTerminate so substitution runs only over a verified TLS connection. Enable tlsTerminate, or set credentials.allowPlaintextInject to opt out (not recommended).",
+    });
+});

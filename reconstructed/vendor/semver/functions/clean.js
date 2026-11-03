@@ -1,0 +1,21 @@
+/**
+ * semver/functions/clean.js
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * third-party: semver@7.7.3..7.7.4
+ * pieces: chunk-bwbq4xvm.js (1)
+ * attribution: cjs-fingerprint 1
+ */
+import { x } from "../../../runtime/bun-runtime.js";
+import { ze } from "./parse.js";
+
+//@ chunk-bwbq4xvm.js:10407-10538 cjs-fingerprint
+var wi = x(function (Z$, Ti) {
+  var Ev = ze(),
+    Sv = (e, s) => {
+      let n = Ev(e.trim().replace(/^[=v]+/, ""), s);
+      return n ? n.version : null;
+    };
+  Ti.exports = Sv;
+});
+
+export { wi };

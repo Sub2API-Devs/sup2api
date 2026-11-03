@@ -1,0 +1,347 @@
+/**
+ * tools/PublishPluginTool/constants.ts
+ *
+ * 2.1.316 新增：PublishPlugin 工具的常量、冻结的提示文本与参数说明。
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * new in 2.1.316 (2.1.88 has no file at this path)
+ * pieces: chunk-hcckvqyb.js (39)
+ * attribution: placement 39
+ */
+import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
+import { env } from "../../utils/env.js";
+import {
+  policyDenyKind,
+  isPolicyDeniedByRefusedCacheHint,
+  isPolicyAllowedInResponse,
+} from "../../services/policyLimits/policyEvidence.js";
+import { ALLOW_PLUGIN_PUBLISH_KEY } from "../../services/plugins/publish/publishGate.js";
+import { getComplianceTaints } from "../../services/policyLimits/complianceTaints.js";
+import { formatFileSize } from "../../utils/format.js";
+import { isRemoteCowork } from "../../utils/entrypointKinds.js";
+import { printableName } from "../../utils/printableName.js";
+import { getOauthConfig } from "../../constants/oauth.js";
+import { DoctorLazy } from "../../cli/handlers/util.js";
+import { u, o, U, A, E, M, zodStrictObject, T } from "../../../vendor/zod/v4/classic/schemas.js";
+import { AS } from "../../utils/commitAttribution.js";
+
+//@ chunk-hcckvqyb.js:764-799 placement
+var ie = (e, t) => ({ kind: e, details: t });
+//@ chunk-hcckvqyb.js:799-851 placement
+var Qh = (e, t = []) => ({ kind: "refused", refusal: ie(e, t) });
+//@ chunk-hcckvqyb.js:851-1049 placement
+var CLOUD_SESSION_PUBLISH_TEXT =
+  "Publishing from a cloud session isn't offered yet, and the plugin's files are in this cloud session, where the Claude app or a terminal on your computer can't reach them. Nothing was sent.";
+//@ chunk-hcckvqyb.js:1049-1092 placement
+var re = () => !getIsNonInteractiveSession() && !env.DISABLE_LOGIN_COMMAND;
+//@ chunk-hcckvqyb.js:1092-1230 placement
+var isPolicyUnloaded = () => {
+  let e = policyDenyKind(ALLOW_PLUGIN_PUBLISH_KEY);
+  return (
+    (e === "cache_miss" || e === "route_missing") &&
+    !isPolicyDeniedByRefusedCacheHint(ALLOW_PLUGIN_PUBLISH_KEY) &&
+    isPolicyAllowedInResponse(
+      { restrictions: {}, compliance_taints: [] },
+      ALLOW_PLUGIN_PUBLISH_KEY,
+      getComplianceTaints(),
+    )
+  );
+};
+//@ chunk-hcckvqyb.js:1230-1413 placement
+var POLICY_UNLOADED_TEXT =
+  "Claude Code couldn't load your organization's policy, so publishing from here is off for now: try again in a moment, or publish this plugin from claude.ai. Nothing was sent.";
+//@ chunk-hcckvqyb.js:1413-1430 placement
+var kOr = 52428800;
+//@ chunk-hcckvqyb.js:1430-1442 placement
+var oTo = 1e4;
+//@ chunk-hcckvqyb.js:1442-6560 placement
+var freeze = Object.freeze({
+  "flag-off": "Publishing plugins isn't available in this session. Nothing was sent.",
+  "third-party":
+    "Publishing goes through claude.ai, and this session uses another provider. Nothing was sent.",
+  bare: "Publishing is off under --bare. Nothing was sent.",
+  "traffic-off":
+    "Publishing is off while nonessential traffic is disabled (CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC). Nothing was sent.",
+  policy:
+    "Your organization's policy doesn't allow publishing from Claude Code: publish this plugin from claude.ai. Nothing was sent.",
+  "cloud-session":
+    "Publishing from a cloud session isn't offered yet. Publish from the Claude app or from a terminal on your own computer. Nothing was sent.",
+  "signed-out": "Publishing needs a claude.ai sign-in. Sign in with /login, then publish again.",
+  "no-organization":
+    "This session is signed in by the app that started it, which didn't say which organization that is. Publish this plugin from claude.ai, or ask Claude in a terminal session signed in to claude.ai. Nothing was sent.",
+  "nobody-to-ask":
+    "Publishing waits for your answer, and this session has nobody to ask. Ask Claude to publish it in a session of your own. Nothing was sent.",
+  "other-question":
+    "The answer that came back was to another question than the one this session asked, so nothing was sent. Ask Claude to publish again.",
+  "network-path":
+    "That path names a place on the network, which publishing does not open. Nothing was read or sent.",
+  "read-denied":
+    "This session's permissions don't allow reading that folder, or a file in it that would be sent. Nothing was sent.",
+  "write-denied":
+    "This session's permissions don't allow writing the manifest this publish would add to the folder. Nothing was written or sent.",
+  "no-folder": "No folder at that path. Nothing was sent.",
+  "not-a-plugin":
+    "That folder holds no plugin: no manifest, commands, skills, agents or hooks. Nothing was sent.",
+  findings: "The plugin didn't pass validation. Fix these, then publish again. Nothing was sent.",
+  "too-many-files": `The plugin has more than ${oTo} files to send. Name what isn't part of it in .gitignore. Nothing was sent.`,
+  "too-large": `The plugin is larger than ${formatFileSize(kOr)}, the most publishing sends. Nothing was published.`,
+  unreadable: "Part of the folder couldn't be read, so nothing was sent.",
+  changed: "The folder changed while it was being published, so nothing was sent. Publish again.",
+  unwritten: "The manifest couldn't be written to .claude-plugin/plugin.json, so nothing was sent.",
+  stopped: "Publishing was stopped.",
+  failed: "Publishing ran into an error and stopped.",
+  "not-served":
+    "claude.ai doesn't offer publishing from Claude Code for your organization yet. Nothing was sent.",
+  "publishing-off":
+    "Your organization doesn't accept member submissions. The upload is on your own shelf on claude.ai (My Uploads), where only you see it and where you can remove it. An administrator chooses a publishing policy in the organization settings.",
+  "creation-off":
+    "Your organization has plugin creation turned off. An administrator turns it on in the organization settings on claude.ai.",
+  exists: "A plugin of this name is already in your uploads on claude.ai, and it was not replaced.",
+  invalid: "claude.ai didn't take the plugin: it failed validation.",
+  "shelf-full": "Your uploads on claude.ai are full. Remove one there, then publish again.",
+  scan: "The plugin didn't pass the security scan on claude.ai, so it wasn't submitted. It is on your own shelf, where only you see it.",
+  "scan-pending": "The security scan of the plugin is still running. Publish again in a few minutes.",
+  "not-current":
+    "The new version is saved to your uploads on claude.ai, but it isn't the plugin's current version there, so nothing was sent to your organization. Open the plugin on claude.ai, make the new version current, and publish it from there.",
+  "already-pending":
+    "Your earlier submission of this plugin is still waiting for review. To send this version instead, withdraw that submission from the plugin's page on claude.ai, then publish again.",
+  "installs-for-members":
+    "A plugin published under this name may be installed automatically for some or all of your organization's members, so it can only be published from claude.ai. Nothing was sent to your organization. Publish it from your uploads on claude.ai.",
+  "nothing-new": "This version is already in your organization's library.",
+  "in-progress":
+    "An earlier submission of this plugin is being published. Publish again once it is in the library.",
+  "needs-admin": "This update needs an administrator: ask one to publish it from claude.ai.",
+  "needs-org-settings":
+    "This update needs a change to the organization's settings on claude.ai first. Ask an administrator.",
+  "name-conflict":
+    "An item with this name is already in your organization's library. Rename yours and publish again.",
+  "library-full": "Your organization's library is full. An administrator makes room on claude.ai.",
+  legal:
+    "Your organization requires an attestation with each submission. Publish this plugin from claude.ai.",
+  busy: "claude.ai was busy with this plugin or did not answer. Publish again in a moment.",
+  other: "claude.ai didn't take the plugin.",
+});
+//@ chunk-hcckvqyb.js:6560-6755 placement
+var NO_CLAUDE_AI_SIGNIN_TEXT =
+  "Publishing needs a claude.ai sign-in, and this session has none it can publish on. Publish this plugin from claude.ai, or ask Claude to publish it from a session signed in to claude.ai.";
+//@ chunk-hcckvqyb.js:6755-6891 placement
+function publishRefusalText(e) {
+  if (e === "signed-out" && !re()) return NO_CLAUDE_AI_SIGNIN_TEXT;
+  if (e === "policy" && isPolicyUnloaded()) return POLICY_UNLOADED_TEXT;
+  if (e === "cloud-session" && isRemoteCowork()) return CLOUD_SESSION_PUBLISH_TEXT;
+  return freeze[e];
+}
+//@ chunk-hcckvqyb.js:6891-7129 placement
+function sharePublishedLines(e) {
+  return e.kind === "published"
+    ? [
+        "Send colleagues this link to add it: " + printableName(e.link),
+        "In Claude Code, they can also add the organization library under " +
+          "/plugin \u2192 Marketplaces, then run /plugin install " +
+          printableName(e.install),
+      ]
+    : [];
+}
+//@ chunk-hcckvqyb.js:7129-7210 placement
+var sTo = (e) => `${getOauthConfig().CLAUDE_AI_ORIGIN}/customize/plugins/` + encodeURIComponent(e);
+//@ chunk-hcckvqyb.js:7210-7708 placement
+var freeze_2 = Object.freeze({
+  published: "published to your organization's library.",
+  "in-review":
+    "uploaded to your shelf and sent to your organization for an administrator's review. It reaches the library once approved.",
+  publishing: "uploaded to your shelf and approved. It is on its way into your organization's library.",
+  "on-shelf":
+    "uploaded to your own shelf on claude.ai, and not submitted yet: its scan was still running when the wait for it ended. Submit it from claude.ai once the scan has passed.",
+});
+//@ chunk-hcckvqyb.js:7708-7718 placement
+var me = 40;
+//@ chunk-hcckvqyb.js:7718-7813 placement
+var z0s = (e) =>
+  [e.verdict ?? ""].filter(Boolean).map((t) => "Security scan on claude.ai: " + printableName(t, me));
+//@ chunk-hcckvqyb.js:7813-8111 placement
+var publishOutcomeLines = (e) => [
+  freeze_2[e.kind],
+  ...[e].flatMap((t) => ("verdict" in t ? [t] : [])).flatMap(z0s),
+  ...[e]
+    .filter((t) => "isUnscanned" in t && t.isUnscanned)
+    .map(() => "claude.ai didn't run a security scan on this plugin."),
+  ...sharePublishedLines(e),
+  ...[e].flatMap((t) => ("id" in t ? [t.id] : [])).map((t) => `Follow it on claude.ai: ${sTo(t)}`),
+];
+//@ chunk-hcckvqyb.js:8111-8173 placement
+var TOr = (e) => printableName([e.name, e.version].filter(Boolean).join(" "));
+//@ chunk-hcckvqyb.js:8173-8249 placement
+var ce = " (the plugin's own version; the library numbers its copies itself)";
+//@ chunk-hcckvqyb.js:8249-8286 placement
+var ge = (e) => TOr(e) + (e.version ? ce : "");
+/**
+ * 把插件发布结果转为展示行：被拒时给出拒绝原因说明与细节；否则按结果种类给出状态、扫描结论、未扫描提示、分享链接与 claude.ai 跟踪链接，首行前缀插件名。
+ */
+//@ chunk-hcckvqyb.js:8286-8439 placement
+function publishResultLines(e) {
+  return e.kind === "refused"
+    ? [publishRefusalText(e.refusal.kind), ...e.refusal.details.map((detail) => printableName(detail))]
+    : publishOutcomeLines(e).map((s, r) => (r === 0 ? `${ge(e.manifest)}: ` : "") + s);
+}
+//@ chunk-hcckvqyb.js:8439-8477 placement
+var be = (e) => ({ type: "other", reason: e });
+//@ chunk-hcckvqyb.js:8477-8540 placement
+var ye = (e) => ({ behavior: "deny", message: e, decisionReason: be(e) });
+//@ chunk-hcckvqyb.js:8540-8585 placement
+var aTo = (e, t = []) =>
+  ye(
+    publishResultLines(Qh(e, t)).join(`
+`),
+  );
+//@ chunk-hcckvqyb.js:8585-8597 placement
+var j0s = 300;
+//@ chunk-hcckvqyb.js:8597-8609 placement
+var xe = 4000;
+//@ chunk-hcckvqyb.js:8609-8620 placement
+var Ae = 128;
+//@ chunk-hcckvqyb.js:8620-8633 placement
+var rsn = 4096;
+//@ chunk-hcckvqyb.js:8633-8650 placement
+var doe = 2 * rsn + Ae;
+//@ chunk-hcckvqyb.js:8650-8662 placement
+var osn = 500;
+/**
+ * 发布插件审批问题的数据结构：确认所绑定的摘要、组织、插件、目标文件夹、新建/替换、步骤、警告、写入的 manifest、发送的文件清单与大小、留在本机的条目及原因、完整清单文件。
+ */
+//@ chunk-hcckvqyb.js:8662-10431 placement
+var PUBLISH_QUESTION_SCHEMA = DoctorLazy(() =>
+  u({
+    digest: o().regex(AS).describe("What a yes binds to: the publish is of this, or refused."),
+    title: o().max(doe),
+    organization: u({ id: o().max(doe), name: o().max(doe).optional() }),
+    plugin: u({ name: o().max(doe), version: o().max(doe).optional() }),
+    folder: o().max(doe),
+    mode: U(["new", "replace"]).describe("Whether a plugin of this name on the shelf is replaced."),
+    steps: A(o().max(doe)).max(osn).describe("What a yes sets off, a sentence each, in order."),
+    warnings: A(o().max(doe))
+      .max(osn)
+      .describe(
+        "What the person is warned of, a sentence each: a file sent although its name is one a secret hides under, and that other entries stay behind unnamed.",
+      ),
+    writes: u({ path: o().max(doe), text: o().max(xe) })
+      .optional()
+      .describe("The manifest a yes writes into the folder first, if any."),
+    sends: u({ files: E(), bytes: E() }).describe("The whole count and size of what is sent."),
+    files: A(
+      u({
+        path: o().max(doe),
+        bytes: E(),
+        sha256: o().regex(AS),
+        runs: M().describe("Whether it is sent as runnable."),
+      }),
+    )
+      .max(osn)
+      .describe("The files sent, in the order of their paths."),
+    staying: E().describe("How many entries stay on the machine and are counted here."),
+    stays: A(
+      u({
+        path: o().max(doe),
+        why: U(["link", "hard-link", "ignored", "secret", "never", "generated", "special", "backslash"]),
+        words: o().max(doe),
+      }),
+    )
+      .max(osn)
+      .describe("The entries that stay and are named, each with why."),
+    list: u({ sha256: o().regex(AS), path: o().max(doe).optional() }).describe(
+      "The list, a line each, of every file sent and every entry that stays and is named, and a last line saying so where entries stay unnamed: its sha256, and the file that holds it.",
+    ),
+    unnamed: u({ files: E(), stays: E() })
+      .optional()
+      .describe(
+        "Present only when the lists are over the bound: how many files and entries they do not name. The list file names them.",
+      ),
+  }),
+);
+//@ chunk-hcckvqyb.js:10431-10443 placement
+var we = 1024;
+//@ chunk-hcckvqyb.js:10443-10454 placement
+var Re = doe;
+//@ chunk-hcckvqyb.js:10454-10465 placement
+var Se = 100;
+//@ chunk-hcckvqyb.js:10465-10481 placement
+var Oe = 2 * osn + Se;
+/**
+ * PublishPlugin 工具的输入结构：插件目录、发布目标（组织库）、无 manifest 时用的描述、是否替换同名插件，以及由工具自己填写的 shown/question 字段。
+ */
+//@ chunk-hcckvqyb.js:10481-11516 placement
+var PUBLISH_PLUGIN_INPUT_SCHEMA = DoctorLazy(() =>
+  zodStrictObject({
+    path: o()
+      .min(1)
+      .max(we)
+      .describe(
+        "The plugin's folder on this machine: the one that holds .claude-plugin/plugin.json, or a mod's hooks/ where there is no manifest yet.",
+      ),
+    destination: T("organization")
+      .optional()
+      .describe(
+        "Where to publish. The one destination is the library of the organization the session is signed in to.",
+      ),
+    description: o()
+      .max(j0s)
+      .optional()
+      .describe(
+        "What the plugin does, in a sentence: used only for a manifest written for a folder that has none.",
+      ),
+    replace: M()
+      .optional()
+      .describe(
+        "True only when the person said to replace the plugin of the same name that is already in their uploads on claude.ai.",
+      ),
+    shown: A(o().max(Re))
+      .max(Oe)
+      .optional()
+      .describe(
+        "Leave out. The tool fills it for the question the person answers: the organization, the folder, the steps, and the files sent.",
+      ),
+    question: PUBLISH_QUESTION_SCHEMA()
+      .optional()
+      .describe(
+        "Leave out. The tool fills it with the same question as data, for a surface that draws its own: what a yes binds to, every file sent, and the entries that stay and are named.",
+      ),
+  }),
+);
+//@ chunk-hcckvqyb.js:11516-11528 placement
+var ze = 4000;
+//@ chunk-hcckvqyb.js:11528-11619 placement
+var Ce = (e) => ({
+  state: e.kind,
+  refusal: e.kind === "refused" ? e.refusal.kind : void 0,
+  lines: publishResultLines(e),
+});
+/**
+ * PublishPlugin 工具的输出结构：状态（已发布/审核中/发布中/已上架/被拒）、拒绝原因与展示行。
+ */
+//@ chunk-hcckvqyb.js:11619-11744 placement
+var PUBLISH_PLUGIN_OUTPUT_SCHEMA = DoctorLazy(() =>
+  zodStrictObject({
+    state: U(["published", "in-review", "publishing", "on-shelf", "refused"]),
+    refusal: o().optional(),
+    lines: A(o()),
+  }),
+);
+
+export {
+  Qh,
+  oTo,
+  j0s,
+  kOr,
+  sTo,
+  z0s,
+  TOr,
+  PUBLISH_QUESTION_SCHEMA,
+  doe,
+  ze,
+  PUBLISH_PLUGIN_INPUT_SCHEMA,
+  PUBLISH_PLUGIN_OUTPUT_SCHEMA,
+  aTo,
+  Ce,
+  publishResultLines,
+  rsn,
+  osn,
+};

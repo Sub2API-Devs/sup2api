@@ -1,0 +1,246 @@
+/**
+ * skills/bundled/loremIpsum.ts
+ *
+ * lorem-ipsum 测试 skill：按目标 token 数生成填充文本。
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/loremIpsum.ts
+ * pieces: chunk-hantmvxa.js (2), chunk-p583jsvp.js (1)
+ * attribution: fingerprint 1, callgraph-fingerprint 2
+ */
+import { registerBundledSkill } from "../bundledSkills.js";
+import { l, buildArtifactTypeAliasPrompt } from "./artifactTypeAlias.js";
+
+/**
+ * lorem-ipsum skill 用的「一个 token 的英文单词」表，用于生成指定 token 数的填充文本。
+ */
+//@ chunk-hantmvxa.js:181559-182847 fingerprint = ONE_TOKEN_WORDS (1)
+var ONE_TOKEN_WORDS = [
+  "the",
+  "a",
+  "an",
+  "I",
+  "you",
+  "he",
+  "she",
+  "it",
+  "we",
+  "they",
+  "me",
+  "him",
+  "her",
+  "us",
+  "them",
+  "my",
+  "your",
+  "his",
+  "its",
+  "our",
+  "this",
+  "that",
+  "what",
+  "who",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "have",
+  "has",
+  "had",
+  "do",
+  "does",
+  "did",
+  "will",
+  "would",
+  "can",
+  "could",
+  "may",
+  "might",
+  "must",
+  "shall",
+  "should",
+  "make",
+  "made",
+  "get",
+  "got",
+  "go",
+  "went",
+  "come",
+  "came",
+  "see",
+  "saw",
+  "know",
+  "take",
+  "think",
+  "look",
+  "want",
+  "use",
+  "find",
+  "give",
+  "tell",
+  "work",
+  "call",
+  "try",
+  "ask",
+  "need",
+  "feel",
+  "seem",
+  "leave",
+  "put",
+  "time",
+  "year",
+  "day",
+  "way",
+  "man",
+  "thing",
+  "life",
+  "hand",
+  "part",
+  "place",
+  "case",
+  "point",
+  "fact",
+  "good",
+  "new",
+  "first",
+  "last",
+  "long",
+  "great",
+  "little",
+  "own",
+  "other",
+  "old",
+  "right",
+  "big",
+  "high",
+  "small",
+  "large",
+  "next",
+  "early",
+  "young",
+  "few",
+  "public",
+  "bad",
+  "same",
+  "able",
+  "in",
+  "on",
+  "at",
+  "to",
+  "for",
+  "of",
+  "with",
+  "from",
+  "by",
+  "about",
+  "like",
+  "through",
+  "over",
+  "before",
+  "between",
+  "under",
+  "since",
+  "without",
+  "and",
+  "or",
+  "but",
+  "if",
+  "than",
+  "because",
+  "as",
+  "until",
+  "while",
+  "so",
+  "though",
+  "both",
+  "each",
+  "when",
+  "where",
+  "why",
+  "how",
+  "not",
+  "now",
+  "just",
+  "more",
+  "also",
+  "here",
+  "there",
+  "then",
+  "only",
+  "very",
+  "well",
+  "back",
+  "still",
+  "even",
+  "much",
+  "too",
+  "such",
+  "never",
+  "again",
+  "most",
+  "once",
+  "off",
+  "away",
+  "down",
+  "out",
+  "up",
+  "test",
+  "code",
+  "data",
+  "file",
+  "line",
+  "text",
+  "word",
+  "number",
+  "system",
+  "program",
+  "set",
+  "run",
+  "value",
+  "name",
+  "type",
+  "state",
+  "end",
+  "start",
+];
+//@ chunk-hantmvxa.js:182847-183105 callgraph-fingerprint = generateLoremIpsum (1)
+function generateLoremIpsum(targetTokens) {
+  let n = 0,
+    result = "";
+  while (n < targetTokens) {
+    let sentenceLength = 10 + Math.floor(Math.random() * 11),
+      h = 0;
+    for (let y = 0; y < sentenceLength && n < targetTokens; y++) {
+      let word = ONE_TOKEN_WORDS[Math.floor(Math.random() * ONE_TOKEN_WORDS.length)];
+      if (((result += word), n++, h++, y === sentenceLength - 1 || n >= targetTokens)) result += ". ";
+      else result += " ";
+    }
+    if (h > 0 && Math.random() < 0.2 && n < targetTokens)
+      result += `
+
+`;
+  }
+  return result.trim();
+}
+/**
+ * 通用注册器：按传入定义注册一个只能用户调用的内置 skill（例如 lorem-ipsum 测试 skill），isEnabled 由调用方给出。
+ */
+//@ chunk-p583jsvp.js:4803-5032 callgraph-fingerprint = registerLoremIpsumSkill (0.389)
+function registerLoremIpsumSkill(t, r) {
+  registerBundledSkill({
+    name: t.name,
+    description: t.description,
+    argumentHint: t.argumentHint,
+    policyGate: r,
+    isEnabled: () => l(t),
+    userInvocable: !0,
+    disableModelInvocation: !0,
+    async getPromptForCommand(e) {
+      return [{ type: "text", text: buildArtifactTypeAliasPrompt(t, e) }];
+    },
+  });
+}
+
+export { registerLoremIpsumSkill };

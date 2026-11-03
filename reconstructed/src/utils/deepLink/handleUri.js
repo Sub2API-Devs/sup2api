@@ -1,0 +1,25 @@
+/**
+ * utils/deepLink/handleUri.ts
+ *
+ * 2.1.316 新增：校验 --handle-uri 深链调用的参数
+ *
+ * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
+ * new in 2.1.316 (2.1.88 has no file at this path)
+ * pieces: chunk-9vb6sa16.js (1)
+ * attribution: placement 1
+ */
+
+//@ chunk-9vb6sa16.js:191-572 placement
+function validateHandleUriArgs(e) {
+  let index = e.indexOf("--handle-uri");
+  if (index === -1 || !e[index + 1]) return null;
+  if (e.length > index + 2)
+    return (
+      `claude: rejected deep-link invocation \u2014 unexpected arguments after the URI.
+` +
+      "The OS protocol handler passes exactly `--handle-uri <uri>`; extra arguments indicate argument injection via the URL. If invoking --handle-uri manually, place other flags before it."
+    );
+  return null;
+}
+
+export { validateHandleUriArgs };
