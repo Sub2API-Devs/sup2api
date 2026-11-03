@@ -2,7 +2,7 @@
 
 > 领域 `extensions`（154 个重组模块，约 2,750 个声明，1.49 MB），负责人 dom-extensions。
 > 对象：官方 Claude Code **2.1.316**（linux-x64）。一切结论取自 `original/`，2.1.88 对照取自 `references/claude-code-analysis/src`。
-> 阅读源码：`build/readable/src/<重组路径>.js`；单个声明 `node tools/q.mjs show <chunk-xxx.js#压缩名>`。下文"声明 id"一律形如 `chunk-xxx.js#压缩名`；Hooks/Skills 两节里只写 `#压缩名` 而没写 chunk 时指 `chunk-e6aww6q8.js`。
+> 阅读源码：`reconstructed/src/<重组路径>.js`；单个声明 `node tools/q.mjs show <chunk-xxx.js#压缩名>`。下文"声明 id"一律形如 `chunk-xxx.js#压缩名`；Hooks/Skills 两节里只写 `#压缩名` 而没写 chunk 时指 `chunk-e6aww6q8.js`。
 > 函数名是命名表合并后的最终名（门面原名 facade > 语义名 semantic > 旧版名 reference > 自动名）。命名见 `naming/semantic-extensions.jsonl`，声明说明见 `naming/docs-extensions.jsonl`，模块一句话说明见 `naming/modules-extensions.json`。
 
 ## 0. 概述
@@ -48,6 +48,7 @@ REPL ─── useManageMCPConnections
 查询 ─── 提交 → UserPromptSubmit 钩子 → 模型 → PreToolUse 钩子 → 工具（MCP：callMCPTool）
           → PostToolUse 钩子 → … → Stop 钩子；LSP 诊断与 MCP instructions 作为附件进下一轮
 ```
+（注：上图中的 server/discover 是 JSON-RPC 方法名，不是文件路径；引用校验脚本把代码块里带斜杠的词按路径检查，会把它报为一处失效，属误报。）
 
 ## 1. 模块地图
 
@@ -56,13 +57,13 @@ REPL ─── useManageMCPConnections
 | 模块 | 职责 | 关键入口 |
 |---|---|---|
 | services/mcp/config.ts | 配置读取、解析、合并、去重、策略、add/remove、启用禁用 | `getMcpConfigsByScope`、`parseMcpConfig`、`getClaudeCodeMcpConfigs`、`getAllMcpConfigs`、`isMcpServerAllowedByPolicy`、`isMcpServerBlockedAtConnectTime`、`addMcpConfig`、`removeMcpConfig` |
-| services/mcp/client.ts | 连接、协商、工具/提示词/资源、工具调用与结果 | `connectToServer`（v2 在 `_unattributed/chunk-8t8n4kdh/part-007.js`）、`getMcpToolsCommandsAndResources`、`fetchToolsForClient`、`buildMcpTool`、`buildMcpPromptCommands`、`callMCPTool`、`processMCPResult`、`reconnectMcpServerImpl` |
+| services/mcp/client.ts | 连接、协商、工具/提示词/资源、工具调用与结果 | `connectToServer`（v2 为 `chunk-8t8n4kdh.js#Wt`，写作时在 `_unattributed/`，现也在本文件）、`getMcpToolsCommandsAndResources`、`fetchToolsForClient`、`buildMcpTool`、`buildMcpPromptCommands`、`callMCPTool`、`processMCPResult`、`reconnectMcpServerImpl` |
 | services/mcp/auth.ts | OAuth（`ClaudeAuthProvider`）、元数据发现、issuer 回显、主流程、XAA 认证、令牌撤销 | `performMCPOAuthFlow`、`performMCPXaaAuth`、`ClaudeAuthProvider`、`fetchAuthServerMetadata` |
 | services/mcp/xaa.ts / xaaIdpLogin.ts | 企业 IdP 的 Cross-App Access | `performCrossAppAccess`、`acquireIdpIdToken` |
 | services/mcp/oauthPort.ts | 回调端口与 redirect URI | `findAvailablePort`、`buildRedirectUri` |
 | services/mcp/claudeai.ts | claude.ai 组织连接器 | `fetchClaudeAIMcpConfigsIfEligible` |
 | services/mcp/useManageMCPConnections.ts / MCPConnectionManager.tsx | REPL 连接生命周期 | `useManageMCPConnections`、`MCPConnectionManager` |
-| services/mcp/types.ts（+ `_unattributed/chunk-dcmhvw5a/part-012.js`） | 作用域/传输枚举、配置 schema | `ConfigScopeSchema`、`McpServerConfigSchema` 族、`isValidMcpServerConfig` |
+| services/mcp/types.ts（写作时另有一段在 `_unattributed/` 的 `chunk-dcmhvw5a` part-012，现已并入本文件） | 作用域/传输枚举、配置 schema | `ConfigScopeSchema`、`McpServerConfigSchema` 族、`isValidMcpServerConfig` |
 | services/mcp/utils.ts | 过期客户端剔除、作用域标签、.mcp.json 审批状态 | `excludeStalePluginClients`、`getProjectMcpServerStatus`、`resolveProjectMcpServerApproval` |
 | services/mcp/mcpStringUtils.ts / normalization.ts | 名字构造与解析、权限规则匹配 | `buildMcpToolName`、`mcpInfoFromString`、`normalizeNameForMCP`、`getToolNameForPermissionCheck` |
 | services/mcp/elicitationHandler.ts、utils/mcp/* | elicitation 处理与表单校验 | `registerElicitationHandler`、`validateElicitationInputAsync`、`parseNaturalLanguageDateTime` |
@@ -89,7 +90,7 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
 | `utils/plugins/pluginInstallationHelpers.ts` | `installResolvedPlugin` 安装主流程、依赖闭包、回滚 |
 | `services/plugins/pluginCliCommands.ts` | `claude plugin` 子命令实现与错误处理 |
 | `utils/plugins/dependencyResolver.ts` | 依赖解析、semver 约束、`verifyAndDemote` |
-| `utils/plugins/loadPluginCommands/Agents/OutputStyles/Hooks.ts` | 组件注入 |
+| `utils/plugins/loadPluginCommands.ts`、`utils/plugins/loadPluginAgents.ts`、`utils/plugins/loadPluginOutputStyles.ts`、`utils/plugins/loadPluginHooks.ts` | 组件注入 |
 | `utils/plugins/mcpPluginIntegration.ts`、`mcpbHandler.ts`、`utils/dxt/*` | 插件 MCP 服务器与 MCPB 包 |
 | `utils/plugins/lspPluginIntegration.ts` | 插件 LSP 服务器 |
 | `utils/plugins/pluginOptionsStorage.ts` | userConfig 选项存储与变量替换 |
@@ -107,9 +108,9 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
 | 模块 | 职责 | 关键入口 |
 |---|---|---|
 | `schemas/hooks.ts` | 钩子配置 zod schema | `buildHookSchemas`（`chunk-dcmhvw5a.js#D_`）、`HookCommandSchema`/`HookMatcherSchema`/`HooksSchema`（`chunk-dcmhvw5a.js#Zxi` 语句） |
-| `types/hooks.ts`（不在本领域，被大量引用） | 钩子 JSON 输出 schema | `syncHookResponseSchema`（`chunk-s61vbvea.js#qD` 语句，`Qfe` = async ∪ sync） |
+| `types/hooks.ts`（不在本领域，被大量引用） | 钩子 JSON 输出 schema | `syncHookResponseSchema`（`chunk-s61vbvea.js#qD` 语句，`hookJSONOutputSchema`（压缩名 Qfe）= async ∪ sync） |
 | `entrypoints/sdk/coreSchemas.ts`（不在本领域） | `HOOK_EVENTS` 事件名数组 | `chunk-dcmhvw5a.js#yc` |
-| `utils/hooks.ts` | 钩子执行核心（92 个需文档的声明） | `executeHooks`（`#eIr`）、`executeHooksOutsideREPL`（`#cN`）、`getMatchingHooks`（`#LPn`）、`execCommandHook`（`#MU`）、`processHookJSONOutput`（`#roe`）、各事件 `execute*Hooks` |
+| `utils/hooks.ts` | 钩子执行核心（92 个需文档的声明） | `executeHooks_2`（`#eIr`）、`executeHooksOutsideREPL`（`#cN`）、`getMatchingHooks`（`#LPn`）、`execCommandHook`（`#MU`）、`processHookJSONOutput`（`#roe`）、各事件 `execute…Hooks`（如 `executePreToolHooks`、`executeStopHooks`） |
 | `utils/hooks/execPromptHook.ts` | prompt 型钩子 | `execPromptHook`（`#TAn`） |
 | `utils/hooks/execAgentHook.ts` | agent 型钩子 | `execAgentHook`（`#hnt`） |
 | `utils/hooks/execHttpHook.ts` | http 型钩子 | `execHttpHook`（`#PJn`）、`interpolateEnvVars`（`#MMr`） |
@@ -125,7 +126,7 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
 | `utils/hooks/fileChangedWatcher.ts` | CwdChanged/FileChanged 监听 | `onCwdChangedForHooks`（`chunk-e6aww6q8.js#csr`） |
 | `utils/hooks/postSamplingHooks.ts` | 内部采样后钩子 | `executePostSamplingHooks` |
 | `skills/loadSkillsDir.ts` | Skill 发现与加载 | `getSkillDirCommands`（`#VRr`）、`loadSkillsFromSkillsDir`（`#yN`）、`parseSkillFrontmatterFields`（`#_Ce`）、`discoverSkillDirsForPaths`（`#Zzo`）、`activateConditionalSkillsForPaths`（`#evn`） |
-| `_unattributed/chunk-e6aww6q8/part-424.js` | （应归 loadSkillsDir.ts）命令对象构造 | `createSkillCommand`（`#phn`）、`parseSkillFileToCommand`（`#QKr`） |
+| `skills/loadSkillsDir.ts` | 命令对象构造（写作时在 `_unattributed/` 的 `chunk-e6aww6q8` part-424，现已归入 loadSkillsDir.ts） | `createSkillCommand`（`#phn`）、`parseSkillFileToCommand`（`#QKr`） |
 | `skills/bundledSkills.ts` / `skills/bundled/*` | 内置 skill | `registerBundledSkill`（`chunk-yjaa68dq.js#ol`）、`initBundledSkills`（`chunk-hantmvxa.js#ALe`） |
 | `utils/skills/skillChangeDetector.ts` | skill 热重载 | `getWatchablePaths`（`chunk-2njac0sx.js#me`）、`createSkillChangeDetector`（`#Re`，unattributed） |
 | `utils/frontmatterParser.ts` | YAML frontmatter | `parseFrontmatter`（`chunk-82kqcve8.js#sd`） |
@@ -156,16 +157,16 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
 | `utils/deepLink/terminalLauncher.ts` | 终端检测与启动 | `launchInTerminal` (`chunk-bh9w80kx.js#y`) |
 | `utils/deepLink/banner.ts` | 深链接会话横幅 | `buildDeepLinkBanner` (`chunk-47mye09a.js#CRs`) |
 
-`utils/computerUse/{appNames,computerUseLock,gates,mcpServer,wrapper}.ts` 在 316 里几乎全是误归的代码（见第 7 节）。
+2.1.88 的 `utils/computerUse/appNames.ts`、`utils/computerUse/computerUseLock.ts`、`utils/computerUse/gates.ts`、`utils/computerUse/mcpServer.ts`、`utils/computerUse/wrapper.tsx` 在 316 里几乎全是误归的代码（见第 7 节；后续重切已把这些声明移走，阅读树中已无这五个文件）。
 
 ## 2. MCP 客户端
 
 ### 2.0 两代客户端
 
-- `chunk-asne9cp8.js`（未归属，一个很小的分发模块）导出 `mcpClientModule()` 等访问器：`rD()`（`chunk-5br6r47d.js#rD`）决定"MCP SDK 代际"，然后 `require` 对应代际的整套模块：
+- `chunk-asne9cp8.js`（写作时未归属，一个很小的分发模块；现 `services/mcp/runtimeTripwire.ts`）导出 `mcpClientModule()` 等访问器：`mcpSdkGeneration()`（`chunk-5br6r47d.js#rD`）决定"MCP SDK 代际"，然后 `require` 对应代际的整套模块：
   - **v2**：`chunk-8t8n4kdh.js`（客户端）、`chunk-n1aavqzh.js`（auth/xaa）、`chunk-qy28ss7z.js`（XAA IdP 登录）、`chunk-n8fn2df7.js`（elicitation）、`chunk-mzh22y2k.js`（任务监视）…；底层 SDK 是 `chunk-r1g76qsy.js` 的新版 `Client`（`cLo`），支持 `server/discover`、`subscriptions/listen`、协议版本 `2026-07-28`。
   - **v1**：`chunk-z1n5m6nf.js`、`chunk-1kaj6e83.js`、`chunk-8y02x996.js`、`chunk-bma111ke.js`…；底层 SDK 是旧版 `Client`（`chunk-z1n5m6nf.js#Bt`），只有 `initialize` 握手（最高 `2025-11-25`，`chunk-dg4taswx.js#LPe`）。
-- 选择规则（`rD`）：`MCP_SDK_GENERATION=v1|v2` 优先；否则 GrowthBook `tengu_brindle_causeway`（默认 `true` → **v2**）；结果锁存并记 `tengu_mcp_sdk_generation`。加载后用 `MCP_TREE_ID` 自检（不符抛 tripwire）。
+- 选择规则（`mcpSdkGeneration`）：`MCP_SDK_GENERATION`=`v1`/`v2` 优先；否则 GrowthBook `tengu_brindle_causeway`（默认 `true` → **v2**）；结果锁存并记 `tengu_mcp_sdk_generation`。加载后用 `MCP_TREE_ID` 自检（不符抛 tripwire）。
 - 因此 `services/mcp/client.ts`、`auth.ts`、`xaa.ts`、`xaaIdpLogin.ts`、`elicitationHandler.ts` 在阅读树中都有两份几乎相同的代码；文档里"（v1 副本）"指旧代。**线上默认路径是 v2**，下面流程以 v2 为准。
 
 ### 2.1 配置来源与作用域
@@ -184,12 +185,12 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
 | claudeai | claude.ai 组织连接器（`claudeai-proxy` 类型，名字 `claude.ai <显示名>`） | `fetchClaudeAIMcpConfigsIfEligible` |
 | agent | 代理 frontmatter 的 `mcpServers` 内联定义 | `extractAgentMcpServers` |
 
-服务器类型（`McpServerConfigSchema`，`chunk-dcmhvw5a.js#Hne`）：`stdio`（缺省）、`sse`、`sse-ide`、`ws-ide`、`http`（接受 `streamable-http` 并转成 http）、`ws`、`sdk`、`claudeai-proxy`。`sdk/sse-ide/ws-ide` 只能由宿主注册（`isHostOnlyTransport`），`claudeai-proxy` 只能来自 claude.ai 或 dynamic。
+服务器类型（`McpServerConfigSchema`，`chunk-dcmhvw5a.js#qIn` 语句，压缩名 Hne）：`stdio`（缺省）、`sse`、`sse-ide`、`ws-ide`、`http`（接受 `streamable-http` 并转成 http）、`ws`、`sdk`、`claudeai-proxy`。`sdk/sse-ide/ws-ide` 只能由宿主注册（原记名 isHostOnlyTransport；待核实：当前阅读树无此名，对应判定未重新定位），`claudeai-proxy` 只能来自 claude.ai 或 dynamic。
 共有字段：`timeout`、`alwaysLoad`、`role`（"comms"）；stdio 另有 `command/args/env/bareElicitationCapability`；http/sse 另有 `headers/headersHelper/oauth{clientId,callbackPort,authServerMetadataUrl,scopes,xaa}/request_timeout_ms（折成 timeout，上限 300000）/tools[{name,permission_policy}]/discoveryCache/toolPermissions{tool: allow|ask|blocked}`；claudeai-proxy 另有 `id/displayName/iconUrl/stateless/cachedInitResponse/discoverSupport(supported|legacy|unknown)/cachedDiscoverResponse/eligible/ineligibleReason/enterpriseManaged`。
 
 #### 解析（`parseMcpConfig`，`chunk-e6aww6q8.js#rVe`）
 1. 顶层必须是 `{mcpServers}`；写成 `servers` 给专门提示。
-2. 保留名（`isReservedServerName`、`Sge`：Object.prototype 名、`claude-code-remote`、`webagent`、Slack 等内部服务器名）直接跳过。
+2. 保留名（`isBuiltinMcpServerName`，`chunk-aepeg2w5.js#Sge`：Object.prototype 名、`claude-code-remote`、`webagent`、Slack 等内部服务器名）直接跳过。
 3. 未知 type、非 dynamic 的 sdk/claudeai-proxy 报错跳过；有 url 无 type 给"加 type"提示。
 4. 展开 `${VAR}`（`expandServerConfigEnvVars`；企业作用域在受控环境下展开），缺失变量与"url 展开为空"变成警告/`configError`；首尾空白给警告。
 5. 返回 `{config, errors, asWrittenEntries}`，错误带 `mcpErrorMetadata{scope, serverName, severity, skipReason}`。
@@ -210,7 +211,7 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
 - `collectProjectMcpServerNames`（services/mcpServerApproval.tsx）收集名单供启动对话框；316 中这个模块只剩收集逻辑（对话框本身在 UI 领域）。
 
 #### 组织策略
-- `deniedMcpServers` / `allowedMcpServers`（设置项，含管理员层合并；`allowManagedMcpServersOnly` 时只看管理员层，`getMcpAllowlistPolicy`）。条目三种：`{serverName}`、`{serverCommand:[...]}`、`{serverUrl:"https://*.example.com/*"}`。
+- `deniedMcpServers` / `allowedMcpServers`（设置项，含管理员层合并；`allowManagedMcpServersOnly` 时只看管理员层，`getMcpAllowlistPolicy`）。条目三种：`{serverName}`、`{serverCommand:[...]}`、`{serverUrl:"<URL 通配模式，如 https://*.example.com/*>"}`。
 - 316 新增：策略条目里的 `${VAR}` 会展开（`expandPolicyCommandPart`、`expandPolicyUrlPattern`），并检测"不安全展开"（值注入通配、改变 URL 结构、点段）——白名单失败关闭、黑名单不受影响；凭证类变量按空值匹配并告警。
 - 连接时再判一次 `isMcpServerBlockedAtConnectTime`（`chunk-e6aww6q8.js#Pw`）：浏览器扩展开关 `allow_claude_browser_extension`、HIPAA、桌面入口、保留地址、账号记忆路由、claude.ai 代理 admit/hold/refuse、dynamic/agent/claudeai 作用域的策略。
 
@@ -238,7 +239,7 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
    - `getListingDiscoverPrior`：claudeai-proxy（非 stateless）由 `/v1/mcp_servers` 返回的 `discover_support` / `cached_discover_response` 投影（开关 `tengu_mcp_discover_projection_prior` = off/legacy_only/all）；
    - `getRememberedLegacyPrior`：本机持久化的"legacy peer"判定（见下）。
    有先验时 `client.connect(transport, {prior})`；modern 先验连上后再发 `subscriptions/listen`（`tengu_mcp_listen_server_denylist` 可关）。
-5. **线上握手（无先验的 auto）**：SDK `Client.connect` → `_connectNegotiated` → `$c`（`chunk-r1g76qsy.js`）：
+5. **线上握手（无先验的 auto）**：SDK `Client` 的 `connect` → `_connectNegotiated` → `$c`（`chunk-r1g76qsy.js`）：
    - 先发 `{"jsonrpc":"2.0","method":"server/discover","params":{"_meta":{protocolVersion:"2026-07-28", clientInfo, clientCapabilities}}}`；
    - 结果分类（`oh`/`sh`/`zc`）：返回 DiscoverResult 且 `supportedVersions` 含 2026-07-28 → **modern**（不发 initialize，能力取自 discover 结果）；JSON-RPC `-32601`（方法不存在）、`-32001/-32020/-32021`、id 不匹配、格式错误、流结束、HTTP 错误体不是 JSON-RPC → **legacy**；`-32022` 带支持版本 → 纠正后重试一次；stdio 关闭/超时 → legacy（stdio 用一次性"兄弟进程"探测，不污染真实进程）；远程超时/网络错 → 错误。
    - legacy → 立即在同一连接发标准 `initialize`（协议版本取 ≤2025 的最高版）+ `notifications/initialized`；若 initialize 被拒且之前探测超时，再试一次 `server/discover`（`_discoverAfterRejectedInitialize`）。
@@ -247,9 +248,9 @@ MCPTool / ListMcpResourcesTool / ReadMcpResourceTool 的工具壳在 tools 领�
    - 文件 `<CLAUDE 配置目录>/state/mcp-discover-verdicts.json`（v5 存储时为 state 键 `mcp-discover-verdicts`），只读普通文件、≤256 KiB，写入原子、0600（`readDiscoverVerdicts`/`writeDiscoverVerdicts`/`updateDiscoverVerdicts`）；读失败只记日志，等同"没有记录，照常探测"。
    - 键 `getDiscoverVerdictKey`：stdio = `stdio:` + hash(command,args,排序 env,项目根)；CCR toolbox http URL = `ccr:` + hash(server_id, mcp_url)；claudeai-proxy = 连接器 id；其他服务器不记。
    - 值 `{observedAt, modernProtocolVersion}`；有效期远程 1 天、stdio 7 天，且只认记录时的 modern 版本等于当前 `2026-07-28`。开关：`tengu_dreamy_sundae`（总开关）、`tengu_gentle_brooks`（CCR 键）。
-   - 写入时机：线上探测（`discoverSource="wire"`）后协商为 legacy，且 POST `server/discover` 的响应是 -32601（`wrapFetchDetectDiscoverMethodNotFound` 置位）或 stdio 探测超时 → `rememberLegacyPeer`；stdio 迟到地回答了探测 → 不记或撤销（`answeredProbeLate`）。
+   - 写入时机：线上探测（`discoverSource` 为 `"wire"`）后协商为 legacy，且 POST `server/discover` 的响应是 -32601（`wrapFetchDetectDiscoverMethodNotFound` 置位）或 stdio 探测超时 → `rememberLegacyPeer`；stdio 迟到地回答了探测 → 不记或撤销（`answeredProbeLate`）。
    - 删除时机：线上协商为 modern、基于判定的连接被拒、tools/list 超时或被拒 → `forgetDiscoverVerdict`。
-7. **stateless claude.ai 连接器**（`isStatelessClaudeAiProxy`：`stateless=true` 且 `tengu_mcp_stateless_skip_init` 默认开）：`answerHandshakeLocally` 包装 transport.send，本地应答 `server/discover`（legacy → -32601；supported + 开关 all → `cached_discover_response`）与 `initialize`（`cached_init_response`，协议版本须受支持），吞掉 `notifications/initialized`；GET 流本地 405。这时 `discoverSource="stateless_local"`。
+7. **stateless claude.ai 连接器**（`isStatelessClaudeAiProxy`：`stateless=true` 且 `tengu_mcp_stateless_skip_init` 默认开）：`answerHandshakeLocally` 包装 transport.send，本地应答 `server/discover`（legacy → -32601；supported + 开关 all → `cached_discover_response`）与 `initialize`（`cached_init_response`，协议版本须受支持），吞掉 `notifications/initialized`；GET 流本地 405。这时 `discoverSource` 为 `"stateless_local"`。
 8. 成功后：注册 `roots/list`（`getMcpRoots`：项目根、额外目录、可选 staging 根）、初始化期间的 `elicitation/create` 一律 cancel（之后由 `registerElicitationHandler` 接管）、IDE 连接发 `ide_connected`、onerror/onclose 计数与清理、`liveClients` 登记、`roots/list_changed`；记录 `tengu_mcp_server_connection_succeeded`（含 `discoverSource`、`protocolEra`、`negotiatedProtocolVersion`、`probeFellBack`、握手耗时 `discoverRequestMs/initializeRequestMs`、`statelessGated`、`keepAliveDisabled`）。
 9. 失败分类：`handleRemoteConnectAuthError`（配置的 Authorization 头被拒 `AUTH_HEADER_REJECTED`、headersHelper 头被拒、CLI 自有令牌、一方登录 `FIRST_PARTY_AUTH_REJECTED`、否则 OAuth 刷新或 `needs-auth`）、`CLAUDEAI_BEARER_REJECTED`、超时 `CONNECT_TIMEOUT`（`tengu_mcp_connect_timeout_retry`）、HTTP→SSE 回退（`tengu_mcp_legacy_sse_fallback`）；记录 `tengu_mcp_server_connection_failed`。
 
@@ -273,17 +274,17 @@ v1 `connectToServer`（`chunk-z1n5m6nf.js#Xe`）结构相同，但没有协商�
   - `alwaysLoad`：服务器配置 `alwaysLoad` 或工具 `_meta`；
   - `checkPermissions`：默认 `passthrough`，建议写入 `localSettings` 的 allow 规则 `mcp__server__tool`；
   - `userFacingName`：`<server> - <title或name> (MCP)`；`inputJSONSchema` 来自工具 inputSchema（可合并配置的参数描述，规范化组合子 `tengu_mcp_normalize_root_combinators`、丢弃无效 schema `tengu_mcp_drop_invalid_tool_schemas`）。
-- 工具策略：http/sse/sdk 配置的 `tools[].permission_policy`（always_allow/ask/deny）→ `collectServerToolPolicies` → 权限上下文的 `mcpServerPolicy` 规则源（`applyDynamicServerToolPolicies`）；claude.ai 连接器的 `toolPermissions{tool: allow|ask|blocked}` 在 `buildMcpToolsForClient` 中生效。
+- 工具策略：http/sse/sdk 配置的 `tools[]` 各项的 `permission_policy`（always_allow/ask/deny）→ `collectServerToolPolicies` → 权限上下文的 `mcpServerPolicy` 规则源（`applyDynamicServerToolPolicies`）；claude.ai 连接器的 `toolPermissions{tool: allow|ask|blocked}` 在 `buildMcpToolsForClient` 中生效。
 - 提示词：`fetchCommandsForClient` → `buildMcpPromptCommands`：每个 prompt 变成 `type:"prompt"` 命令 `mcp__<server>__<prompt>`（显示 `server:prompt (MCP)`），参数按空格位置传入，检查必填，`getPrompt` 后经 `transformResultContent` 转换。
 - 资源：`fetchResourcesForClient`（resources/list）与 `fetchResourceTemplatesForClient`（resources/templates/list），有资源的服务器会额外带上 ListMcpResources/ReadMcpResource 工具（`uF, fF, H5`）；`completeResourceTemplateArgument` 调用 `completion/complete`。
 - 列表拉取：legacy 用 `listAllPages`（`nextCursor` 翻页，防重复游标与页数上限，记录 `tengu_mcp_list_paginated`）；modern 用 SDK `listTools` 聚合（结果缺 `resultType/ttlMs/cacheScope` 时 `installModernResultBackfill` 补默认值）。list_changed 通知触发刷新（`tengu_mcp_list_changed`）。
-- **延迟加载**：`isDeferredTool`（`chunk-3h9nvmn3.js#T`）对所有 `isMcp` 工具返回 true；`alwaysLoad===true` 的不延迟（`chunk-3h9nvmn3.js#Nqe`）。即默认 MCP 工具只以名字出现，由 ToolSearch 按需加载完整 schema（ToolSearch 模式由 `ENABLE_TOOL_SEARCH` 控制，见 tools 领域）。经 ToolSearch 加载的工具用更长的描述上限。
+- **延迟加载**：`isDeferredTool`（`chunk-3h9nvmn3.js#T`）对所有 `isMcp` 工具返回 true；`alwaysLoad === !0` 的不延迟（`chunk-3h9nvmn3.js#Nqe`）。即默认 MCP 工具只以名字出现，由 ToolSearch 按需加载完整 schema（ToolSearch 模式由 `ENABLE_TOOL_SEARCH` 控制，见 tools 领域）。经 ToolSearch 加载的工具用更长的描述上限。
 - **工具调用**（`callMCPTool`，v1 `chunk-z1n5m6nf.js#xt`）：`tools/call`，总超时 `getMcpToolTimeoutMs`（配置 timeout ≥1000 > `MCP_TOOL_TIMEOUT` > 默认 1e8 ms ≈ 27.8 小时）与空闲超时 `getMcpToolIdleTimeoutMs`（`CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`，默认 stdio 30 分钟、远程 5 分钟，sse-ide/ws-ide/sdk 不设；进度通知会重置）；401/会话过期时刷新凭证或重连后重试一次；insufficient_scope 走 step-up（`runStepUpReauth`，开关 `tengu_mcp_step_up_auth_dialog`）；URL elicitation required 错误由 `callMCPToolWithUrlElicitationRetry` 处理后重试。
 - 结果：`processMCPResult` → `transformMCPResult`（toolResult / structuredContent / contentArray）→ `transformResultContent`（text、image 压缩、audio、resource 文本或 blob 落盘、resource_link）。超过 MCP 输出上限（`getMaxMcpOutputTokens`：`MAX_MCP_OUTPUT_TOKENS` > GrowthBook `tengu_velvet_ibis.mcp_tool` > 25000；判定 `mcpContentNeedsTruncation` 粗估 ≤0.5× 不截、>4× 必截、中间用 API 计数）时：`ENABLE_MCP_LARGE_OUTPUT_FILES` 未关且不含图片 → 全文写入 tool-results 文件，返回 `getLargeOutputInstructions` 说明（按 JSON / 长行 / 多行给 jq、python 切片或 Read offset/limit 读法，建议用子代理完整读取）；否则截断（`truncateMcpContent`，图片按 1600 token 估算并尝试压缩）。二进制内容 `persistBinaryContent` 按 MIME 扩展名落盘。
 
 ### 2.4 OAuth
 
-- 令牌存储：安全存储（钥匙串/凭证文件）`mcpOAuth[getServerKey(name, config)]`，键 = `<name>|sha256({type,url,headers}) 前 16 位`（`chunk-cyj440je.js#zi`）；client secret 在 `mcpOAuthClientConfig[key]`；XAA IdP 令牌在 `mcpXaaIdp[issuerKey]`、IdP client secret 在 `mcpXaaIdpConfig[issuerKey]`。
+- 令牌存储：安全存储（钥匙串/凭证文件）`mcpOAuth[getServerKey(name, config)]`，键 = `<name>|sha256({type,url,headers}) 前 16 位`（`chunk-cyj440je.js#zi`）；client secret 在 `mcpOAuthClientConfig[<key>]`；XAA IdP 令牌在 `mcpXaaIdp[<issuerKey>]`、IdP client secret 在 `mcpXaaIdpConfig[<issuerKey>]`。
 - `ClaudeAuthProvider`（v2 `chunk-n1aavqzh.js#vdn`）：`clientMetadata`（client_name `Claude Code (<server>)`、grant_types authorization_code+refresh_token、token_endpoint_auth_method none、scope 取元数据）；`clientMetadataUrl`（CIMD，默认 `https://claude.ai/oauth/claude-code-client-metadata`，`MCP_OAUTH_CLIENT_METADATA_URL` 可改；redirect 不是本机 /callback 时退回 DCR）；`tokens()`（XAA 静默换令牌、step-up 时不发 refresh token、本会话被拒的令牌不再发）；`refreshAuthorization`（并发刷新协调）；`saveDiscoveryState` 等。
 - 主流程 `performMCPOAuthFlow`：XAA 分支 → 否则选端口（配置 `oauth.callbackPort` > 已注册端口 > `findAvailablePort`：`MCP_OAUTH_CALLBACK_PORT` > 随机（Windows 39152–49151，其他 49152–65535，最多 100 次）> 3118）→ 清旧令牌（保留客户端注册）→ 在 127.0.0.1 起回调服务器（只处理 /callback）→ SDK `auth()` 发现元数据（`fetchAuthServerMetadata`：配置的 `authServerMetadataUrl` 必须 https）、注册、PKCE、打开浏览器 → 回调换令牌；v2 回调校验 `iss`（RFC 9207，`evaluateIssuerEchoPolicy`，`tengu_mcp_issuer_strict_echo` 决定 enforce/observe）。遥测 `tengu_mcp_oauth_flow_start/success/error/failure`、`tengu_mcp_oauth_refresh_*`。
 - needs-auth 缓存：`<配置目录>/mcp-needs-auth-cache.json`（或 v5 存储），条目 `{timestamp, id?, ttlMs?}`；TTL 15 分钟 / 4 小时（claude.ai 代理、插件远程）/ 90 秒（有 refresh token）。命中时直接显示 needs-auth 不连线。
@@ -298,7 +299,7 @@ v1 `connectToServer`（`chunk-z1n5m6nf.js#Xe`）结构相同，但没有协商�
 
 ### 2.6 Channel（服务器主动推送）
 
-- 门控 `gateChannelServer`：服务器声明 `experimental["claude/channel"]`、非 modern 协议、一方 API、`allow_channels` + `tengu_harbor`、组织 `channelsEnabled`、会话 `--channels` 列表；插件条目还须市场一致并在 allowlist（`allowedChannelPlugins` 或 `tengu_harbor_ledger`），开发期用 `--dangerously-load-development-channels`。
+- 门控 `gateChannelServer`：服务器声明 `experimental?.["claude/channel"]`、非 modern 协议、一方 API、`allow_channels` + `tengu_harbor`、组织 `channelsEnabled`、会话 `--channels` 列表；插件条目还须市场一致并在 allowlist（`allowedChannelPlugins` 或 `tengu_harbor_ledger`），开发期用 `--dangerously-load-development-channels`。
 - 消息：`notifications/claude/channel {content, meta}` → `wrapChannelMessage` 生成 `<channel source="…" k="v">…</channel>` 注入对话（`tengu_mcp_channel_message`）。
 - 权限中继（`tengu_harbor_permissions`）：向声明 `claude/channel/permission` 的客户端发送 `notifications/claude/channel/permission_request`（5 字母请求 ID、脱敏截断的输入预览 `truncateForPreview`），服务器回 `notifications/claude/channel/permission {request_id, behavior}`。
 
@@ -315,7 +316,7 @@ v1 `connectToServer`（`chunk-z1n5m6nf.js#Xe`）结构相同，但没有协商�
 
 设置键：`enabledMcpjsonServers`、`disabledMcpjsonServers`、`enableAllProjectMcpServers`、`allowedMcpServers`、`deniedMcpServers`、`allowManagedMcpServersOnly`、`managedMcpServers`、`channelsEnabled`、`allowedChannelPlugins`、`disableClaudeAiConnectors`、`xaaIdp`、`allowAllClaudeAiMcps`；项目配置 `mcpServers`、`enabledMcpServers`、`disabledMcpServers`；全局配置 `mcpServers`、`claudeAiMcpEverConnected`。
 
-GrowthBook：`tengu_brindle_causeway`（v2 SDK）、`tengu_mcp_protocol_negotiation_{http,claudeai,stdio,ccr}`、`tengu_mcp_negotiation_server_denylist`、`tengu_mcp_listen_server_denylist`、`tengu_dreamy_sundae`、`tengu_gentle_brooks`、`tengu_mcp_discover_projection_prior`、`tengu_mcp_stateless_skip_init`、`tengu_serene_teapot`、`tengu_mcp_connect_timeout_retry`、`tengu_mcp_legacy_sse_fallback`、`tengu_mcp_step_up_auth_dialog`、`tengu_mcp_issuer_strict_echo`、`tengu_mcp_normalize_root_combinators`、`tengu_mcp_drop_invalid_tool_schemas`、`tengu_mcp_singleton_unwrap`、`tengu_velvet_ibis`、`tengu_harbor`、`tengu_harbor_ledger`、`tengu_harbor_permissions`、`tengu_quiet_elephant`、`tengu_gleaming_creek`、`tengu_mcp_directory_bff`、`tengu_mcp_directory_visibility`、`tengu_auto_mode_config`。
+GrowthBook：`tengu_brindle_causeway`（v2 SDK）、`tengu_mcp_protocol_negotiation_http`/`tengu_mcp_protocol_negotiation_claudeai`/`tengu_mcp_protocol_negotiation_stdio`/`tengu_mcp_protocol_negotiation_ccr`、`tengu_mcp_negotiation_server_denylist`、`tengu_mcp_listen_server_denylist`、`tengu_dreamy_sundae`、`tengu_gentle_brooks`、`tengu_mcp_discover_projection_prior`、`tengu_mcp_stateless_skip_init`、`tengu_serene_teapot`、`tengu_mcp_connect_timeout_retry`、`tengu_mcp_legacy_sse_fallback`、`tengu_mcp_step_up_auth_dialog`、`tengu_mcp_issuer_strict_echo`、`tengu_mcp_normalize_root_combinators`、`tengu_mcp_drop_invalid_tool_schemas`、`tengu_mcp_singleton_unwrap`、`tengu_velvet_ibis`、`tengu_harbor`、`tengu_harbor_ledger`、`tengu_harbor_permissions`、`tengu_quiet_elephant`、`tengu_gleaming_creek`、`tengu_mcp_directory_bff`、`tengu_mcp_directory_visibility`、`tengu_auto_mode_config`。
 
 主要遥测事件：`tengu_mcp_server_connection_succeeded/failed`、`tengu_mcp_server_needs_auth`、`tengu_mcp_tools_listed`、`tengu_mcp_degraded`、`tengu_mcp_discovery_source`、`tengu_mcp_list_changed`、`tengu_mcp_large_result_handled`、`tengu_mcp_oauth_flow_*`、`tengu_claudeai_mcp_eligibility`、`tengu_mcp_project_servers_approved`、`tengu_mcp_sdk_generation`、`tengu_mcp_instructions_pool_change`。
 
@@ -326,7 +327,7 @@ GrowthBook：`tengu_brindle_causeway`（v2 SDK）、`tengu_mcp_protocol_negotiat
 插件系统负责：市场（marketplace）登记与缓存 → 插件安装到版本化缓存并记在 `installed_plugins.json` → 按 settings 的 `enabledPlugins` 启用 → 启动/刷新时把插件目录里的命令、技能、代理、hooks、输出样式、主题、MCP/LSP 服务器、监视器（monitors）等组件注入运行时。
 
 - 上游调用者：启动流程（`performStartupChecks`、`installPluginsForHeadless`）、`/plugin` 界面（`commands/plugin/*`）、`claude plugin …` CLI（`cli/handlers/plugins.ts` → `services/plugins/pluginCliCommands.ts`）、`/reload-plugins`（`refreshActivePlugins`）、技能/命令加载、MCP 配置合并（`services/mcp/config` 调 `getPluginMcpServers`）、LSP 管理器（`getPluginLspServers`）、Bash 工具 PATH（`getEnabledPluginBinPaths`）。
-- 下游依赖：settings 读写（`getSettingsForSource`、`getEnabledSettingSources_7`）、安全存储（`getSecureStorage`，keychain/credential-manager/凭据文件）、git 执行、HTTP（axios 实例）、zod、存储后端 V5（`isStorageV5Enabled`）。
+- 下游依赖：settings 读写（`getSettingsForSource`、`getEnabledSettingSources`（`chunk-5hsd6qen.js#Po`））、安全存储（`getSecureStorage`，keychain/credential-manager/凭据文件）、git 执行、HTTP（axios 实例）、zod、存储后端 V5（`isStorageV5Enabled`）。
 
 ### 3.2 标识与目录布局
 
@@ -358,7 +359,7 @@ GrowthBook：`tengu_brindle_causeway`（v2 SDK）、`tengu_mcp_protocol_negotiat
 `pluginOperations.ts · installPluginOp(pluginId, scope='user', {shownSourceCommand, replaceInstalledCopy, npmRegistry, gitHubHttpsFallback, …}, storageV5)`
 1. `assertInstallableScope`（user/project/local；managed 不可安装）；策略检查（`describePolicyBlock`：plugin_policy_blocked、marketplace_policy_blocked）。
 2. 取条目：`getPluginById`/`getPluginByIdCacheOnly`（插件目录市场只读缓存）。
-3. `pluginInstallationHelpers.ts · installResolvedPlugin`：`resolveDependencyClosure`（同市场或根市场 `allowCrossMarketplaceDependenciesOn` 白名单内的依赖自动安装，标 `auto:true`；环检测）→ 每个插件 `cacheAndRegisterPlugin`：
+3. `pluginInstallationHelpers.ts · installResolvedPlugin`：`resolveDependencyClosure`（同市场或根市场 `allowCrossMarketplaceDependenciesOn` 白名单内的依赖自动安装，标 `auto: !0`；环检测）→ 每个插件 `cacheAndRegisterPlugin`：
    - `pluginLoader.ts · cachePlugin(source)` 按来源下载到暂存：`installFromGitHub`/`installFromGit`/`gitClone_2`（ref 不能以 - 开头，sha 必须完整，`verifyPinnedSha`）、`installFromGitSubdir`（`--filter=tree:0` + sparse-checkout，需 git ≥ 2.25）、npm（`fetchNpmPackageNoScripts`，不跑 install 脚本）、`installFromArchive`（https + 非回环/元数据主机 + sha256 校验，headers 只转发给同源）、command（运行命令取目录，需用户同意，`disableCommandPluginSources`/`allowManagedHooksOnly` 可禁）、本地路径。
    - `calculatePluginVersion`：manifest.version > 条目 version > git sha > archive sha256 > 内容哈希。
    - `copyPluginToVersionedCache`：复用已有完整缓存、他会话占用时推迟、种子缓存命中、link 模式、复制后装依赖与 `binaries`（sha256 钉住下载到 bin/），zip 模式打包。
@@ -369,7 +370,7 @@ GrowthBook：`tengu_brindle_causeway`（v2 SDK）、`tengu_mcp_protocol_negotiat
 
 #### 3.3.3 启用/禁用
 
-- 设置键 `enabledPlugins: { "<id>": true | false | string[] }`（数组也视为启用，`mO`），在 user/project/local/policy/flag 设置与 `--add-dir` 目录设置中合并；优先级 local > project > user（`SCOPE_PRECEDENCE`），托管 false 不可覆盖（`hJt`）。未设置时看 `manifest.defaultEnabled`（默认 true）。
+- 设置键 `enabledPlugins: { "<id>": true | false | string[] }`（数组也视为启用，`mO`），在 user/project/local/policy/flag 设置与 `--add-dir` 目录设置中合并；优先级 local > project > user（`SCOPE_PRECEDENCE`），托管 false 不可覆盖（`isPluginEnabled`，`chunk-dcmhvw5a.js#hJt`）。未设置时看 `manifest.defaultEnabled`（默认 true）。
 - `setPluginEnabledOp(pluginId, enabled, scope)`：托管锁定、被启用插件依赖时禁止禁用（`requiredDependencyMessage`）、组织要求的插件（`listRequiredPlugins`）不可禁用；`enablePluginOp`/`disablePluginOp` 是薄包装。
 
 #### 3.3.4 加载
@@ -423,9 +424,9 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
 
 **marketplace.json**（`PluginMarketplaceSchema`）：`name, version, description, owner, plugins[], forceRemoveDeletedPlugins, metadata{pluginRoot, version, description}, allowCrossMarketplaceDependenciesOn[], renames{old: new|null}`；插件条目（`PluginMarketplaceEntrySchema`）= manifest 字段全部可选 + `name, source, headers, headersHelper, category, tags, strict(默认 true), relevance{topic, signals{cli, hosts, filesRead, manifestDeps, cwd}}`。解析失败但有名字的条目改写为 `source:{source:"unsupported", error}` 占位。
 
-**插件来源**（`PluginSourceSchema`）：`"./相对路径"` | `{source:"npm", package, version, registry}` | `{source:"url", url, ref, sha}` | `{source:"github", repo, ref, sha}` | `{source:"git-subdir", url, path, ref, sha}` | `{source:"archive", url, sha256}` | `{source:"command", command, timeout(≤600), mode copy|link}` | `{source:"unsupported", error}`。
+**插件来源**（`PluginSourceSchema`）：`"./<相对路径>"` | `{source:"npm", package, version, registry}` | `{source:"url", url, ref, sha}` | `{source:"github", repo, ref, sha}` | `{source:"git-subdir", url, path, ref, sha}` | `{source:"archive", url, sha256}` | `{source:"command", command, timeout(≤600), mode copy|link}` | `{source:"unsupported", error}`。
 
-**市场来源**（`MarketplaceSourceSchema`）：`url{url, headers, headersHelper}`、`github{repo, ref, path, sparsePaths, skipLfs}`、`git{url, ref, path, sparsePaths, skipLfs}`、`npm{package, version, registry}`、`file{path}`、`directory{path}`、`settings{name, plugins[], owner}`；策略专用 `skills-dir`、`hostPattern{hostPattern}`、`pathPattern{pathPattern}`、`pluginDirectory`（`MarketplacePolicySourceSchema`）。
+**市场来源**（`MarketplaceSourceSchema`）：`url{url, headers, headersHelper}`、`github{repo, ref, path, sparsePaths, skipLfs}`、`git{url, ref, path, sparsePaths, skipLfs}`、`npm{package, version, registry}`、`file`（字段 path）、`directory`（字段 path）、`settings{name, plugins[], owner}`；策略专用 `skills-dir`、`hostPattern`（字段 hostPattern）、`pathPattern`（字段 pathPattern）、`pluginDirectory`（`MarketplacePolicySourceSchema`）。
 
 **known_marketplaces.json**（`KnownMarketplacesFileSchema`）：`{ "<name>": {source, installLocation, lastUpdated, autoUpdate?} }`。
 
@@ -438,7 +439,7 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
 - settings：`enabledPlugins`、`extraKnownMarketplaces`、`pluginConfigs`；托管（policySettings）：`strictKnownMarketplaces`、`blockedMarketplaces`、`disableSideloadFlags`、`disablePluginDirectory`、`disableCommandPluginSources`、`allowManagedHooksOnly`、`pluginTrustMessage`、`prependPlugins/appendPlugins`；全局配置：`officialMarketplaceAutoInstalled`、`claudeCodeHints`、`lspRecommendationNeverPlugins`、`lspRecommendationIgnoredCount`。
 - env：`CLAUDE_CODE_PLUGIN_CACHE_DIR`、`CLAUDE_CODE_PLUGIN_SEED_DIR`、`CLAUDE_CODE_PLUGIN_USE_ZIP_CACHE`、`CLAUDE_CODE_USE_COWORK_PLUGINS`、`CLAUDE_CODE_SYNC_PLUGIN_INSTALL`、`CLAUDE_CODE_PLUGIN_GIT_TIMEOUT_MS`、`CLAUDE_CODE_PLUGIN_KEEP_MARKETPLACE_ON_FAILURE`、`CLAUDE_CODE_PLUGIN_MANAGER`、`CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL`、`CLAUDE_CODE_SKIP_PLUGIN_MCP_SERVERS`、`CLAUDE_CODE_SKIP_PLUGIN_MCP_SERVERS_EXCEPT`、`CLAUDE_CODE_SKIP_PLUGIN_LOCAL_MCP_SERVERS`、`CLAUDE_CODE_SKIP_PLUGIN_MCP_BUNDLES`、`CLAUDE_CODE_CCR_ONE_PLUGIN_LOAD_PER_RELOAD`；注入给插件进程：`CLAUDE_PLUGIN_ROOT`、`CLAUDE_PLUGIN_DATA`、`CLAUDE_PLUGIN_OPTION_<KEY>`。
 - GrowthBook：`tengu_hover_rest`（存储后端 V5，进程内首次读取固定，`isStorageV5Enabled`）、`tengu_plugin_hooks_modules`（hooks 模块）、`tengu_ccr_plugins_turn_start_check_enabled`、`allow_plugin_directory_search`（组织策略限制）。
-- 遥测事件：`tengu_plugin_installed(_cli)`、`tengu_plugin_uninstalled_cli`、`tengu_plugin_enabled_cli`、`tengu_plugin_disabled(_all)_cli`、`tengu_plugin_updated_cli`、`tengu_plugin_prune_cli`、`tengu_plugin_command_failed`、`tengu_plugin_install_failed`、`tengu_plugin_remote_fetch`、`tengu_plugin_state_file_error`、`tengu_plugin_record_spelling`、`tengu_plugin_delisted_enforcement`、`tengu_plugin_autoupdate_pass`、`tengu_official_marketplace_auto_install`、`tengu_plugin_official_mkt_git_fallback`、`tengu_marketplace_background_install`、`tengu_headless_plugin_install`、`tengu_known_marketplaces_fallback_write`、`tengu_plugin_hint_detected`、`tengu_plugin_load_refresh_window_recovered`。
+- 遥测事件：`tengu_plugin_installed(_cli)`、`tengu_plugin_uninstalled_cli`、`tengu_plugin_enabled_cli`、`tengu_plugin_disabled_cli`/`tengu_plugin_disabled_all_cli`、`tengu_plugin_updated_cli`、`tengu_plugin_prune_cli`、`tengu_plugin_command_failed`、`tengu_plugin_install_failed`、`tengu_plugin_remote_fetch`、`tengu_plugin_state_file_error`、`tengu_plugin_record_spelling`、`tengu_plugin_delisted_enforcement`、`tengu_plugin_autoupdate_pass`、`tengu_official_marketplace_auto_install`、`tengu_plugin_official_mkt_git_fallback`、`tengu_marketplace_background_install`、`tengu_headless_plugin_install`、`tengu_known_marketplaces_fallback_write`、`tengu_plugin_hint_detected`、`tengu_plugin_load_refresh_window_recovered`。
 
 ## 4. Hooks
 
@@ -449,7 +450,7 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
 | PreToolUse | tool_name | |
 | PostToolUse | tool_name | |
 | PostToolUseFailure | tool_name | |
-| **PostToolBatch** | 无 | 新增：一批工具调用全部完成、下一次请求前触发一次，输入 `tool_calls[]` |
+| **PostToolBatch** | 无 | 新增：一批工具调用全部完成、下一次请求前触发一次，输入 `tool_calls` 数组 |
 | Notification | notification_type（含 elicitation_complete / elicitation_response） | |
 | UserPromptSubmit | 无 | |
 | **UserPromptExpansion** | command_name | 新增：用户输入的斜杠命令展开为提示词时；输入 expansion_type/command_name/command_args/command_source/prompt |
@@ -487,12 +488,12 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
 钩子匹配器列表由 `SO`（`chunk-e6aww6q8.js#SO`，unattributed）→ `g4`/`f`（`chunk-7a5rgqvc.js`，unattributed）汇总，顺序：
 
 1. **启动快照**（`X2()` = `getHooksFromAllowedSources` 的缓存）：合并后的 settings `hooks`（user/project/local/flag/policy）。policy `disableAllHooks` → 空；policy `allowManagedHooksOnly` 或只允许插件定制（`isRestrictedToPluginOnly("hooks")`）→ 只取 policy 钩子；用户层 `disableAllHooks` 视受信层情况处理。
-2. **设备钩子**（`fkn(event)`）与**主线程代理钩子**（`w7()`，代理 frontmatter 注册的，managedOnly 时略过）。
-3. **注册钩子**（`registerHookCallbacks_2()`，`bootstrap/state`）：插件 `hooks/hooks.json`（带 pluginRoot/pluginId）、SDK `hooks` 回调（callback）、内部 callback。policy `disableAllHooks` 时只保留非插件、非设备的回调。
+2. **设备钩子**（`getPluginSettingsHooks(event)`）与**主线程代理钩子**（`getMainThreadAgentHooks()`，代理 frontmatter 注册的，managedOnly 时略过）。
+3. **注册钩子**（`getRegisteredHooks()`，`bootstrap/state`）：插件 `hooks/hooks.json`（带 pluginRoot/pluginId）、SDK `hooks` 回调（callback）、内部 callback。policy `disableAllHooks` 时只保留非插件、非设备的回调。
 4. **会话钩子**（`SessionHooksRegistry`）：skill frontmatter（`registerSkillHooks`，带 skillRoot，`once` 成功后移除）、agent frontmatter（`registerFrontmatterHooks`，子代理里 Stop 改成 SubagentStop）、`/goal` 等运行时注册、function 钩子（`addFunctionHook`，默认 5s 超时，回调参数是消息列表）。
 5. `managedHooksOnly` 模式只用 `oot(event)`：policySettings.hooks + 宿主提供的 policy 钩子。
 
-快照：`X2()` 第一次调用时计算并保存 `initialHooksConfig`，之后会话内不变（settings 变更走 ConfigChange 事件和 skill 重载）；`SJr()` 返回 policy 快照，读不到时为 `"unreadable"`，此时按“组织的钩子”保守处理。
+快照：`getHooksConfigFromSnapshot()` 第一次调用时计算并保存 `initialHooksConfig`，之后会话内不变（settings 变更走 ConfigChange 事件和 skill 重载）；`getPolicyHooksFromSnapshot()` 返回 policy 快照，读不到时为 `"unreadable"`，此时按“组织的钩子”保守处理。
 
 ### 4.3 匹配规则（`getMatchingHooks`，`#LPn`）
 
@@ -510,7 +511,7 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
 |---|---|---|
 | `command` | command、**args**（exec 形式，无 shell）、if、shell（bash/powershell）、timeout、**onFailure**（continue/block）、statusMessage、once、async、asyncRewake、**rewakeMessage**、**rewakeSummary**（@internal）、**cloud**（device/skip，@internal） | `execCommandHook`（`#MU`） |
 | `prompt` | prompt（`$ARGUMENTS` 占位）、if、timeout、model、**continueOnBlock**、statusMessage、once | `execPromptHook`（`#TAn`） |
-| **`mcp_tool`** | server、tool、input（字符串支持 `${tool_input.file_path}` 插值）、if、timeout、statusMessage、once | `Snt`（unattributed） |
+| **`mcp_tool`** | server、tool、input（字符串支持 `${tool_input.file_path}` 插值）、if、timeout、statusMessage、once | `runMcpToolHook`（`chunk-e6aww6q8.js#Snt`） |
 | `http` | url、if、timeout、**onFailure**、headers、allowedEnvVars、statusMessage、once、**cloud** | `execHttpHook`（`#PJn`） |
 | `agent` | prompt、if、timeout（默认 60s）、model、statusMessage、once | `execAgentHook`（`#hnt`） |
 
@@ -524,25 +525,25 @@ loadAllPlugins(storageV5, credentials)      全局 pluginLoad（允许联网补�
 2. 云端服务调用（served call）准备环境 `buildServedCallHookEnv`（`#OOr`）；mods 的 owed 列表 / whichCopyAsk 先等待。
 3. `getMatchingHooks` → 过滤（served call 下 prompt/agent 不跑）。
 4. 只有 callback 钩子时走快路径（不发进度消息）；否则发 `hook_progress` 消息、开 OTel span，按 `bAn(...)` 并行执行（有并发槽位 `SAn`，PermissionRequest 的 agent 钩子不占槽），总超时 `_nt(...)`。
-5. 每个钩子按类型分发；结果经 `QBt` / `refuseUnfinishedPreToolHook`（`#Vxn`，PreToolUse 钩子超时/失败即拒绝调用，除非 `onFailure: continue`）处理后逐条产出。
+5. 每个钩子按类型分发；结果经 `summarizeHookFailures`（`chunk-e6aww6q8.js#QBt`）/ `refuseUnfinishedPreToolHook`（`#Vxn`，PreToolUse 钩子超时/失败即拒绝调用，除非 `onFailure: continue`）处理后逐条产出。
 6. 汇总权限：deny > defer > ask > allow。产出 `{permissionBehavior, hookPermissionDecisionReason, updatedInput, rewriterKind, permissionDisplay}` 等。
 7. 遥测：`tengu_run_hook`、`tengu_repl_hook_finished`（含注入字符数）、`tengu_hook_plugin_injected/finished`、OTel `hook_execution_start/complete`。
 
 `executeHooksOutsideREPL`（`#cN`）用于没有对话上下文的事件（SessionEnd、Notification、PreCompact、PostCompact、ConfigChange、CwdChanged、FileChanged、InstructionsLoaded、StopFailure、Elicitation*、WorktreeCreate/Remove、DirectoryAdded），返回 `{command, succeeded, output, blocked, watchPaths, systemMessage}`；prompt/agent 钩子在这里返回 “not yet supported outside REPL”。
 
-`JI`（`chunk-e6aww6q8.js#JI`，unattributed）是 REPL 内的分派层：有 mods function-hook 链（`classic.<Event>`）时走 `ZOr` 链，否则直接 `executeHooks`；子代理里只透传权限相关字段（`Kzr`）。
+`executeHooks`（`chunk-e6aww6q8.js#JI`，`utils/hooks.ts`；门面导出名）是 REPL 内的分派层：有 mods function-hook 链（`classic.<Event>`）时走 `runFunctionHookChain`（`chunk-e6aww6q8.js#ZOr`）链，否则直接 `executeHooks_2`（`chunk-e6aww6q8.js#eIr`）；子代理里只透传权限相关字段（`keptForObservationContext`，`chunk-e6aww6q8.js#Kzr`）。
 
 command 钩子细节（`execCommandHook`）：
 
 - 启动：`args` 存在 → `spawn(command, args)`（exec 形式，`${CLAUDE_PROJECT_DIR}`、`${CLAUDE_PLUGIN_ROOT}`、`${CLAUDE_PLUGIN_DATA}`、`${user_config.*}` 逐元素替换）；shell=powershell → pwsh/powershell（找不到报错），追加 exit 2 透传与“只输出字符串无结论”检测；默认 bash（Windows 用 Git Bash，找不到报错）。`CLAUDE_CODE_SHELL_PREFIX` 包装命令。
 - 插件钩子在 shell 形式里引用 `${user_config.*}` 直接拒绝（防二次 shell 解析）；非插件钩子引用 `${CLAUDE_PLUGIN_ROOT}`/`${CLAUDE_PLUGIN_DATA}` 报错；skill 钩子只有 `CLAUDE_PLUGIN_ROOT`（指向 skill 目录）。
-- 环境变量：继承进程 env（组织钩子用干净的 env，剔除个人插件的 `$.env.set` 和仓库设置的 env），加 `CLAUDECODE=1`、`CLAUDE_CODE_SESSION_ID`、`CLAUDE_CODE_CHILD_SESSION=1`、`CLAUDE_CODE_SESSION_ATTENDED`、`CLAUDE_PID`、`CLAUDE_EFFORT`、`TRACEPARENT`（`Gnt`）、`CLAUDE_PROJECT_DIR`、`COLUMNS`/`LINES`、`CLAUDE_PLUGIN_ROOT`、`CLAUDE_PLUGIN_DATA`、`CLAUDE_PLUGIN_OPTION_<KEY>`，官方插件可得 `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_API_KEY`（`qOr`，受 `tengu_amber_lattice.plugins` 名单门控），SessionStart/Setup/CwdChanged/FileChanged 加 `CLAUDE_ENV_FILE`。
+- 环境变量：继承进程 env（组织钩子用干净的 env，剔除个人插件的 `$.env.set` 和仓库设置的 env），加 `CLAUDECODE=1`、`CLAUDE_CODE_SESSION_ID`、`CLAUDE_CODE_CHILD_SESSION`=`1`、`CLAUDE_CODE_SESSION_ATTENDED`、`CLAUDE_PID`、`CLAUDE_EFFORT`、`TRACEPARENT`（`claudeSubprocessEnv`，`chunk-s61vbvea.js#Gnt`）、`CLAUDE_PROJECT_DIR`、`COLUMNS`/`LINES`、`CLAUDE_PLUGIN_ROOT`、`CLAUDE_PLUGIN_DATA`、`CLAUDE_PLUGIN_OPTION_<KEY>`，官方插件可得 `ANTHROPIC_AUTH_TOKEN`/`ANTHROPIC_API_KEY`（`getPluginHookCredentialEnv`，`chunk-e6aww6q8.js#qOr`，受 `tengu_amber_lattice` 的 `plugins` 名单门控），SessionStart/Setup/CwdChanged/FileChanged 加 `CLAUDE_ENV_FILE`。
 - stdin：写入一行 JSON（`createBaseHookInput` 的公共字段 + 事件字段），然后关闭。
 - 超时：`hook.timeout` 秒，否则 `TOOL_HOOK_EXECUTION_TIMEOUT_MS = 600000`（UserPromptSubmit 30s）。
 - 退出后 `waitForStdioQuiet`（`#s$t`）等 stdout/stderr 安静 500ms、最多 10s；stdio 未正常结束且输出不是惰性 JSON 时拒绝采信（`checkIncompleteCapture`）。
-- async：配置 `async: true`、`asyncRewake: true`（交互会话或 `UDt()`），或 stdout 首个 JSON 是 `{"async": true, "asyncTimeout"?}` → 转后台（`backgroundHookProcess`，`#Rnt`）。普通 async 登记到 `AsyncHookRegistry`（默认 15s），之后读取 `{async:true}` 后的那一个 JSON 作为答复；asyncRewake 在 exit 2 时把 stderr 用 rewakeMessage 包装成 system-reminder 唤醒模型（缺失脚本只报一次）。`forceSyncExecution` 时忽略 async。
+- async：配置 `async: true`、`asyncRewake: true`（交互会话或 `getHasStreamingInput()`），或 stdout 首个 JSON 是 `{"async": true, "asyncTimeout"?}` → 转后台（`backgroundHookProcess`，`#Rnt`）。普通 async 登记到 `AsyncHookRegistry`（默认 15s），之后读取 `{async:true}` 后的那一个 JSON 作为答复；asyncRewake 在 exit 2 时把 stderr 用 rewakeMessage 包装成 system-reminder 唤醒模型（缺失脚本只报一次）。`forceSyncExecution` 时忽略 async。
 
-公共输入字段（`createBaseHookInput`，`#wf`）：`session_id`、`transcript_path`、`cwd`、`scratchpad_dir`、`prompt_id`、`permission_mode`、`agent_id`、`agent_type`、`effort: {level}`；served call 时 `session_id = "served:<caller>"`、`transcript_path = ""`。各事件附加字段见 `execute*Hooks` 文档（如 Stop 的 `stop_hook_active`、`last_assistant_message`、`background_tasks`、`session_crons`；PreToolUse 的 `tool_name/tool_input/tool_use_id/mcp_server`）。
+公共输入字段（`createBaseHookInput`，`#wf`）：`session_id`、`transcript_path`、`cwd`、`scratchpad_dir`、`prompt_id`、`permission_mode`、`agent_id`、`agent_type`、`effort: {level}`；served call 时 `session_id = "served:<caller>"`、`transcript_path = ""`。各事件附加字段见 `execute…Hooks` 文档（如 Stop 的 `stop_hook_active`、`last_assistant_message`、`background_tasks`、`session_crons`；PreToolUse 的 `tool_name/tool_input/tool_use_id/mcp_server`）。
 
 ### 4.6 返回值协议
 
@@ -658,7 +659,7 @@ prompt/agent 钩子协议：模型返回 `{ok, reason, impossible?}`（`hookResp
 | `created_by` / `improved_by` | `dream-proposal` 标记（316 新增） |
 | `fallback` | 布尔（316 新增，语义未查清） |
 | `metadata` | 任意对象（316 新增） |
-| `experimental.cachettl` | 缓存 TTL（`parseExperimentalCacheTtl`） |
+| `experimental` 中的 `cachettl` | 缓存 TTL（`parseExperimentalCacheTtl`） |
 
 frontmatter 解析（`parseFrontmatter`，`chunk-82kqcve8.js#sd`）：`---` 块用 YAML 解析；untrusted 来源拒绝超过 65536 字节、过深或含锚点的块；`quoteLossyValues` 模式给会丢信息的值加引号并报告 rewriteHazard。
 
@@ -740,7 +741,7 @@ SkillTool（tools 领域）调用命令：inline 时把提示词注入当前对�
 | `maxRestarts` | 默认 3 |
 | `diagnostics` | 为 false 时保留跳转/悬停等导航功能，但不自动注入诊断（**316 新增**） |
 
-- 加载出的配置还带 `pluginSource`：崩溃统计、诊断计数归到对应插件（`ax(pluginSource)` 记插件用量）。
+- 加载出的配置还带 `pluginSource`：崩溃统计、诊断计数归到对应插件（`recordPluginUsage(pluginSource)` 记插件用量）。
 
 ### 6.2 生命周期与调用顺序
 
@@ -760,15 +761,15 @@ prepareSession / 启动
 退出 → shutdownLspServerManager()
 ```
 
-- 服务器是**懒启动**的：`LSPServerManager.ensureServerStarted(filePath)` 在 `sendRequest`/`openFile` 时按扩展名找到服务器，状态是 stopped 或 error 就调用 `start()`。
-- `LSPServerInstance.start` → `doStart`：
+- 服务器是**懒启动**的：`ensureServerStarted(filePath)`（`services/lsp/LSPServerManager.ts`） 在 `sendRequest`/`openFile` 时按扩展名找到服务器，状态是 stopped 或 error 就调用 `start()`。
+- `createLSPServerInstance` 返回对象的 `start` → `doStart`：
   1. 受 `restartOnCrash` 与 `crashRecoveryCount > maxRestarts` 约束，超限时只记一次 `lsp_server_max_crash_recovery`。
   2. `LSPClient.start(command, args, {env, cwd, pluginId})`：在工具 cgroup（`toolCgroupClass:"lsp"`）里 spawn，`stdio` 全管道，`windowsHide`；按插件 id 合成环境变量。stderr 逐行进调试日志。
   3. 注册 `workspace/configuration`（用 `getConfigSection` 从 `settings` 按点号路径取值），忽略 `client/registerCapability` / `client/unregisterCapability`（只记日志）。
   4. `initialize`：`processId`、`clientInfo {name:"Claude Code", version:"2.1.316"}`、`initializationOptions`、`workspaceFolders`/`rootPath`/`rootUri`，能力声明：
-     - `workspace.configuration = (settings != null)`、`workspaceFolders:false`、`didChangeWatchedFiles`（不动态注册）；
-     - `textDocument.synchronization.didSave`、`publishDiagnostics`（relatedInformation、tagSupport [1,2]、codeDescriptionSupport）、`hover`（markdown/plaintext）、`definition`（linkSupport）、`references`、`documentSymbol`（层级）、`callHierarchy`；
-     - `general.positionEncodings:["utf-16"]`。
+     - `workspace.configuration = (settings != null)`、`workspaceFolders: !1`、`didChangeWatchedFiles`（不动态注册）；
+     - `textDocument` 下 `synchronization` 的 `didSave`、`publishDiagnostics`（relatedInformation、tagSupport [1,2]、codeDescriptionSupport）、`hover`（markdown/plaintext）、`definition`（linkSupport）、`references`、`documentSymbol`（层级）、`callHierarchy`；
+     - `general: { positionEncodings: ["utf-16"] }`。
      然后发 `initialized` 通知；可选 `startupTimeout`。
   5. 有 `settings` 时推 `workspace/didChangeConfiguration`。
 - `sendRequest`：要求 `isHealthy()`（running 且已初始化）；单次请求受 `requestTimeout`（默认 60s）限制；遇到 `-32801 ContentModified` 时按 500ms × 2^n 退避，最多重试 3 次。
@@ -794,7 +795,7 @@ prepareSession / 启动
 
 ### 6.4 与 LSPTool 的关系
 
-- `tools/LSPTool/LSPTool.ts`（`chunk-kxyd0g16.js#zt`）的 `isEnabled()` 是 `hasLspEverConnected()`：至少有一个服务器曾经进入非 error 状态，工具才会出现。工具 `shouldDefer:true`、只读、可并发，请求经 `getLspServerManager().sendRequest(filePath, method, params)` 转发。
+- `tools/LSPTool/LSPTool.ts`（`chunk-kxyd0g16.js#zt`）的 `isEnabled()` 是 `hasLspEverConnected()`：至少有一个服务器曾经进入非 error 状态，工具才会出现。工具 `shouldDefer` 为 true、只读、可并发，请求经 `getLspServerManager().sendRequest(filePath, method, params)` 转发。
 - 状态展示：`hooks/notifs/useLspInitializationNotification.tsx` 读 `getInitializationStatus()`。
 
 ### 6.5 开关与环境变量
@@ -817,7 +818,7 @@ prepareSession / 启动
 
 服务器到扩展有两条链路：本地原生宿主 socket（`socketPath`/`getSocketPaths`），以及云端 WebSocket 桥 `wss://bridge.claudeusercontent.com`（staging 与本地 `ws://localhost:8765` 由 `USE_STAGING_OAUTH`/`USE_LOCAL_OAUTH`/`LOCAL_BRIDGE` 切换）。
 
-### 7.2 启用判定与接入（主会话，`_new/prepareSession.ts · KSo` 内）
+### 7.2 启用判定与接入（主会话，`cli/startup/prepareSession.ts` · `prepareSession` 内，`chunk-3wek6r2k.js#KSo`；写作时为 _new/prepareSession.ts）
 
 ```
 isClaudeInChromeAllowed()  = 组织策略 allow_claude_browser_extension            [#ox]
@@ -887,7 +888,7 @@ shouldEnableClaudeInChrome(chromeFlag)                                          
    - `bridgeConfig.getUserId`：按 OAuth 令牌解析账户 UUID。与持久化登录的账户不一致时上报 `tengu_chrome_bridge_account_mismatch`，并以令牌对应的账户为准。
    - `getOAuthToken`：令牌先经 `createBearerGate` 校验，被组织拒绝的令牌不交给桥。
    - `onToolCallDisconnected`：按情形返回给模型的长篇排障提示，包括账户不一致、配对设备不可达、远程会话、未安装扩展等。
-   - `onExtensionPaired`：把 `chromeExtension.{pairedDeviceId,pairedDeviceName}` 写入全局配置。
+   - `onExtensionPaired`：把 `chromeExtension` 的 `pairedDeviceId`、`pairedDeviceName` 写入全局配置。
    - 工具调用超时：`browser_batch` 为 90 s，其余为库的缺省值。
    - `trackEvent`：只放行白名单字段（`SAFE_BRIDGE_STRING_KEYS`）。
 4. `createClaudeForChromeMcpServer(ctx)`，接到 `StdioServerTransport`。stdin 结束时退出。
@@ -900,7 +901,7 @@ shouldEnableClaudeInChrome(chromeFlag)                                          
 ### 7.6 环境变量 / 配置键 / 开关
 
 - 环境变量：`CLAUDE_CODE_ENABLE_CFC`、`CLAUDE_CODE_DISABLE_CFC_PROMPT`、`CLAUDE_CODE_CHROME_LATE_MCP_SERVER`、`CLAUDE_CODE_CHROME_MCP_ORG_DENIED`、`CLAUDE_CHROME_PERMISSION_MODE`（ask / skip_all_permission_checks / follow_a_plan）、`CLAUDE_CHROME_PAIRED_DEVICE_ID`、`CLAUDE_CHROME_TAB_GROUP_KEY`（形如 `chat:<小写 UUID>`；一个进程承载多个会话时忽略）、`CLAUDE_CODE_BRIDGE_CHILD_MACHINE_SETTINGS`、`USE_LOCAL_OAUTH`、`LOCAL_BRIDGE`、`USE_STAGING_OAUTH`、`CLAUDE_CODE_OAUTH_TOKEN`、`CLAUDE_CODE_ACCOUNT_UUID`。
-- 全局配置键：`claudeInChromeDefaultEnabled`、`cachedChromeExtensionInstalled`、`chromeExtension.pairedDeviceId`、`chromeExtension.pairedDeviceName`、`chromeInstallUpsellDismissed`。
+- 全局配置键：`claudeInChromeDefaultEnabled`、`cachedChromeExtensionInstalled`、`chromeExtension?.pairedDeviceId`、`chromeExtension` 的 `pairedDeviceName`、`chromeInstallUpsellDismissed`。
 - 组织策略：`allow_claude_browser_extension`。
 - GrowthBook：`tengu_chrome_auto_enable`、`tengu_chrome_install_upsell`。
 - 遥测与健康指标：`tengu_claude_in_chrome_setup`、`tengu_claude_in_chrome_setup_failed`、`chrome_open_url`、`chrome_native_host_install`、`chrome_native_host_run`、`chrome_mcp_server_start`。
@@ -909,7 +910,7 @@ shouldEnableClaudeInChrome(chromeFlag)                                          
 
 - **CLI 本机路径在 316 公版里已不存在**：
   - 2.1.88 的 `cli.tsx` 有 `feature('CHICAGO_MCP') && argv[2]==='--computer-use-mcp'`；316 的 `cli.js` 只剩 `--claude-in-chrome-mcp`、`--chrome-native-host`、`--eval-mock-server` 三个快路径。
-  - 原文件位置（`computerUse/mcpServer.ts`、`gates.ts` 的 `getChicagoEnabled`、`computerUseLock.ts`、`appNames.ts`）在 316 中匹配到的都是无关代码。
+  - 原文件位置（`utils/computerUse/mcpServer.ts`、`gates.ts` 的 `getChicagoEnabled`、`computerUseLock.ts`、`appNames.ts`）在 316 中匹配到的都是无关代码。
   - linux 构建中 `requireComputerUseSwift()` 和 `createCliExecutor()` 都直接抛 "macOS-only"。
   - `@ant/computer-use-swift` 的 CommonJS 包裹（`chunk-ha3km179.js` 里的 `Cl`，读 `COMPUTER_USE_SWIFT_NODE_PATH` 或 `prebuilds/computer_use.node`）在本构建中第一句就抛错。
 - **托管桌面路径（316 新增）**：
@@ -944,7 +945,7 @@ shouldEnableClaudeInChrome(chromeFlag)                                          
   - `repo`：必须匹配 `owner/repo`。
 - `claude-cli://install-plugin?plugin=<名>&marketplace=<源>`（**316 新增**）：
   - `plugin`：ASCII 字母、数字和 `. _ -`，不超过 100 字符。
-  - `marketplace`：缺省为官方市场。允许 GitHub `owner/repo`、`https://` URL 或 `git@host:owner/repo.git`；可以用 `#ref` 或 `@ref` 指定 git ref（URL 里写成 `%23`，裸 `#` 直接报错）。禁止百分号编码和 `.`/`..`/空段；官方市场不能钉 ref；总长不超过 256。
+  - `marketplace`：缺省为官方市场。允许 GitHub `owner/repo`、`https://` URL 或 `git@host:owner/repo.git`；可以用 `#<ref>` 或 `@<ref>` 指定 git ref（URL 里写成 `%23`，裸 `#` 直接报错）。禁止百分号编码和 `.`/`..`/空段；官方市场不能钉 ref；总长不超过 256。
 
 ### 9.2 处理流程
 
@@ -985,7 +986,7 @@ OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
 ### 10.1 MCP
 
 1. **两代 SDK 并存 + 协议版本协商**：88 只有 `initialize`；316 v2 先 `server/discover`（2026-07-28 协议），按结果走 modern 或回退 legacy，并持久化 legacy 判定（`mcp-discover-verdicts.json`）；全部协商代码 88 中不存在（grep `server/discover`、`MCP_PROTOCOL_NEGOTIATION`、`subscriptions/listen` 在 88 源码为 0）。
-2. 作用域新增 `agent`；类型新增 `cached` 连接状态；配置新增 `tools[].permission_policy`、`toolPermissions`、`discoveryCache`、`bareElicitationCapability`、`role`、`request_timeout_ms`、`managedMcpServers`（88 均无）。
+2. 作用域新增 `agent`；类型新增 `cached` 连接状态；配置新增 `tools[]` 各项的 `permission_policy`、`toolPermissions`、`discoveryCache`、`bareElicitationCapability`、`role`、`request_timeout_ms`、`managedMcpServers`（88 均无）。
 3. claude.ai 连接器：stateless 连接器本地应答握手、`/v1/mcp_servers` 的 discover 投影、additional_install 兄弟连接器、`include_additional_installs` 降级重试。
 4. 描述截断上限从固定 2048 改为可配置 4096（ToolSearch 加载 16384）；工具 `_meta` 新增 `anthropic/requiresUserInteraction` 等。
 5. 工具空闲超时（`CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`）、远程批量连接默认 20、发现缓存（`mcp-discovery-cache`，加密封存、失败计数）为 316 新增。
@@ -1001,7 +1002,7 @@ OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
 - **存储后端 V5**：几乎所有缓存/记录读写都有 `storageV5` 分支（作用域化存储、符号链接拒绝、`.links_materialized`），由 `tengu_hover_rest` 开关控制；旧版无此概念。
 - **安全加固**：manifest/组件路径的符号链接逃逸检查（`assertManifestContained`、`reportIfPathEscapes`）、archive URL 拒绝回环/元数据地址、来源脱敏（`redactMarketplaceSource`）、官方名防仿冒扩展（逐词拼接检测）。
 - **CLI**：新增 `init`、`tag`、`test`、`details`、`prune`、`configure`、`eval`、`validate --strict/--json`；旧版只有 install/uninstall/enable/disable/update/list/validate/marketplace。
-- `gitAvailability.ts` 在 316 不再是独立模块（git 可用性检测并入 `ffn`/全局 `gitAvailable`，chunk-e6aww6q8 part-104）。
+- `utils/plugins/gitAvailability.ts`（2.1.88 路径）在 316 不再是独立模块（git 可用性检测并入 `isGitUsable`（`chunk-e6aww6q8.js#ffn`，`utils/plugins/pluginManifestRead.ts`）/全局 `gitAvailable`；写作时在 chunk-e6aww6q8 part-104）。
 
 ### 10.3 Hooks / Skills
 
@@ -1011,7 +1012,7 @@ OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
 4. prompt 钩子：Stop 系事件包装为“停止条件”判断并支持 `impossible`；提示过长时减半历史重试。
 5. agent 钩子：最多 50 轮、模型被拒回退主模型、served call 无 transcript。
 6. 新增大量安全加固：stdio 截断不采信、PreToolUse 钩子未完成即拒绝、云端 served call 钩子扣留、`CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG`、http 钩子 env 一致性检查、凭证类变量不插值、插件 shell 形式禁用 `${user_config.*}`。
-7. Skills：frontmatter 新增 `disallowed-tools`、`background`、`fallback`、`metadata`、`created_by`、`experimental.cachettl`；新增同步 skills（syncedSkills）、host catalog、storageV5 后端、保留名拒绝；`CLAUDE_CONFIG_DIRECTORIES` 新增 `routines`、去掉 `templates`。
+7. Skills：frontmatter 新增 `disallowed-tools`、`background`、`fallback`、`metadata`、`created_by`、`experimental` 中的 `cachettl`；新增同步 skills（syncedSkills）、host catalog、storageV5 后端、保留名拒绝；`CLAUDE_CONFIG_DIRECTORIES` 新增 `routines`、去掉 `templates`。
 8. 内置 skill 大幅变化：2.1.88 的 verify/stuck/skillify/remember/simplify/loremIpsum/loop 等在 316 的同一位置已是 cowork-plugin、dataviz、design、memory-types 等（旧版名匹配多处错误，见第 7 节）；新增 design、artifact-*、dataviz、claude-code-docs、workflow-authoring、run、send-to-project、doctor、fewer-permission-prompts、commit/pr/code-review 作为 skill。
 
 ### 10.4 LSP / Chrome / Computer Use / 深链接
@@ -1019,13 +1020,13 @@ OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
 | 项 | 2.1.88 | 316 | 证据 |
 |---|---|---|---|
 | LSP 诊断登记表 | 模块级 Map + 导出函数 | 类 `LSPDiagnosticRegistry`，按会话根各一份（WeakMap） | `chunk-e6aww6q8.js#gDt`、`#jG`、`#yDt…#Kfn` |
-| LSP 管理器 | 模块级变量 + 导出函数 | 工厂 `bTs()` 返回对象，单例 `_F` 再解构导出；新增 `hasEverConnected` 与代次号 | `#bTs`、`#_F` |
+| LSP 管理器 | 模块级变量 + 导出函数 | 工厂 `createLspManagerSingleton()` 返回对象，单例 `lspManagerSingleton` 再解构导出；新增 `hasEverConnected` 与代次号 | `#bTs`、`#_F` |
 | LSPTool 启用条件 | 当前已连接 | 曾经连接过（`hasLspEverConnected`） | `chunk-kxyd0g16.js#zt` |
 | `restartOnCrash` | 未实现，配置了会告警 | 已实现：为 false 时崩溃后拒绝重启 | `#a2n` |
 | `workspace/configuration` | 不声明、不支持 | 按 `settings` 应答，并声明 `configuration` 能力 | `#a2n`、`#pTs` |
 | 文档版本、didClose | 版本恒为 1；有显式 closeFile 发 didClose，没有淘汰 | 版本递增；超过 50 个已打开文档时按 LRU 发 didClose；丢弃陈旧版本的诊断 | `#l2n`、`#d2n` |
 | 请求超时 | 无 | `requestTimeout`，默认 60 s | `#mTs`、schema |
-| 按服务器关闭诊断注入 | 无 | `diagnostics:false` | `#d2n`、schema |
+| 按服务器关闭诊断注入 | 无 | `diagnostics` 设为 false | `#d2n`、schema |
 | LSP 进程隔离 | 普通 spawn | 工具 cgroup `lsp`，能判断是否被内存上限杀掉 | `#Pa`、`#Bn` |
 | 远程会话延后 LSP | 无 | `tengu_moonlit_panda` | `#UFo` |
 | 原生宿主 status | 只有 `native_host_version` | 增加 `computer_name` | `chunk-ncz9bgnh.js#S` |
@@ -1045,7 +1046,7 @@ OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
 - `chunk-r1g76qsy.js#Ra`（`McpResponseCache`）：被切进 channelNotification.ts，实为 SDK 内部响应缓存，按 `ttlMs/cacheScope` 使用的完整策略未追。
 - `chunk-0qyh5wah.js#Z4n` 发现缓存（加密封存、admission purge、strike-threshold）细节未逐行核实；文件路径 `<配置目录>/mcp-discovery-cache/`。
 - `chunk-8t8n4kdh.js#yc`/`Cc`（subscriptions/listen 重开与 park 调参，`tengu_mcp_listen_reopen_park_tuning`）未细读。
-- `chunk-z1n5m6nf.js#xt`（callMCPTool）只读了主干，v2 对应实现在 `_unattributed/chunk-8t8n4kdh/part-009.js`（`chunk-8t8n4kdh.js#Jn`，约 15.6 KB），未逐行比较两代差异。
+- `chunk-z1n5m6nf.js#xt`（`callMCPTool_2`）只读了主干，v2 对应实现 `callMCPTool`（`chunk-8t8n4kdh.js#Jn`，约 15.6 KB；写作时在 `_unattributed/`，现在 `services/mcp/client.ts`），未逐行比较两代差异。
 - `chunk-aepeg2w5.js#PV` 官方 MCP 注册表 / directory BFF 的可见性规则（`tengu_mcp_directory_bff`、`tengu_mcp_directory_visibility`）未细看。
 - 第 3 节 stdio 探测"兄弟进程"（`chunk-r1g76qsy.js#Sh`）在 316 v2 客户端里是否实际启用：CLI 的 stdio 传输 `Ht` 继承 SDK 基类，`_dispose` 存在于 chunk-8t8n4kdh 的 `jr` 类上，按 `fh()` 判定应启用，但未运行验证。
 
@@ -1054,8 +1055,8 @@ OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
 - `chunk-e6aww6q8.js#zKn`（loadCachedMarketplacePlugin）与 `#KKn`（finishMarketplacePluginLoad）参数众多，仅给了函数名，参数语义未逐一确认。
 - `chunk-pp50kewz.js#Ut`（finishReplaceSwitch，22 KB）只读了开头，--replace 的设置迁移细节未完整梳理。
 - `chunk-e6aww6q8.js#kX`（loadPluginHooks）里 hooks 模块“wake/rollout flag”状态机（`hooksModulesSwitchRead`、`hookModulesAwaitTrust`）未完全理清，相关小函数名置信度 0.45–0.55。
-- `chunk-s61vbvea.js#Ont/QA`（被归到 reconciler.ts）是环境变量危险名单（DYLD_/LD_ 等），用途应属沙箱/hooks 环境清洗，未追到调用方。
-- 存储后端 V5（`tengu_hover_rest`）的存储接口实现（`read/write/update/deleteScope/ensureScope/statMeta`）位于 _unattributed，未分析。
+- `chunk-s61vbvea.js#Ont`/`chunk-s61vbvea.js#QA`（被归到 reconciler.ts）是环境变量危险名单（DYLD_/LD_ 等），用途应属沙箱/hooks 环境清洗，未追到调用方。
+- 存储后端 V5（`tengu_hover_rest`）的存储接口实现（`read/write/update/deleteScope/ensureScope/statMeta`）写作时位于 _unattributed，未分析（place-rest 后的具体位置未重新定位）。
 
 ### 11.3 Hooks / Skills
 
@@ -1071,8 +1072,16 @@ OS 调用 claude --handle-uri <uri>   （cli 早期分派，chunk-shkzs7rp）
 - `chunk-bss4k1z9.js#Jr`（旧版名 registerEscHotkey）实际是 UI 主题函数，ESC 热键的**注册**代码没有找到（可能只在 darwin 构建里）。
 - `chunk-aepeg2w5.js#zos`（旧版名 initializationState）是 `return null` 后跟一段不可达代码，用途不明。
 - macOS 构建里 `createCliExecutor` 和 Swift 加载的真实实现在本 ELF 中看不到；第 4 节的执行器辅助函数在 linux 构建中没有调用方。
-- `chunk-dcmhvw5a.js#C_r` 里的 `Vxi = ["region","duration"]`（暂未命名）与 `HOSTED_DESKTOP_ONLY_MESSAGE` 的使用方在 `_unattributed`，语义只有推断。
+- `chunk-dcmhvw5a.js#C_r` 里的 `Vxi = ["region","duration"]`（暂未命名）与 `HOSTED_DESKTOP_ONLY_MESSAGE` 的使用方写作时在 `_unattributed`，语义只有推断（`HOSTED_DESKTOP_ONLY_MESSAGE` 现在 `utils/computerUse/toolRendering.ts`）。
 - `chunk-dxdtyerk.js#V`：带某种终端特性的终端集合（含 JetBrains IDE），具体是哪种特性没有确认。
 - `@ant/claude-for-chrome-mcp`（`chunk-3ewc7v9f.js` 等）没有读，桥协议与工具实现不在本组范围。
 
 切分与匹配的修正建议不放在本手册，见 `docs/process/domain-extensions.md`。
+
+## 12. 引用校验结果
+
+校验时间 2026-11-03 04:39（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+
+- 共检查 2130 处引用：名字 1408/1413（另 5 个只在 2.1.88 中存在），路径 179/188（另 8 个只在 2.1.88 中存在），字面量 320/321（另 1 个只在 2.1.88 中存在），声明id 207/207，路径·函数 1/1；占位符与含空格的说明性文字 300 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`utils/computerUse/appNames.ts`、`utils/computerUse/computerUseLock.ts`、`utils/computerUse/wrapper.tsx`、`isPathSafe`、`bypass_permissions_disabled`、`textDocument/publishDiagnostics`、`true/false`、`getChicagoEnabled`、`computerUseLock.ts`、`appNames.ts`、`utils/plugins/gitAvailability.ts`、`permissionBehaviorSchema`、`--computer-use-mcp`
+- 未通过 1 处：server/discover

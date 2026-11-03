@@ -1,7 +1,7 @@
 # query 子系统手册：从一次用户输入到模型请求与工具循环
 
 > 适用版本：Claude Code 2.1.316（linux-x64）。所有结论都来自 `original/` 的代码，旧版（2.1.88）只用来取名字和对照差异。
-> 路径写的是重组模块路径（阅读树在 `build/readable/src/<路径>.js`，生成后在 `src/`）；函数写成 `路径 · 可读名`，后面括号是声明 id（`chunk-xxx.js#压缩名`），可用 `node tools/q.mjs show <id>` 查看。
+> 路径写的是重组模块路径（阅读树在 `reconstructed/src/<路径>.js`，生成后在 `src/`）；函数写成 `路径 · 可读名`，后面括号是声明 id（`chunk-xxx.js#压缩名`），可用 `node tools/q.mjs show <id>` 查看。
 > 可读名来自 `naming/semantic-query.jsonl`（本领域语义名）、门面名、旧版名，三者冲突时以门面名为准。
 
 ## 1. 概述
@@ -37,7 +37,7 @@ query 领域负责"一轮对话"在客户端里的全部工作：
 用户输入 / SDK 消息
   │  REPL.onSubmit 或 headless submitMessage（chunk-tyg7f3ek.js#nI 内 No → _i）
   ▼
-utils/processUserInput · processUserInput（jLt）        斜杠命令、bash 模式、@提及附件、UserPromptSubmit 钩子
+utils/processUserInput/processUserInput.ts · processUserInput（jLt）        斜杠命令、bash 模式、@提及附件、UserPromptSubmit 钩子
   │  得到 messages + shouldQuery
   ▼
 query.ts · query（chunk-ha3km179.js#J$）                 工具初始化；主线程可挂观察者（queryWithObserverTap #iy）
@@ -91,13 +91,13 @@ queryLoop 消费事件：assistant 中的 tool_use 交给 StreamingToolExecutor 
 ### 4.1 入口
 
 - `query.ts · query`（`chunk-ha3km179.js#J$`，旧版同名）：
-  1. 确保工具初始化（`Xnt(tools)`）。
+  1. 确保工具初始化（`awaitArtifactRosterSafe(tools)`，`chunk-s61vbvea.js#Xnt`）。
   2. `transcriptTap = $a(toolUseContext, messages)` 建转录 tap：assistant 带 tool_use 时先落盘。
-  3. 运行 queryLoop。主线程且开了代理观察者（`aVn()`）时走 `queryWithObserverTap`（`#iy`）。
+  3. 运行 queryLoop。主线程且开了代理观察者（`isObserverAgentsEnabled()`）时走 `queryWithObserverTap`（`#iy`）。
   4. 结束时为本轮吸收的命令发 `command_lifecycle`（completed/cancelled），记录 turn 的成败与统计（`$u`），返回终止结果。
   - 子代理退出时通知预计算模块（`subagent_exit`）。
 - `queryWithObserverTap`（`#iy`）：
-  - 主线程先挂代理观察者 `sWs`；非交互会话会等它就绪。
+  - 主线程先挂代理观察者 `ensureMainObserver`（`chunk-wjzg3t3t.js#sWs`）；非交互会话会等它就绪。
   - 把每个事件交给观察者 `capture`，遇到 `stream_request_start` 时 `flushSegment`。
 - `queryLoop(params, startedCommandUuids, deliveredPollEventUuids, transcriptTap)`（`#xc`，75 KB）：
   - 外层是 `while(true){ r = yield* runIterationRecordingErrors(); if (r !== NEXT_ROUND) return r }`。
@@ -129,19 +129,19 @@ queryLoop 消费事件：assistant 中的 tool_use 交给 StreamingToolExecutor 
    - `queryTracking = {chainId, depth+1, roundStartedAtMs}`。
    - `messagesForQuery` 先经 `transcriptTap.withArrivedRows`，再经 `utils/toolResultStorage.ts · applyToolResultBudget`（`chunk-jcnpfn31.js#eii`，大工具结果落盘，见第 11 节）。
 5. **模型决定**
-   - 主线程时 `f8s` 比较"会话选定模型/实时切换"，采纳 `session_pick` 或 `availability_chain`，并记 `tengu_live_model_switch`。
+   - 主线程时 `checkModelSwitch`（`chunk-e6aww6q8.js#f8s`）比较"会话选定模型/实时切换"，采纳 `session_pick` 或 `availability_chain`，并记 `tengu_live_model_switch`。
    - `resolveModelAndFacts(messages, permissionMode)` 得到 `attemptModel` 与 `attemptModelFacts`：`by()` 处理 plan 模式、200k 以上用 opusplan 一类规则，见第 13 节。
 6. **自动压缩**：`autocompactOutcome = yield* deps.autocompact(...)`，取值：
    - `rapid_refill_breaker_tripped` → 产出错误消息，返回 `rapid_refill_breaker`。
    - `compacted` → 记 `tengu_auto_compact_succeeded`，扣 taskBudget，重算上下文路由，用 `buildPostCompactMessages` 替换 `messagesForQuery`，更新 MagicDocs，产出压缩边界与摘要消息。
    - `failed` / `not_needed` → 更新连续失败计数。
    - 之后可能触发预计算压缩（`bzr`），供下次反应式压缩直接换用。
-7. **其他轮首附加**：目录同步通知、PostModelSwitch 钩子上下文、请求公告（`Gjs`、`Dr`/`ol`/`rl`）、`hu`/`pu` 两组公告、advisor 决议（`kFs` → `advisorModel/advisorDeferred/advisorActive`）。
+7. **其他轮首附加**：目录同步通知、PostModelSwitch 钩子上下文、请求公告（`usageLimitNotices`（`chunk-89vj35pq.js#Gjs`）、`Dr`/`ol`/`rl`）、`hu`/`pu` 两组公告、advisor 决议（`resolveAdvisorState`（`chunk-mw4q1ac2.js#kFs`）→ `advisorModel/advisorDeferred/advisorActive`）。
 8. **渲染 system 提示词**
    - `promptRender = xu(messagesForQuery, systemPrompt, {...})` 负责会话级回放：工具描述、wire 形状、提醒折叠都沿用上次记录，保证提示词缓存稳定。
    - `apiSystemPrompt = asSystemPrompt(RYs(promptRender.systemPrompt, contextRouting.systemContext))`。
 9. **用量额度模型同意**：模型需要 usage credits（如 Fable）且有对话框能力时，`requestDialog(E0e, …)` 询问用户：
-   - 同意 → `qYs` 开启额度。
+   - 同意 → `recordCreditsOnlyConsent`（`chunk-e6aww6q8.js#qYs`）开启额度。
    - 拒绝/未答 → 退回允许的回退模型（`model_consent_fallback` 系统消息）。
    - `CLAUDE_CODE_NO_MODEL_FALLBACK` 设置时不替换模型，直接报错。
 10. **阻断上限**：未压缩且 token 估算达到 `blocked` 级（`pse`）时产出 prompt-too-long 错误，返回 `blocking_limit`；能走反应式压缩时除外。
@@ -156,7 +156,7 @@ queryLoop 消费事件：assistant 中的 tool_use 交给 StreamingToolExecutor 
       - `server_fallback` / `refusal_no_fallback` / `fallback_request` → 服务器拒答回退：换模型、墓碑化（tombstone）已丢弃的消息、横幅提示。
       - `streaming_fallback_began` → 放弃本次尝试的工具，可能提示"Retrying without streaming"。
       - `stream_event` 的 `message_delta` → 记 `lastStopReason`，同步 usage 到改写过的副本。
-      - `assistant` → 修正工具输入（`Nu`），记 `permissionModeAtRequest`；判断是否"扣住"不发给 UI（max_output_tokens、prompt-too-long、截断、安全监控）；否则 yield。最后放进 `assistantMessages`，tool_use 块交 `StreamingToolExecutor.addTool`（`services/tools/StreamingToolExecutor.ts`，`chunk-ha3km179.js#oi`），实现边流边执行。
+      - `assistant` → 修正工具输入（`Nu`），记 `permissionModeAtRequest`；判断是否"扣住"不发给 UI（max_output_tokens、prompt-too-long、截断、安全监控）；否则 yield。最后放进 `assistantMessages`，tool_use 块交 `StreamingToolExecutor` 的 `addTool`（`services/tools/StreamingToolExecutor.ts`，`chunk-ha3km179.js#oi`），实现边流边执行。
     - 抛错时 `endTurnOnError` 补齐缺失的 tool_result（`yieldMissingToolResultBlocks` `#Tc`），返回 `model_error` / `image_error`。
 12. **流结束后的恢复**（按顺序，命中即返回 NEXT_ROUND 或终止）：
     1. 安全监控拦截（`isSafetyMonitorBlockedMessage`，旧版名误为 createAssistantAPIErrorMessage，见第 10 节）→ 补 tool_result。
@@ -187,7 +187,7 @@ queryLoop 消费事件：assistant 中的 tool_use 交给 StreamingToolExecutor 
 - 上下文：`blocking_limit`、`rapid_refill_breaker`
 - 错误：`model_error`、`image_error`、`api_error`、`malformed_tool_use_exhausted`
 
-进入下一轮的 `transition.reason`：`next_turn`、`stop_hook_blocking`、`max_output_tokens_recovery`、`truncated_response_recovery`、`malformed_tool_use_retry`、`thinking_only_retry`、`reactive_compact_retry`、`precomputed_compact_swap`、`refusal_retry`。
+进入下一轮的 `transition: { reason }`：`next_turn`、`stop_hook_blocking`、`max_output_tokens_recovery`、`truncated_response_recovery`、`malformed_tool_use_retry`、`thinking_only_retry`、`reactive_compact_retry`、`precomputed_compact_swap`、`refusal_retry`。
 
 ### 4.3 其他
 
@@ -204,7 +204,7 @@ queryLoop 消费事件：assistant 中的 tool_use 交给 StreamingToolExecutor 
   - `submitMessage`（内部 `No` → `_i`）依次：
     1. 判断本轮不允许的工具。
     2. `BE` 处理交接/孤儿权限。
-    3. `processUserInput`（`jLt`，`querySource:"sdk"`）。
+    3. `processUserInput`（`chunk-xx1vmpsq.js#jLt`，`querySource:"sdk"`）。
     4. 通过 `vpt({run: query, queryParams})` 驱动 `query()`。
   - `Dy` 类是 headless 每轮的驱动器，管理 abort、轮次结果与 SDK 事件。
   - 这些建议归入 `QueryEngine.ts`（见过程文档）。
@@ -263,9 +263,9 @@ queryLoop 消费事件：assistant 中的 tool_use 交给 StreamingToolExecutor 
      - display 由会话设置与 highlights/updates 逻辑决定。
      - thinking-binding-controls 开启时附 `block_binding`。
    - thinking 开启时，`tool_choice: {type:"tool"}` 降为 auto；thinking 机械关闭且模型限制时 effort 被钳制。
-   - `context_management = getAPIContextManagement({hasThinking, toolClearing})`（`$7t`，见第 12 节），只在带 context-management beta 时发送。
+   - `context_management = getAPIContextManagement({hasThinking, toolClearing})`（`chunk-e6aww6q8.js#$7t`，见第 12 节），只在带 context-management beta 时发送。
    - `speed:"fast"`：fast mode 条件见第 13 节。
-   - `diagnostics:{previous_message_id}`：第一方、agentic 查询时发送。
+   - `diagnostics.previous_message_id`：第一方、agentic 查询时发送。
    - `metadata = getAPIMetadata()`（`chunk-w5ndchqs.js#vVe`）。
    - 消息加缓存断点：`addCacheBreakpoints`（`#YSr`）用 `kun()` 选标记位置，再转成 `userMessageToMessageParam`/`assistantMessageToMessageParam`。实测缓存断点在"最后一条消息的最后一块"。
    - `CLAUDE_CODE_SIMULATE_PROXY_USAGE` 模拟代理：去掉 beta 与缓存标记，用于测试。
@@ -297,7 +297,7 @@ queryLoop 消费事件：assistant 中的 tool_use 交给 StreamingToolExecutor 
 ## 7. API 客户端、beta 头、请求日志与成本
 
 > 子区域 client；命名与声明说明在 naming/semantic-query.jsonl、naming/docs-query.jsonl。
-> 范围：`services/api/client.ts`、`utils/betas.ts`、`utils/api.ts`、`utils/apiPreconnect.ts`、`services/api/logging.ts`、`services/api/dumpPrompts.ts`、`services/api/emptyUsage.ts`、`services/api/firstTokenDate.ts`、`services/api/promptCacheBreakDetection.ts`、`services/vcr.ts`、`utils/queryProfiler.ts`、`cost-tracker.ts`、`costHook.ts`、`query/{config,deps,stopHooks,tokenBudget}.ts`、`QueryEngine.ts`，以及切分更新后新进入 `utils/effort.ts` 的 64 个声明。函数名为本轮语义名（或旧版名/门面名），括号内为声明 id。
+> 范围：`services/api/client.ts`、`utils/betas.ts`、`utils/api.ts`、`utils/apiPreconnect.ts`、`services/api/logging.ts`、`services/api/dumpPrompts.ts`、`services/api/emptyUsage.ts`、`services/api/firstTokenDate.ts`、`services/api/promptCacheBreakDetection.ts`、`services/vcr.ts`、`utils/queryProfiler.ts`、`cost-tracker.ts`、`costHook.ts`、`query/config.ts`、`query/deps.ts`、`query/stopHooks.ts`、`query/tokenBudget.ts`、`QueryEngine.ts`，以及切分更新后新进入 `utils/effort.ts` 的 64 个声明。函数名为本轮语义名（或旧版名/门面名），括号内为声明 id。
 
 ### 1. 模块地图
 
@@ -326,20 +326,20 @@ queryLoop 消费事件：assistant 中的 tool_use 交给 StreamingToolExecutor 
 queryModel 每次尝试都在 `withRetry(() => getAnthropicClient({maxRetries: 0, model, source, promptId, ...}), ...)` 里取客户端（`chunk-e6aww6q8.js#e_n`）。`maxRetries: 0`，所以 SDK 不重试，`X-Stainless-Retry-Count` 恒为 0（实测一致），重试全部在 withRetry。
 
 1. **默认头** `defaultHeaders`：
-   - `getBaseAppHeaders`（`chunk-hwmsct5x.js#Fl`，未归属）：`x-app: cli`（后台会话 `cli-bg`）、`User-Agent: claude-cli/<版本> (<external|…>, <entrypoint>[, agent-sdk/…][, client-app/…])`（`chunk-aepeg2w5.js#wU`）、`X-Claude-Code-Session-Id`。
+   - `Fl`（`chunk-hwmsct5x.js#Fl`，写作时称 getBaseAppHeaders、未归属；现在 `services/api/requestHeaders.ts`，仍为压缩名）：`x-app: cli`（后台会话 `cli-bg`）、`User-Agent: claude-cli/<版本> (<external|…>, <entrypoint>[, agent-sdk/…][, client-app/…])`（`chunk-aepeg2w5.js#wU`）、`X-Claude-Code-Session-Id`。
    - `getCustomHeaderMap`（`#v4t`）：`ANTHROPIC_CUSTOM_HEADERS`（`getCustomHeaders` `chunk-bwbq4xvm.js#ile` 每行 `名: 值`；HIPAA 组织丢弃其中 `anthropic-beta`）；桌面版加 `anthropic-client-platform: desktop_app`、`anthropic-client-version`；cowork 加 `x-cowork-enrollment`。
    - `chunk-bwbq4xvm.js#oj`：`ANTHROPIC_CUSTOM_HEADERS` 里的 `anthropic-beta` 单独合并。
    - 环境注入：`x-claude-remote-container-id`（`CLAUDE_CODE_CONTAINER_ID`）、`x-claude-remote-session-id`、`x-claude-remote-session-origin`、`x-client-app`（`CLAUDE_AGENT_SDK_CLIENT_APP`）、子代理 `x-claude-code-agent-id` / `x-claude-code-parent-agent-id`。
    - 网关提示头（`chunk-hwmsct5x.js#gir`：`CLAUDE_CODE_GATEWAY_HINT_HEADERS`，或第一方官方 API，或 GrowthBook `tengu_splendid_sutton`）开启时：`x-claude-code-request-class`（main/subagent/workflow/compaction/auxiliary/side_reply，`chunk-aepeg2w5.js#LEi`）、`x-claude-code-agent-type`、`x-claude-code-prompt-id`。实测第一方形状多出的 `x-claude-code-prompt-id`、`x-claude-code-request-class: main` 就来自这里。
    - `CLAUDE_CODE_ADDITIONAL_PROTECTION` → `x-anthropic-additional-protection: true`。
-2. **认证**：OAuth 刷新（`fge`）→ 是否 claude.ai 订阅（`hUe`）；非订阅时 `applyAuthTokenHeader`（`#lw`）把 `ANTHROPIC_AUTH_TOKEN` 或 apiKeyHelper 写成 `Authorization: Bearer`。
+2. **认证**：OAuth 刷新（`checkAndRefreshOAuthTokenIfNeededWithOutcome`）→ 是否 claude.ai 订阅（`hasInferenceScope`）；非订阅时 `applyAuthTokenHeader`（`#lw`）把 `ANTHROPIC_AUTH_TOKEN` 或 apiKeyHelper 写成 `Authorization: Bearer`。
 3. **公共选项** `clientOptions`：`timeout` = `API_TIMEOUT_MS` 或托管配置 `api_timeout_ms`，缺省 600 s（实测 `X-Stainless-Timeout: 600`）；`dangerouslyAllowBrowser: true`（SDK 因此发 `anthropic-dangerous-direct-browser-access: true`）；`fetchOptions` 来自代理层 `sa()`（`utils/proxy.ts`），`fetch` = `buildFetch`。
-4. **按提供商分支**（`Od(model)`）：
+4. **按提供商分支**（`getProviderForModel(model)`）：
    - `gateway`：云网关 JWT（`Authorization: Bearer <jwt>`，baseURL 为网关 URL；未登录/过期抛错）。
    - `bedrock`：`AnthropicBedrock`（`chunk-h87x8cg3.js`）；`AWS_BEARER_TOKEN_BEDROCK` 或 AWS 凭证链；`ANTHROPIC_BEDROCK_SERVICE_TIER` → `X-Amzn-Bedrock-Service-Tier`；`CLAUDE_CODE_SKIP_BEDROCK_AUTH`。
    - `foundry`：`AnthropicFoundry`；`ANTHROPIC_FOUNDRY_AUTH_TOKEN` / `ANTHROPIC_FOUNDRY_API_KEY` / Azure `DefaultAzureCredential`；`ANTHROPIC_FOUNDRY_RESOURCE` 校验。
-   - `anthropicAws`、`anthropicGoogleCloud`、`mantle`、`vertex`：各自 SDK 子类与凭证链，`CLAUDE_CODE_SKIP_*_AUTH` 跳过认证。
-   - 第一方（默认）：API key（`x-api-key`）或 OAuth（`Authorization: Bearer`），`ANTHROPIC_BASE_URL` 覆盖 baseURL；`Vto` 校验头值合法；令牌在构建过程中变了就递归重建。
+   - `anthropicAws`、`anthropicGoogleCloud`、`mantle`、`vertex`：各自 SDK 子类与凭证链，`CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH`/`CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH`/`CLAUDE_CODE_SKIP_MANTLE_AUTH`/`CLAUDE_CODE_SKIP_VERTEX_AUTH` 跳过认证。
+   - 第一方（默认）：API key（`x-api-key`）或 OAuth（`Authorization: Bearer`），`ANTHROPIC_BASE_URL` 覆盖 baseURL；`validateAuthHeaders`（`chunk-aepeg2w5.js#Vto`）校验头值合法；令牌在构建过程中变了就递归重建。
 5. **base URL**：`getProviderBaseUrl`（`#uw`）。
 
 #### 2.2 fetch 包装：`buildFetch`（`chunk-hwmsct5x.js#bw`）
@@ -410,7 +410,7 @@ queryModel 在每个响应结束时调用 `addToTotalSessionCost(cost, usage, mo
 
 #### 2.9 headless 入口：`QueryEngine.ts · ask`（`chunk-tyg7f3ek.js#hm`）
 
-`runHeadlessStreaming`（`cli/print.ts`）调用 `ask(sessionConfig, {abortController, userSpecifiedModel})`：配置项可以是函数（`resolveLazy` `#kr`），按权限模式决定主循环模型与 thinking，构建 headless `ToolUseContext`（`runQuery: query`、`isNonInteractiveSession: true`）。真正的引擎（`submitMessage`、`interrupt`、`setModel`、`getMessages`……）在未归属的 `chunk-tyg7f3ek.js#nI`，其 `submitMessage` 调 `processUserInput`（`jLt`）后进入 `query()`（`chunk-ha3km179.js#J$`）。
+`runHeadlessStreaming`（`cli/print.ts`）调用 `ask(sessionConfig, {abortController, userSpecifiedModel})`：配置项可以是函数（`resolveLazy` `#kr`），按权限模式决定主循环模型与 thinking，构建 headless `ToolUseContext`（`runQuery: query`、`isNonInteractiveSession: true`）。真正的引擎（`submitMessage`、`interrupt`、`setModel`、`getMessages`……）在未归属的 `chunk-tyg7f3ek.js#nI`，其 `submitMessage` 调 `processUserInput`（`chunk-xx1vmpsq.js#jLt`）后进入 `query()`（`chunk-ha3km179.js#J$`）。
 
 ### 3. 数据结构：请求头（第一方客户端）
 
@@ -432,7 +432,7 @@ queryModel 在每个响应结束时调用 `addToTotalSessionCost(cost, usage, mo
 
 ### 4. 环境变量、设置、开关
 
-- 环境：`ANTHROPIC_CUSTOM_HEADERS`、`ANTHROPIC_BETAS`、`ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、`API_TIMEOUT_MS`、`CLAUDE_STREAM_IDLE_TIMEOUT_MS`、`CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS`、`CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS`、`CLAUDE_ENABLE_BYTE_WATCHDOG(_BEDROCK)`、`CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_(DEFAULT|GUARD)`、`CLAUDE_CODE_GATEWAY_HINT_HEADERS`、`CLAUDE_CODE_ADDITIONAL_PROTECTION`、`CLAUDE_CODE_CONTAINER_ID`、`CLAUDE_CODE_REMOTE_SESSION_ID`、`CLAUDE_AGENT_SDK_CLIENT_APP`、`CLAUDE_AGENT_SDK_VERSION`、`CLAUDE_CODE_ENTRYPOINT`、`CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`、`DISABLE_INTERLEAVED_THINKING`、`CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS`、`CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM`、`CLAUDE_CODE_PER_TURN_TIMING`、`CLAUDE_CODE_INLINE_TOOLS`、`CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING`、`CLAUDE_CODE_SIMULATE_PROXY_USAGE`、`CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES`、`CLAUDE_CODE_DISABLE_FAST_MODE`、`CLAUDE_CODE_PROFILE_QUERY`（本构建不生效）、`CLAUDE_CODE_EFFORT_LEVEL`、各提供商 `ANTHROPIC_*_BASE_URL`、`AWS_BEARER_TOKEN_BEDROCK`、`ANTHROPIC_BEDROCK_SERVICE_TIER`、`ANTHROPIC_FOUNDRY_*`、`CLAUDE_CODE_SKIP_*_AUTH`、`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`。
+- 环境：`ANTHROPIC_CUSTOM_HEADERS`、`ANTHROPIC_BETAS`、`ANTHROPIC_BASE_URL`、`ANTHROPIC_AUTH_TOKEN`、`API_TIMEOUT_MS`、`CLAUDE_STREAM_IDLE_TIMEOUT_MS`、`CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS`、`CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS`、`CLAUDE_ENABLE_BYTE_WATCHDOG(_BEDROCK)`、`CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_(DEFAULT|GUARD)`、`CLAUDE_CODE_GATEWAY_HINT_HEADERS`、`CLAUDE_CODE_ADDITIONAL_PROTECTION`、`CLAUDE_CODE_CONTAINER_ID`、`CLAUDE_CODE_REMOTE_SESSION_ID`、`CLAUDE_AGENT_SDK_CLIENT_APP`、`CLAUDE_AGENT_SDK_VERSION`、`CLAUDE_CODE_ENTRYPOINT`、`CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS`、`DISABLE_INTERLEAVED_THINKING`、`CLAUDE_CODE_DISABLE_STRUCTURED_OUTPUTS`、`CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM`、`CLAUDE_CODE_PER_TURN_TIMING`、`CLAUDE_CODE_INLINE_TOOLS`、`CLAUDE_CODE_ENABLE_FINE_GRAINED_TOOL_STREAMING`、`CLAUDE_CODE_SIMULATE_PROXY_USAGE`、`CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES`、`CLAUDE_CODE_DISABLE_FAST_MODE`、`CLAUDE_CODE_PROFILE_QUERY`（本构建不生效）、`CLAUDE_CODE_EFFORT_LEVEL`、各提供商 `ANTHROPIC_*_BASE_URL`、`AWS_BEARER_TOKEN_BEDROCK`、`ANTHROPIC_BEDROCK_SERVICE_TIER`、`ANTHROPIC_FOUNDRY_*`、`CLAUDE_CODE_SKIP_…_AUTH`（BEDROCK、VERTEX、FOUNDRY、ANTHROPIC_AWS、ANTHROPIC_GOOGLE_CLOUD、MANTLE）、`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`。
 - 设置：`modelSettings.<模型>.{effortLevel,maxEffortLevel}`、`effortLevel`、`maxEffortLevel`、托管网络配置 `api_timeout_ms`/`stream_idle_timeout_ms`/`body_idle_timeout`。
 - GrowthBook：`tengu_splendid_sutton`（网关提示头）、`tengu_byte_stream_idle_timeout_ms`、`tengu_stream_watchdog_default_on`、`tengu_tool_pear`（structured outputs）、`tengu_fgts`、`tengu_velvety_kay`（effort 提示）、`tengu_witty_wand`（默认 effort）、`tengu_prompt_cache_1h_config`。
 
@@ -480,7 +480,7 @@ queryModel 在每个响应结束时调用 `addToTotalSessionCost(cost, usage, mo
 1. 次数：`resolveMaxRetries`（`#F_r`）→ `getMaxRetriesFromEnv`（`#JQe`）：`CLAUDE_CODE_MAX_RETRIES`（非持久模式超过 15 时截到 15 并告警），默认 10；持久模式（`CLAUDE_CODE_RETRY_WATCHDOG` 且 `_SCOPE` 不是 `capacity`）默认 300。循环 `attempt = 1 … maxAttempts+1`。
 2. 起手：若 accessFallbackModel 可用且当前模型无权访问，直接抛 `FallbackTriggeredError(…, "permission_denied")`。
 3. 每次尝试前：
-   - 本轮 API 尝试预算（`modelCallRetries.takeApiAttempt()`）耗尽 → `CannotRetryError(NoApiAttemptsLeftError)`。
+   - 本轮 API 尝试预算（`options.modelCallRetries?.takeApiAttempt()`）耗尽 → `CannotRetryError(NoApiAttemptsLeftError)`。
    - 上次是陈旧连接（ECONNRESET/EPIPE 一类）→ 关 keep-alive；配了 `CLAUDE_CODE_CLIENT_CERT` 时重载 mTLS。
    - 客户端为空、凭证轮换、或上次是 401/OAuth 吊销/云凭证错误 → 刷新凭证再 `getClient()`：OAuth 用 `Fk` 强制刷新（失败 2 次或磁盘满抛 `OAuthRefreshDiskFullError`；账号冻结抛 account_on_hold）；主机托管凭证调用宿主的 getHostAuthToken 回调（失败 2 次放弃）。
 4. `operation(client, attempt, retryContext)`：`retryContext = {model, fastMode, maxTokensOverride}`，`queryModel` 用它构建请求参数（`buildRequestParams(retryContext)`）。成功即返回。
@@ -491,7 +491,7 @@ queryModel 在每个响应结束时调用 `addToTotalSessionCost(cost, usage, mo
    4. 低优先级等待（额度窗口快恢复时排队）：等待后 `attempt--`。
    5. 模型访问被拒/不存在、或 5xx（非持久模式）且有 fallback 模型 → `FallbackTriggeredError(reason = model_not_found / permission_denied / server_error)`；AWS 凭证未变而被拒时先探测 fallback 模型可达性。
    6. 快速模式（`fastModeActive`）遇 429/529：有 overage-disabled-reason 头则关快速模式立即重发；retry-after < 20 秒则短等后同模式重试；否则进入冷却（`max(retry-after 或 30 分钟, 10 分钟)`）、关 fastMode 重发。400 "does not support the `speed` parameter" / "Fast mode is not enabled" 同样关快速模式重发。
-   7. 529：后台查询来源（不在 `RETRY_ON_529_QUERY_SOURCES`）直接放弃；对 Opus/Fable 等或有 fallback 时连续 3 次（`Ute=3`）→ 有 fallback 抛 `FallbackTriggeredError(…, "overloaded")`，否则抛 repeated 529 错误。
+   7. 529：后台查询来源（不在 `RETRY_ON_529_QUERY_SOURCES`）直接放弃；对 Opus/Fable 等或有 fallback 时连续 3 次（`MAX_529_RETRIES` = 3，压缩名 Ute，在 `chunk-e6aww6q8.js#Bte` 语句内）→ 有 fallback 抛 `FallbackTriggeredError(…, "overloaded")`，否则抛 repeated 529 错误。
    8. 次数用尽 → `CannotRetryError`（401 且还有凭证续期机会时多给一次）。
    9. 远程 401/403、AWS/GCP 凭证错误、API key helper、WIF 交换各有独立的小上限（多为 2 次），同时清对应凭证缓存。
    10. `shouldRetry`（`#M_r`）为假：若是有状态码的 HTTP 错误、不在 `NON_RETRYABLE_STATUS_CODES` 且不命中 `NON_FALLBACK_ERROR_PREDICATES`、又有 fallback 模型 → `FallbackTriggeredError(…, "last_resort")`；否则 `CannotRetryError`（`api_request_non_retryable`）。
@@ -511,10 +511,10 @@ queryModel 在每个响应结束时调用 `addToTotalSessionCost(cost, usage, mo
 |---|---|---|
 | 1 | 原样 | — |
 | 2 | `i1`：去掉 `thinking-token-count-2026-05-13` beta | `retry:thinking-token-count-unclaimed` |
-| 3 | `_Le`：去掉 `thinking.display` | `retry:thinking-display-unclaimed:withoutField` |
+| 3 | `_Le`：去掉 `thinking.display` | `retry:thinking-display-unclaimed:<字段>`（此处为 withoutField） |
 | 4 | `Tae`：本次请求声明了延迟工具 → 抛 `ToolSearchRefusedError`（`#Yte`）；外层 `queryModelWithToolSearchRecovery` 以 `toolSearchRefusal` 重新调用一次 `queryModel`（去掉 `advanced-tool-use` beta，延迟工具全部内联，并加一条 critical_system_reminder）。新的 `queryModel` 调用重新构建 beta 列表，所以 thinking-token-count 又回来了 | 异常而非标签 |
 | 5 | 新调用里的 `i1` | `retry:thinking-token-count-unclaimed` |
-| 6 | 新调用里的 `_Le` | `retry:thinking-display-unclaimed:withoutField` |
+| 6 | 新调用里的 `_Le` | `retry:thinking-display-unclaimed:<字段>`（同上） |
 
 第 6 次后所有识别器都返回空，`shouldRetry(400)` 为假 → `CannotRetryError` → `getAssistantMessageFromError` 生成 `API Error: 400 …` 文本。`-p` 模式把它写到 stdout 并退出 1。
 
@@ -588,15 +588,15 @@ ClaudeAILimits = { status: "allowed"|"allowed_warning"|"rejected", resetsAt?, un
 - 新增 `onError` 自愈钩子与 `retry:<原因>` 标签机制（2.1.88 的 `withRetry.ts` 无 onError 参数）；316 的 400 去特性链全部基于它。
 - 持久重试从 `CLAUDE_CODE_UNATTENDED_RETRY`（`feature('UNATTENDED_RETRY')`）改为 `CLAUDE_CODE_RETRY_WATCHDOG` 系列（316 original 中已无 UNATTENDED_RETRY 字符串），并新增 `_SCOPE`、等待上限与用量恢复检查、`subscribeRetryWake` 提前唤醒、低优先级等待。
 - `CLAUDE_CODE_MAX_RETRIES` 非持久模式截到 15（旧版直接 parseInt）。
-- 新增 `FallbackTriggeredError.reason` 多种取值（旧版只有 529 overloaded 触发 fallback），以及 accessFallbackModel、"last_resort" 回退。
+- 新增 `FallbackTriggeredError` 的 `reason` 多种取值（旧版只有 529 overloaded 触发 fallback），以及 accessFallbackModel、"last_resort" 回退。
 - 新增流式重试决策表（`decideStreamRetry` 系列：休眠穿越、断网重连、keepPartial、改非流式）。
 - 新增提供商：anthropicAws、mantle、anthropicGoogleCloud 的凭证错误识别与重试；WIF 交换 401。
-- 限额：新增 `seven_day_overage_included`（显示名 "Fable limit"）、`overage` 窗口，按窗口的 utilization/surpassed-threshold 头和时间相对预警；`overage-period-{monthly,channel}-utilization`。
+- 限额：新增 `seven_day_overage_included`（显示名 "Fable limit"）、`overage` 窗口，按窗口的 utilization/surpassed-threshold 头和时间相对预警；`anthropic-ratelimit-unified-overage-period-monthly-utilization`/`anthropic-ratelimit-unified-overage-period-channel-utilization`。
 - 常量保持：默认 10 次、FLOOR_OUTPUT_TOKENS 3000、基础退避 500ms、持久退避上限 5 分钟/总 6 小时/心跳 30 秒、快速模式冷却 30 分钟/20 秒/10 分钟与旧版一致。
 
 ### 未解之处
 
-- `chunk-e6aww6q8.js#e_n` 的 onError 中 `$gt`、`Hgt`、`SI`、`OLe`、`l$`（空函数）几个兜底识别器的具体含义未逐一核对。
+- `chunk-e6aww6q8.js#e_n` 的 onError 中 `$gt`、`Hgt`、`SI`、`OLe`、`l$`（空函数）几个兜底识别器的具体含义未逐一核对（这些是写作时的压缩名，当前阅读树的 onError 中已无同名绑定，未重新对应，待核实）。
 - `chunk-hwmsct5x.js#W8r`（低优先级等待决策）与 `chunk-77a3xzkb.js#s`、`chunk-fm6h4dv7.js#M7`（低优先级 arm 条件）只做了粗命名。
 - `chunk-e6aww6q8.js#AQt` 恒返回 false（构建裁剪），原本的用途不明。
 - `chunk-w5ndchqs.js#pe`（fetchUtilization）内部的重放缓存 `be` 与挂起集合 `V` 未展开。
@@ -628,15 +628,15 @@ ClaudeAILimits = { status: "allowed"|"allowed_warning"|"rejected", resetsAt?, un
 旧版 `getSystemPrompt` 是一个函数直接拼数组；316 改成"提示词组合器"三步，入口是 `constants/prompts.ts · getSystemPrompt`（`chunk-e6aww6q8.js#KI`，旧版名在 316 里落在了 `#Aur` 上，见 notes）。
 
 1. `constants/prompts.ts · getSystemPrompt(tools, model, options)`（`#KI`）
-   调 `composeSections(factsFn, renderFn)`（`WI.composeSections`，`chunk-e6aww6q8.js#RZn`），再 `J7n(sections, 动态分界标记)`：先放所有 `scope:"shared"` 段，然后（全局缓存可用 `j3()` 时）插入 `__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__`（`chunk-dcmhvw5a.js` 导出 `h$`），再放 `scope:"session"` 段；最后每段过一次提示词消融替换 `y0e`。返回字符串数组。
+   调 `composeSections(factsFn, renderFn)`（`WI.composeSections`，`chunk-e6aww6q8.js#RZn`），再 `orderPromptSections(sections, 动态分界标记)`（`chunk-e6aww6q8.js#J7n`）：先放所有 `scope === "shared"` 段，然后（全局缓存可用 `shouldUseGlobalCacheScope()` 时）插入 `__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__`（`chunk-dcmhvw5a.js` 导出 `h$`），再放 `scope:"session"` 段；最后每段过一次提示词消融替换 `y0e`。返回字符串数组。
 2. `computePromptFacts`（`#gan`）→ `buildPromptFacts`（`#a7e`）：事实 = `{model, promptModel, tools[名字], outputStyle{name,isKeepingCodingInstructions}, traits[]}`，traits ∈ `bare / lean / sdk-preset(excludeDynamicSections) / teammate / analysis / print / skills / send-user-message`。
 3. `composeSessionSystemPrompt`（`#kan`）
-   - `decideSystemPromptSections`（`#Cur`）：`CLAUDE_CODE_SIMPLE` 时只产出 `bare` 段（`CWD: … Date: …`）。否则对每个会话段调用 `decideSection`（`#dh`）：段 key（如 `communication:L:send_user_msg`）在会话记录（`bootstrap promptAssembly`）里已有就回放（`replayRecordedSection` `#_an`），否则算决策、渲染并记录（`recordSectionAnswer` `#San`）。这保证同一会话里各段文本稳定、缓存不断。
+   - `decideSystemPromptSections`（`#Cur`）：`CLAUDE_CODE_SIMPLE` 时只产出 `bare` 段（`CWD: … Date: …`）。否则对每个会话段调用 `decideSection`（`#dh`）：段 key（如 `communication:<L>:send_user_msg`：communication 段在需要时加 `:send_user_msg` 后缀）在会话记录（`bootstrap promptAssembly`）里已有就回放（`replayRecordedSection` `#_an`），否则算决策、渲染并记录（`recordSectionAnswer` `#San`）。这保证同一会话里各段文本稳定、缓存不断。
    - `buildSystemPromptSectionList`（`#Aur`）按顺序渲染：
      - shared 段（非 lean）：`intro`（`getSimpleIntroSection` `#sur`）、`system`（`#aur`）、`doing_tasks`（`#lur`，输出风格不保留编码指令时省略）、`actions`（`getActionsSection` `#dur`）、`tools`（`getUsingYourToolsSection` `#fur`）、`tone`（`#yur`）。lean 模型只有一个 `lean_body`（`getLeanBodySection` `#ian`）。
      - session 段：`communication`、`pronouns`、`action_caution`、`task_continuity`、`fable_identity`、`tool_param_json`、`session_guidance`、`memory`、`surface`、`env_info_simple`/`env_info_static`（最新模型清单）、`bg-session`、`context_management`、`system_messages`、`brief`、`focus_mode`、`act_dont_rederive`、`delivering_work_max`、`overcorrection`、`subagent_steer_delegation`、`opus5_reduced_delegation`、`original_games`、`heron_brook`、`brook_heron`、`willow_tern`、`autonomy_append`、`endconv_deferred_hint`，再加 `total_tokens`、`user_pays`、`repl_working`。渲染函数表在 `getSectionRenderers`（`#ban`）。
      - lean 改写（`mme(model)`）时每段用 `<tag>…</tag>` 包起来（`tagLeanSection` `#l7e`、标签名 `getLeanSectionTagName` `#vur`）。
-4. 模块加载时 `setPromptComposer({facts, detachedSections})`（`chunk-e6aww6q8.js#@2280125`）把这套组合器注册到 bootstrap，分离运行的代理（后台/hook）用 `composeDetachedSections`（`#han`）按记录的事实重算。
+4. 模块加载时 `setPromptComposer({facts, detachedSections})`（`chunk-e6aww6q8.js:2280125-2280246`，`constants/prompts.ts`）把这套组合器注册到 bootstrap，分离运行的代理（后台/hook）用 `composeDetachedSections`（`#han`）按记录的事实重算。
 
 调用方（`tools/q.mjs callers #KI`）：AgentTool、`fetchSystemPromptParts`（utils/queryContext）、/btw、/context、/compact、进程内队友、analyzeContextUsage 等。
 
@@ -662,19 +662,19 @@ query 主循环另把 `--system-prompt`/`--append-system-prompt` 拼成 `userSys
    - 有录制值（恢复/分叉）用录制值；
    - 非交互（`-p`、SDK）：有 `--append-system-prompt` 用 `"…running within the Claude Agent SDK."`，否则用 `"You are a Claude agent, built on Anthropic's Claude Agent SDK."`（与 verify.md 7.3 的 `-p` 实测一致）；
    - 交互用 CLI 行。
-3. `JXs`（`chunk-w5ndchqs.js#JXs`，未归属）：`[getAttributionHeader(...), 身份行, ...systemPrompt]`。
+3. `buildSystemWithAttribution`（`chunk-w5ndchqs.js#JXs`，`services/api/claude.ts`）：`[getAttributionHeader(...), 身份行, ...systemPrompt]`。
 4. `constants/system.ts · getAttributionHeader`（`chunk-3b05zaw0.js#Dns`）生成 `x-anthropic-billing-header: cc_version=2.1.316.<指纹>; cc_entrypoint=<入口>;`，入口取 `entrypointOnRequests`（可被 `CLAUDE_CODE_ENTRYPOINT_ON_REQUESTS`、local_projects 改写）或 `CLAUDE_CODE_ENTRYPOINT`（`-p` 为 `sdk-cli`）。追加字段（按顺序）：
    - ` cch=00000;`：第一方且 OAuth 订阅，或 vertex；发送前由原生层改写（JS 层看不到，见 verify.md 7.2）；
    - ` cc_workload=…;`（AsyncLocalStorage 里的 workload）；
    - ` cc_is_subagent=true;`（子代理且非主会话）；
    - 以下只在第一方 + OAuth：` cc_prev_req=req_…;`、` cc_prompt_id=<uuid>;`、` cc_turn_origin=…;`、` cc_prompt_index=N; cc_turn_index=M;`；
-   - ` cc_gateway=1|env;`（gateway 提供商或自定义网关，主机未被担保）；
+   - `cc_gateway=<1|env>;`（gateway 提供商或自定义网关，主机未被担保）；
    - ` cc_project=…; cc_project_src=…;`（项目 id 合法、来源在白名单、订阅归属可发）；
    - 第一方 + OAuth 时压缩前的响应：` cc_prev_msg=msg_…;`、` cc_prev_prompt_index; cc_prev_turn_index`。
    - `CLAUDE_CODE_ATTRIBUTION_HEADER` 为假值时返回空串（除非 `ignoreEnvOptOut` 且第一方直连）。旧版还看 GrowthBook `tengu_attribution_header`，316 只看环境变量。
 5. `utils/api.ts · splitSysPromptPrefix`（`chunk-w5ndchqs.js#s2o`）切块并定 cacheScope：
    - 计费头块：`cacheScope:null`；身份行块：全局缓存模式下 `null`，否则 `"org"`；`# Reporting outcomes` 块（`akn`）单列 `null`；
-   - 全局缓存（`j3()`：第一方或 anthropicAws、开关 `nb()`、OAuth `Oi()`）且找到分界标记：分界前的静态部分 `cacheScope:"global"`，分界后动态部分 `"org"`（或静态被再切分时 `null`）；
+   - 全局缓存（`shouldUseGlobalCacheScope()`：第一方或 anthropicAws、开关 `nb()`、OAuth `Oi()`）且找到分界标记：分界前的静态部分 `cacheScope:"global"`，分界后动态部分 `"org"`（或静态被再切分时 `null`）；
    - 其他情况：其余文本合成一块 `"org"`。
    这对应实测：第三方 3 块（计费头、身份行带 cache_control、主提示词），第一方 4 块（计费头、身份行无 cache_control、静态 1,229 字 `scope: global`、动态 4,432 字）。
 6. `services/api/claude.ts · buildSystemPromptBlocks`（`#ZSr`）把块转成 `{type:"text", text, cache_control?}`，`scope:"global"` 时 `cache_control` 带 `scope`。
@@ -694,7 +694,7 @@ query 主循环另把 `--system-prompt`/`--append-system-prompt` 拼成 `userSys
 
 #### 2.6 OAuth 常量
 
-`constants/oauth.ts · getOauthConfig`（`chunk-6ysndsgz.js#nn`）：环境恒为 prod（`#E`），生产配置 `PROD_OAUTH_CONFIG`（`#a`）：`BASE_API_URL=https://api.anthropic.com`、`CONSOLE_AUTHORIZE_URL=https://platform.claude.com/oauth/authorize`、`CLAUDE_AI_AUTHORIZE_URL=https://claude.com/cai/oauth/authorize`、`TOKEN_URL=https://platform.claude.com/v1/oauth/token`、create_api_key/roles 等；`CLAUDE_CODE_CUSTOM_OAUTH_URL` 只接受白名单（`#u9e`：staging、fedstart）。scope：`user:inference`、`user:profile`、`user:sessions:claude_code`、`user:mcp_servers`、`user:file_upload`、可选 `user:plugins`、`user:projects:read/write`、Console 的 `org:create_api_key`；`CLAUDE_CODE_OAUTH_SCOPES` 可覆盖推理 scope（`getRequestedOAuthScopes` `chunk-aepeg2w5.js#kT`）。OAuth beta 头常量 `oauth-2025-04-20`（`#c` 语句）。
+`constants/oauth.ts · getOauthConfig`（`chunk-6ysndsgz.js#nn`）：环境恒为 prod（`#E`），生产配置 `PROD_OAUTH_CONFIG`（`#a`）：`BASE_API_URL: "https://api.anthropic.com"`、`CONSOLE_AUTHORIZE_URL: "https://platform.claude.com/oauth/authorize"`、`CLAUDE_AI_AUTHORIZE_URL: "https://claude.com/cai/oauth/authorize"`、`TOKEN_URL: "https://platform.claude.com/v1/oauth/token"`、create_api_key/roles 等；`CLAUDE_CODE_CUSTOM_OAUTH_URL` 只接受白名单（`#u9e`：staging、fedstart）。scope：`user:inference`、`user:profile`、`user:sessions:claude_code`、`user:mcp_servers`、`user:file_upload`、可选 `user:plugins`、`user:projects:read/write`、Console 的 `org:create_api_key`；`CLAUDE_CODE_OAUTH_SCOPES` 可覆盖推理 scope（`getRequestedOAuthScopes` `chunk-aepeg2w5.js#kT`）。OAuth beta 头常量 `oauth-2025-04-20`（`#c` 语句）。
 
 ### 3. 数据结构
 
@@ -708,7 +708,7 @@ query 主循环另把 `--system-prompt`/`--append-system-prompt` 拼成 `userSys
 ### 4. 配置项、环境变量、开关
 
 - 环境变量：`CLAUDE_CODE_SIMPLE`（只发 CWD/Date）、`CLAUDE_CODE_ATTRIBUTION_HEADER`、`CLAUDE_CODE_ENTRYPOINT`、`CLAUDE_CODE_ENTRYPOINT_ON_REQUESTS`、`CLAUDE_CODE_TURN_UPDATES`、`CLAUDE_CODE_ACT_DONT_REDERIVE`、`CLAUDE_CODE_BISON_CAIRN`、`CLAUDE_CODE_LARCH_CISTERN`、`CLAUDE_CODE_BASALT_COVE`、`CLAUDE_CODE_PEWTER_OWL_TOOL`、`CLAUDE_CODE_PERFORCE_MODE`、`CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS`、`CLAUDE_CODE_SESSION_KIND=bg` + `CLAUDE_JOB_DIR`（bg-session 段）、`CLAUDE_CODE_USER_EMAIL`、`CLAUDE_CODE_DISABLE_BUNDLED_SKILLS`、`CLAUDE_CODE_CUSTOM_OAUTH_URL`、`CLAUDE_LOCAL_OAUTH_*`、`CLAUDE_CODE_OAUTH_SCOPES`、`CLAUDE_CODE_DISABLE_ATTACHMENTS`（total_tokens 段）。
-- settings：`outputStyle`、`language`、`spinnerVerbs`（replace/append）、`includeGitInstructions`、`flagSettings.viewMode=focus`（focus_mode 段）、`disableBundledSkills`。
+- settings：`outputStyle`、`language`、`spinnerVerbs`（replace/append）、`includeGitInstructions`、`viewMode` 为 `"focus"`（focus_mode 段）、`disableBundledSkills`。
 - GrowthBook：`tengu_cedar_lantern`（act_dont_rederive，默认开）、`tengu_wobbly_dahl`（user_pays）、`tengu_silent_harbor`（tool_param_json）、`tengu_verified_vs_assumed`、`tengu_slate_bittern`（opus5 减少委派）、`tengu_idempotent_wolf`（haiku 5.5 early stopping）、`tengu_amber_sextant`（autonomy_append）、`tengu_virtual_pancake`（粘贴内容标签说明）、`tengu_velvet_possum`（大 CLAUDE.md 只读开头）；模型特性 `fable_5_mitigations`、`opus_5_prompt_bundle`、`fable_5_1_prompt_bundle`、`turn_updates`、`original_games_guidance`、`haiku_5_5_early_stopping_guidance`。遥测 `tengu_brook_heron_applied`、`tengu_heron_brook_applied`、`tengu_willow_tern_applied`、`tengu_sysprompt_boundary_found`、`tengu_sysprompt_missing_boundary_marker`、`tengu_sysprompt_using_tool_based_cache`。
 
 ### 5. 与 2.1.88 的差异（有代码证据）
@@ -725,7 +725,7 @@ query 主循环另把 `--system-prompt`/`--append-system-prompt` 拼成 `userSys
 
 - `chunk-e6aww6q8.js#Cur` 内多个开关函数在 `chunk-p1bhnnws.js`/`chunk-m8whhcc1.js`（`iR`、`yS` 模型特性表），具体特性取值来自模型目录，未逐个核对。
 - `chunk-372tanf4.js#f` 语句里的 `WWe=2` 导出常量用途未确认，未命名。
-- `JXs`/`QXs`（`chunk-w5ndchqs.js`，未归属）应属 `services/api/claude.ts` 或 `utils/api.ts`，见 notes。
+- `buildSystemWithAttribution`/`prependAttributionHeader`（`chunk-w5ndchqs.js#JXs`/`chunk-w5ndchqs.js#QXs`，写作时未归属）：place-rest 后分别放在 `services/api/claude.ts` 与 `utils/model/modelAccessCheck.ts`（后者位置可疑），见 notes。
 - `cch` 的实际计算在原生层，JS 不可见。
 
 ## 10. 消息模型与规范化
@@ -744,7 +744,7 @@ query 主循环另把 `--system-prompt`/`--append-system-prompt` 拼成 `userSys
 | `utils/queryHelpers.ts` | `normalizeMessage`（内部消息 → SDK 流消息）、`isResultSuccessful`、从历史重建 readFileState、提取 Bash CLI 名；恢复时处理孤立权限、延迟工具、跨进程交接的轮次 |
 | `utils/conversationRecovery.ts` | `loadConversationForResume`、旧附件迁移、中断检测（补 "Continue from where you left off."） |
 | `utils/messageQueueManager.ts` | 本切片只有队列的边角：`PRIORITY_ORDER`、`recordQueueOperation`、`popAllEditable`、`isSlashCommand`；队列本体是未归属的 `chunk-e6aww6q8.js#jzo`（见“未解之处”） |
-| `utils/promptCategory.ts` | querySource 标签（`agent:builtin:x`、`repl_main_thread:outputStyle:x`） |
+| `utils/promptCategory.ts` | querySource 标签（`agent:builtin:x`、`repl_main_thread:outputStyle:<x>`） |
 | `utils/streamJsonStdoutGuard.ts` | stream-json 模式下保证 stdout 每行都是 JSON |
 | 其他 | `userPromptKeywords`（"continue/keep going"）、`stream`（单消费者异步队列）、`streamlinedTransform`（仅一个辅助函数） |
 
@@ -753,11 +753,11 @@ query 主循环另把 `--system-prompt`/`--append-system-prompt` 拼成 `userSys
 #### 1. 消息构造函数族
 
 - `utils/messages.ts · createUserMessage`（`chunk-e6aww6q8.js#De`）：所有 user 消息的出口。`content` 为空时用 `"(no content)"`；其余字段原样透传（见下文数据结构），uuid/timestamp 可由调用方注入（queryLoop 的 `deps.uuid/now`）。
-- `createUserInterruptionMessage`（`#Sk`）：内容 `[Request interrupted by user]`，`toolUse=true` 时为 `[Request interrupted by user for tool use]`；带 `interruptedMessageId`、`interruptedByShutdown`。queryLoop 在中止时产出它。
-- `baseCreateAssistantMessage`（`#a6n`）/`createAssistantMessage`（`#vd`）：合成 assistant，`message.model="<synthetic>"`、`stop_reason="stop_sequence"`、全零 usage；API 错误消息额外带 `isApiErrorMessage/apiError/apiErrorParams/apiErrorIsTransient/quotaLimits/error/errorDetails/truncatedAfterOutput`。（API 错误文案的生成在 api-errors 子区域。）
+- `createUserInterruptionMessage`（`#Sk`）：内容 `[Request interrupted by user]`，`toolUse` 为 true 时为 `[Request interrupted by user for tool use]`；带 `interruptedMessageId`、`interruptedByShutdown`。queryLoop 在中止时产出它。
+- `baseCreateAssistantMessage`（`#a6n`）/`createAssistantMessage`（`#vd`）：合成 assistant，`message.model="<synthetic>"`、`stop_reason: "stop_sequence"`、全零 usage；API 错误消息额外带 `isApiErrorMessage/apiError/apiErrorParams/apiErrorIsTransient/quotaLimits/error/errorDetails/truncatedAfterOutput`。（API 错误文案的生成在 api-errors 子区域。）
 - system 消息：`createInformationalSystemMessage`（`#Lv`，subtype `informational`）、`createSystemMessage`（`#Nt`，带 toolUseID/preventContinuation）、`createCompactBoundaryMessage`（`#z2`）、`createSystemAPIErrorMessage`（`#kV`，重试进度）、`createTurnDurationMessage`（`#jzt`）、`createStopHookSummaryMessage`（`#bXs`）、`createPermissionRetryMessage`、`createBridgeStatusMessage`、`createCloudSessionStatusMessage`、`createScheduledTaskFireMessage`、`createAwaySummaryMessage`、`createMemorySavedMessage`、`createAgentsKilledMessage`、`createCommandInputMessage`（`#vb`，subtype `local_command`）。
 - `createProgressMessage`（`#Nzt`）、`createToolUseSummaryMessage`（`#wXs`，type `tool_use_summary`）。
-- 固定文案常量：`INTERRUPT_MESSAGE*`、`CANCEL_MESSAGE`、`REJECT_MESSAGE`（`chunk-yxnffbzs.js#Gk/#Bh`），以及 316 新增的一组“未完成”文案：轮次被交付消息打断、会话结束、复制会话缺结果、审批过期/未答等（`TOOL_CALL_ENDED_FOR_DELIVERY`、`TOOL_CALL_SESSION_ENDED`、`TOOL_RESULT_NOT_IN_COPY`、`APPROVAL_EXPIRED_MESSAGE`…）。权限拒绝文案（`AUTO_REJECT_MESSAGE`、`DONT_ASK_REJECT_MESSAGE`、`buildYoloRejectionMessage`、`buildClassifierUnavailableMessage`、`buildDangerousRemovalDenial`）也在这里。
+- 固定文案常量：`INTERRUPT_MESSAGE*`、`CANCEL_MESSAGE`、`REJECT_MESSAGE`（`chunk-yxnffbzs.js#Gk`/`chunk-yxnffbzs.js#Bh`），以及 316 新增的一组“未完成”文案：轮次被交付消息打断、会话结束、复制会话缺结果、审批过期/未答等（`TOOL_CALL_ENDED_FOR_DELIVERY`、`TOOL_CALL_SESSION_ENDED`、`TOOL_RESULT_NOT_IN_COPY`、`APPROVAL_EXPIRED_MESSAGE`…）。权限拒绝文案（`AUTO_REJECT_MESSAGE`、`DONT_ASK_REJECT_MESSAGE`、`buildYoloRejectionMessage`、`buildClassifierUnavailableMessage`、`buildDangerousRemovalDenial`）也在这里。
 
 #### 2. 发 API 前：`normalizeMessagesForAPI`（`chunk-e6aww6q8.js#AT`，16 KB）
 
@@ -765,10 +765,10 @@ query 主循环另把 `--system-prompt`/`--append-system-prompt` 拼成 `userSys
 
 按顺序：
 
-1. `Kqt`：按 `accountMemoryWithheld` 处理账号记忆附件。
+1. `messagesWithoutAccountMemory`（`chunk-f25sswmp.js#Kqt`）：按 `accountMemoryWithheld` 处理账号记忆附件。
 2. `promoteAndFilterThinking`（`#c8e`）：字符串 assistant 内容提升为文本块（记 `tengu_assistant_string_content_promoted`），反复过滤“只有思考”的孤立 assistant 与空白 assistant 直至稳定；`zvt` 再做一次 user 内容修整。
 3. 计算剥离计划：`thinkingStripPlan` = 传入计划 ∪ `thinking_stripped` 附件（`collectThinkingStripPlan`），`advisorStrippedIds` = 传入 ∪ 最后一个 `advisor_stripped` 附件之前的 id。
-4. `systemTurnsOn = rne(model)`：模型支持中途 system 消息（catalog 能力 `mid_conversation_system`；`CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM` 强开；HIPAA 下关闭；由 `utils/betas.ts · d$` 判定）。Sonnet 5（`Cmr`）另有特殊处理（system 文本不再包 `<system-reminder>`）。
+4. `systemTurnsOn = rne(model)`：模型支持中途 system 消息（catalog 能力 `mid_conversation_system`；`CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM` 强开；HIPAA 下关闭；由 `utils/betas.ts · computeMidConvSystemSupport`（`chunk-aepeg2w5.js#d$`） 判定）。Sonnet 5（`shouldKeepMidConvSystemReminderTags`，`chunk-aepeg2w5.js#Cmr`）另有特殊处理（system 文本不再包 `<system-reminder>`）。
 5. `reorderAttachmentsForAPI`（`#bxs`）：附件上移到最近的 assistant 或 tool_result 之后；`vvt` 再按工具可见性重排。
 6. 媒体错误自愈：扫描 API 错误消息（`errorDetails` 里的图片/文档错误），给之前的 user/附件消息标记要剥离的媒体类型（`stripTargets`）。
 7. 主循环 `for (message of orderedMessages)`：
@@ -781,7 +781,7 @@ query 主循环另把 `--system-prompt`/`--append-system-prompt` 拼成 `userSys
      - 否则包成 `<system-reminder>` 的 isMeta user 消息，合并进前一条 user（`mergeUserMessageWithReminders`：reminder 文本并入 tool_result，tool_result 置前）。
      - 角色与记录不符时记 `tengu_attachment_role_unknown_or_differs`。
 8. 收尾管道：`removeEmptyTextBlocksBetweenThinking`（`#DPs`）→ `filterOrphanedThinkingOnlyMessages`（`#B6n`）→ 必要时 `mergeAdjacentUserMessages` → `filterTrailingThinkingFromLastAssistant`（`#N6n`，最后一条 assistant 不能以思考结尾；`preserveTrailingThinking` 时保留，用于续写未完成思考）→ `filterWhitespaceOnlyAssistantMessages`（`#$6n`）→ `ensureNonEmptyAssistantContent`（`#LPs`）。
-9. `systemTurnsOn` 时合并相邻 `api_system`（`mergeAdjacentApiSystemMessages`，`#qxs`）；否则 reminderFold 开启时做数组级 smoosh（`k6n`，未归属）。
+9. `systemTurnsOn` 时合并相邻 `api_system`（`mergeAdjacentApiSystemMessages`，`#qxs`）；否则 reminderFold 开启时做数组级 smoosh（`countToolCallsSince`，`chunk-e6aww6q8.js#k6n`；该名是旧版匹配名，与行为不符）。
 10. 可选 `echoApiBlockOrder` 按原始块顺序重排；按计划剥离思考（`stripThinkingFromMessages`）与 advisor 块（`stripAdvisorBlocks`）；`Exs` 清理；`Uri` 校验工具引用；`tvt` 最后修整。
 
 `ensureToolResultPairing`（`#R_n`，在 `normalizeMessagesForRequest` 中调用）：删除会话恢复后孤立的 tool_result（首条时换成 `[Orphaned tool result removed due to conversation resume]`）、重复的 tool_use 与无结果的 server/mcp tool_use（夹在思考块间时换 `[Tool use removed]`，全删时 `[Tool use interrupted]`），为缺结果的 tool_use 补 `SYNTHETIC_TOOL_RESULT_PLACEHOLDER`；修复时记 `tengu_tool_result_pairing_repaired`。
@@ -793,7 +793,7 @@ agent teams 开启时先处理 `teammate_mailbox`、`team_context`；然后 `swi
 #### 4. UI 侧：拆块与 lookups
 
 - `normalizeMessages`（`#Gm`）：每个内容块拆成一条消息（多块消息用 `deriveUUID` 派生 uuid），可传缓存 Map；`IncrementalMessageNormalizer`（`chunk-ag5x7vhf.js#cs`）只重算变化部分。
-- `buildMessageLookups` 的 316 实现是增量类 `MessageLookupsAccumulator`/`MessageLookupsBuilder`（`chunk-ag5x7vhf.js#vw/#Ol`），每行再由 `RowLookupsProjector` 切出相关子集，避免整表重渲染。
+- `buildMessageLookups` 的 316 实现是增量类 `MessageLookupsAccumulator`/`MessageLookupsBuilder`（`chunk-ag5x7vhf.js#vw`/`chunk-ag5x7vhf.js#Ol`），每行再由 `RowLookupsProjector` 切出相关子集，避免整表重渲染。
 - `reorderMessagesInUI`（`#kzo`）把 PreToolUse 钩子、tool_use、tool_result、PostToolUse 钩子聚在一起。
 - `handleMessageFromStream`（`#Mzo`）：把流事件转成 UI 状态（`requesting`→`thinking`/`responding`/`tool-input`→`tool-use`、首 token 时间、流式文本、流式 tool_use 列表）。
 
@@ -830,7 +830,7 @@ agent teams 开启时先处理 `teammate_mailbox`、`team_context`；然后 `swi
 
 | 名称 | 作用 |
 |---|---|
-| `CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM` | 强制开启中途 `role:system` 消息（附件折叠成 api_system） |
+| `CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM` | 强制开启中途 `role: "system"` 消息（附件折叠成 api_system） |
 | catalog 能力 `mid_conversation_system`、HIPAA 组织 | 决定 systemTurnsOn（HIPAA 时关闭） |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` / `tengu_amber_flint` | agent teams：teammate_mailbox、team_context 附件 |
 | `tengu_amber_prism` | 拒绝文案后附“下一条可能是纠正”提示（需自动记忆开启） |
@@ -844,7 +844,7 @@ agent teams 开启时先处理 `teammate_mailbox`、`team_context`；然后 `swi
 1. **中途 system 消息**：旧版附件一律转 `<system-reminder>` 的 user 消息；316 在模型支持时折叠成 `api_system`（发出时 `role:"system"`），与 verify.md 7.3 实测第二条消息一致。
 2. **附件预渲染**：316 附件带 `rendered/renderedRole`，`Kbe` 优先使用；`normalizeAttachmentForAPI` 的 switch 从旧版 57 个 case 缩到 26 个，旧版的 `date_change`、`directory`、`edited_text_file`、`nested_memory`、`skill_listing`、`token_usage`、各类 `hook_*` 等不再在这里渲染；新增 `attention_budget`、`tool_search_usage_reminder`、`mcp_dropped_tools_delta`、`memory_update`。
 3. **思考块剥离计划**：新增 `thinking_stripped`/`advisor_stripped` 附件驱动的按消息剥离，以及 `keepForeignThinking`（all/upgrade/none）剥掉其他模型的带签名思考。
-4. 旧版由 `tengu_chair_sermon` 门控的 smoosh，316 改为由 reminderFold（`Uzt`）决定；旧版的 `tengu_toolref_defer_j8m` 开关在 316 原文中已不存在，`relocateToolReferenceSiblings` 未找到对应实现（同名声明是错配）。
+4. 旧版由 `tengu_chair_sermon` 门控的 smoosh，316 改为由 reminderFold（`resolveReminderFold_2`，`chunk-e6aww6q8.js#Uzt`）决定；旧版的 `tengu_toolref_defer_j8m` 开关在 316 原文中已不存在，`relocateToolReferenceSiblings` 未找到对应实现（同名声明是错配）。
 5. **带 id 的 system-reminder** 与 `stripTrailingMessageIdTag`（`[id:xxxx]` 标签）。
 6. 新增大量“未完成调用”与权限拒绝文案（交付打断、会话结束、复制会话、审批过期、内置 rm -rf 保护、无审批界面、分类器不可用/要求等待）。
 7. UI lookups 改为增量累加 + 每行投影（旧版每次重建 `buildMessageLookups`）。
@@ -852,8 +852,8 @@ agent teams 开启时先处理 `teammate_mailbox`、`team_context`；然后 `swi
 
 ### 未解之处
 
-- `chunk-e6aww6q8.js#jzo`（队列本体）、`#k6n`（reminderFold 时的数组级 smoosh）、`#Kbe/#D6n`（附件渲染入口）、`#zvt`、`#Exs`、`#tvt`、`chunk-a76knw89.js#Uri` 都在 `_unattributed`，属于本子系统但未命名。
-- `Kqt`（账号记忆附件处理，`chunk-f25sswmp.js`）的具体规则未细看。
+- `chunk-e6aww6q8.js#jzo`（队列本体）、`#k6n`（reminderFold 时的数组级 smoosh）、`#Kbe`/`#D6n`（附件渲染入口）、`#zvt`、`#Exs`、`#tvt`、`chunk-a76knw89.js#Uri` 写作时都在 `_unattributed`、未命名；place-rest 后已落位并依次命名为 `createMessageQueueManager`、`countToolCallsSince`、`attachmentToMessages`、`attachmentMessagesWithAnswer`、`stringifyObjectToolResults`、`sanitizeErrorToolResultContent`、`dropRedundantEmptyPolls`、`countToolCallsSince`（待核实：`#k6n` 与 `#Uri` 的名字是旧版匹配名，与行为不符）。
+- `messagesWithoutAccountMemory`（账号记忆附件处理，`chunk-f25sswmp.js#Kqt`）的具体规则未细看。
 - `normalizeMessagesForAPI` 内部许多局部状态（`fo/un/ao/rr/bo/vn` 等折叠缓冲、`Cr` 无 assistant 时的延后声明）只命名了主干变量。
 - `chunk-ag5x7vhf.js#cs` 的损坏探针 `Cp` 的检查条件未细看。
 
@@ -876,7 +876,7 @@ agent teams 开启时先处理 `teammate_mailbox`、`team_context`；然后 `swi
 |---|---|
 | `utils/attachments.ts` | 附件生成：`getAttachments` 与约 60 个生成器；@ 提及解析；记忆附件；待办/任务/计划/自动模式提醒；延迟工具与 MCP 增量 |
 | `utils/toolResultStorage.ts` | 大工具结果落盘（`tool-results/`）、`<persisted-output>` 预览、每批工具结果的聚合预算与替换状态 |
-| `utils/messages.ts`（另一子区域） | `normalizeAttachmentForAPI`：附件 → API 消息；`MKr`（`chunk-e6aww6q8.js#MKr`）为按类型的渲染表 |
+| `utils/messages.ts`（另一子区域） | `normalizeAttachmentForAPI`：附件 → API 消息；`ATTACHMENT_MESSAGE_RENDERERS`（`chunk-e6aww6q8.js#MKr`）为按类型的渲染表 |
 
 ### 关键流程
 
@@ -899,8 +899,8 @@ queryLoop / processUserInputBase
 
 - 每个生成器由 `maybe(label, fn)`（`#bu`）包装：计时、5% 采样记 `tengu_attachment_compute_duration`、出错只返回空数组。
 - 所有生成器共享一个 1 秒超时的 AbortController（`attachmentAbortController`）。
-- `options.inputMentionsOnly` 时只算用户输入类和嵌套记忆。
-- 子代理委托观察（`agentContext.delegatedObservation`）时直接返回空。
+- `options` 的 `inputMentionsOnly` 时只算用户输入类和嵌套记忆。
+- 子代理委托观察（`isDelegatedObservationContext(agentContext)`）时直接返回空。
 
 #### 2. 附件类型清单（getAttachments 里的生成器，按 label）
 
@@ -909,12 +909,12 @@ queryLoop / processUserInputBase
 | at_mentioned_files → file / directory / compact_file_reference / pdf_reference / already_read_file / at_mention_reference | `getAtMentionedFileAttachments` `#gPr`、`processAtMentionedFiles` `#hPr`、`generateFileAttachment` `#CJn`、`tryGetPDFReference` `#ACn` | 输入含 `@path`、`@"带空格路径"`，可带 `#L10-20`；`CLAUDE_CODE_EVAL_CONFINED` 时不处理；`CLAUDE_CODE_DISABLE_FILE_MENTIONS` 或宿主不读文件时走 `getFileMentionReferences` `#pPr`，只给 at_mention_reference |
 | mcp_resources → mcp_resource | `getMcpResourceAttachments` `#SPr` | `@server:uri` |
 | agent_mentions → agent_mention | `#yPr` | `@agent-x` 或 `@"x (agent)"` |
-| skill_mentions → skill_mention | `wRn`（`chunk-e6aww6q8.js#wRn`） | 人工输入、主线程、有 Skill 工具 |
+| skill_mentions → skill_mention | `buildSkillMentionAttachments`（`chunk-e6aww6q8.js#wRn`） | 人工输入、主线程、有 Skill 工具 |
 | peer_mentions → peer_mention | `getPeerMentionAttachments` `#_Pr` | 人工输入且有同伴会话 |
 | queued_commands → poll_events + queued_command | `getQueuedCommandAttachments` `#KKe`、`buildPollEventsAttachment` `#Wxr` | 消息队列里 mode 为 prompt/task-notification 的命令 |
-| sandbox_instructions | `Kmn` | 有沙箱 Bash 类工具 |
-| artifact_opening_prefetch | `rPr` | 开关 `VCn()`，主线程首轮 |
-| environment / model / session_settings | `XCn` / `getRuntimeModelSwitchAnnouncements` / `ZCn` | 环境、运行时模型切换、会话设置（语言、输出风格）变化公告 |
+| sandbox_instructions | `getSandboxInstructionsAttachments`（`chunk-e6aww6q8.js#Kmn`） | 有沙箱 Bash 类工具 |
+| artifact_opening_prefetch | `prefetchArtifactOpening`（`chunk-e6aww6q8.js#rPr`） | 开关 `VCn()`，主线程首轮 |
+| environment / model / session_settings | `detectEnvironmentDirectoryChange`（`#XCn`）/ `getRuntimeModelSwitchAnnouncements` / `getOutputStyleAndLanguageAttachments`（`#ZCn`） | 环境、运行时模型切换、会话设置（语言、输出风格）变化公告 |
 | ultrathink_effort | `#iPr` | 输入含 ultrathink 且开关开 |
 | deferred_tools_delta | `getDeferredToolsDeltaAttachments` `#TJn` | 工具搜索可用；延迟工具出现/撤回；`tengu_composed_treehouse` 加 deniedLead |
 | agent_listing_delta | `getAgentListingDeltaAttachment` `#Eve` | 有 Agent 工具，可用代理类型变化 |
@@ -934,13 +934,13 @@ queryLoop / processUserInputBase
 | teammate_mailbox / team_context | `#zPr`（316 恒为空） / `getTeamContextAttachment` `#qPr` | 代理团队模式 `Ko()` |
 | agent_pending_messages → queued_command | `getAgentPendingMessageAttachments` `#zxr` | 子代理的待处理消息 |
 | critical_system_reminder | `#bCn` | `criticalSystemReminder_EXPERIMENTAL` |
-| spawned_loop_memory_withdrawal | `mVo` | 子代理工具步骤后撤回协作记忆 |
+| spawned_loop_memory_withdrawal | `withdrawCoworkMemoryContext`（`chunk-s61vbvea.js#mVo`） | 子代理工具步骤后撤回协作记忆 |
 | silent_turn_reminder | `#Xxr`、`#Yxr` | 主线程、非用户发起的轮次、连续静默轮或秒数超阈值 |
-| host_status_nudge / host_prompt_reminder | `CRn` / `#bCn` | 宿主回复门策略 `replyGatePolicy` |
-| elapsed_time_reminder | `$Rn` | 非用户发起轮、模型开关 |
+| host_status_nudge / host_prompt_reminder | `getCriticalReminderAttachment`（`chunk-e6aww6q8.js#CRn`）/ `#bCn` | 宿主回复门策略 `replyGatePolicy` |
+| elapsed_time_reminder | `getElapsedTimeReminderAttachments`（`chunk-e6aww6q8.js#$Rn`） | 非用户发起轮、模型开关 |
 | total_tokens_reminder | `#VPr` | 模式非 off（countdown/padded-countdown…），格式 `<total_tokens>N tokens left</total_tokens>` |
 | budget_usd | `#XPr` | `--max-budget-usd` |
-| workflow_keyword_request / ultra_effort_enter / ultra_effort_exit / workflow_size_guideline_change | `#aPr` / `#lPr` / `MJs` | 主线程、工作流开关 `Sg()` |
+| workflow_keyword_request / ultra_effort_enter / ultra_effort_exit / workflow_size_guideline_change | `#aPr` / `#lPr` / `latestWorkflowSize`（`chunk-6rgkw5kr.js#MJs`） | 主线程、工作流开关 `Sg()` |
 | ide_selection → selected_lines_in_ide / selected_lines_in_diff | `getSelectedLinesFromIDE` `#wCn` | 主线程、连接了 IDE |
 | ide_opened_file → opened_file_in_ide (+ nested_memory) | `#ECn` | 主线程 |
 | queued_ide_selections | 同上 | 队列命令里带 IDE 选区 |
@@ -948,8 +948,8 @@ queryLoop / processUserInputBase
 | diagnostics / lsp_diagnostics → diagnostics | `#OPr` / `#IPr` | 有编辑类工具；IDE MCP 或 LSP 有新诊断 |
 | unified_tasks → task_status | `#jPr` | 后台任务状态变化 |
 | async_hook_responses → async_hook_response… | `#GPr` | 异步钩子完成 |
-| late_memory_context | `fZs` | `CLAUDE_CODE_MEMORY_CONTEXT_NO_WAIT` 且工具步骤后 |
-| low_resource_status | `eCn` | 磁盘/内存不足提示 |
+| late_memory_context | `collectCcrMemoryAttachments`（`chunk-s61vbvea.js#fZs`） | `CLAUDE_CODE_MEMORY_CONTEXT_NO_WAIT` 且工具步骤后 |
+| low_resource_status | `lowResourceReminders`（`chunk-e6aww6q8.js#eCn`） | 磁盘/内存不足提示 |
 | memory_update | `#WPr` | 记忆同步/待处理更新 |
 | withheld_memory | `#oAn` | 有因权限未显示的记忆 |
 | token_usage | `#KPr` | `CLAUDE_CODE_ENABLE_TOKEN_USAGE_ATTACHMENT` |
@@ -962,11 +962,11 @@ queryLoop / processUserInputBase
 #### 3. 附件变成 API 消息
 
 `utils/messages.ts · normalizeAttachmentForAPI`（`chunk-e6aww6q8.js#ogt`）：
-- 先查渲染表 `MKr`（约 90 种类型）。
+- 先查渲染表 `ATTACHMENT_MESSAGE_RENDERERS`（约 90 种类型）。
 - `file` 类伪造一对 Read 工具调用：`createToolUseMessage(Read, {file_path})` + `createToolResultMessage(FileReadTool, content)`，用 `wrapMessagesInSystemReminder` 包裹。
 - 其余类型生成 `createUserMessage({content, isMeta:true})`，文本外包 `<system-reminder>`。
 - `teammate_mailbox`/`team_context` 只在团队模式渲染。
-- 一部分类型（如 `*_sent` 记录、`prompt_render_point`）只是会话记录，不发给模型。
+- 一部分类型（如 `…_sent` 记录、`prompt_render_point`）只是会话记录，不发给模型。
 
 实测（`docs/process/verify.md` 7.3）：第二条消息 role=system 的环境块就来自 environment/session_settings 一类附件（316 新增的"附件承载环境信息"路线）。
 
@@ -1029,7 +1029,7 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 | task_status | taskId, taskType, status, description, deltaSummary, outputFilePath?, canContinueAgent |
 | deferred_tools_delta | surfacedNames, replacedNames, removedNames, readdedNames, retractedTools[{name,cause}], deniedLead? |
 | agent_listing_delta | addedTypes, removedTypes, addedLines |
-| mcp_instructions_delta / mcp_dropped_tools_delta | 由 `Dan` / `ARn` 计算的增量字段 |
+| mcp_instructions_delta / mcp_dropped_tools_delta | 由 `getMcpInstructionsDelta`（`#Dan`）/ `buildMcpDroppedToolsDelta`（`#ARn`）计算的增量字段 |
 | skill_listing | content, skillCount, isInitial, names, digests |
 | dynamic_skill | skillDir, skillNames, displayPath |
 | output_style | style, turnReminder |
@@ -1080,7 +1080,7 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 
 **2.1.88 有、316 不再产出**：
 - compaction_reminder、companion_intro、bagel_console、current_session_memory、skill_discovery、verify_plan_reminder（生成器 label 已不存在）。
-- 原 `verifyPlanReminder` 的旧版名被错配到 `chunk-nkdv7dw8.js#At`。
+- 原 verifyPlanReminder（2.1.88 名）曾被错配到 `chunk-nkdv7dw8.js#At`（现已改名 `getUserPromptFromMessage`）。
 
 **其他变化**：
 - 待办提醒同时支持新任务系统（task_reminder）。
@@ -1089,7 +1089,7 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 
 ### 未解之处
 
-- `chunk-e6aww6q8.js#uPr`（按值声明工具的增量）与 `#TJn` 的门闩逻辑（`JYr`/`XYr`/`PKe`）只做了粗命名。
+- `chunk-e6aww6q8.js#uPr`（按值声明工具的增量）与 `#TJn` 的门闩逻辑（`shouldAnnounceDeferredTools`/`canInlineToolAdditions`/`toolSearchRejectedOn`：`chunk-a76knw89.js#JYr`、`chunk-a76knw89.js#XYr`、`chunk-e6aww6q8.js#PKe`）只做了粗命名。
 - `chunk-e6aww6q8.js#rPr`（artifact_opening_prefetch）、`#ZCn`/`#XCn`（环境/会话设置公告）不在本领域模块里，未展开。
 - `chunk-tmx5d02z.js#sn`、`#Xe`：图片收集器，归属不明。
 - `chunk-e6aww6q8.js#iAn`：恒返回 `{}`，可能是构建期裁掉的字段。
@@ -1098,14 +1098,14 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 
 > 子区域 compact；命名与声明说明在 naming/semantic-query.jsonl、naming/docs-query.jsonl。
 > 依据：`original/` 2.1.316 代码；函数名为本次 semantic/旧版/门面名，后附声明 id。旧版 2.1.88 只作对照。
-> 阅读树路径以 `build/readable/src/<路径>.js` 为准。
+> 阅读树路径以 `reconstructed/src/<路径>.js` 为准。
 
 ### 1. 模块地图
 
 | 模块（重组路径） | 职责 | 说明 |
 |---|---|---|
-| `services/compact/autoCompact.ts` | 自动压缩窗口、阈值、等级、是否该压缩、快速回填熔断 | 主入口 autocompact 本体 `yzr` 仍在 `_unattributed/chunk-e6aww6q8/part-258.js` |
-| `services/compact/compact.ts` | 整段压缩、部分压缩、摘要请求、压缩后附件 | 反应式压缩核心 `dJn/Tjo/HTe` 在 `_unattributed/.../part-231.js` |
+| `services/compact/autoCompact.ts` | 自动压缩窗口、阈值、等级、是否该压缩、快速回填熔断 | 主入口 autocompact 本体 `runAutoCompactIfNeeded`（`chunk-e6aww6q8.js#yzr`；写作时在 `_unattributed/` part-258，现已在本文件） |
+| `services/compact/compact.ts` | 整段压缩、部分压缩、摘要请求、压缩后附件 | 反应式压缩核心 `triggerReactiveCompact`/`tryReactiveCompact`/`runReactiveCompact`（`#dJn`/`#Tjo`/`#HTe`）写作时在 `_unattributed/` part-231，现在 `services/compact/reactiveCompact.ts` |
 | `services/compact/prompt.ts` | 摘要提示词 8 种变体、部分压缩提示词、analysis/summary 处理 | 变体选择 `qee` 在 part-231 |
 | `services/compact/microCompact.ts` | keep-recent 清理、空闲返回后服务端 clear_tool_uses 规划 | 混入日期解析、MCP 说明（错归） |
 | `services/compact/apiMicrocompact.ts` | 请求体 `context_management` | 一个函数 |
@@ -1131,16 +1131,16 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
    - 设置里嵌套的 `{ceiling, inner}` 取上限；
    - `CLAUDE_CODE_AUTO_COMPACT_WINDOW`（source=`env`）；
    - 设置 `autoCompactWindow`（数字，或 `{default, byModel}`；`"auto"` 表示不覆盖，source=`settings`）；
-   - 否则 `bUo`（part-166）：clientdata 下发窗口（`clientdata`）→ 实验窗口 `a6e`（`experiment`）→ 禁用 1M（`CLAUDE_CODE_DISABLE_1M_CONTEXT`）或特定模型时 200k（`model-default`）→ 模型表（如 `claude-sonnet-5` 在 remote_cowork/local-agent 表面默认 500k，其余 1M）→ 未知模型强制（`unknown-model`，可用 `CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT` 关）→ `auto`。
+   - 否则 `resolveAutoCompactWindow`（`chunk-e6aww6q8.js#bUo`，`services/compact/autoCompactWindow.ts`）：clientdata 下发窗口（`clientdata`）→ 实验窗口 `a6e`（`experiment`）→ 禁用 1M（`CLAUDE_CODE_DISABLE_1M_CONTEXT`）或特定模型时 200k（`model-default`）→ 模型表（如 `claude-sonnet-5` 在 remote_cowork/local-agent 表面默认 500k，其余 1M）→ 未知模型强制（`unknown-model`，可用 `CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT` 关）→ `auto`。
    - window 永远不超过模型上下文窗口。
 3. **有效窗口** `DZ`（part-167）= window − min(模型 maxOutputTokens, 20000)（旧版 MAX_OUTPUT_TOKENS_FOR_SUMMARY 同值）。
 4. **压缩阈值** `getAutoCompactThresholdTokens`（`#LB`）→ `AJ`：有效窗口 − 13000（旧版 AUTOCOMPACT_BUFFER_TOKENS）；`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` 给出百分比时取 `floor(窗口×pct)` 与之较小值；远程（`CLAUDE_CODE_REMOTE`）200k 窗口下 GrowthBook `tengu_peppy_gosling` 可抬高百分比（`getAutoCompactThresholdConfig`，`#_ke`）。
-5. **等级** `calculateTokenWarningState`（`#pse` → `Z4e`，part-165）：
+5. **等级** `calculateTokenWarningState`（`#pse` → `computeTokenWarning`（`#Z4e`，`services/compact/autoCompactWindow.ts`））：
    - `blocked`：token ≥ 窗口 − 3000（或 `CLAUDE_CODE_BLOCKING_LIMIT_OVERRIDE`）；
    - `compact`：自动压缩开启且 ≥ 阈值；
    - `warn`：≥ 阈值 − 20000；否则 `ok`；附 `pctLeft`。
-6. **预计算压缩**：`isAtPrecomputeThreshold`（`#gQt`）用 `阈值 − 窗口×缓冲比例`；比例 `getPrecomputeBufferFraction`（`#w6o`）来自 GrowthBook `tengu_amber_moleskin`（按窗口大小、repl/sdk 区分的表）或 `tengu_amber_rokovoko`（默认 0.2）。queryLoop 在 `Ojo(...)` 为真时调 `bzr`/`_zr` 后台预先生成摘要（压缩前一轮就开始），真正压缩时 `apr` / `dJn` 直接换上（`precomputed_compact_swap`）。
-7. **是否压缩** `shouldAutoCompact`（`#npr`）：querySource 为 `compact` 或特定辅助来源、窗口已被 `F8n` 判为无需本地压缩、自动压缩关闭时为 false；token = `Tp` 估算（最近 usage + 之后消息粗估）− snip 节省 + 服务端已清理量；等级为 compact/blocked 即压缩。远程 fork 达到阈值但未达“无 PCT 覆盖阈值”时可跳过（`tengu_fork_early_compact`）。
+6. **预计算压缩**：`isAtPrecomputeThreshold`（`#gQt`）用 `阈值 − 窗口×缓冲比例`；比例 `getPrecomputeBufferFraction`（`#w6o`）来自 GrowthBook `tengu_amber_moleskin`（按窗口大小、repl/sdk 区分的表）或 `tengu_amber_rokovoko`（默认 0.2）。queryLoop 在 `shouldArmPrecompute(...)`（`#Ojo`）为真时调 `armPrecomputedCompact`/`latchArmGate`（`#bzr`/`#_zr`）后台预先生成摘要（压缩前一轮就开始），真正压缩时 `runIdleCompaction` / `triggerReactiveCompact`（`#apr`/`#dJn`）直接换上（`precomputed_compact_swap`）。
+7. **是否压缩** `shouldAutoCompact`（`#npr`）：querySource 为 `compact` 或特定辅助来源、窗口已被 `usesLongContextWindow`（`chunk-e6aww6q8.js#F8n`）判为无需本地压缩、自动压缩关闭时为 false；token = `Tp` 估算（最近 usage + 之后消息粗估）− snip 节省 + 服务端已清理量；等级为 compact/blocked 即压缩。远程 fork 达到阈值但未达“无 PCT 覆盖阈值”时可跳过（`tengu_fork_early_compact`）。
 8. **熔断**：
    - 快速回填：`checkRapidRefillBreaker`（`#ajr`）——压缩后不到 `RAPID_REFILL_TURN_WINDOW`=3 轮又需压缩，连续 3 次即 `trip` → autocompact 返回 `rapid_refill_breaker_tripped`，queryLoop 产出 `autocompact_thrashing` 错误并以 `{reason:"rapid_refill_breaker"}` 结束。
    - 连续失败：`hzr`=3 次失败后返回 `failure_breaker_open`（同旧版 MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES）。
@@ -1156,7 +1156,7 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 | `failure_breaker_open` | 连续失败熔断 | 不再尝试 |
 | `rapid_refill_breaker_tripped` | 快速回填熔断 | 产出错误并结束本轮 |
 
-`yzr` 的路由：窗口来源不是 `auto`（即用户/服务端配置了窗口）、自动模式分类器溢出、或指定了压缩模型时，走**反应式压缩管线**（`dJn`，`tengu_auto_compact_routed_reactive`）；否则调用 `compactConversation`。可用更大模型压缩（`rpr`，`compact_larger_model`）。
+`runAutoCompactIfNeeded`（`#yzr`）的路由：窗口来源不是 `auto`（即用户/服务端配置了窗口）、自动模式分类器溢出、或指定了压缩模型时，走**反应式压缩管线**（`triggerReactiveCompact`，`tengu_auto_compact_routed_reactive`）；否则调用 `compactConversation`。可用更大模型压缩（`findLargerWindowModel`（`#rpr`），`compact_larger_model`）。
 
 ### 3. 整段压缩 `compactConversation`（`chunk-e6aww6q8.js#mzr`）
 
@@ -1172,16 +1172,16 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 8. 边界：`createCompactBoundaryMessage("auto"|"manual", preTokens, lastUuid)` 生成 `system/compact_boundary`，`compactMetadata` 含 preTokens、postTokens、durationMs、preCompactDiscoveredTools、cumulativeDroppedTokens（`setCumulativeDroppedTokens`，`#wK`）。
 9. 摘要消息：`createUserMessage({...Bee(summaryText, {...}), isCompactSummary:true, isVisibleInTranscriptOnly:true})`；`Bee` 用 `formatCompactSummary`（`#jsr`）去 analysis、把 summary 变成 "Summary:"，前面是 `COMPACT_CONTINUATION_PREAMBLE`。
 10. 遥测 `tengu_compact`（pre/post token、ptlAttempts、promptCacheSharingEnabled、summaryPromptArm、上下文构成 `tokenStatsToStatsigMetrics(analyzeContext(...))`）；`executePostCompactHooks`。
-11. 返回 CompactionResult（见第 9 节）；`finally` 发 `compact_end`、`sdk_status:null`。
+11. 返回 CompactionResult（见第 9 节）；`finally` 发 `compact_end`、`{ type: "sdk_status", status: null }`。
 
 **部分压缩** `partialCompactConversation`（`#m8s`）：消息选择器触发，`direction` 为 `from`（摘要所选位置之后，保留之前）或 `up_to`（摘要之前，保留之后；保留段含 thinking 时 `decideKeptThinkingStrip` 决定是否剥离并加 `thinking_stripped` 标记）。提示词用 `getPartialCompactPrompt`（`#Asn`），用户反馈作为 "User context:"，边界带 userFeedback 与摘要条数，遥测 `tengu_partial_compact`/`tengu_partial_compact_failed`。
 
-**反应式压缩**（prompt too long 之后）：queryLoop 收到被扣住的 `prompt_too_long`/`image_error` 错误时，经 `lJn`（未尝试过、非 compact 来源、自动压缩开、远程会话 bridge 打开）后调 `dJn` → `Tjo` → `HTe`（part-231，按 API 轮次分组保留尾部、只摘要头部，可回退整段），成功由 `buildReactiveCompactionResult`（`#szr`）组装，迁移 `transition: reactive_compact_retry`（或 `precomputed_compact_swap`）进入下一轮；可有一次“更深一层”压缩（`reactiveCompactDeeperPass`）。失败则把错误交给用户（`tengu_ptl_surfaced_to_user`）。
+**反应式压缩**（prompt too long 之后）：queryLoop 收到被扣住的 `prompt_too_long`/`image_error` 错误时，经 `canReactiveCompact`（`#lJn`，未尝试过、非 compact 来源、自动压缩开、远程会话 bridge 打开）后调 `triggerReactiveCompact` → `tryReactiveCompact` → `runReactiveCompact`（`services/compact/reactiveCompact.ts`，按 API 轮次分组保留尾部、只摘要头部，可回退整段），成功由 `buildReactiveCompactionResult`（`#szr`）组装，迁移 `transition: reactive_compact_retry`（或 `precomputed_compact_swap`）进入下一轮；可有一次“更深一层”压缩（`reactiveCompactDeeperPass`）。失败则把错误交给用户（`tengu_ptl_surfaced_to_user`）。
 
 ### 4. 压缩提示词（`services/compact/prompt.ts`）
 
 - 结构：`getNoToolsPreamble`（只回文本）+ 正文 + 可选 "Additional Instructions:" + `getNoToolsTrailer`。
-- 变体表 `COMPACT_PROMPT_ARMS`（`#$sr` 内 `@2096868`）：
+- 变体表 `COMPACT_PROMPT_ARMS`（`chunk-e6aww6q8.js#$sr` 语句内，偏移 2096868，`services/compact/prompt.ts`）：
 
 | arm | 回复形状 | 正文 |
 |---|---|---|
@@ -1198,7 +1198,7 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 
 ### 5. 压缩后重新注入的附件 `buildPostCompactAttachments`（`#jTe`）
 
-顺序：最近读过的文件（`createPostCompactFileAttachments`，最多 5 个、每个 5000 token、合计 50000）→ 后台代理 `task_status`（`createAsyncAgentAttachmentsIfNeeded`）→ 后台 shell `task_status` → peer handback 的 queued_command → `plan_file_reference` → `plan_mode`（plan 模式时）→ `invoked_skills`（每个 5000、合计 25000）→ 延迟工具/代理列表/MCP 说明等增量公告（压缩后要重新公告）→ projects 线程请求携带、`goal_status`、`session_cron_carry` → SessionStart(`compact`) 钩子结果。子代理（`Gs(agentContext)`）不注入后台任务类附件。
+顺序：最近读过的文件（`createPostCompactFileAttachments`，最多 5 个、每个 5000 token、合计 50000）→ 后台代理 `task_status`（`createAsyncAgentAttachmentsIfNeeded`）→ 后台 shell `task_status` → peer handback 的 queued_command → `plan_file_reference` → `plan_mode`（plan 模式时）→ `invoked_skills`（每个 5000、合计 25000）→ 延迟工具/代理列表/MCP 说明等增量公告（压缩后要重新公告）→ projects 线程请求携带、`goal_status`、`session_cron_carry` → SessionStart(`compact`) 钩子结果。子代理（`isDelegatedObservationContext(agentContext)`）不注入后台任务类附件。
 
 ### 6. microcompact 与 API 侧 context_management
 
@@ -1209,11 +1209,11 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 
 ### 7. session memory 压缩
 
-旧版 `sessionMemoryCompact.ts`（`tengu_sm_compact*` 系列）在 316 中**没有任何遥测串或对应代码**。此路径下两个声明：`chunk-e6aww6q8.js#szr` 实为反应式压缩结果组装，`chunk-tyg7f3ek.js#Gb` 实为 headless 停放轮次 uuid 计算。316 的 SessionMemory 仍存在（queryLoop 调 `manuallyExtractSessionMemory`），但不参与压缩路径；压缩由“预计算摘要 + 反应式管线”取代。
+旧版 `services/compact/sessionMemoryCompact.ts`（`tengu_sm_compact*` 系列）在 316 中**没有任何遥测串或对应代码**。此路径下两个声明：`chunk-e6aww6q8.js#szr` 实为反应式压缩结果组装，`chunk-tyg7f3ek.js#Gb` 实为 headless 停放轮次 uuid 计算。316 的 SessionMemory 仍存在（queryLoop 调 `manuallyExtractSessionMemory`），但不参与压缩路径；压缩由“预计算摘要 + 反应式管线”取代。
 
 ### 8. token 计数与估算
 
-- **以 API usage 为准**：`tokenCountWithEstimation`（`#M4o`）取最近一次响应的上下文 token（遇到 compact_boundary 为 0）；`Tp`（part-162）= 锚点 usage + 之后消息粗估，是阈值判断用的主函数。`getTokenUsage`（`@1534644`）跳过合成占位、`isUnmetered`；`Ste`（chunk-g54kbxqw）取 `iterations` 最后一项。
+- **以 API usage 为准**：`tokenCountWithEstimation`（`#M4o`）取最近一次响应的上下文 token（遇到 compact_boundary 为 0）；`Tp`（`chunk-e6aww6q8.js#Tp`，`services/compact/autoCompact.ts`，仍为压缩名）= 锚点 usage + 之后消息粗估，是阈值判断用的主函数。`getTokenUsage`（`chunk-e6aww6q8.js:1534635-1534844`，`utils/tokens.ts`）跳过合成占位、`isUnmetered`；`getTokenCountFromUsage`（`chunk-g54kbxqw.js#Ste`）取 `iterations` 最后一项。
 - **粗估**：`roughTokenCountEstimation`（`#pc`）按 4 字节/token；json/jsonl/jsonc 2 字节；图片/文档固定 2000；tool_use 为名字+输入 JSON 长度。
 - **countTokens API**：`countMessagesTokensWithAPI`（`#gVe`）——Bedrock 用 `CountTokensCommand`；否则 `anthropic.beta.messages.countTokens`（去 caller/tool_reference、去工具 schema 的 defer_loading 等，含 thinking 时带 thinking）；网关 501 时 `countTokensViaHaikuFallback` 发 max_tokens=1 的真实请求读 usage。
 - **max_output_tokens**：`getModelMaxOutputTokens`（`chunk-aepeg2w5.js#age`）{default, upperLimit}：模型目录覆盖 → 目录值 → claude-3 老模型 4096/8192 → 默认 32000/128000；再受 clientdata `heather_vale` 与能力表约束。主循环再经 `CLAUDE_CODE_MAX_OUTPUT_TOKENS` 调整（见 claude.ts 片段）。
@@ -1224,7 +1224,7 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 **CompactionResult**（compactConversation/partial/reactive 共用）：
 `{ boundaryMarker, summaryMessages, messagesToKeep, attachments, hookResults, userDisplayMessage?, preCompactTokenCount, postCompactTokenCount, truePostCompactTokenCount, compactionUsage, ptlAttempts?, promptCacheSharingEnabled?, replacement? }`；`buildPostCompactMessages`（`#EW`）按 边界→摘要→replacement→保留→附件→钩子 拼接。
 
-**compact_boundary 消息** `compactMetadata`：`trigger(auto|manual)`、`preTokens`、`postTokens`、`durationMs`、`cumulativeDroppedTokens`、`preCompactDiscoveredTools`、`preservedSegment{headUuid,anchorUuid,tailUuid}`、`preservedMessages{anchorUuid,uuids,allUuids}`、`precomputed?`、`preCompactArtifactReadVersions?`、userFeedback（部分压缩）。
+**compact_boundary 消息** `compactMetadata`：`trigger(auto|manual)`、`preTokens`、`postTokens`、`durationMs`、`cumulativeDroppedTokens`、`preCompactDiscoveredTools`、`preservedSegment`（`{headUuid, anchorUuid, tailUuid}`）、`preservedMessages`（`{anchorUuid, uuids, allUuids}`）、`precomputed?`、`preCompactArtifactReadVersions`（可选）、userFeedback（部分压缩）。
 
 **compactTracking**（queryLoop 状态）：`{compacted, turnId, turnCounter, consecutiveFailures, consecutiveRapidRefills}`。
 
@@ -1234,7 +1234,7 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 
 - **提示建议**（`services/PromptSuggestion/promptSuggestion.ts`）：`shouldEnablePromptSuggestion`（`CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION` > GrowthBook `tengu_chomp_inflection` > 交互会话 > 非 swarm 队员 > 设置 `promptSuggestionEnabled`）；每轮主线程结束 `executePromptSuggestion` → `tryGenerateSuggestion`（至少 2 条回答、无 API 错误、非 plan 模式、未限额、缓存不冷：非缓存 token >1 万则跳过，`tengu_chomp_thaw` 可放行缓存写入）→ fork（`prompt_suggestion`）→ `stripSuggestionWrapper` → `shouldFilterSuggestion`（12 类过滤，含中日韩文本）。
 - **代理进度摘要** `startAgentSummarization`（`chunk-0h4e7gnq.js#xu`）：3–5 个词现在进行时。
-- **工具批次标签** `generateToolUseSummary`（`chunk-ha3km179.js#Ja`）：`CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES` 打开（`buildQueryConfig.gates.emitToolUseSummaries`），小模型、约 30 字符过去时；queryLoop 把结果作为 `pendingToolUseSummary` 在下一轮产出。
+- **工具批次标签** `generateToolUseSummary`（`chunk-ha3km179.js#Ja`）：`CLAUDE_CODE_EMIT_TOOL_USE_SUMMARIES` 打开（`buildQueryConfig` 返回的 `queryConfig.gates.emitToolUseSummaries`），小模型、约 30 字符过去时；queryLoop 把结果作为 `pendingToolUseSummary` 在下一轮产出。
 - **/btw 旁路提问** `runSideQuestion`（`chunk-pphytj9x.js#JHt`，门面名）：fork（`side_question`，单轮、拒绝工具、共享缓存），对进行中的工具补“仍在进行”占位结果，带历史 btw 问答；回答写入 `session.btwHistory`。
 - **/context 建议**（`utils/contextSuggestions.ts`）：≥80% 警告、单工具 ≥15% 且 ≥1 万 token、Read ≥5%、记忆文件 ≥5% 且 ≥5000、自动压缩关闭且 50–80%。
 
@@ -1273,7 +1273,7 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 
 ### 13. 未解之处
 
-- `chunk-e6aww6q8.js#yzr`（autocompact 本体）、`#dJn`/`#Tjo`/`#HTe`（反应式压缩）、`#qee`（变体选择）、`#Bee`（摘要消息构造）、`#Tp`/`#U4e`（token 锚点估算）、`#bUo`（窗口默认来源）、`#Z4e`/`#AJ`/`#DZ`（阈值）都在 `_unattributed`，建议归入 autoCompact.ts / compact.ts / tokens.ts 后再命名。
+- `chunk-e6aww6q8.js#yzr`（autocompact 本体）、`#dJn`/`#Tjo`/`#HTe`（反应式压缩）、`#qee`（变体选择）、`#Bee`（摘要消息构造）、`#Tp`/`#U4e`（token 锚点估算）、`#bUo`（窗口默认来源）、`#Z4e`/`#AJ`/`#DZ`（阈值）写作时都在 `_unattributed`，建议归入 autoCompact.ts / compact.ts / tokens.ts 后再命名（place-rest 后已落位到 `services/compact/` 下各文件并有了名字）。
 - `chunk-e6aww6q8.js#rpr`（更大模型压缩）的选择条件未细读。
 - `chunk-gzv3xh26.js` 的上下文提示控制器（触发 keep-recent 清理、`buildRequestParams` 加 beta）未展开。
 - 旧版 awaySummary 的真实位置未找到。
@@ -1298,7 +1298,7 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 | `utils/model/deprecation.ts` | 弃用表与提示、旧 Opus 4/4.1 自动重映射 |
 | `utils/model/validateModel.ts` | /model、--model 校验与服务器探测 |
 | `utils/model/bedrock.ts` | Bedrock 客户端、推理配置文件、区域前缀；混入环境变量注册表一段 |
-| `utils/model/modelSupportOverrides.ts` | 第三方 `ANTHROPIC_DEFAULT_*_MODEL_SUPPORTED_CAPABILITIES` |
+| `utils/model/modelSupportOverrides.ts` | 第三方 `ANTHROPIC_DEFAULT_…_MODEL_SUPPORTED_CAPABILITIES`（如 `ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES`） |
 | `utils/model/modelCapabilities.ts` | 本地能力缓存（316 中读取开关恒关）；混入 accessFallbackModels 解析 |
 | `utils/model/contextWindowUpgradeCheck.ts` | 1M 升级提示 |
 | `utils/model/check1mAccess.ts` | 订阅用户 1M 依赖 usage credits |
@@ -1314,16 +1314,16 @@ Attachment 公共形状为 `{type, ...}`。常见字段（从生成器读出）�
 #### 2.1 主循环模型的决定顺序
 
 1. `utils/model/model.ts · getUserSpecifiedModelSetting`（`chunk-aepeg2w5.js#a8t`）：会话初始模型（`--model`，bootstrap `getInitialMainLoopModel`）> `ANTHROPIC_MODEL` > `settings.model`；经 `normalizeModelSetting`（`#fmr`）：不在白名单时尝试白名单替代（`Hk`），持久化来源的未解析别名丢弃。
-2. 会话内覆盖：bootstrap `getMainLoopModelOverride`（/model 切换）优先于上一步，见 `Z_`（`chunk-aepeg2w5.js#Z_`，未命名，在 `_unattributed`）。
-3. 无用户设置时走默认 `tne()`/`Fw()`（`_unattributed`）：服务端下发/组织默认（`attribution: org/served`）→ `ANTHROPIC_DEFAULT_MODEL`（env）→ 档位默认 `rm()`：
+2. 会话内覆盖：bootstrap `getMainLoopModelOverride`（/model 切换）优先于上一步，见 `getUserSpecifiedModelSetting`（`chunk-aepeg2w5.js#Z_`，写作时未命名、在 `_unattributed`）。
+3. 无用户设置时走默认 `resolveDefaultMainLoopModelSetting()`/`resolvePlanModeModel()`（`chunk-aepeg2w5.js#tne`、`chunk-aepeg2w5.js#Fw`）：服务端下发/组织默认（`attribution: org/served`）→ `ANTHROPIC_DEFAULT_MODEL`（env）→ 档位默认 `envDefaultModel()`（`chunk-aepeg2w5.js#rm`）：
    - 订阅用户有 Opus 权限（`hasOpusAccess`：max；team/enterprise/pro 视条件）或第一方类提供商 → 默认 Opus（`getDefaultOpusModel` 并按 1M optIn 加 `[1m]`）；
    - Mantle → `opus55`；Bedrock/Vertex → 只有 Sonnet 权限时 Sonnet，否则 Opus；
    - 其余（Foundry 等）→ 默认 Sonnet。
    - 托管 `availableModels`+`enforceAvailableModels` 可把默认改到被允许的模型（`om()`）。
-4. `resolveModelSetting`（`#Ut`）= `parseUserSpecifiedModel`（`#fG`）：
-   - 别名：`opus`→`getDefaultOpusModel()`（`ANTHROPIC_DEFAULT_OPUS_MODEL` > settings 档位覆盖 > catalog 默认），`sonnet`/`opusplan`→`getDefaultSonnetModel`，`haiku`→默认 Haiku（`TD`），`fable`→默认 Fable（`E6e`），`best`→`NK()`（catalog `best: "fable"` 可用则 Fable，否则 Opus）；`[1m]` 后缀保留。
+4. `parseUserSpecifiedModel`（`#Ut`，写作时称 resolveModelSetting）→ `resolveModelAliasSetting`（`#fG`，写作时称 parseUserSpecifiedModel）：
+   - 别名：`opus`→`getDefaultOpusModel()`（`ANTHROPIC_DEFAULT_OPUS_MODEL` > settings 档位覆盖 > catalog 默认），`sonnet`/`opusplan`→`getDefaultSonnetModel`，`haiku`→默认 Haiku（`TD`），`fable`→默认 Fable（`getDefaultFableModel`，`chunk-aepeg2w5.js#E6e`），`best`→`NK()`（catalog `best: "fable"` 可用则 Fable，否则 Opus）；`[1m]` 后缀保留。
    - 旧 Opus（`claude-opus-4-0/4-1` 及带日期 id，`LEGACY_OPUS_FIRSTPARTY`）在第一方类提供商上自动换成默认 Opus，`CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP=1` 关闭。
-5. plan 模式：`by()/u8t()`（`_unattributed`）对 `opusplan`/`haiku` 设置做 plan 时升级（Opus/Sonnet），受白名单时降档并告警。
+5. plan 模式：`getRuntimeMainLoopModel()`/`resolveRuntimeMainLoopModel()`（`chunk-aepeg2w5.js#by`、`chunk-aepeg2w5.js#u8t`）对 `opusplan`/`haiku` 设置做 plan 时升级（Opus/Sonnet），受白名单时降档并告警。
 6. 主循环每轮 `queryLoop` 里再经 fallback 链、拒答回退、额度同意等改写（见 query 手册）。
 
 #### 2.2 别名与 316 模型 id（catalog `aliases`）
@@ -1363,9 +1363,9 @@ catalog 字段 `context` 与 `max_output_tokens`（摘录）：
 | haiku-4-5 | 200k | 32000 / 64000 |
 | fable-5、5-1，mythos-5、5-1 | 1M | 64000 / 128000 |
 
-- 请求的 `max_tokens`：`services/api/claude.ts · getMaxOutputTokensForModel`（`chunk-aepeg2w5.js#tRn`）= 模型默认，`CLAUDE_CODE_MAX_OUTPUT_TOKENS` 可在上限内调整。实测 opus-5-5 发 `max_tokens=128000`（verify.md 7.3）与此一致。
+- 请求的 `max_tokens`：`services/api/claude.ts · getMaxOutputTokensForModel`（`chunk-aepeg2w5.js#tRn`）= 模型默认，`CLAUDE_CODE_MAX_OUTPUT_TOKENS` 可在上限内调整。实测 opus-5-5 发 `max_tokens` 为 128000（verify.md 7.3）与此一致。
 - `getSonnet46ContextWindowOverride`（`#Zxt`）：客户端数据 `kelp_forest_sonnet` 可把 sonnet-4-6 窗口调到 200k–1M。
-- 1M 合并：`isOpus1mMergeEnabled`（`#ige`）第一方、非 Pro、未设 `CLAUDE_CODE_DISABLE_1M_CONTEXT`；`isDefaultOpus1mOptIn`（`#T6e`）时 opus 默认带 `[1m]`。
+- 1M 合并：`isOpus1mMergeEnabled`（`#ige`）第一方、非 Pro、未设 `CLAUDE_CODE_DISABLE_1M_CONTEXT`；`opus1mMergeTagsDefaultOpus`（`#T6e`，写作时称 isDefaultOpus1mOptIn）时 opus 默认带 `[1m]`。
 
 #### 2.5 价格（`utils/modelCost.ts`）
 
@@ -1379,7 +1379,7 @@ catalog 字段 `context` 与 `max_output_tokens`（摘录）：
 
 - 级别 `EFFORT_LEVELS = low, medium, high, xhigh, max`（`chunk-dcmhvw5a.js#Ei`）。`med` 视作 medium，`ultracode` 视作 xhigh。
 - 支持判定 `modelSupportsEffort`（`chunk-kswt4qha.js#iS`）：API 拒绝过 → 否；3P 能力覆盖；`CLAUDE_CODE_MODEL_CAPABILITIES`；服务端目录 `effort_levels`；旧模型（3.x、opus-4-0/4-1、sonnet-4-0/4-5、haiku-4-5）否；`CLAUDE_CODE_ALWAYS_ENABLE_EFFORT`；catalog 能力 `effort`；第一方类提供商默认支持。`max`/`xhigh` 同理（能力 `max_effort`/`xhigh_effort`）。
-- 本轮 effort `aS()`（`_unattributed`，`chunk-kswt4qha.js#aS`）：钩子给的值 > `CLAUDE_CODE_EFFORT_LEVEL`（`unset/auto` 表示不发）> 本轮 effort > 会话设置 > 默认。默认 `gcr()`：GrowthBook `tengu_witty_wand`（按模型）> 组织默认（`default_effort_level`）> fallback 携带 > 服务端目录 `default_effort` > catalog `default_effort`（opus-5-5/sonnet-5-5/haiku-5-5 为 medium，opus-5/4-8/fable 为 high，opus-4-7 xhigh）。实测默认 `output_config.effort=medium`（opus-5-5）一致。
+- 本轮 effort `resolveEffortValue()`（`chunk-kswt4qha.js#aS`，`utils/effort.ts`）：钩子给的值 > `CLAUDE_CODE_EFFORT_LEVEL`（`unset/auto` 表示不发）> 本轮 effort > 会话设置 > 默认。默认 `getDefaultEffortForModel()`：GrowthBook `tengu_witty_wand`（按模型）> 组织默认（`default_effort_level`）> fallback 携带 > 服务端目录 `default_effort` > catalog `default_effort`（opus-5-5/sonnet-5-5/haiku-5-5 为 medium，opus-5/4-8/fable 为 high，opus-4-7 xhigh）。实测默认 `output_config.effort` 为 medium（opus-5-5）一致。
 - 组织上限：`modelSettings.<模型>.maxEffortLevel` 与账户 `maxEffortLevel` 取较低，`resolveAppliedEffort`（`#Zkn`）截断，max/xhigh 不支持时降为 high。
 - 子代理：`CLAUDE_CODE_SUBAGENT_EFFORT`。
 
@@ -1411,7 +1411,7 @@ catalog 字段 `context` 与 `max_output_tokens`（摘录）：
 #### 2.10 弃用与白名单
 
 - 弃用表 `DEPRECATED_MODELS`（`#Ak`）：opus-4-1、opus-4-0（重映射到 "the latest Opus"）、sonnet-4-0、3-opus、3-7-sonnet、3-5-haiku，各提供商退役日期（如 sonnet-4-0 第一方 2026-06-15）。
-- 白名单：`settings.availableModels`、托管 `enforceAvailableModels`、服务端 `model_access` 权利、`deniedModels`；`isModelAllowed`（`ro`，`_unattributed`）为总判定。校验 `validateModel`（`chunk-ewfzwa2f.js#f0r`）对未知名字发 `max_tokens=1` 的探测请求。
+- 白名单：`settings.availableModels`、托管 `enforceAvailableModels`、服务端 `model_access` 权利、`deniedModels`；`isModelAllowed`（`chunk-aepeg2w5.js#ro`，`utils/model/modelAllowlist.ts`）为总判定。校验 `validateModel`（`chunk-ewfzwa2f.js#f0r`）对未知名字发 `max_tokens=1` 的探测请求。
 
 ### 3. 数据结构
 
@@ -1423,8 +1423,8 @@ catalog 字段 `context` 与 `max_output_tokens`（摘录）：
 
 ### 4. 环境变量、设置与开关
 
-- 模型：`ANTHROPIC_MODEL`、`ANTHROPIC_DEFAULT_MODEL`、`ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU,FABLE}_MODEL`（及 `_NAME/_DESCRIPTION/_SUPPORTED_CAPABILITIES`）、`ANTHROPIC_SMALL_FAST_MODEL(_AWS_REGION)`、`ANTHROPIC_CUSTOM_MODEL_OPTION(_NAME/_DESCRIPTION)`、`CLAUDE_CODE_SUBAGENT_MODEL(_FORCE)`、`CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP`、`CLAUDE_CODE_DISABLE_1M_CONTEXT`、`CLAUDE_CODE_MODEL_CAPABILITIES`、`CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST`。
-- 提供商：`CLAUDE_CODE_USE_{BEDROCK,VERTEX,FOUNDRY,ANTHROPIC_AWS,ANTHROPIC_GOOGLE_CLOUD,MANTLE,GATEWAY}`、`ANTHROPIC_BEDROCK_BASE_URL`、`ANTHROPIC_BEDROCK_REGION_PREFIX`、`CLAUDE_CODE_SKIP_BEDROCK_AUTH`、`AWS_REGION` 等（见 bedrock.ts 中的注册表片段）。
+- 模型：`ANTHROPIC_MODEL`、`ANTHROPIC_DEFAULT_MODEL`、`ANTHROPIC_DEFAULT_OPUS_MODEL`/`ANTHROPIC_DEFAULT_SONNET_MODEL`/`ANTHROPIC_DEFAULT_HAIKU_MODEL`/`ANTHROPIC_DEFAULT_FABLE_MODEL`（及 `_NAME/_DESCRIPTION/_SUPPORTED_CAPABILITIES`）、`ANTHROPIC_SMALL_FAST_MODEL(_AWS_REGION)`、`ANTHROPIC_CUSTOM_MODEL_OPTION(_NAME/_DESCRIPTION)`、`CLAUDE_CODE_SUBAGENT_MODEL(_FORCE)`、`CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP`、`CLAUDE_CODE_DISABLE_1M_CONTEXT`、`CLAUDE_CODE_MODEL_CAPABILITIES`、`CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST`。
+- 提供商：`CLAUDE_CODE_USE_BEDROCK`/`CLAUDE_CODE_USE_VERTEX`/`CLAUDE_CODE_USE_FOUNDRY`/`CLAUDE_CODE_USE_ANTHROPIC_AWS`/`CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD`/`CLAUDE_CODE_USE_MANTLE`/`CLAUDE_CODE_USE_GATEWAY`、`ANTHROPIC_BEDROCK_BASE_URL`、`ANTHROPIC_BEDROCK_REGION_PREFIX`、`CLAUDE_CODE_SKIP_BEDROCK_AUTH`、`AWS_REGION` 等（见 bedrock.ts 中的注册表片段）。
 - effort/thinking：`CLAUDE_CODE_EFFORT_LEVEL`、`CLAUDE_CODE_SUBAGENT_EFFORT`、`CLAUDE_CODE_ALWAYS_ENABLE_EFFORT`、`MAX_THINKING_TOKENS`、`CLAUDE_CODE_DISABLE_THINKING`、`CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING`、`CLAUDE_CODE_DISABLE_ULTRATHINK`、`CLAUDE_CODE_MAX_OUTPUT_TOKENS`。
 - fast/advisor：`CLAUDE_CODE_DISABLE_FAST_MODE`、`CLAUDE_CODE_SKIP_FAST_MODE_ORG_CHECK`、`CLAUDE_CODE_SKIP_FAST_MODE_NETWORK_ERRORS`、`CLAUDE_CODE_DISABLE_ADVISOR_TOOL`、`CLAUDE_CODE_ENABLE_EXPERIMENTAL_ADVISOR_TOOL`。
 - 设置：`model`、`availableModels`、`enforceAvailableModels`、`deniedModels`、`modelOverrides`、`modelSettings.<模型>.{effortLevel,maxEffortLevel}`、`modelPicker`、`modelPricing`（托管）、`fastMode`、`fastModePerSessionOptIn`、`alwaysThinkingEnabled`、`showThinkingSummaries`、`advisorModel`、`ultracode`。
@@ -1443,10 +1443,10 @@ catalog 字段 `context` 与 `max_output_tokens`（摘录）：
 
 ### 6. 未解之处
 
-- `Z_`、`tne`、`Fw`、`rm`、`om`、`ro`、`by/u8t`、`aS`、`gcr`、`_y` 等核心判定在 `_unattributed/chunk-aepeg2w5`、`chunk-kswt4qha` 中，未纳入本领域命名（应归 `utils/model/model.ts`、`utils/effort.ts`、`utils/fastMode.ts`）。
-- 服务端模型目录（served catalog，`uR()`/`Xn()`）与 `modelKnowledge` 回调的完整语义未追完（`chunk-aepeg2w5.js#@462260`）。
+- `Z_`、`tne`、`Fw`、`rm`、`om`、`ro`、`by`/`u8t`、`aS`、`gcr`、`_y` 等核心判定写作时在 `_unattributed` 的 `chunk-aepeg2w5`、`chunk-kswt4qha` 中，未纳入本领域命名（应归 `utils/model/model.ts`、`utils/effort.ts`、`utils/fastMode.ts`）；place-rest 后已落位并命名为 `getUserSpecifiedModelSetting`、`resolveDefaultMainLoopModelSetting`、`resolvePlanModeModel`、`envDefaultModel`、`resolveAvailableModels`、`isModelAllowed`、`getRuntimeMainLoopModel`/`resolveRuntimeMainLoopModel`、`resolveEffortValue`、`getDefaultEffortForModel`、`supportsFastMode`（分布在 `utils/model/` 多个文件与 `utils/effort.ts`、`utils/fastMode.ts`）。
+- 服务端模型目录（served catalog，`activeServedCatalog()`（`chunk-aepeg2w5.js#uR`）/`Xn()`）与 `modelKnowledge` 回调的完整语义未追完（`chunk-aepeg2w5.js:462260-462820`，`utils/model/modelDisplay.ts`）。
 - `chunk-e6aww6q8.js#cVe` 同句的 `FG` 槽用途未查清。
-- mythos 模型（无 bedrock id）在哪些条件下对用户可见（`c8t`/`rno`）未完全确认。
+- mythos 模型（无 bedrock id）在哪些条件下对用户可见（`isMythosModelValue`/`isMythosAvailable`：`chunk-aepeg2w5.js#c8t`、`chunk-aepeg2w5.js#rno`）未完全确认。
 
 ## 14. 请求头与请求体：代码 ↔ 实测对照
 
@@ -1462,11 +1462,11 @@ catalog 字段 `context` 与 `max_output_tokens`（摘录）：
 | `system` 第三方 3 块 / 第一方 4 块，计费头 `cc_version=2.1.316.<3hex>` | `buildSystemPromptBlocks` → `s2o`；计费头 `getAttributionHeader`（`chunk-3b05zaw0.js#Dns`），后缀算法见第 9 节 |
 | `messages` 第二条 role=system（环境、延迟工具、代理类型、Skill 列表、日期） | `normalizeMessagesForAPI` 的中途 system 消息（`api_system`），见第 10 节 |
 | tool_result 最后一块带 `cache_control: {type: ephemeral}` | `addCacheBreakpoints`（`#YSr`） |
-| `metadata.user_id` = `{"device_id","account_uuid","session_id"}` 的 JSON 字符串 | `getAPIMetadata`（`chunk-w5ndchqs.js#vVe`） |
-| `max_tokens=128000`、`thinking={type: adaptive, display: omitted}`、`output_config={effort: medium}` | 模型目录（`claude-opus-5-5` 的默认值），`buildRequestParams`，见第 13 节 |
-| `context_management.edits=[{type: clear_thinking_20251015, keep: all}]` | `getAPIContextManagement`（`$7t`），见第 12 节 |
+| `metadata.user_id` = 由 `device_id`、`account_uuid`、`session_id` 组成的 JSON 字符串 | `getAPIMetadata`（`chunk-w5ndchqs.js#vVe`） |
+| `max_tokens` 为 128000、`thinking={type: adaptive, display: omitted}`、`output_config={effort: medium}` | 模型目录（`claude-opus-5-5` 的默认值），`buildRequestParams`，见第 13 节 |
+| `context_management.edits=[{type: clear_thinking_20251015, keep: all}]` | `getAPIContextManagement`（`chunk-e6aww6q8.js#$7t`），见第 12 节 |
 | 第一方 `diagnostics: {previous_message_id: null}` | `buildRequestParams` 末尾（条件 `t$()` 且 agentic） |
-| 400 时 6 个请求逐级去特性 | `queryModel.onError` 的标签 + `queryModelWithToolSearchRecovery`，逐行对照见第 8 节 |
+| 400 时 6 个请求逐级去特性 | `queryModel` 中 `onError` 返回的 retry 标签 + `queryModelWithToolSearchRecovery`，逐行对照见第 8 节 |
 
 ## 15. 配置项与环境变量（汇总，详见各节）
 
@@ -1476,12 +1476,12 @@ catalog 字段 `context` 与 `max_output_tokens`（摘录）：
 | thinking | `CLAUDE_CODE_DISABLE_THINKING`；settings `alwaysThinkingEnabled`、thinking display | 关闭/配置 thinking | 6、13 |
 | effort | `CLAUDE_CODE_EFFORT_LEVEL`、settings `effortLevel`；GrowthBook 组织上限 | output_config.effort | 13 |
 | fast mode | `CLAUDE_CODE_DISABLE_FAST_MODE`；settings `fastMode` | `speed:"fast"` | 13 |
-| 模型 | `ANTHROPIC_MODEL`、`ANTHROPIC_DEFAULT_{OPUS,SONNET,HAIKU}_MODEL`、`ANTHROPIC_SMALL_FAST_MODEL`、`CLAUDE_CODE_NO_MODEL_FALLBACK` | 模型与别名、回退 | 4、13 |
-| 缓存 | `DISABLE_PROMPT_CACHING[_HAIKU/_SONNET/_OPUS/_FABLE/_MYTHOS]`、`CLAUDE_CODE_MESSAGES_PROMPT_CACHE_TTL`；`tengu_prompt_cache_1h_config`、`tengu_tidy_frost` | 提示词缓存与 TTL | 6 |
+| 模型 | `ANTHROPIC_MODEL`、`ANTHROPIC_DEFAULT_OPUS_MODEL`/`ANTHROPIC_DEFAULT_SONNET_MODEL`/`ANTHROPIC_DEFAULT_HAIKU_MODEL`、`ANTHROPIC_SMALL_FAST_MODEL`、`CLAUDE_CODE_NO_MODEL_FALLBACK` | 模型与别名、回退 | 4、13 |
+| 缓存 | `DISABLE_PROMPT_CACHING`（及 `DISABLE_PROMPT_CACHING_HAIKU`/`DISABLE_PROMPT_CACHING_SONNET`/`DISABLE_PROMPT_CACHING_OPUS`/`DISABLE_PROMPT_CACHING_FABLE`/`DISABLE_PROMPT_CACHING_MYTHOS`）、`CLAUDE_CODE_MESSAGES_PROMPT_CACHE_TTL`；`tengu_prompt_cache_1h_config`、`tengu_tidy_frost` | 提示词缓存与 TTL | 6 |
 | 请求体扩展 | `CLAUDE_CODE_EXTRA_BODY`、`CLAUDE_CODE_EXTRA_METADATA`、`ANTHROPIC_CUSTOM_HEADERS` | 附加 body/metadata/头 | 6、7 |
-| 端点与认证 | `ANTHROPIC_BASE_URL`、`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`、`ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN`、`CLAUDE_CODE_USE_{BEDROCK,VERTEX,FOUNDRY}`、各提供商 `*_BASE_URL`、`ANTHROPIC_UNIX_SOCKET` | 客户端与第一方/第三方形状 | 7 |
+| 端点与认证 | `ANTHROPIC_BASE_URL`、`_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL`、`ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN`、`CLAUDE_CODE_USE_BEDROCK`/`CLAUDE_CODE_USE_VERTEX`/`CLAUDE_CODE_USE_FOUNDRY`、各提供商 `*_BASE_URL`、`ANTHROPIC_UNIX_SOCKET` | 客户端与第一方/第三方形状 | 7 |
 | 超时/流 | `API_TIMEOUT_MS`、`CLAUDE_SLOW_FIRST_BYTE_MS`、`CLAUDE_ENABLE_STREAM_WATCHDOG`、`CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS` | 请求与流看门狗 | 6、8 |
-| 重试 | `CLAUDE_CODE_MAX_RETRIES`、`CLAUDE_CODE_RETRY_WATCHDOG[_SCOPE/_MAX_WAIT_MS/_MAX_USAGE_LIMIT_WAIT_MS/_USAGE_LIMIT_RECHECK_MS]`、`CLAUDE_CODE_OVERLOADED_RETRY_{BASE,MAX}_DELAY_MS`、`CLAUDE_CODE_NONSTREAMING_TIMEOUT_RETRIES` | withRetry | 8 |
+| 重试 | `CLAUDE_CODE_MAX_RETRIES`、`CLAUDE_CODE_RETRY_WATCHDOG`（及 `CLAUDE_CODE_RETRY_WATCHDOG_SCOPE`/`CLAUDE_CODE_RETRY_WATCHDOG_MAX_WAIT_MS`/`CLAUDE_CODE_RETRY_WATCHDOG_MAX_USAGE_LIMIT_WAIT_MS`/`CLAUDE_CODE_RETRY_WATCHDOG_USAGE_LIMIT_RECHECK_MS`）、`CLAUDE_CODE_OVERLOADED_RETRY_BASE_DELAY_MS`/`CLAUDE_CODE_OVERLOADED_RETRY_MAX_DELAY_MS`、`CLAUDE_CODE_NONSTREAMING_TIMEOUT_RETRIES` | withRetry | 8 |
 | 计费头 | `CLAUDE_CODE_ATTRIBUTION_HEADER` | 关闭 system[0] 计费头 | 9 |
 | 中途 system | `CLAUDE_CODE_FORCE_MID_CONVERSATION_SYSTEM` | 强制 role=system 中途消息 | 10 |
 | 压缩 | `DISABLE_AUTO_COMPACT`/`DISABLE_COMPACT` 一类、`CLAUDE_CODE_AUTO_COMPACT_WINDOW`、`CLAUDE_CODE_COLD_COMPACT`；`tengu_curried_trinket`、`tengu_jiggly_blossom` | 自动/手动压缩与摘要提示词 | 12 |
@@ -1535,8 +1535,16 @@ catalog 字段 `context` 与 `max_output_tokens`（摘录）：
 各节"未解之处"列了声明 id，这里只汇总最影响理解主流程的几项：
 
 - headless 引擎 `chunk-tyg7f3ek.js#nI`/`#Mp`/`#BE`/`#Dy` 仍未归属，只读了入口和返回对象（第 5 节）。
-- queryLoop 内的拒答回退级联（`#xc` 中 `fJn`/`Ol`/`ar` 一组）只按事件类型梳理，没逐分支核对。
-- `queryModel.onError` 兜底链中的 `$gt`、`Hgt`、`SI`、`OLe` 没逐一核对含义（第 8 节）。
-- 自动压缩本体 `chunk-e6aww6q8.js#yzr`，以及反应式压缩 `dJn`、`Tjo` 等仍在 `_unattributed`，手册按其行为描述（第 12 节）。
-- 消息规整流水线的若干步骤（`k6n`、`Kbe`、`D6n`、`zvt` 等）与消息队列核心 `jzo` 仍在 `_unattributed`（第 10 节）。
+- queryLoop 内的拒答回退级联（`#xc` 中 `resolveRefusalFallback`（`chunk-e6aww6q8.js#fJn`）/`Ol`/`ar` 一组）只按事件类型梳理，没逐分支核对。
+- `queryModel` 的 `onError` 兜底链中的 `$gt`、`Hgt`、`SI`、`OLe` 没逐一核对含义（第 8 节；写作时的压缩名，当前阅读树中已无同名绑定，待核实）。
+- 自动压缩本体 `chunk-e6aww6q8.js#yzr`，以及反应式压缩 `triggerReactiveCompact`、`tryReactiveCompact`（`#dJn`、`#Tjo`）等写作时仍在 `_unattributed`，手册按其行为描述（第 12 节）；现已放入 `services/compact/autoCompact.ts`、`services/compact/reactiveCompact.ts`。
+- 消息规整流水线的若干步骤（`#k6n`、`#Kbe`、`#D6n`、`#zvt` 等）与消息队列核心 `createMessageQueueManager`（`#jzo`）写作时仍在 `_unattributed`（第 10 节），现已放入 `utils/messages.ts`、`utils/messageQueueManager.ts`。
 - `cch` 在 JS 层是 `00000`，官方二进制在发送前由原生代码替换，JS 里看不到（第 9 节）。
+
+## 18. 引用校验结果
+
+校验时间 2026-11-03 04:39（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+
+- 共检查 2969 处引用：路径 268/276（另 8 个只在 2.1.88 中存在），名字 1754/1760（另 6 个只在 2.1.88 中存在），字面量 365/367（另 2 个只在 2.1.88 中存在），声明id 566/566；占位符与含空格的说明性文字 421 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`costHook.ts`、`query/tokenBudget.ts`、`CLAUDE_CODE_UNATTENDED_RETRY`、`tengu_attribution_header`、`utils/streamlinedTransform.ts`、`streamlinedTransform`、`tengu_toolref_defer_j8m`、`services/compact/sessionMemoryCompact.ts`、`tengu_cached_microcompact`、`tengu_sm_compact*`、`utils/model/antModels.ts`
+- 未通过：0 处。

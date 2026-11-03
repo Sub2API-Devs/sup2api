@@ -2,7 +2,7 @@
 
 > 适用版本：Claude Code 2.1.316（linux-x64 构建）。领域模块清单见 `analysis/segments/domains.json` 的 `state` 键（275 个重组模块、4,364 个顶层声明）。
 > 命名：`naming/semantic-state.jsonl`（语义名）、`naming/docs-state.jsonl`（声明说明）、`naming/modules-state.json`（模块说明）。下文函数名优先用门面原名（`analysis/names/facade.jsonl`），其次本领域语义名、旧版名；括号里是声明 id（`chunk-xxx.js#压缩名`）。
-> 路径写法：`utils/settings/settings.ts` 指重组源码 `src/utils/settings/settings.ts`（阅读树 `build/readable/src/…/*.js`）。`<配置目录>` = `$CLAUDE_CONFIG_DIR` 或 `~/.claude`。
+> 路径写法：`utils/settings/settings.ts` 指阅读树文件 `reconstructed/src/utils/settings/settings.js`（`.ts`/`.tsx` 对应阅读树里同路径的 `.js`）。`<配置目录>` = `$CLAUDE_CONFIG_DIR` 或 `~/.claude`。
 
 ## 0. 概述
 
@@ -28,7 +28,7 @@ state 领域是 CLI 的"持久状态与环境"层，几乎被所有其他子系�
 
 | 组 | 模块（重组路径） |
 |---|---|
-| 设置与配置（48） | `utils/settings/*`（settings、types、constants、validation、changeDetector、mdm/*…）、`services/remoteManagedSettings/*`、`services/policyLimits/*`、`services/settingsSync/*`、`utils/config.ts`、`utils/env*.ts`、`utils/managedEnv*.ts`、`utils/platform.ts`、`utils/xdg.ts`、`utils/cachePaths.ts`、`utils/json.ts`、`types/{command,hooks,plugin}.ts` |
+| 设置与配置（48） | `utils/settings/*`（settings、types、constants、validation、changeDetector、mdm/*…）、`services/remoteManagedSettings/*`、`services/policyLimits/*`、`services/settingsSync/*`、`utils/config.ts`、`utils/env*.ts`、`utils/managedEnv*.ts`、`utils/platform.ts`、`utils/xdg.ts`、`utils/cachePaths.ts`、`utils/json.ts`、`types/hooks.ts`、`types/plugin.ts`（`types/command.ts` 只有类型声明，阅读树无对应文件） |
 | 会话（38） | `utils/sessionStorage.ts`（最大，约 9.8k 行）、`utils/sessionStoragePortable.ts`、`utils/sessionRestore.ts`、`utils/crossProjectResume.ts`、`utils/listSessionsImpl.ts`、`history.ts`、`utils/pasteStore.ts`、`utils/imageStore.ts`、`state/*`、`utils/task/*`、`utils/concurrentSessions.ts`、`utils/session*.ts`、`utils/handlePromptSubmit.ts`、`utils/queueProcessor.ts`、`utils/plans.ts` |
 | 记忆（29） | `utils/claudemd.ts`、`memdir/*`、`services/extractMemories/*`、`services/autoDream/*`、`services/teamMemorySync/*`、`services/SessionMemory/*`、`services/MagicDocs/*`、`utils/memoryFileDetection.ts` |
 | 认证（30） | `utils/auth.ts`、`services/oauth/*`、`utils/authFileDescriptor.ts`、`utils/http.ts`、`utils/userAgent.ts`、`utils/proxy.ts`、`utils/mtls.ts`、`utils/caCerts*.ts`、`utils/aws*.ts`、`utils/billing.ts`、`utils/extraUsage.ts`、`utils/teleport.tsx`、`utils/teleport/*` |
@@ -36,7 +36,7 @@ state 领域是 CLI 的"持久状态与环境"层，几乎被所有其他子系�
 | git/IDE/fs（27） | `utils/git.ts`、`utils/git/*`、`utils/gitDiff.ts`、`utils/worktree.ts`、`utils/attribution.ts`、`utils/commitAttribution.ts`、`utils/ide.ts`、`utils/fsOperations.ts`、`utils/lockfile.ts`、`utils/which.ts`、`utils/windowsPaths.ts`、`utils/tmuxSocket.ts` |
 | 其他基础设施（64） | `services/tips/*`、`services/notifier.ts`、`services/preventSleep.ts`、`utils/analyzeContext.ts`、`utils/collapse*.ts`、`utils/stringUtils.ts`、`utils/Cursor.ts`、`utils/suggestions/*`、`utils/releaseNotes.ts`、`utils/preflightChecks.tsx` 等 |
 
-注意：大量核心实现目前仍在 `_unattributed/`（未归属段）里，例如托管层组合（`chunk-dcmhvw5a` part-051/052/056）、转录项目目录与路径清洗（`chunk-qzv7ezvq`、`chunk-f9pzpnqt`）、输入历史（`chunk-s61vbvea/part-008.js`）、调试日志类（`chunk-cgr0tezp/part-018.js`）、GrowthBook 客户端（`chunk-aepeg2w5/part-111.js`）。见第 11 节。
+注意：本手册写作时大量核心实现还在 `_unattributed/`（未归属段）里，place-rest 后已全部落位：托管层组合（现 `utils/settings/policySettings.ts`、`utils/settings/policyTiers.ts`、`utils/settings/settingsSources.ts`）、转录项目目录与路径清洗（`chunk-qzv7ezvq`、`chunk-f9pzpnqt`，现 `utils/sessionStorage.ts`、`utils/sessionStoragePortable.ts`）、输入历史（现 `history.ts` 的 `PromptHistoryStore`）、调试日志类（现 `utils/debug.ts` 的 `DebugLogger`）、GrowthBook 客户端（现 `services/analytics/growthbookClient.ts`）。见第 11 节。
 
 ---
 
@@ -81,26 +81,26 @@ getSettingsForSource (chunk-q8cqcff6.js#be)         // 单来源（带 perSource
 
 合并后的强制项：policy 中的 `availableModels`、`enforceAvailableModels`、`modelPicker`、`deniedModels` **覆盖**合并结果（不是合并）；托管设置开启 `sandbox.filesystem.allowManagedReadPathsOnly` / `sandbox.network.allowManagedDomainsOnly` 时，其他来源的 `allowRead` / `allowedDomains` 被忽略并给出 statusOnly 警告。结束时记诊断日志 `settings_load_completed`（耗时、来源数、错误数）。
 
-`getHighestSourceForKey`（#pI）从高到低找出某键来自哪个来源（/config、/status 用）。`getSettingsWithSources` 返回合并结果与各非空来源（/status、doctor 用）。
+`getEffectiveSettingSource_2`（`chunk-q8cqcff6.js#pI`）从高到低找出某键来自哪个来源（/config、/status 用）。`getSettingsWithSources` 返回合并结果与各非空来源（/status、doctor 用）。
 
 ### 2.3 托管（policy）设置的组合
 
-托管设置有多层，316 的组合逻辑比 2.1.88（"第一个非空者胜"）复杂得多。入口 `loadPolicySettings`（chunk-dcmhvw5a.js#lgs）→ `resolvePolicySettings`（#SI，位于 `_unattributed/chunk-dcmhvw5a/part-056.js`）。
+托管设置有多层，316 的组合逻辑比 2.1.88（"第一个非空者胜"）复杂得多。入口 `loadPolicySettings`（chunk-dcmhvw5a.js#lgs）→ `resolvePolicySettings`（#SI，位于 `utils/settings/policySettings.ts`）。
 
 | 层 | 来源 | 读取 |
 |---|---|---|
-| helper | `policyHelper` / `policyHelpers` 设置（企业 helper 程序输出设置；`composes: "tier"` 时它就是整层） | `NU()` 判定组合方式 |
-| remote | 远程托管设置（2.4） | `FQ()` → remote-settings.json 缓存 |
-| MDM | macOS plist（`plist`）或 Windows 注册表 `HKLM\SOFTWARE\Policies\ClaudeCode` 值 `Settings`（`hklm`） | `MdmSettingsLoader`（chunk-q8cqcff6.js#startMdmSettingsLoad）、`fireRawRead`（`reg query`）；linux 构建里 plist 分支为空 |
+| helper | `policyHelper` / `policyHelpers` 设置（企业 helper 程序输出设置；`composes: "tier"` 时它就是整层） | `armedHelperOutput()`（`chunk-dcmhvw5a.js#NU`）判定组合方式 |
+| remote | 远程托管设置（2.4） | `parseRemoteManagedSettings()`（`chunk-dcmhvw5a.js#FQ`）→ remote-settings.json 缓存 |
+| MDM | macOS plist（`plist`）或 Windows 注册表 `HKLM\SOFTWARE\Policies\ClaudeCode` 值 `Settings`（`hklm`） | `MdmSettingsLoader`（`chunk-q8cqcff6.js#rn`，旧版匹配名 startMdmSettingsLoad）、`fireRawRead`（`reg query`）；linux 构建里 plist 分支为空 |
 | file | `<托管目录>/managed-settings.json` + `<托管目录>/managed-settings.d/*.json`（按文件名排序依次叠加，后者覆盖） | `loadManagedFileSettingsFromDir`（chunk-dcmhvw5a.js#Tbr） |
-| parent | 父进程传下来的托管切片（只收紧不放宽：deny 规则、禁用项、sandbox 限制等） | `extractParentManagedSlice`（#$ms） |
+| parent | 父进程传下来的托管切片（只收紧不放宽：deny 规则、禁用项、sandbox 限制等） | `keepRestrictiveFromParent`（`chunk-dcmhvw5a.js#$ms`） |
 | hkcu | `HKCU\SOFTWARE\Policies\ClaudeCode`（用户可写，最低） | 仅在没有其他托管层时使用 |
 
 - 托管目录（`utils/settings/managedPath.ts · getManagedFilePath`）：macOS `/Library/Application Support/ClaudeCode`，Windows `C:\Program Files\ClaudeCode`，其他 `/etc/claude-code`。WSL 下可经 `wslInheritsWindowsSettings` 继承 Windows 侧策略（`/mnt/c/...`）。verify.md 第 4 节记录了一个副作用：linux 构建在 Windows 上把 `/etc/claude-code` 解析成 `<当前盘>:\etc\claude-code`。
 - 组合方式由 `managedSourcesBehavior` 决定：默认 **first-wins**（remote > MDM > file，取第一个有内容的层）；`"merge"` 时多层合并。`parentSettingsBehavior` 控制父进程切片是合并还是 first-wins。
 - 宽容解析：托管文档里写错的值不使整份作废，而是按该字段的"限制性取值"处理（`buildPolicyTolerantSettingsSchema`，chunk-dcmhvw5a.js#bs），并给出警告。
-- 宿主托管提供方（`CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST`）时，托管层里的模型相关设置与提供方环境变量被剥离（`stripHostManagedModelSettings`，#Mao），改由宿主覆盖（`pickHostModelOverlay`，#y1i）。
-- 托管层的 env 默认取各层并集（`unionManagedTierEnv`，#FPi），`CLAUDE_CODE_DISABLE_ADMIN_ENV_UNION` 关闭并集只用第一层。
+- 宿主托管提供方（`CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST`）时，托管层里的模型相关设置与提供方环境变量被剥离（`stripHostManagedModelKeys`，`chunk-dcmhvw5a.js#Mao`），改由宿主覆盖（`hostManagedModelOverlay`，`chunk-dcmhvw5a.js#y1i`）。
+- 托管层的 env 默认取各层并集（`unionAdminTierEnv`，`chunk-dcmhvw5a.js#FPi`），`CLAUDE_CODE_DISABLE_ADMIN_ENV_UNION` 关闭并集只用第一层。
 
 ### 2.4 远程托管设置与策略限制
 
@@ -122,7 +122,7 @@ getSettingsForSource (chunk-q8cqcff6.js#be)         // 单来源（带 perSource
 
 ### 2.6 设置 schema 与 env 应用
 
-- `SettingsSchema`（`utils/settings/types.ts`）共约 **187 个顶层键**（2.1.88 为 75 个）。316 新增的部分：`policyHelper(s)`、`managedSourcesBehavior`、`parentSettingsBehavior`、`proxyAuthHelper`、`processWrapper`、`deniedModels`、`availableModelsMatch`、`enforceAvailableModels`、`modelPicker`、`modelPricing`、`modelOverrides`、`skillOverrides`、`claudeMd`（托管注入 CLAUDE.md）、`wslInheritsWindowsSettings`、`remoteTools`、`remoteControl`、`isolatePeerMachines`、`syncClaudeAiSkills/Plugins`、`disableWorkflows`、`disableArtifact`、`theme`、`verbose`、`editorMode` 等原先只在全局配置里的界面偏好。新旧差集用 `artifacts/tmp/state/{oldkeys,newkeys}.txt` 可复现。
+- `SettingsSchema`（`utils/settings/types.ts`）共约 **187 个顶层键**（2.1.88 为 75 个）。316 新增的部分：`policyHelper(s)`、`managedSourcesBehavior`、`parentSettingsBehavior`、`proxyAuthHelper`、`processWrapper`、`deniedModels`、`availableModelsMatch`、`enforceAvailableModels`、`modelPicker`、`modelPricing`、`modelOverrides`、`skillOverrides`、`claudeMd`（托管注入 CLAUDE.md）、`wslInheritsWindowsSettings`、`remoteTools`、`remoteControl`、`isolatePeerMachines`、`syncClaudeAiSkills/Plugins`、`disableWorkflows`、`disableArtifact`、`theme`、`verbose`、`editorMode` 等原先只在全局配置里的界面偏好。新旧差集用 `artifacts/tmp/state/oldkeys.txt`、`artifacts/tmp/state/newkeys.txt` 可复现。
 - 设置里的 `env`：`applySafeConfigEnvironmentVariables`（chunk-q4qb1h08.js）在工作区信任前只应用安全来源（user/flag/policy）与安全变量名单（`utils/managedEnvConstants.ts` 的 SAFE_ENV_VARS 等），托管设置的值优先并在覆盖时警告；信任后应用全部。
 
 ---
@@ -141,30 +141,30 @@ getSettingsForSource (chunk-q8cqcff6.js#be)         // 单来源（带 perSource
 
 默认值 `createDefaultGlobalConfig`（chunk-aepeg2w5.js）：`numStartups:0, theme:"dark", preferredNotifChannel:"auto", verbose:false, editorMode:"normal", autoCompactEnabled:true, autoScrollEnabled:true, showTurnDuration:true, diffTool:"auto", customApiKeyResponses:{approved:[],rejected:[]}, env:{}, tipsHistory:{}, memoryUsageCount:0, promptQueueUseCount:0, todoFeatureEnabled:true, messageIdleNotifThresholdMs:60000, autoConnectIde:false, autoInstallIdeExtension:true, fileCheckpointingEnabled:true, terminalProgressBarEnabled:true, cachedDynamicConfigs:{}, cachedGrowthBookFeatures:{}, respectGitignore:true, copyFullResponse:false, …`。
 
-主要键（按用途；从代码中 `getGlobalConfig().X` 的读取统计得出，约 160 个不同键）：
+主要键（按用途；从代码中 `getGlobalConfig().<键>` 的读取统计得出，约 160 个不同键）：
 
 | 用途 | 键 |
 |---|---|
-| 身份 | `userID`（64 hex，作遥测 device_id 与 `metadata.user_id.device_id`）、`machineID`、`firstStartTime`、`firstStartVersion`、`numStartups` |
+| 身份 | `userID`（64 hex，作遥测 device_id 与 `metadata.user_id`（JSON 字符串）里的 `device_id`）、`machineID`、`firstStartTime`、`firstStartVersion`、`numStartups` |
 | 登录 | `oauthAccount`（accountUuid、emailAddress、organizationUuid、organizationName、organizationRole、workspaceRole、displayName、billingType、hasExtraUsageEnabled、accountCreatedAt、subscriptionCreatedAt、seatTier、planDisplayName、claudeCodeTrial*…）、`primaryApiKey`、`customApiKeyResponses`、`hasCompletedOnboarding` |
 | 项目 | `projects[<项目键>]`：`allowedTools, mcpServers, enabledMcpjsonServers, disabledMcpjsonServers, hasTrustDialogAccepted, hasClaudeMdExternalIncludesApproved, hasClaudeMdExternalIncludesWarningShown, exampleFiles, …` |
 | 缓存 | `cachedGrowthBookFeatures(+At)`、`cachedDynamicConfigs`、`modelAccessCache`、`additionalModelOptionsCache`、`passesEligibilityCache`、`cachedExtraUsageDisabledReason`、`groveConfigCache` … |
-| 界面与提示状态 | `tipsHistory`、`seenNotifications`、`lastReleaseNotesSeen`、各类 `has*Seen*`/`*SeenCount`、`diffSidebarOpen`、`copyOnSelect`、`leftArrowOpensAgents` … |
+| 界面与提示状态 | `tipsHistory`、`seenNotifications`、`lastReleaseNotesSeen`、各类 `has…Seen…`/`…SeenCount`（如 `hasSeenTasksHint`、`projectOnboardingSeenCount`）、`diffSidebarOpen`、`copyOnSelect`、`leftArrowOpensAgents` … |
 | 更新 | `installMethod`、`autoUpdates`、`autoUpdatesProtectedForNative`、`migrationVersion` |
 
 `GLOBAL_CONFIG_KEYS`（47 个）是 `/config` 能直接改的键，`PROJECT_CONFIG_KEYS` = `allowedTools, hasTrustDialogAccepted`。
 
-**项目键**：`getProjectPathForConfig`（chunk-aepeg2w5.js#dOe）= 原始 cwd 所在 git 根（无则 realpath），统一分隔符。`getCurrentProjectConfig` 取 `projects[键]`，不存在时 `DEFAULT_PROJECT_CONFIG`。
+**项目键**：`getProjectPathForConfig`（chunk-aepeg2w5.js#dOe）= 原始 cwd 所在 git 根（无则 realpath），统一分隔符。`getCurrentProjectConfig` 取 `config.projects[absolutePath]`，不存在时 `DEFAULT_PROJECT_CONFIG`。
 
 ### 3.3 读写流程
 
 - 启动 `enableConfigs`：读文件（损坏则备份为 `.corrupted.<ts>` 并提示恢复命令，`tengu_config_parse_error`）、`migrateConfigFields`（autoUpdaterStatus → installMethod/autoUpdates）、装入缓存；此前调用 `getGlobalConfig` 会抛 "Config accessed before allowed."。
 - 读：`getGlobalConfig`（chunk-aepeg2w5.js#ue）返回内存缓存；其他进程改了文件时由 freshness watcher（`fs.watchFile` 或 storage 订阅，1 秒轮询）重新装入（`installGlobalConfigFromDisk`）。
-- 写：`saveGlobalConfig(updater)` → `saveGlobalConfigQueued`（#yc）：先在内存乐观应用，再进 `global-config` 写队列；`saveConfigWithLock` 对 `.claude.json.lock` 加锁读-改-写，写前按间隔备份到 `<配置目录>/backups/.claude.json.backup.<ts>`，删除退役键（`stripRetiredConfigKeys`）。锁失败走回退写，但如果重读结果丢失了缓存里有的 `oauthAccount`/`hasCompletedOnboarding`，拒绝写入（`tengu_config_auth_loss_prevented`，注释引用 GH #3117）。
+- 写：`saveGlobalConfig(updater)` → `saveGlobalConfigQueued`（#yc）：先在内存乐观应用，再进 `global-config` 写队列；`saveConfigWithLock` 对 `.claude.json` 加 `.lock` 后缀的锁文件加锁读-改-写，写前按间隔备份到 `<配置目录>/backups/.claude.json.backup.<ts>`，删除退役键（`stripRetiredConfigKeys`）。锁失败走回退写，但如果重读结果丢失了缓存里有的 `oauthAccount`/`hasCompletedOnboarding`，拒绝写入（`tengu_config_auth_loss_prevented`，注释引用 GH #3117）。
 
 ### 3.4 工作区信任
 
-`checkHasTrustDialogAccepted`（chunk-aepeg2w5.js#Ts）：`CLAUDE_CODE_SANDBOXED` 视为已信任；会话内已接受；`projects[项目键].hasTrustDialogAccepted`；或在 git 根以内向上找到已信任的父目录（`walkUpForTrustedProject`）。`CLAUDE_CODE_IGNORE_PERSISTED_TRUST` 让持久化的信任记录全部失效（自托管 runner `--trust-workspace false` 时设置）。信任影响：project/local 设置中的 env 与 helper、apiKeyHelper、自动记忆目录设置、settings.local.json 写入等。
+`checkHasTrustDialogAccepted`（chunk-aepeg2w5.js#Ts）：`CLAUDE_CODE_SANDBOXED` 视为已信任；会话内已接受；`config.projects?.[projectPath]?.hasTrustDialogAccepted`；或在 git 根以内向上找到已信任的父目录（`findTrustedAncestor`，`chunk-aepeg2w5.js#Vh`）。`CLAUDE_CODE_IGNORE_PERSISTED_TRUST` 让持久化的信任记录全部失效（自托管 runner `--trust-workspace false` 时设置）。信任影响：project/local 设置中的 env 与 helper、apiKeyHelper、自动记忆目录设置、settings.local.json 写入等。
 
 ---
 
@@ -174,7 +174,7 @@ getSettingsForSource (chunk-q8cqcff6.js#be)         // 单来源（带 perSource
 
 | 内容 | 路径 | 代码 |
 |---|---|---|
-| 项目目录 | `<配置目录>/projects/<清洗名>`：路径中非 `[A-Za-z0-9]` 字符换成 `-`，超过 200 字符截断并加 `-<hash36>` | `getProjectDir`（chunk-qzv7ezvq.js#ZS）、`sanitizeProjectPath`（chunk-f9pzpnqt.js#b0） |
+| 项目目录 | `<配置目录>/projects/<清洗名>`：路径中非 `[A-Za-z0-9]` 字符换成 `-`，超过 200 字符截断并加 `-<hash36>` | `getProjectDir`（chunk-qzv7ezvq.js#ZS）、`sanitizePath`（chunk-f9pzpnqt.js#b0） |
 | 项目目录名覆盖 | `CLAUDE_CODE_PROJECT_DIR_NAME`（只在自定义配置目录或 diskless 时生效；`^[A-Za-z0-9_-]{1,64}$`） | `getProjectDirNameOverride`（chunk-cgcrer2m.js#wHn） |
 | 主转录 | `<项目目录>/<sessionId>.jsonl` | |
 | 子代理转录 | `<项目目录>/<sessionId>/subagents/[子目录/]agent-<agentId>.jsonl`，元数据侧车 `agent-<id>.meta.json` | `getAgentTranscriptPath`（chunk-qzv7ezvq.js#fm） |
@@ -189,7 +189,7 @@ getSettingsForSource (chunk-q8cqcff6.js#be)         // 单来源（带 perSource
 
 ### 4.2 记录类型
 
-写入策略表 `ENTRY_WRITE_POLICY`（chunk-e6aww6q8.js#v$i）列出 **47 种**记录类型（2.1.88 的 `types/logs.ts` 为 18 种）：
+写入策略表 `ENTRY_APPEND_POLICY`（chunk-e6aww6q8.js#v$i）列出 **47 种**记录类型（2.1.88 的 `types/logs.ts` 为 18 种）：
 
 - **dedup-transcript**（按 uuid 去重；`isSidechain` 且有 agentId 时写子代理文件）：`user`、`assistant`、`attachment`、`system`、`progress`。
 - **always**（元数据，直接追加）：`summary`、`custom-title`、`ai-title`、`last-prompt`、`tag`、`ended-by-model`、`continued-in`、`relocated`、`agent-name`、`agent-color`、`agent-setting`、`pr-link`、`frame-link`、`artifact-comment-monitor`、`artifact-autoreact-ledger`、`bridge-session`、`history-suppression`、`file-history-snapshot`、`file-history-delta`、`attribution-snapshot`、`mode`、`permission-mode`、`isolation-latch`、`dev-mods`、`memory-mode`、`atis-latch`、`tools-used`、`worktree-state`、`cost-state`、`queue-operation`。
@@ -203,7 +203,7 @@ getSettingsForSource (chunk-q8cqcff6.js#be)         // 单来源（带 perSource
 recordTranscript / recordSidechainTranscript
   → getProject (chunk-e6aww6q8.js#Na)：首次创建 Project，注册退出清理与 process.on("exit")
   → Project.insertMessageChain（trackWrite 计数）
-      首条 user/assistant/system 到来前不建文件（materializeSessionFile），之前的元数据暂存 pendingEntries
+      首条 user、assistant、system 到来前不建文件（materializeSessionFile），之前的元数据暂存 pendingEntries
   → Project.appendEntry：按 ENTRY_WRITE_POLICY 选目标文件 → enqueueWrite（按文件的 writeQueues）
   → scheduleDrain：100ms 定时器（FLUSH_INTERVAL_MS）
   → drainQueuesOnce：拼成 jsonl，单块 ≥100MB 分批 → appendToFile（O_APPEND；撕裂尾行先补换行）
@@ -218,17 +218,17 @@ recordTranscript / recordSidechainTranscript
 
 1. 参数解析 `parseSessionIdentifier`（chunk-ndmse9kj.js#Pbs）：`.jsonl` 路径（分配新 sessionId）、UUID、URL（远程 ingress）。
 2. 入口 `utils/conversationRecovery.ts · loadConversationForResume`（query 领域）：
-   - `--continue`（无参数）：`iBo`（chunk-e6aww6q8.js）列出当前项目的会话，跳过 bookkeeping、已被后台会话接续（continued-in）、superseded、正在运行的后台会话，取最新一条。
+   - `--continue`（无参数）：`findLatestResumableLog`（`chunk-e6aww6q8.js#iBo`）列出当前项目的会话，跳过 bookkeeping、已被后台会话接续（continued-in）、superseded、正在运行的后台会话，取最新一条。
    - `--resume <id>`：`loadSessionFile`（chunk-e6aww6q8.js#Smo）按"会话记录的 projectDir → 当前项目目录 → 清洗名截断冲突的兄弟目录"定位文件，找不到再试 worktree 目录（`tengu_resume_worktree_fallback`）和全局扫描（`tengu_transcript_id_scan_fallback`）。
 3. 加载：逐行解析（坏行跳过并计数）；`getLastSessionLog` 选叶子，`buildConversationChain` 沿 `parentUuid` 回溯（环检测 `tengu_chain_parent_cycle`、时间戳回退、补回并行 tool_result），`checkResumeConsistency`。
 4. 列表（/resume 选择器）只读文件头尾（`readLiteMetadata`、`getSessionFilesLite`），选中后 `loadFullLog`。
 5. 后处理 `processResumedConversation`（chunk-08s5p3av.js#u1n）：`--fork-session` 时生成新 sessionId 并复制 content-replacement，否则 `restoreSessionMetadata` + `adoptResumedSessionFile` 继续写原文件；恢复费用状态、worktree（不适用则退出）、代理定义、权限模式（存的 auto 在 proactivity=ask 时降级）；计划文件随之复制。
 6. 跨项目：`checkCrossProjectResume` 给出 `cd … && claude --resume …` 提示；同仓库的 worktree 可直接恢复。
-7. verify.md `tty-session` 场景实测：退出时打印 "Resume this session with: claude --resume <id>"。
+7. `docs/process/verify.md` 的 tty-session 场景（`tools/verify/scenarios.mjs`）实测：退出时打印 "Resume this session with: claude --resume <id>"。
 
 ### 4.5 输入历史 history.jsonl
 
-`PromptHistoryStore.add`：`CLAUDE_CODE_SKIP_PROMPT_HISTORY` 关闭记录；敏感命令不记；与上一条相同则去重；粘贴内容 ≤1024 字内联，否则写 paste-cache 只记 `contentHash`。
+`PromptHistoryStore` 的 `add`：`CLAUDE_CODE_SKIP_PROMPT_HISTORY` 关闭记录；敏感命令不记；与上一条相同则去重；粘贴内容 ≤1024 字内联，否则写 paste-cache 只记 `contentHash`。
 
 记录形状：`{display, pastedContents: {[id]: {id, type: "text"|"image", content? | contentHash?, mediaType?, filename?}}, timestamp, project, sessionId}`。
 
@@ -236,7 +236,7 @@ recordTranscript / recordSidechainTranscript
 
 ### 4.6 AppState
 
-`createStore`（chunk-2mbp91tg.js#hs）是最小 store：`setState(updater)`，引用不变不通知，变化时先 `onChange({newState, oldState})` 再通知订阅者。默认状态 `getDefaultAppState` 的主要字段：`settings, tasks, transcripts, runningSubagents, agentNameRegistry, toolPermissionContext, mainLoopModel, agent, agentDefinitions, fileHistory, attribution, mcp, plugins, todos, inbox, thinkingEnabled, fastMode, sessionEffort, promptSuggestion, replBridge*`，以及约 25 个 `artifact*ConsentSlugs` 字段（316 新增）。React 侧 `AppStateProvider`（不可嵌套）、`useAppState(selector)`、`useSetAppState`。
+`createStore`（chunk-2mbp91tg.js#hs）是最小 store：`setState(updater)`，引用不变不通知，变化时先 `onChange({newState, oldState})` 再通知订阅者。默认状态 `getDefaultAppState` 的主要字段：`settings, tasks, transcripts, runningSubagents, agentNameRegistry, toolPermissionContext, mainLoopModel, agent, agentDefinitions, fileHistory, attribution, mcp, plugins, todos, inbox, thinkingEnabled, fastMode, sessionEffort, promptSuggestion, replBridge*`，以及约 25 个 `artifact…ConsentSlugs` 字段（316 新增；如 `artifactAssetReadConsentSlugs`、`artifactDbReadConsentSlugs`。待核实：阅读树中能找到的不同 `artifact…ConsentSlugs` 键名为 14 个）。React 侧 `AppStateProvider`（不可嵌套）、`useAppState(selector)`、`useSetAppState`。
 
 ---
 
@@ -256,13 +256,13 @@ recordTranscript / recordSidechainTranscript
 其他规则：
 - `.claude/rules/*.md` 的 frontmatter `paths:` 使其成为条件规则，只在访问匹配路径时加载（`processConditionedMdRules`）；访问 cwd 以下目录时 `getMemoryFilesForNestedDirectory` 补加载该目录的文件。
 - 设置 `claudeMdExcludes` 排除 User/Project/Local 文件；`CLAUDE_CODE_DISABLE_CLAUDE_MDS` 关闭嵌套加载；`--bare` 时整个跳过。
-- AGENTS.md 只统计是否存在（`tengu_claudemd__initial_load.agents_md_count`），**不加载内容**。
+- AGENTS.md 只统计是否存在（`tengu_claudemd__initial_load` 的 `agents_md_count` 字段），**不加载内容**。
 - 注入系统提示时前言为 "Codebase and user instructions are shown below…"（`MEMORY_INSTRUCTION_PROMPT`），每个文件附类型说明（`getClaudeMds`：project instructions, checked into the codebase / user's private project instructions, not checked in / user's auto-memory… / organization-managed policy instructions / user's private global instructions for all projects）。
 
 ### 5.2 @include
 
 `parseMemoryFileContent` → `extractIncludePathsFromTokens`（用 marked 词法解析）：
-- 语法 `@路径`，正则 `/(?:^|\s)@((?:[^\s\\]|\\ )+)/g`；`\ ` 表示空格；`#` 之后是片段，被去掉。
+- 语法 `@<路径>`，正则 `/(?:^|\s)@((?:[^\s\\]|\\ )+)/g`；`\ ` 表示空格；`#` 之后是片段，被去掉。
 - 接受 `./相对`、`~/家目录`、`/绝对`（不能是 `/` 本身）、普通相对名（以字母数字 `._-` 开头）。
 - 代码块、行内代码中的 `@` 忽略；HTML 注释先剥离（注释外残留文字里的 @ 仍识别）。
 - 最大嵌套深度 5（`MAX_INCLUDE_DEPTH`，chunk-e6aww6q8.js#Jzr）；已处理路径去重；非文本扩展名跳过。
@@ -282,7 +282,7 @@ recordTranscript / recordSidechainTranscript
 
 ### 5.5 多 store 同步（取代旧 team memory）
 
-`CLAUDE_MEMORY_STORES` 配置多个记忆 store（scope：user / account / team；account 目录 `<配置目录>/memory/personal/`，team 目录 `<自动记忆目录>/team/<mount>/`），经 Anthropic API `/v1/memory_stores`（beta `agent-memory-2026-07-22`）同步，本地 `.memory-sync` manifest 记录状态；周期重同步（`tengu_memory_store_resync_interval_minutes`，`CLAUDE_CODE_DISABLE_MEMORY_PERIODIC_RESYNC` 关闭）。写共享记忆前用 `scanForSecrets` 拒绝含密钥的内容（`services/teamMemorySync/secretScanner.ts`、`teamMemSecretGuard.ts`）。核心代码在 `_unattributed/chunk-s61vbvea/part-016~018.js`，尚未逐函数命名。
+`CLAUDE_MEMORY_STORES` 配置多个记忆 store（scope：user / account / team；account 目录 `<配置目录>/memory/personal/`，team 目录 `<自动记忆目录>/team/<mount>/`），经 Anthropic API `/v1/memory_stores`（beta `agent-memory-2026-07-22`）同步，本地 `.memory-sync` manifest 记录状态；周期重同步（`tengu_memory_store_resync_interval_minutes`，`CLAUDE_CODE_DISABLE_MEMORY_PERIODIC_RESYNC` 关闭）。写共享记忆前用 `scanForSecrets` 拒绝含密钥的内容（`services/teamMemorySync/secretScanner.ts`、`teamMemSecretGuard.ts`）。核心代码写作时在 `_unattributed/` 的 `chunk-s61vbvea` part-016~018，尚未逐函数命名；现已放入 `services/memorySync/`（`multiStoreSync.ts`、`storeReconcile.ts`、`syncManifest.ts`、`memoryWatcher.ts` 等）。
 
 ---
 
@@ -321,7 +321,7 @@ recordTranscript / recordSidechainTranscript
 | Bedrock | 设置 `awsAuthRefresh`（先用 STS GetCallerIdentity 检查现有凭证，无效才执行，超时 3 分钟）、`awsCredentialExport`（输出 STS JSON）；默认凭证链按区域缓存；env `AWS_BEARER_TOKEN_BEDROCK`、`ANTHROPIC_BEDROCK_BASE_URL`、`CLAUDE_CODE_SKIP_BEDROCK_AUTH` |
 | Vertex | 设置 `gcpAuthRefresh`（google-auth-library 检查，结果缓存 1 小时）；项目 `ANTHROPIC_VERTEX_PROJECT_ID`/`GCLOUD_PROJECT`；区域 `CLOUD_ML_REGION`（默认 us-east5）与按模型的 `VERTEX_REGION_*`；`CLAUDE_CODE_SKIP_VERTEX_AUTH` |
 | Foundry | `ANTHROPIC_FOUNDRY_RESOURCE`/`_BASE_URL`/`_API_KEY`/`_AUTH_TOKEN`、`CLAUDE_CODE_SKIP_FOUNDRY_AUTH` |
-| Anthropic AWS / Google Cloud / Mantle | 316 新增，各有 `CLAUDE_CODE_SKIP_*_AUTH` |
+| Anthropic AWS / Google Cloud / Mantle | 316 新增，各有 `CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH`、`CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH`、`CLAUDE_CODE_SKIP_MANTLE_AUTH` |
 
 这些 helper 来自 project/local 设置时同样需要工作区信任。第三方提供方下 1P 遥测、GrowthBook、Datadog、错误日志都不发（见 7.5）。
 
@@ -364,7 +364,7 @@ services/analytics/sink.ts · initializeAnalyticsSink (chunk-ryc3zkv1.js#poe)：
 
 ### 7.3 1P 事件日志
 
-- `initialize1PEventLogging`：批量配置 `tengu_1p_event_batch_config`；OTel LoggerProvider，logger 名 `com.anthropic.claude_code.events`，resource `service.name=claude-code`、`service.version=2.1.316`。
+- `initialize1PEventLogging`：批量配置 `tengu_1p_event_batch_config`；OTel LoggerProvider，logger 名 `com.anthropic.claude_code.events`，resource `service.name=claude-code`、`service.version`（值为版本号 2.1.316）。
 - `FirstPartyEventLoggingExporter`：`POST https://api.anthropic.com/api/event_logging/v2/batch`（2.1.88 为 `/api/event_logging/batch`；`ANTHROPIC_BASE_URL` 为 staging 时发 staging）；超时 10s、批 200、退避 500ms→30s、最多 8 次；失败批落盘 `<配置目录>/telemetry/1p_failed_events.*`，下次启动重发。
 - 事件 protobuf `ClaudeCodeInternalEvent`（`types/generated/events_mono/claude_code/v1/`）：event_name、client_timestamp、model、session_id、user_type、betas、env（EnvironmentMetadata）、entrypoint、is_interactive、auth（account/organization uuid）、event_id、device_id、agent_id、parent_session_id、skill_name、plugin_name、mcp_server_name、git_remote_url 等。GrowthBook 曝光另有 `GrowthbookExperimentEvent`。
 
@@ -396,7 +396,7 @@ services/analytics/sink.ts · initializeAnalyticsSink (chunk-ryc3zkv1.js#poe)：
 
 ### 7.7 调试、错误与诊断日志
 
-- 调试日志 `logForDebugging`（chunk-cgr0tezp.js#t）→ `DebugLogger`（`_unattributed/chunk-cgr0tezp/part-018.js`）：`--debug`、`-d`、`--debug=<过滤>`、`--debug-to-stderr`/`-d2e`、`--debug-file <路径>`、env `DEBUG`、`DEBUG_SDK`；级别 `CLAUDE_CODE_DEBUG_LOG_LEVEL`；路径 `--debug-file` > `CLAUDE_CODE_DEBUG_LOGS_DIR/<session>.txt` > `<配置目录>/debug/<sessionId>.txt`（维护 `latest` 链接）。过滤语法：逗号分隔分类，`!` 前缀表示排除。消息经密钥脱敏。
+- 调试日志 `logForDebugging`（chunk-cgr0tezp.js#t）→ `DebugLogger`（`chunk-cgr0tezp.js#xr`，`utils/debug.ts`）：`--debug`、`-d`、`--debug=<过滤>`、`--debug-to-stderr`/`-d2e`、`--debug-file <路径>`、env `DEBUG`、`DEBUG_SDK`；级别 `CLAUDE_CODE_DEBUG_LOG_LEVEL`；路径 `--debug-file` > `CLAUDE_CODE_DEBUG_LOGS_DIR/<session>.txt` > `<配置目录>/debug/<sessionId>.txt`（维护 `latest` 链接）。过滤语法：逗号分隔分类，`!` 前缀表示排除。消息经密钥脱敏。
 - 错误日志（`utils/log.ts · logError`，ui 领域）：写 `<缓存目录>/errors/<YYYY-MM-DD>.jsonl`；MCP 日志 `<缓存目录>/mcp-logs-<server>/`。缓存目录 = env-paths("claude-cli").cache。
 - 诊断日志 `logForDiagnosticsNoPII`：仅在 `CLAUDE_CODE_DIAGNOSTICS_FILE` 设置时写 JSON 行（settings_load_started/completed、memory_files_started 等）。
 
@@ -412,7 +412,7 @@ services/analytics/sink.ts · initializeAnalyticsSink (chunk-ryc3zkv1.js#poe)：
 - **防睡眠**（实现 `chunk-0sfjpx19.js#fo`，未归属）：macOS 上引用计数地 spawn `caffeinate -i -t 300`，每 4 分钟续一次。
 - **提示（tips）**：约 70 条内置；冷却按 `numStartups - tipsHistory[id]`；设置 `spinnerTipsEnabled`。
 - **更新日志**：缓存 `<配置目录>/cache/changelog.md`（2.1.88 存在全局配置里）。
-- **预检**（utils/preflightChecks.tsx）：首次运行 GET `<BASE_API_URL>/api/hello` 与 OAuth 源的 `/v1/oauth/hello`（verify.md `tty-first-run` 实测失败时显示 "Unable to connect to Anthropic services"）。
+- **预检**（utils/preflightChecks.tsx）：首次运行 GET `<BASE_API_URL>/api/hello` 与 OAuth 源的 `/v1/oauth/hello`（`docs/process/verify.md` 的 tty-first-run 场景实测失败时显示 "Unable to connect to Anthropic services"）。
 
 ---
 
@@ -424,7 +424,7 @@ services/analytics/sink.ts · initializeAnalyticsSink (chunk-ryc3zkv1.js#poe)：
 - 目录与模式：`CLAUDE_CONFIG_DIR`、`CLAUDE_CODE_PROJECT_DIR_NAME`、`CLAUDE_CODE_SIMPLE`、`CLAUDE_CODE_SAFE_MODE`、`CLAUDE_CODE_RESTRICTED`、`CLAUDE_CODE_SANDBOXED`、`CLAUDE_CODE_IGNORE_PERSISTED_TRUST`、`CLAUDE_CODE_USE_COWORK_PLUGINS`、`CLAUDE_CODE_REMOTE_SETTINGS_PATH`、`CLAUDE_CODE_DISABLE_ADMIN_ENV_UNION`、`CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST`。
 - 会话：`CLAUDE_CODE_SKIP_PROMPT_HISTORY`、`CLAUDE_CODE_RESUME_*`、`CLAUDE_CODE_SESSION_KIND`、`CLAUDE_ENV_FILE`、`CLAUDE_CODE_MAX_TURNS`。
 - 记忆：`CLAUDE_CODE_DISABLE_AUTO_MEMORY`、`CLAUDE_CODE_DISABLE_CLAUDE_MDS`、`CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD`、`CLAUDE_CODE_REMOTE_MEMORY_DIR`、`CLAUDE_COWORK_MEMORY_*`、`CLAUDE_MEMORY_STORES`、`CLAUDE_CODE_POST_TURN_MEMORY*`。
-- 认证：`ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN`、`CLAUDE_CODE_OAUTH_TOKEN(_FILE_DESCRIPTOR)`、`CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR`、`CLAUDE_CODE_API_KEY_HELPER_TTL_MS`、`CLAUDE_CODE_USE_BEDROCK/VERTEX/FOUNDRY/ANTHROPIC_AWS/ANTHROPIC_GOOGLE_CLOUD/MANTLE`、`CLAUDE_CODE_SKIP_*_AUTH`、`CLAUDE_CODE_CLIENT_CERT/KEY(_PASSPHRASE)`、`NODE_EXTRA_CA_CERTS`、`HTTP(S)_PROXY`、`NO_PROXY`、`CLAUDE_CODE_CUSTOM_OAUTH_URL`。
+- 认证：`ANTHROPIC_API_KEY`、`ANTHROPIC_AUTH_TOKEN`、`CLAUDE_CODE_OAUTH_TOKEN(_FILE_DESCRIPTOR)`、`CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR`、`CLAUDE_CODE_API_KEY_HELPER_TTL_MS`、`CLAUDE_CODE_USE_BEDROCK/VERTEX/FOUNDRY/ANTHROPIC_AWS/ANTHROPIC_GOOGLE_CLOUD/MANTLE`、`CLAUDE_CODE_SKIP_BEDROCK_AUTH`、`CLAUDE_CODE_SKIP_VERTEX_AUTH`、`CLAUDE_CODE_SKIP_FOUNDRY_AUTH`、`CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH`、`CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH`、`CLAUDE_CODE_SKIP_MANTLE_AUTH`、`CLAUDE_CODE_CLIENT_CERT/KEY(_PASSPHRASE)`、`NODE_EXTRA_CA_CERTS`、`HTTP(S)_PROXY`、`NO_PROXY`、`CLAUDE_CODE_CUSTOM_OAUTH_URL`。
 - 遥测：`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`、`DISABLE_TELEMETRY`、`DO_NOT_TRACK`、`DISABLE_GROWTHBOOK`、`DISABLE_ERROR_REPORTING`、`CLAUDE_CODE_ENABLE_TELEMETRY`、`OTEL_*`、`CLAUDE_INTERNAL_FC_OVERRIDES`、`CLAUDE_CODE_DEBUG_LOG_LEVEL`、`CLAUDE_CODE_DEBUG_LOGS_DIR`、`CLAUDE_CODE_DIAGNOSTICS_FILE`。
 
 **GrowthBook（本领域用到、含义已确认的）**：`tengu_event_sampling_config`（事件采样）、`tengu_log_datadog_events`（Datadog 开关）、`tengu_frond_boric`（Datadog/1P killswitch）、`tengu_1p_event_batch_config`、`tengu_gb_refresh_interval_minutes`、`tengu_cozy_dusk`（BigQuery 指标间隔）、`tengu_passport_quail` / `tengu_slate_thimble` / `tengu_bramble_lintel`（记忆提取）、`tengu_onyx_plover`（autoDream）、`tengu_moth_copse`（外部注入记忆文件）、`tengu_ochre_finch` / `tengu_gorse_fathom`（记忆提示变体）、`tengu_memory_store_resync_interval_minutes`、`tengu_mighty_sprout`（worktree 锁写法）、`tengu_context_usage_bulk_counts`（/context 批量计数）、`tengu_ccr_stored_gap_bridge_enabled`、`tengu_swift_whistle`（1P 认证附带）。
@@ -456,9 +456,17 @@ services/analytics/sink.ts · initializeAnalyticsSink (chunk-ryc3zkv1.js#poe)：
 
 ## 11. 未解之处与已知缺口
 
-- 多 store 记忆同步引擎（`_unattributed/chunk-s61vbvea/part-016~018.js`、`chunk-hwmsct5x/part-008.js`）只定位未命名。
+- 多 store 记忆同步引擎写作时只定位未命名（当时在 `_unattributed/` 的 `chunk-s61vbvea` part-016~018 与 `chunk-hwmsct5x` part-008）；现已放入 `services/memorySync/` 并有语义名。待核实：当前 `services/memorySync/` 只含 `chunk-s61vbvea` 与 `chunk-82kqcve8` 的代码，原记的 `chunk-hwmsct5x` part-008 去向未查明。
 - `resolvePolicySettings`（chunk-dcmhvw5a.js#SI）中 "held"/"substitute"/"floors" 一系列托管文档保护机制（对不可信位置的托管文件只采纳限制性值）只读懂了骨架。
-- 转录压缩重写（`Project.performCompactTranscript*`，阈值 20MB）与字节级转录扫描器（chunk-e6aww6q8.js#uIt，10KB）未细读。
-- 401 处理后半段、teleport 环境选择与 git bundle 策略未细读（chunk-aepeg2w5.js#L1、chunk-e6aww6q8.js#teleportToRemote）。
+- 转录压缩重写（`Project` 的 `performCompactTranscript`，阈值 20MB）与字节级转录扫描器（chunk-e6aww6q8.js#uIt，10KB）未细读。
+- 401 处理后半段、teleport 环境选择与 git bundle 策略未细读（chunk-aepeg2w5.js#L1、`teleportToRemote`（`chunk-e6aww6q8.js#AF`））。
 - 若干判定函数含义未查：`Sgt()`（autoDream 前置条件）、`lk()`（自动记忆 off 条件）、`Slt()`（BigQuery 指标另一条件）。
 - 本领域 4,364 个顶层声明中仍有约 500 个（入度 ≥1 的约 500 个）保持压缩名或自动名，多数是混入的外来代码（切分问题）或低引用常量；过程文档列出了建议的归属修正。
+
+## 12. 引用校验结果
+
+校验时间 2026-11-03 04:39（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+
+- 共检查 835 处引用：路径 153/154（另 1 个只在 2.1.88 中存在），名字 497/498（另 1 个只在 2.1.88 中存在），字面量 167/169（另 2 个只在 2.1.88 中存在），声明id 14/14；占位符与含空格的说明性文字 128 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`types/command.ts`、`HKLM\SOFTWARE\Policies\ClaudeCode`、`DEFAULT_SESSION_MEMORY_TEMPLATE`、`/api/claude_code/team_memory?repo=`
+- 未通过：0 处。

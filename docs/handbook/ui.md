@@ -1,14 +1,14 @@
 # UI 子系统手册（2.1.316）
 
 > 领域：`ui`（473 个重组模块：`components/`、`screens/`、`hooks/`、主题/终端/格式化/markdown/高亮/剪贴板等 `utils/`）。终端渲染引擎 `ink/` 由 dom-ink 负责，不在本手册范围。
-> 代码路径以重组路径为准（`build/readable/src/<path>.js`，对应旧版 `src/<path>.tsx`）。函数写作 `路径 · 名字`；名字来自旧版对照（reference）或本领域语义命名（semantic，见 `naming/semantic-ui.jsonl`）。仍是压缩名的写成 `chunk-xxx.js#名`。
+> 代码路径以重组路径为准（`reconstructed/src/<path>.js`，对应旧版 `src/<path>.tsx`）。函数写作 `路径 · 名字`；名字来自旧版对照（reference）或本领域语义命名（semantic，见 `naming/semantic-ui.jsonl`）。仍是压缩名的写成 `chunk-xxx.js#名`。
 > 全部 UI 组件都经过 React Compiler 编译：`$ = c(N)`（本文统一称 `$` 缓存数组，`c` 是 `react/compiler-runtime` 的 `useMemoCache`，在包里是 `chunk-s89ma3n1.js#w`）、`$[i] === MEMO_CACHE_SENTINEL`（`chunk-rshven70.js#S`）判断首次渲染、`t0/t1` 临时值、`_temp` 抽出的回调。阅读时把 `if ($[k] !== dep) {…$[k]=…} else x = $[k]` 当作 `useMemo` 即可。
 
 ## 1. 概述
 
 UI 子系统是交互模式（非 `-p`）的全部界面：主屏幕 REPL、输入框、消息列表、权限与各类对话框、设置界面、通知、状态栏与 Spinner，以及支撑它们的 hooks 与设计系统组件。
 
-- **谁调用它**：启动流程（`main`/`replLauncher`，dom-bootstrap）在 Ink 根下渲染 `components/App.tsx · App` → `screens/REPL.tsx · REPLWithProviders` → `REPL`；`/doctor`、`/resume` 等命令直接渲染 `screens/Doctor.tsx`、`screens/ResumeConversation.tsx`；各斜杠命令（dom-commands）通过 `local-jsx` 返回本领域的对话框组件（`ModelPicker`、`Settings`、`MCPSettings`、`HooksConfigMenu`…）。
+- **谁调用它**：启动流程（`main`/`replLauncher`，dom-bootstrap）在 Ink 根下渲染 `components/App.tsx · App` → `screens/REPL.tsx · REPL`（`chunk-18hwfzwa.js#hkr`，写作时称 REPLWithProviders） → `REPL`；`/doctor`、`/resume` 等命令直接渲染 `screens/Doctor.tsx`、`screens/ResumeConversation.tsx`；各斜杠命令（dom-commands）通过 `local-jsx` 返回本领域的对话框组件（`ModelPicker`、`Settings`、`MCPSettings`、`HooksConfigMenu`…）。
 - **它调用谁**：Ink（`ink/`：Box/Text/ScrollBox、`useInput`、终端尺寸与焦点）、AppState（`state/AppState.tsx · useAppState(=G)/useSetAppState/useAppStore`，dom-state）、会话控制器（一批 `chunk-18hwfzwa.js` 中未归属的类：TurnController、SessionController…，见第 3 节）、查询循环（dom-query）、工具（dom-tools，各工具的 `renderToolUseMessage/renderToolResultMessage/…` 由消息组件调用）、权限引擎（dom-permissions，`hasPermissionsToUseTool`）、MCP/插件/hooks（dom-extensions）。
 
 **316 相对 2.1.88 的最大变化**：REPL 不再是"一个 5000 行组件里堆几十个 useState + useEffect"，而是**控制器对象 + 外部 store**架构：REPL 在 `useState(() => new X(...))` 里创建长生命周期控制器，组件通过 `useStoreSelector(store, select)`（`chunk-yn45f1gp.js#Ie`，基于 `useSyncExternalStore` 的带缓存选择器）订阅；`useLayoutEffect` 里一次性 `bindHost({...})` 注入宿主能力。权限确认也不再是 REPL 里的 `toolUseConfirmQueue` 状态，而是统一的**对话框存储（dialogStore）+ `requestDialog(def, payload)` + kind→组件注册表**。
@@ -45,31 +45,31 @@ UI 子系统是交互模式（非 `-p`）的全部界面：主屏幕 REPL、输�
 
 ### 3.1 外壳与 props
 
-`screens/REPL.tsx · REPLWithProviders`（`hkr`）用 `props.messageQueue ?? 全局消息队列` 建 `zmt` 队列 Provider，再包写入节流上下文 `vz.Provider`，然后渲染 `REPL`。
+`screens/REPL.tsx · REPL`（`chunk-18hwfzwa.js#hkr`，写作时称 REPLWithProviders）用 `props.messageQueue ?? 全局消息队列` 建 `QueueProvider`（`chunk-s3t86t3k.js#zmt`）队列 Provider，再包写入节流上下文 `SpinnerPaceContext.Provider`（`chunk-mfvgtsgj.js#vz`），然后渲染 `REPL`。
 
 `REPL` 的 props（从解构读出）：`commands, debug, initialTools, initialMessages, initialMessagesOrigin, pendingHookMessages, initialFileHistorySnapshots, initialContentReplacements, mcpClients, dynamicMcpConfig, autoConnectIdeFlag, strictMcpConfig, systemPrompt, appendSystemPrompt, systemPromptSnapshot, onBeforeQuery, onTurnComplete, onCaptureSnapshot, disabled, mainThreadAgentDefinition, disableSlashCommands, remoteSessionConfig, onDetachToCaller, embedded, hideWelcomeChrome, hideLoginNotice, disableQuery, filterCommands, cancelRef, directConnectConfig, sshSession, thinkingConfig, thinkingConfigExplicit, thinkingDisplayFlag, fallbackModel, engine, onCommandsChange, onQueryParamsChange`。
 
-关键派生值：`isRemoteSession = !!remoteSessionConfig || htt()`；`hasRemoteTransport = isRemoteSession || directConnectConfig || sshSession`；`isThinClient = On() || hasRemoteTransport`；`isFullscreen = presentation === "fullscreen"`（`presentation` 来自 `NI()`）；本地 state 只剩 `screen`（`"prompt" | "transcript"`）与 `dumpMode`。
+关键派生值：`isRemoteSession = !!remoteSessionConfig || htt()`；`hasRemoteTransport = isRemoteSession || directConnectConfig || sshSession`；`isThinClient = On() || hasRemoteTransport`；`isFullscreen = presentation === "fullscreen"`（`presentation` 来自 `useRenderMode()`（`chunk-x6v6jz2y.js#NI`））；本地 state 只剩 `screen`（`"prompt" | "transcript"`）与 `dumpMode`。
 
 ### 3.2 控制器（全部在 `useState(初始化器)` 中创建，生命周期 = REPL）
 
 | 局部名 | 构造 | 作用（从构造参数与方法名读出） | 声明 id |
 |---|---|---|---|
 | `scope` | `ReplSessionScope` | 会话作用域：commands、renderingTools、dynamicMcpConfig、`requestDialog`、`dialogTransport`、`localJsx`、`addAutoConnectedIde`；`connect()/dispose()` | `chunk-18hwfzwa.js#NQ` |
-| `turn` / `transcript` / `sessionEngine` | `TurnController`（`ste`）+ 转录 store（`bte`）+ 引擎（`Mie` 或 props.engine） | 一个回合的生命周期：`guard`（isActive/isRunning）、`loading`、`stream`（toolProgress、userInputOnProcessing、responseLength）、`buildToolUseContext`、`submitIncomingPrompt`、`retractRateLimitAutoContinue`；转录 `apply({type:"append"})/getSnapshot/conversation` | `#ste`、`#bte` |
-| `chrome` | `ComposerChrome`（`ute`） | 输入区"外壳"状态：ideSelection、bashesDialog、退出流程、`openMessageSelector`、`setView` | `#ute` |
-| `networkPrompts` | `SandboxNetworkPrompts`（`MQ`） | 沙箱网络访问询问（经 requestDialog 或 bridge） | `#MQ` |
+| `turn` / `transcript` / `sessionEngine` | `TurnController`（`chunk-18hwfzwa.js#ste`）+ 转录 store（`bte`）+ 引擎（`Mie` 或 props.engine） | 一个回合的生命周期：`guard`（isActive/isRunning）、`loading`、`stream`（toolProgress、userInputOnProcessing、responseLength）、`buildToolUseContext`、`submitIncomingPrompt`、`retractRateLimitAutoContinue`；转录 `apply({type:"append"})/getSnapshot/conversation` | `#ste`、`#bte` |
+| `chrome` | `ComposerChrome`（`chunk-18hwfzwa.js#ute`） | 输入区"外壳"状态：ideSelection、bashesDialog、退出流程、`openMessageSelector`、`setView` | `#ute` |
+| `networkPrompts` | `SandboxNetworkPrompts`（`chunk-18hwfzwa.js#MQ`） | 沙箱网络访问询问（经 requestDialog 或 bridge） | `#MQ` |
 | `sandbox` | `cz` | 沙箱启停与不可用原因（failIfUnavailable 时拒绝启动） | `#cz` |
-| `scrollPin` | `ScrollPin`（`Yee`） | 全屏滚动：viewport/modalViewport、isAtBottom、未读分隔线、`reveal` | `#Yee` |
-| `draft` | `PromptDraft`（`zY`） | 输入草稿 store：value/cursorOffset/mode/pastedContents/interimRange/decorations；`setValue`、`attribute(来源, fn)`、`paintLayer`；prompt hooks（`prompt.change`） | `#zY` |
-| `sessionController` | `SessionController`（`lz`） | 会话级：resume、compact、conversation reset、hook 消息延迟、haiku 标题、空闲额度询问、`start()` | `#lz` |
-| `contextualTips` | `xQ` | tmux 鼠标/焦点等上下文提示 | `#xQ` |
+| `scrollPin` | `ScrollPin`（`chunk-18hwfzwa.js#Yee`） | 全屏滚动：viewport/modalViewport、isAtBottom、未读分隔线、`reveal` | `#Yee` |
+| `draft` | `PromptDraft`（`chunk-18hwfzwa.js#zY`） | 输入草稿 store：value/cursorOffset/mode/pastedContents/interimRange/decorations；`setValue`、`attribute(来源, fn)`、`paintLayer`；prompt hooks（`prompt.change`） | `#zY` |
+| `sessionController` | `SessionController`（`chunk-18hwfzwa.js#lz`） | 会话级：resume、compact、conversation reset、hook 消息延迟、haiku 标题、空闲额度询问、`start()` | `#lz` |
+| `contextualTips` | `StartupNudges` | tmux 鼠标/焦点等上下文提示 | `#xQ` |
 | `titles` | `AQ` | 终端标题（会话名 / Spinner 前缀），`CLAUDE_CODE_DISABLE_TERMINAL_TITLE` | `#AQ` |
 | `idleNudge` | `BG` | 久离返回提示（`tengu_idle_return_action`）、空闲系统通知（"Claude is waiting for your input"） | `#BG` |
-| `gesture` | `BackgroundGesture`（`XG`） | 后台化/代理视图手势（↓、左箭头打开 agents 等） | `#XG` |
+| `gesture` | `BackgroundGesture`（`chunk-18hwfzwa.js#XG`） | 后台化/代理视图手势（↓、左箭头打开 agents 等） | `#XG` |
 | `lowLatency` | `jG` | 低延迟提交（`input_low_latency_submit`） | `#jG` |
 | `idleCacheQuota` | `UG` | 空闲后缓存/额度询问 | `#UG` |
-| `submitController` | `PromptSubmitController`（`yte`） | **提交入口**：`submit(text, helpers, opts)`、`readDraft/fillDraft/suggestDraft`、`cancelAndDrainPending`、bash/本地命令/local-jsx 分流 | `#yte` |
+| `submitController` | `PromptSubmitController`（`chunk-18hwfzwa.js#yte`） | **提交入口**：`submit(text, helpers, opts)`、`readDraft/fillDraft/suggestDraft`、`cancelAndDrainPending`、bash/本地命令/local-jsx 分流 | `#yte` |
 
 随后一个 `useLayoutEffect`（无依赖数组以外的 deps 列表很长）调用：
 `transport.bindHost` → `submitController.bindHost({mainLoopModel, canUseTool, onBeforeQuery})` → `sessionController.bindHost(...)` → `chrome.bindHost({openMessageSelector})` → `scope.bindHost({mainLoopModel, canUseTool, getMessages, buildToolUseContext, compact, readDraft/fillDraft/paintDraft…, revealInTranscript…})` → `gesture.bindHost(...)` → `turn.bindHost({...约 60 项：store/setAppState/canUseTool/thinkingConfig/theme/ideSelection/draft/titles/onSubmit/...})`。控制器在 bindHost 前被使用会抛出 "…: used before its screen bound a host"。
@@ -82,14 +82,14 @@ UI 子系统是交互模式（非 `-p`）的全部界面：主屏幕 REPL、输�
 REPLWithProviders
 └─ REPL
    └─ wrapWithProviders(...)             // MCPConnectionManager + ZXe.Provider
-      └─ _F（屏幕框架：screen/turn/transcript/titles/localJsx/dialogSurface/draft/scrollPin）
+      └─ _F（屏幕框架：screen、turn、transcript、titles、localJsx、dialogSurface、draft、scrollPin）
          └─ $A.Provider(tokenWarningState) → LF（会话标题）
             └─ vJe
                ├─ GlobalKeybindingHandlers   (hooks/useGlobalKeybindings.tsx)  // 仅 prompt 屏
                ├─ promptEffects              // 冷恢复额度对话框 cre + 输入流 oY
                ├─ zee                        // 滚动按键/鼠标处理（ScrollKeybindingHandler 一族）
                ├─ FullscreenLayout (components/FullscreenLayout.tsx · FullscreenLayout)
-               │   ├─ scrollable  = Gee      // 消息区（_unattributed）
+               │   ├─ scrollable  = Gee      // 消息区（MessageArea，`screens/repl/MessageArea.ts`）
                │   │    ├─ LogoHeader → LogoV2（欢迎框/精简 Logo）
                │   │    ├─ uye → Messages → MessageRow → Message → messages/*
                │   │    ├─ $ee → SpinnerWithVerb（Spinner 行）
@@ -112,18 +112,18 @@ REPLWithProviders
 ```
 
 - 非全屏模式下仍用同一棵树，只是 `FullscreenLayout` 不启用 ScrollBox，消息通过 Ink 静态区写入 scrollback（`Messages.tsx · shouldRenderStatically`）。
-- transcript 屏（ctrl+o，`toggleScreen`）：提前 `return`，只渲染 `gQ` 转录视图；页脚 `REPL.tsx · TranscriptModeFooter`、`?` 帮助 `TranscriptHelpFooter`、`/` 搜索 `TranscriptSearchBar`（预热搜索索引后 `jumpRef.setSearchQuery`）、`[` 打印到 scrollback（`dumpMode`）、`v` 用编辑器打开。
+- transcript 屏（ctrl+o，`toggleScreen`）：提前 `return`，只渲染 `TranscriptView`（`chunk-18hwfzwa.js#gQ`）转录视图；页脚 `REPL.tsx · TranscriptModeFooter`、`?` 帮助 `TranscriptHelpFooter`、`/` 搜索 `TranscriptSearchBar`（预热搜索索引后 `jumpRef.setSearchQuery`）、`[` 打印到 scrollback（`dumpMode`）、`v` 用编辑器打开。
 - `AnimatedTerminalTitle`：工作中且终端聚焦时每 960ms 交替 `◐/◑` 前缀，否则 `✳`；在 tmux/screen/zellij 下受 `tengu_static_title_under_mux` 控制改为静态。
 
 ### 3.4 REPL 挂接的副作用 hooks（按代码顺序）
 
-`IEe(session)`、`MEe()`（spinner 模式）、`useKeybindingWarnings()`、`EF(scope.dialogTransport)`（对话框传输）、`LEe/OIe/FEe`（启动通知、"feature of the week" 额度）、`EIe/MIe`（转录里的 notice/system 消息）、`soe`（LSP 插件推荐）、`useClaudeCodeHintRecommendation`、`useIDEIntegration`、`VEe`（文件历史快照初始化）、`useSessionBackgrounding`、`aMe`（OSC 133 语义提示：markTurnStart/markTurnDone）、`VN`（左箭头打开 agents 等手势）、`useLogMessages`（转录持久化）、`AIe`（bridge 回复）、`useQueueProcessor`、btw 历史重开器（`/btw`）、`jEe`（空闲阈值）、`rEe` + `useMailboxBridge`（swarm 收件箱）、`useScheduledTasks`（/loop、schedule_wakeup）、`VIe`（token 告警状态）、`getViewedTeammateTask`、`FIe`、面板坞相关 `ah.usePanesAtOnce/useDockColumns/usePaneToastHold/useBarToasts`、`gK.useTerminalViewport(columns, rows, 占用列宽)`。
+`useRegistryOverride(session)`（`chunk-18hwfzwa.js#IEe`）、`useBackgroundStatusSync()`（`chunk-18hwfzwa.js#MEe`）（spinner 模式）、`useKeybindingWarnings()`、`useExternalDialogBridge(scope.dialogTransport)`（`chunk-18hwfzwa.js#EF`）（对话框传输）、`runStartupNotificationSpecs`（`chunk-18hwfzwa.js#LEe`）/`FeatureOfTheWeekClaim`（`chunk-18hwfzwa.js#OIe`）/`FEe`（启动通知、"feature of the week" 额度）、`useTrustedDeviceEnrolledNotice`（`chunk-18hwfzwa.js#EIe`）/`useInformationalMessageSink`（`chunk-18hwfzwa.js#MIe`）（转录里的 notice/system 消息）、`soe`（LSP 插件推荐）、`useClaudeCodeHintRecommendation`、`useIDEIntegration`、`useAwaySummaryOnce`（`chunk-18hwfzwa.js#VEe`，文件历史快照初始化；当前语义名与行为不符）、`useSessionBackgrounding`、`useSemanticPromptMarks`（`chunk-18hwfzwa.js#aMe`，OSC 133 语义提示：markTurnStart/markTurnDone）、`VN`（左箭头打开 agents 等手势）、`useLogMessages`（转录持久化）、`AIe`（bridge 回复）、`useQueueProcessor`、btw 历史重开器（`/btw`）、`useStartupNotifications`（`chunk-18hwfzwa.js#jEe`，空闲阈值；返回 idleThresholdMin，当前语义名与行为不符）、`useInboxPollerHook`（`chunk-18hwfzwa.js#rEe`）+ `useMailboxBridge`（swarm 收件箱）、`useScheduledTasks`（/loop、schedule_wakeup）、`useUsageLimitNotices`（`chunk-18hwfzwa.js#VIe`）（token 告警状态）、`getViewedTeammateTask`、`FIe`、面板坞相关 `PaneDockNamespace.usePanesAtOnce`/`PaneDockNamespace.useDockColumns`/`PaneDockNamespace.usePaneToastHold`/`PaneDockNamespace.useBarToasts`（`chunk-18hwfzwa.js#ah`）、`useTerminalViewportNamespace.useTerminalViewport(columns, rows, 占用列宽)`。
 
 ### 3.5 对话框栈
 
 - **存储**：`dialogStore`（`useDialogStore()`，`chunk-1m6hq5zz.js#Cm`，由 AppStateProvider 挂载），`getState().open` 是已打开对话框列表。
 - **入队**：`scope.requestDialog(def, payload, opts)`；`def` 由 `qo({kind, payload: schema, result: schema, default})` 定义（共约 40 个 kind：`permission_bash`、`permission_file`、`permission_webfetch`、`permission_skill`、`permission_powershell`、`permission_ask_user_question`、`permission_enter_plan_mode`、`permission_workflow`、`permission_browser`、`permission_monitor`、`permission_publish_plugin`、`sandbox_network_access`、`computer_use_approval`、`managed_settings_security`、`mcp_elicitation`、`mcp_url_elicitation`、`ide_onboarding`、`lsp_recommendation`、`plugin_hint`、`remote_callout`、`ultraplan_launch`、`goal_proposal`、`auto_mode_setup_review`、`auto_mode_outside_reads`、`peer_inbound_approval`、`local_jsx`…）。
-- **渲染**：`XC`（`chunk-18hwfzwa.js#XC`）是对话框宿主，按 `variant`（inline/bottom/modal）筛选当前应显示在本位置的对话框；组件从注册表 `ZAe`（`chunk-18hwfzwa.js#ZAe`，`dialogEntry(def, Component) = {[def.kind]: Component}`）按 kind 取得。被草稿遮挡时显示提示（"draftHiddenCue"），被遮挡的权限请求另外通过 `PermissionRequest.tsx · BuriedPermissionCue` 发 `buried-idle-cue` 通知。
+- **渲染**：`XC`（`chunk-18hwfzwa.js#XC`）是对话框宿主，按 `variant`（inline/bottom/modal）筛选当前应显示在本位置的对话框；组件从注册表 `DIALOG_REGISTRY`（`chunk-18hwfzwa.js#ZAe`，`dialogEntry(def, Component) = {[def.kind]: Component}`）按 kind 取得。被草稿遮挡时显示提示（"draftHiddenCue"），被遮挡的权限请求另外通过 `components/dialogs/DialogHost.ts · BuriedPermissionCue` 发 `buried-idle-cue` 通知。
 - 斜杠命令的 `local-jsx` 界面（/config、/model…）也走同一通道（kind `local_jsx`，`hasActiveLocalJsxUI`）。
 
 ### 3.6 通知
@@ -136,7 +136,7 @@ REPLWithProviders
 
 ### 4.1 组件结构
 
-`y8`（输入区）→ `Nke` → `Oet` → `PromptInput`（`components/PromptInput/PromptInput.tsx`，`d9e`）+ `PromptInputFooterMemo`（`V3e`）。
+`y8`（输入区）→ `Nke` → `PromptComposer`（`chunk-18hwfzwa.js#Oet`） → `PromptInput`（`components/PromptInput/PromptInput.tsx`，`d9e`）+ `PromptInputFooterMemo`（`V3e`）。
 
 `PromptInput` 的 props（部分）：`draft, transcript, scope, turn, chrome, suggestionsStore, hidden, inputTakesFocus, takePendingPastes, onSubmit, dispatchCommand, isSearchingHistory, historyQuery, historyMatch, historySearchKeyDown, onOpenHistorySearch, helpOpen, setHelpOpen, toggleHelp, footerItemSelected, onHistoryDownPastEnd, placeholder, leftArrowRoute, modeIndicator, ideSelection, topBorderText, fastModeTag, ultraEffortTag, onIsPastingChange, onExitMessage, onExternalEditorActiveChange`。从 draft 订阅 `value/cursorOffset/mode/pastedContents/interimRange/decorations`（选择器 `Dv/JU/MT/XU/Mce/Ece`）。
 
@@ -189,8 +189,8 @@ REPLWithProviders
 
 | message.type | 渲染 |
 |---|---|
-| `assistant` | 逐内容块交 `AssistantMessageBlock`（`Ih`）：`text`→`AssistantTextMessage`；`tool_use`→`AssistantToolUseMessage`；`thinking`→`AssistantThinkingMessage`；`redacted_thinking`→`AssistantRedactedThinkingMessage`；`server_tool_use`/advisor→`AdvisorMessage` 等；不认识的块只记一次日志（`logUnrenderableBlockOnce`） |
-| `user` | `UserMessage`（`Ah`）按块：`text`→真正的用户文本组件 `chunk-ah34pb7m.js#I7`（见下），`image`→`UserImageMessage`，`tool_result`→`UserToolResultMessage` |
+| `assistant` | 逐内容块交 `AssistantMessageBlock`（`chunk-ah34pb7m.js#Ih`）：`text`→`AssistantTextMessage`；`tool_use`→`AssistantToolUseMessage`；`thinking`→`AssistantThinkingMessage`；`redacted_thinking`→`AssistantRedactedThinkingMessage`；`server_tool_use`/advisor→`AdvisorMessage` 等；不认识的块只记一次日志（`logUnrenderableBlockOnce`） |
+| `user` | `UserMessage`（`chunk-ah34pb7m.js#Ah`）按块：`text`→真正的用户文本组件 `chunk-ah34pb7m.js#I7`（见下），`image`→`UserImageMessage`，`tool_result`→`UserToolResultMessage` |
 | `attachment` | `messages/AttachmentMessage.tsx · AttachmentMessage`（约 40 种，见 5.3）；`NULL_RENDERING_TYPES` 中的不渲染 |
 | `system` | `messages/SystemTextMessage.tsx · SystemTextMessage`（见 5.4） |
 | `grouped_tool_use` | `GroupedToolUseContent`（工具的 `renderGroupedToolUse`） |
@@ -203,8 +203,8 @@ REPLWithProviders
 
 ### 5.2 工具调用与结果
 
-- `AssistantToolUseMessage`（`Bp`）：`ToolUseLoader` 圆点（进行中闪烁/成功/失败）+ `tool.userFacingName` + `renderToolUseMessage(input)`（异常被 `ul` 捕获记录）；状态来自 `lookups`：排队（`renderToolUseQueuedMessage`）、运行中（`renderToolUseProgressMessage`，含 PreToolUse hook 进度）、等待权限、完成、失败、已停止；MCP 工具 `mcp__server__tool` 拆开显示。
-- `UserToolResultMessage`（`kh`）：`is_error` → `UserToolErrorMessage`（工具的 `renderToolUseErrorMessage`，兜底 `FallbackToolUseErrorMessage`：去 `<tool_use_error>`、InputValidationError→"Invalid tool parameters"、非 verbose 截断并提示 ctrl+o）；被拒绝 → `UserToolRejectMessage`（`renderToolUseRejectedMessage`；计划被拒 `RejectedPlanMessage`；文件编辑被拒 `FileEditToolUseRejectedMessage`）；成功 → `UserToolSuccessMessage`（`renderToolResultMessage(output, progress, {verbose, theme…})`，auto 模式放行附 "Allowed by auto mode"，PostToolUse hook 进度）。
+- `AssistantToolUseMessage`（`chunk-ah34pb7m.js#Bp`）：`ToolUseLoader` 圆点（进行中闪烁/成功/失败）+ `tool.userFacingName` + `renderToolUseMessage(input)`（异常被 `ul` 捕获记录）；状态来自 `lookups`：排队（`renderToolUseQueuedMessage`）、运行中（`renderToolUseProgressMessage`，含 PreToolUse hook 进度）、等待权限、完成、失败、已停止；MCP 工具 `mcp__server__tool` 拆开显示。
+- `UserToolResultMessage`（`chunk-ah34pb7m.js#kh`）：`is_error` → `UserToolErrorMessage`（工具的 `renderToolUseErrorMessage`，兜底 `FallbackToolUseErrorMessage`：去 `<tool_use_error>`、InputValidationError→"Invalid tool parameters"、非 verbose 截断并提示 ctrl+o）；被拒绝 → `UserToolRejectMessage`（`renderToolUseRejectedMessage`；计划被拒 `RejectedPlanMessage`；文件编辑被拒 `FileEditToolUseRejectedMessage`）；成功 → `UserToolSuccessMessage`（`renderToolResultMessage(output, progress, {verbose, theme…})`，auto 模式放行附 "Allowed by auto mode"，PostToolUse hook 进度）。
 - 缩进容器 `MessageResponse`（"⎿" 前缀，嵌套不重复，被 100+ 处使用）；"(ctrl+o to expand)" 由 `CtrlOToExpand` 提供。
 - Shell 输出：`shell/OutputLine.tsx`（JSON 格式化、错误/警告着色）、`ShellProgressMessage`、`ShellTimeDisplay`。
 
@@ -229,25 +229,25 @@ REPLWithProviders
 ```
 查询循环执行工具前 → canUseTool(tool, input, toolUseContext, assistantMessage, toolUseID, forceDecision?)
   hooks/useCanUseTool.tsx · useCanUseTool  (X$o)
-    ├─ 匹配最近拒绝记录（recordDenial/getDenials）
+    ├─ 匹配最近拒绝记录（recordDenial、getDenials）
     ├─ hasPermissionsToUseTool（gKe，dom-permissions）→ allow | deny | ask
     │    allow：logDecision(config) → buildAllow(updatedInput)；auto 模式分类器放行时记录
     │    ask  ：tool.description(input) → chunk-s4bxxzsw.js#pWn（requestToolPermission，未归属）
     │           ├─ swarm worker：hooks/toolPermission/handlers/swarmWorkerHandler.ts · handleSwarmWorkerPermission（写领导 mailbox，等回复）
-    │           ├─ coordinator ：handlers/coordinatorHandler.ts · handleCoordinatorPermission（先自动检查）
+    │           ├─ coordinator ：hooks/toolPermission/handlers/coordinatorHandler.ts · handleCoordinatorPermission（先自动检查）
     │           └─ 交互式      ：components/permissions/hooks.ts · usePermissionRequestLogging（实为"显示权限对话框"）
     │                   ├─ toolUseContext.requestDialog(def, descriptor) → dialogStore → XC → ZAe[kind] 组件
-    │                   └─ handlers/interactiveHandler.ts · handleInteractivePermission：
+    │                   └─ hooks/toolPermission/handlers/interactiveHandler.ts · handleInteractivePermission：
     │                      同时向 Remote Control bridge 发请求、监听 channel 回复、服务器审批 watcher、PermissionRequest hooks；
     │                      谁先给出决定谁 claim，其余 teardown
     └─ PermissionContext（hooks/toolPermission/PermissionContext.ts · createPermissionContext）：
-         resolveOnce、logDecision/logCancelled、persistPermissions（写规则到 settings）、setModeFromBridge、
+         resolveOnce、logDecision、logCancelled、persistPermissions（写规则到 settings）、setModeFromBridge、
          resolveIfAborted、buildAllow、cancelAndAbort、runHooks
 ```
 
 决策日志：`hooks/toolPermission/permissionLogging.ts · logPermissionDecision`（`tengu_tool_use_granted_in_config/_by_classifier/_in_prompt`、`tengu_tool_use_denied_in_config/_rejected_in_prompt`、OTEL `tool_decision`，来源 config/classifier/hook/user_permanent/user_temporary/user_abort）。显示时记录 `tengu_tool_use_show_permission_request`；等待过久由 `usePermissionPromptNotification`（旧版名 `PermissionRequest`）调用 `useNotifyAfterTimeout(text, "permission_prompt")` 发系统通知。
 
-### 6.2 对话框组件（注册表 `ZAe` 中的权限部分）
+### 6.2 对话框组件（注册表 `DIALOG_REGISTRY`（`chunk-18hwfzwa.js#ZAe`） 中的权限部分）
 
 | kind | 组件 | 内容与选项 |
 |---|---|---|
@@ -297,9 +297,9 @@ REPLWithProviders
 
 ## 8. 主题与输出样式
 
-- 调色板：`utils/theme.ts` 六套——`DARK_THEME`（默认）、`LIGHT_THEME`、`DARK_ANSI_THEME`、`LIGHT_ANSI_THEME`、`DARK_DALTONIZED_THEME`、`LIGHT_DALTONIZED_THEME`（`getTheme(name)`）；每套约 75 个键：`claude/claudeShimmer`、`permission(+Shimmer)`、`planMode`、`autoAccept(+Shimmer)`、`bashBorder`、`promptBorder(+Shimmer)`、`text/inverseText/inactive/subtle/suggestion/success/error/warning`、`diffAdded/diffRemoved(+Dimmed/+Word)`、`userMessageBackground(+Hover)`、`bashMessageBackgroundColor`、`memoryBackgroundColor`、`fastMode`、`effortUltra`、`rate_limit_fill/empty`、`rainbow_*`、`clawd_body/clawd_background`、`*_FOR_SUBAGENTS_ONLY`（子代理颜色）、`professionalBlue`、`briefLabelYou/Claude`、`composerSidebarBackground` 等。
+- 调色板：`utils/theme.ts` 六套——`DARK_THEME`（默认）、`LIGHT_THEME`、`DARK_ANSI_THEME`、`LIGHT_ANSI_THEME`、`DARK_DALTONIZED_THEME`、`LIGHT_DALTONIZED_THEME`（`getTheme(name)`）；每套约 75 个键：`claude/claudeShimmer`、`permission(+Shimmer)`、`planMode`、`autoAccept(+Shimmer)`、`bashBorder`、`promptBorder(+Shimmer)`、`text/inverseText/inactive/subtle/suggestion/success/error/warning`、`diffAdded`/`diffRemoved`（及 `diffAddedDimmed`、`diffAddedWord`、`diffRemovedDimmed`、`diffRemovedWord`）、`userMessageBackground(+Hover)`、`bashMessageBackgroundColor`、`memoryBackgroundColor`、`fastMode`、`effortUltra`、`rate_limit_fill/empty`、`rainbow_*`、`clawd_body/clawd_background`、`*_FOR_SUBAGENTS_ONLY`（子代理颜色）、`professionalBlue`、`briefLabelYou/Claude`、`composerSidebarBackground` 等。
 - Provider：`components/design-system/ThemeProvider.tsx · ThemeProvider`：读全局配置 `theme`（默认 `dark`），`auto` 跟随系统明暗；预览（`usePreviewTheme`：`setPreviewTheme/cancelPreview`，ThemePicker 用）；**自定义主题**（用户主题 + 插件主题 `pluginThemes`）与覆盖色 `activeThemeOverrides`（2.1.88 没有）；`useTheme() → [currentTheme, setThemeSetting]`。
-- 解析：`ThemedText`/`ThemedBox`（`Box` = `ThemedBox`）的颜色属性可写主题键或原始颜色（`rgb()`、`#hex`、`ansi256()`、`ansi:` 直通，`resolveColor`）；`design-system/color.ts · color` 返回 chalk 函数；`themeColorToAnsi` 用于非 React 输出。
+- 解析：`ThemedText`/`ThemedBox`（`Box` = `ThemedBox`）的颜色属性可写主题键或原始颜色（`rgb()`、`#` 开头的十六进制、`ansi256()`、`ansi:` 直通，`resolveColor`）；`design-system/color.ts · color` 返回 chalk 函数；`themeColorToAnsi` 用于非 React 输出。
 - `/theme`：`ThemePicker`（预览 diff、ctrl+t `theme:toggleSyntaxHighlighting`、写 userSettings）。`CLAUDE_CODE_SYNTAX_HIGHLIGHT` 影响 diff/代码高亮。
 - 输出样式：`OutputStylePicker`（`/output-style`，内置 + 自定义样式，"Preferred output style"），设置写入 `outputStyle`（`tengu_output_style_changed`）；样式定义与提示词注入不在本领域。
 
@@ -309,12 +309,12 @@ REPLWithProviders
 
 **设置键**（读写）：`theme`、`editorMode`（normal/vim）、`outputStyle`、`language`、`prUrlTemplate`、`maxProseWidth`、`showTurnDuration`、`prefersReducedMotion`、`autoConnectIde`、`autoUpdatesChannel`、`disableAllHooks`、`statusLine`（含 `refreshInterval`）、`voiceFooterHintSeenCount`、`lastClawdEntranceVersion`、`lastShownEmergencyTip`、`remoteControlAtStartup`、`sandbox.*`、`permissions.*`（规则）。
 
-**GrowthBook/动态配置**（ui 中出现的非事件名）：`tengu_static_title_under_mux`、`tengu_pewter_brook`、`tengu_amber_creek`（全屏默认）、`tengu_marlin_porch`、`tengu_kairos_brief`（brief 模式）、`tengu_lively_avalanche`、`tengu_copper_thistle`、`tengu_cosmic_lake`（超额通知）、`tengu_calm_riddle`（取消请求）、`tengu_glittery_fern`、`tengu_feedback_survey_config`、`tengu_{bad,fine,good}_survey_transcript_ask_config`、`tengu_juniper_vale`、`tengu_russet_whimbrel`、`tengu_dunwich_bell`、`tengu_velvet_moth`、`tengu_amber_flint`（swarm）、`tengu_prompt_suggestion`、`tengu-top-of-feed-tip`（紧急提示）、`tengu_keen_sloth`。
+**GrowthBook/动态配置**（ui 中出现的非事件名）：`tengu_static_title_under_mux`、`tengu_pewter_brook`、`tengu_amber_creek`（全屏默认）、`tengu_marlin_porch`、`tengu_kairos_brief`（brief 模式）、`tengu_lively_avalanche`、`tengu_copper_thistle`、`tengu_cosmic_lake`（超额通知）、`tengu_calm_riddle`（取消请求）、`tengu_glittery_fern`、`tengu_feedback_survey_config`、`tengu_bad_survey_transcript_ask_config`/`tengu_fine_survey_transcript_ask_config`/`tengu_good_survey_transcript_ask_config`、`tengu_juniper_vale`、`tengu_russet_whimbrel`、`tengu_dunwich_bell`、`tengu_velvet_moth`、`tengu_amber_flint`（swarm）、`tengu_prompt_suggestion`、`tengu-top-of-feed-tip`（紧急提示）、`tengu_keen_sloth`。
 
 ## 10. 与 2.1.88 的差异（有代码证据）
 
 1. **REPL 架构**：88 的 `screens/REPL.tsx`（5005 行，110 处 useState/useEffect，`toolUseConfirmQueue` 等状态）在 316 中变为控制器类（TurnController、SessionController、PromptSubmitController、ComposerChrome、PromptDraft、ScrollPin、BackgroundGesture、IdleNudge…，均在 `chunk-18hwfzwa.js` 未归属段）+ `bindHost`；REPL 局部 state 只剩 `screen`、`dumpMode`。
-2. **对话框统一**：权限确认队列改为 `dialogStore` + `requestDialog(def)` + kind 注册表 `ZAe`（约 40 个 kind，含 Slack 连接、Continue in Projects、导入审查、账号记忆确认等新对话框）。88 的 `components/permissions/PermissionRequest.tsx` 是按工具分派的组件，316 同名模块只剩通知副作用。
+2. **对话框统一**：权限确认队列改为 `dialogStore` + `requestDialog(def)` + kind 注册表 `DIALOG_REGISTRY`（`chunk-18hwfzwa.js#ZAe`）（约 40 个 kind，含 Slack 连接、Continue in Projects、导入审查、账号记忆确认等新对话框）。88 的 `components/permissions/PermissionRequest.tsx` 是按工具分派的组件，316 同名模块只剩通知副作用。
 3. **输入草稿外置**：输入值不再是 PromptInput 的 useState，而是 `PromptDraft` store（`draft.attribute(来源, fn)` 记录修改来源，支持 prompt hooks `prompt.change`/`prompt.submit`）。
 4. **全屏/虚拟滚动**成为主路径：`FullscreenLayout`、`ScrollPin`、未读分隔线、"新消息"药丸、置顶提示头、diff 侧栏（`replTab === "diff"`）、面板坞（PaneDock、InlinePanes）、ToastStack；`utils/fullscreen.ts` 的决策码（`bg_forced_on/sr_auto_off/env_off/env_on/settings_on/tmux_cc_auto_off/win_ssh_auto_off/upsell_trial_on/fresh_install_on`）。
 5. **transcript 模式增强**：搜索栏（索引预热 "indexing…/indexed in Nms"、n/N 导航）、`[` 打印到 scrollback、`v` 编辑器打开、`?` 帮助页脚。
@@ -328,14 +328,22 @@ REPLWithProviders
 - **Draft 快照**（`PromptDraft`）：`{value, cursorOffset, mode: "prompt"|"bash", pastedContents: {[id]: {id, type: "text"|"image", content, mediaType?, filename?, dimensions?, sourcePath?, unavailable?}}, interimRange, decorations, changedFromOutside, linkSuppliedTexts}`。
 - **提交 helpers**（`NOOP_HELPERS`）：`{setCursorOffset, clearBuffer, resetHistory}`；提交选项 `{fromKeybinding, inputModeOverride, leavesIdeSelection}`。
 - **对话框定义**：`qo({kind, payload: zodSchema, result: zodSchema, default})`；注册项 `{[kind]: Component}`。
-- **通知**：`{key, text|jsx, priority, color, timeoutMs, fold, hint, dim, segments}`（从 `EIe/OIe` 读出的字段）。
+- **通知**：`{key, text|jsx, priority, color, timeoutMs, fold, hint, dim, segments}`（从 `useTrustedDeviceEnrolledNotice`（`chunk-18hwfzwa.js#EIe`）/`FeatureOfTheWeekClaim`（`chunk-18hwfzwa.js#OIe`） 读出的字段）。
 - **Message 组件 props**：`{message, lookups, containerWidth, addMargin, tools, commands, verbose, inProgressToolUseIDs, progressMessagesForMessage, shouldAnimate, shouldShowDot, isTranscriptMode, isUserContinuation, isSplitUserContinuation, followsSpeakerLabel, followsInboundLabel, latestBashOutputUUID, …}`。
 - **REPL 本地屏幕**：`"prompt" | "transcript"`；`presentation`：`"fullscreen"` 或其他。
 
 ## 12. 未解之处
 
-- `chunk-18hwfzwa.js` 中一批未归属的核心类（`ste` TurnController、`lz` SessionController、`yte` PromptSubmitController、`ute` ComposerChrome、`zY` PromptDraft、`Yee` ScrollPin、`XG` BackgroundGesture、`NQ` ReplSessionScope、`XC` 对话框宿主、`ZAe` 注册表、`Gee` 消息区、`y8/Nke/Oet` 输入区、`gQ` 转录视图、`_F` 屏幕框架）在 88 中没有对应文件，应由 lead 新建重组路径（建议放 `screens/repl/*`）。本手册按构造参数与方法名描述，内部逻辑未逐行核实。
+- `chunk-18hwfzwa.js` 中一批未归属的核心类（`TurnController`（`chunk-18hwfzwa.js#ste`）、`SessionController`（`chunk-18hwfzwa.js#lz`）、`PromptSubmitController`（`chunk-18hwfzwa.js#yte`）、`ComposerChrome`（`chunk-18hwfzwa.js#ute`）、`PromptDraft`（`chunk-18hwfzwa.js#zY`）、`ScrollPin`（`chunk-18hwfzwa.js#Yee`）、`BackgroundGesture`（`chunk-18hwfzwa.js#XG`）、`ReplSessionScope`（`chunk-18hwfzwa.js#NQ`）、`XC` 对话框宿主、`DIALOG_REGISTRY`（`chunk-18hwfzwa.js#ZAe`）注册表、`Gee` 消息区、`PromptAreaWithBackgroundHint`/`Nke`/`PromptComposer`（`chunk-18hwfzwa.js#y8`/`chunk-18hwfzwa.js#Nke`/`chunk-18hwfzwa.js#Oet`）输入区、`TranscriptView`（`chunk-18hwfzwa.js#gQ`）转录视图、`_F` 屏幕框架）在 88 中没有对应文件，应由 lead 新建重组路径（建议放 `screens/repl/*`）。本手册按构造参数与方法名描述，内部逻辑未逐行核实。
 - `REPL` 的若干局部（`isInsidePanelHost`=`Se(lVt)`、`dialogOverPanel`=`VI()`、`exitState`=`Ie(chrome, BV)`、`hasTeamModal`/`isModalOpen`）语义只从用途推断，置信度 0.6。
 - `components/agents/*` 与 `new-agent-creation/wizard-steps/*` 的内容与模块名明显不符（实为 Bedrock/Vertex/云网关设置向导等），旧版 `/agents` 创建向导在 316 的真实位置未确认。
 - `inputModes.ts` 中 `chunk-2rkp9ne9.js` 的 34 个声明（propose_skills 相关）真实归属未确认。
-- `PermissionRequest` 流程中 `pWn`（`chunk-s4bxxzsw.js#pWn`）及其调用的 `usePermissionRequestLogging` 的旧版名不准确，后者实际是"显示并管理权限对话框"。
+- `PermissionRequest` 流程中 `repromptFilePermission`（`chunk-s4bxxzsw.js#pWn`）及其调用的 `usePermissionRequestLogging` 的旧版名不准确，后者实际是"显示并管理权限对话框"。
+
+## 13. 引用校验结果
+
+校验时间 2026-11-03 04:39（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+
+- 共检查 909 处引用：路径 85/87（另 2 个只在 2.1.88 中存在），字面量 122/122，名字 613/622（另 9 个只在 2.1.88 中存在），声明id 78/78；占位符与含空格的说明性文字 152 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`toolUseConfirmQueue`、`messages/*`、`SedEditPermissionRequest`、`UserBashOutputMessage`、`UserToolCanceledMessage`、`PromptInputStashNotice`、`useMergedTools/useMergedCommands`、`useElapsedTime`、`useSettingsChange`、`useSkillsChange`
+- 未通过：0 处。

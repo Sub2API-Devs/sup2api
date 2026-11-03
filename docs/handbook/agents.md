@@ -20,9 +20,9 @@
                             │                     │
           ┌─────────────────┴───┐        ┌────────┴──────────┐
           │ 本地：LocalAgent/     │        │ 同进程 teammate    │
-          │ LocalShell/Dream/…  │        │ tmux / iTerm2 pane │
+          │ LocalShell、Dream、…  │        │ tmux / iTerm2 pane │
           └─────────────────────┘        └───────────────────┘
-SDK / 桌面端 / 网页 ◄── stream-json + control_request/response（entrypoints/sdk）──► cli/structuredIO
+SDK / 桌面端 / 网页 ◄── stream-json + control_request、control_response（entrypoints/sdk）──► cli/structuredIO.ts
 claude.ai/code ◄── Remote Control（bridge/*：独立 environment 轮询 或 REPL 内 v2 桥）
 ```
 
@@ -33,27 +33,27 @@ claude.ai/code ◄── Remote Control（bridge/*：独立 environment 轮询 �
 
 | 目录 / 模块 | 职责 |
 |---|---|
-| `reconstructed/src/Task.ts`、`tasks.ts`、`tasks/types.ts`、`tasks/pillLabel.ts`、`tasks/stopTask.ts` | 任务公共定义：类型与 ID 前缀、状态基础对象、终态判断；任务实现注册表；后台任务胶囊文字；TaskStop 的实现 |
-| `reconstructed/src/tasks/LocalAgentTask/LocalAgentTask.tsx` | 本地子代理任务：注册（前台/后台/恢复）、进度、自动转后台、完成/失败/被杀、task-notification |
+| `reconstructed/src/Task.js`、`tasks.ts`、`tasks/types.ts`、`tasks/pillLabel.ts`、`tasks/stopTask.ts` | 任务公共定义：类型与 ID 前缀、状态基础对象、终态判断；任务实现注册表；后台任务胶囊文字；TaskStop 的实现 |
+| `reconstructed/src/tasks/LocalAgentTask/LocalAgentTask.js` | 本地子代理任务：注册（前台/后台/恢复）、进度、自动转后台、完成/失败/被杀、task-notification |
 | `reconstructed/src/tasks/LocalShellTask/*` | 后台 shell / Monitor 任务：前后台切换、卡住检测、结束通知、kill |
-| `reconstructed/src/tasks/LocalMainSessionTask.ts` | 主会话查询转后台（main-session） |
-| `reconstructed/src/tasks/RemoteAgentTask/RemoteAgentTask.tsx` | 云会话任务（remote-agent / ultraplan / ultrareview / autofix-pr / remote-workflow）：注册、轮询、权限中继、恢复 |
+| `reconstructed/src/tasks/LocalMainSessionTask.js` | 主会话查询转后台（main-session） |
+| `reconstructed/src/tasks/RemoteAgentTask/RemoteAgentTask.js` | 云会话任务（remote-agent / ultraplan / ultrareview / autofix-pr / remote-workflow）：注册、轮询、权限中继、恢复 |
 | `reconstructed/src/tasks/InProcessTeammateTask/*` | 同进程 teammate 任务实现与查找 |
-| `reconstructed/src/tasks/DreamTask/DreamTask.ts` | autoDream 记忆整理任务 |
-| `reconstructed/src/utils/forkedAgent.ts` | fork 子代理基础设施：缓存安全参数、隔离的 ToolUseContext、`runForkedAgent` |
-| `reconstructed/src/utils/agentContext.ts` | 代理上下文判断（主线程/子代理/teammate、深度、后台）；混有若干无关 ALS 小封装 |
-| `reconstructed/src/utils/teammate.ts`、`teammateContext.ts`、`teammateMailbox.ts`、`inProcessTeammateHelpers.ts`、`agentSwarmsEnabled.ts` | teammate 身份、文件信箱协议、团队开关 |
+| `reconstructed/src/tasks/DreamTask/DreamTask.js` | autoDream 记忆整理任务 |
+| `reconstructed/src/utils/forkedAgent.js` | fork 子代理基础设施：缓存安全参数、隔离的 ToolUseContext、`runForkedAgent` |
+| `reconstructed/src/utils/agentContext.js` | 代理上下文判断（主线程/子代理/teammate、深度、后台）；混有若干无关 ALS 小封装 |
+| `reconstructed/src/utils/teammate.js`、`teammateContext.ts`、`teammateMailbox.ts`、`inProcessTeammateHelpers.ts`、`agentSwarmsEnabled.ts` | teammate 身份、文件信箱协议、团队开关 |
 | `reconstructed/src/utils/swarm/*` | 团队文件、权限同步、pane 后端（tmux/iTerm2/in-process）、同进程 teammate 运行循环、派生、重连 |
-| `reconstructed/src/coordinator/coordinatorMode.ts` | 协调者模式 |
-| `reconstructed/src/entrypoints/sdk/controlSchemas.ts`、`coreSchemas.ts` | 旧版 SDK schema 文件位置；316 真正的 zod schema 在 `_unattributed/chunk-bwbq4xvm`（见第 5 章） |
+| `reconstructed/src/coordinator/coordinatorMode.js` | 协调者模式 |
+| `reconstructed/src/entrypoints/sdk/controlSchemas.js`、`coreSchemas.ts`、`uiControlSchemas.ts` | SDK schema（写作时 316 真正的 zod schema 还在 `_unattributed/` 的 `chunk-bwbq4xvm`，place-rest 后已放入 `entrypoints/sdk/`；见第 5 章） |
 | `reconstructed/src/bridge/*` | Remote Control：独立模式（environment 轮询）与 REPL 内 v2 桥 |
 | `reconstructed/src/remote/*`、`server/*`、`assistant/sessionHistory.ts` | 查看/驱动远程会话、`claude server` 直连、远程事件分页 |
-| `reconstructed/src/utils/cron*.ts` | 定时任务（ScheduledTasks） |
+| `reconstructed/src/utils/cron*.js` | 定时任务（ScheduledTasks） |
 | `reconstructed/src/utils/ultraplan/*` | ultraplan：轮询云会话里的 ExitPlanMode |
 | `reconstructed/src/utils/background/remote/*` | 后台云会话前置条件 |
-| `reconstructed/src/services/voice*.ts`、`voice/voiceModeEnabled.ts` | 语音输入 |
-| `reconstructed/src/utils/backgroundHousekeeping.ts`、`agenticSessionSearch.ts` | 后台维护、跨会话检索 |
-| `reconstructed/src/buddy/*` | **316 已删除伴侣精灵功能**，这些文件名下匹配到的都是无关代码（见 9.6） |
+| `reconstructed/src/services/voice*.js`、`voice/voiceModeEnabled.ts` | 语音输入 |
+| `reconstructed/src/utils/backgroundHousekeeping.js`、`agenticSessionSearch.ts` | 后台维护、跨会话检索 |
+| `buddy/*`（2.1.88 路径；后续重切已把这些声明移走，阅读树无此目录） | **316 已删除伴侣精灵功能**，这些文件名下匹配到的都是无关代码（见 9.6） |
 
 ---
 
@@ -67,7 +67,7 @@ Agent 工具本身在 tools 领域（`tools/AgentTool/*`，本领域只读引用
 
 `built-in` → `plugin` → `userSettings`（~/.claude/agents）→ `projectSettings`（附加目录的先、再按路径排序）→ `flagSettings`（--agents）→ `policySettings`（托管）。
 
-内置代理（`tools/AgentTool/builtInAgents.ts · getBuiltInAgents`）：
+内置代理（`tools/AgentTool/loadAgentsDir.ts · getBuiltInAgents`（`chunk-e6aww6q8.js#lKe`））：
 
 - 协调者模式下只返回协调者的 worker 代理（`getCoordinatorAgents`，见第 4 章）；`none` 时为空。
 - 默认：`general-purpose`；按开关追加 Explore、Claude（`CLAUDE_AGENT`）、Plan 相关两个、verification、`claude-code-guide`（SDK 入口 `sdk-ts/sdk-py/sdk-cli` 不加）。
@@ -100,19 +100,19 @@ tools/AgentTool/AgentTool.ts · AgentTool(agentInput…)
  ├─ 工具：tools/AgentTool/agentToolUtils.ts · resolveAgentTools → filterToolsForAgent
  │     去掉不允许子代理用的工具；Agent 工具只在深度 < 最大深度时保留；
  │     plan 模式补 ExitPlanMode；异步子代理只保留异步可用工具（teammate 另有白名单）；
- │     再按 tools / disallowedTools 求交集，记录 invalid/unavailable
+ │     再按 tools / disallowedTools 求交集，记录 invalid、unavailable
  ├─ 系统提示词：tools/AgentTool/runAgent.ts · getAgentSystemPrompt
  │     = 代理定义 getSystemPrompt（可带已加载的代理记忆）→ 加环境信息；失败用兜底提示词
  ├─ 同步 or 后台：
- │     后台（run_in_background / 代理 background / 宿主规则）→ tasks/LocalAgentTask · registerAsyncAgent（lfe）
- │     前台 → tasks/LocalAgentTask · registerAgentForeground（uXn），返回 backgroundSignal，
+ │     后台（run_in_background / 代理 background / 宿主规则）→ tasks/LocalAgentTask/LocalAgentTask.ts · registerAsyncAgent（lfe）
+ │     前台 → tasks/LocalAgentTask/LocalAgentTask.ts · registerAgentForeground（uXn），返回 backgroundSignal，
  │            autoBackgroundMs 到点自动转后台（见 2.5）
  └─ runAgent(...)（tools/AgentTool/runAgent.ts）：建子上下文、MCP、钩子，循环 runQuery，
        进度写入任务（updateProgressFromMessage / updateAgentProgressIfChanged）
        结束 → completeAgentTask / failAgentRun / killAsyncAgent → enqueueAgentNotification
 ```
 
-最大派生深度：`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`，否则 GrowthBook `tengu_hazel_trellis`（默认 3），`_unattributed/chunk-k8xs47j2 · OT`。深度来自 `utils/agentContext.ts · getAgentDepth`（主线程 0）。
+最大派生深度：`CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH`，否则 GrowthBook `tengu_hazel_trellis`（默认 3），`getMaxSubagentSpawnDepth`（`chunk-k8xs47j2.js#OT`，`tools/AgentTool/spawnDepth.ts`）。深度来自 `utils/agentContext.ts · getAgentDepth`（主线程 0）。
 
 ### 1.3 子代理上下文（`createSubagentContext`）
 
@@ -121,7 +121,7 @@ tools/AgentTool/AgentTool.ts · AgentTool(agentInput…)
 | 字段 | 默认行为 |
 |---|---|
 | `abortController` | 父控制器的子控制器（`shareAbortController` 时共用） |
-| `getAppState` | 包一层，强制 `toolPermissionContext.shouldAvoidPermissionPrompts=true`，并追加 `{kind:"avoid_prompts"}` 权限层（共享 abort 或自带 getAppState 时不加） |
+| `getAppState` | 包一层，强制 `toolPermissionContext.shouldAvoidPermissionPrompts` 为 true，并追加 `{kind:"avoid_prompts"}` 权限层（共享 abort 或自带 getAppState 时不加） |
 | `setAppState` | 隔离：只允许回写父状态的 `frameUrls`（`shareSetAppState` 时共用） |
 | `readFileState` | 克隆（`stripSeededFromContext`） |
 | 文件历史 / denial tracking | 默认隔离（文件历史只转发 `touch` 操作） |
@@ -149,7 +149,7 @@ fork 子代理"继承整个对话"：
 
 ### 1.5 结果回传：task-notification
 
-子代理结束时由 `tasks/LocalAgentTask · enqueueAgentNotification` 生成一条 `<task-notification>` 以 `mode: "task-notification"`、`priority: "next"` 进入消息队列，下一轮作为用户消息喂给属主（主线程或父代理）。XML 结构（`_unattributed/chunk-gppkhxdv · bi`）：
+子代理结束时由 `tasks/LocalAgentTask/LocalAgentTask.ts · enqueueAgentNotification` 生成一条 `<task-notification>` 以 `mode: "task-notification"`、`priority: "next"` 进入消息队列，下一轮作为用户消息喂给属主（主线程或父代理）。XML 结构（`formatTaskNotification`，`chunk-gppkhxdv.js#bi`，`utils/xmlTags.ts`）：
 
 ```xml
 <task-notification>
@@ -189,12 +189,12 @@ fork 子代理"继承整个对话"：
 | `remote_agent` | r | `RemoteAgentTask` | 云会话任务 |
 | `in_process_teammate` | t | `InProcessTeammateTask` | 同进程 teammate |
 | `local_workflow` | w | 懒加载 `LocalWorkflowTask` | 动态 workflow |
-| `monitor_mcp` / `monitor_ws` | m / s | （在 `_unattributed`） | MCP / WebSocket 监控（含 Artifact 评论监控） |
+| `monitor_mcp` / `monitor_ws` | m / s | `MonitorMcpTask` / `MonitorWsTask`（`tasks/MonitorMcpTask/`、`tasks/MonitorWsTask/`；写作时在 _unattributed） | MCP / WebSocket 监控（含 Artifact 评论监控） |
 | `mcp_task` | k | 懒加载 `MCP_TASK` | MCP 长任务 |
 | `dream` | d | `DreamTask` | autoDream 记忆整理 |
-| `auto_mode_scan` | e | （在 `_unattributed`） | auto 模式扫描 |
-| `local_memory_import` | n | （在 `_unattributed`） | 记忆导入 |
-| `post_turn_memory` | p | （在 `_unattributed`） | 轮后保存记忆 |
+| `auto_mode_scan` | e | `AutoModeScanTask`（`tasks/AutoModeScanTask/`；写作时在 _unattributed） | auto 模式扫描 |
+| `local_memory_import` | n | `LocalMemoryImportTask`（`tasks/LocalMemoryImportTask/`；写作时在 _unattributed） | 记忆导入 |
+| `post_turn_memory` | p | `PostTurnMemoryTask`（`tasks/PostTurnMemoryTask/`；写作时在 _unattributed） | 轮后保存记忆 |
 
 ID = 前缀 + 8 位 36 进制随机字符（`generateTaskId`，crypto.randomBytes）。旧版 2.1.88 只有 local_bash/local_agent/remote_agent/in_process_teammate/local_workflow/monitor_mcp/dream 七种。
 
@@ -235,11 +235,11 @@ ID = 前缀 + 8 位 36 进制随机字符（`generateTaskId`，crypto.randomByte
 ### 2.4 通知
 
 - 子代理：1.5 节。
-- shell：`tasks/LocalShellTask · backgroundTask` 在命令结束时写终态与 `terminal.summary`（`formatTaskTerminalSummary`："Background command "x" completed (exit code 0)" 等；Monitor 用 `formatMonitorTerminalSummary`），并调用 `Qpt` 生成通知（Monitor 不发）。
+- shell：`tasks/LocalShellTask/LocalShellTask.ts · backgroundTask` 在命令结束时写终态与 `terminal.summary`（`formatTaskTerminalSummary`："Background command "x" completed (exit code 0)" 等；Monitor 用 `formatMonitorTerminalSummary`），并调用 `finishLocalShellTask`（`chunk-e6aww6q8.js#Qpt`）生成通知（Monitor 不发）。
 - 卡住检测：`startStallWatchdog` 发现输出停在交互式提示（`looksLikePrompt`）时，发一条带最后输出与 `INTERACTIVE_PROMPT_HINT` 的 task-notification。
 - 远程：`notifyRemoteReviewCompleted/Failed`、`getStatusText`；会话恢复时没有结束记录的后台任务由 `enqueueOrphanedTasksNotification` 汇总通知为 failed/stopped。
 - 队列中 task-notification 过多时 `collapseExcessTaskNotifications` 合并多余部分。
-- 终止事件 `ya(taskId, status, {toolUseId, summary, …})`：发 SDK `task_notification` 系统消息等（实现在 `_unattributed/chunk-aepeg2w5`）。
+- 终止事件 `emitTaskNotification(taskId, status, {toolUseId, summary, …})`：发 SDK `task_notification` 系统消息等（`chunk-aepeg2w5.js#ya`，`utils/task/taskNotifications.ts`）。
 
 ### 2.5 前台与后台
 
@@ -279,21 +279,21 @@ ID = 前缀 + 8 位 36 进制随机字符（`generateTaskId`，crypto.randomByte
 
 两种 teammate：
 
-- **同进程 teammate**：身份放在 AsyncLocalStorage（`utils/agentContext.ts · getTeammateContext` / `runWithTeammateContext`，由 `utils/teammateContext.ts · createTeammateContext` 构造，`isInProcess: true`）。
+- **同进程 teammate**：身份放在 AsyncLocalStorage（`utils/teammate.ts · getTeammateContext` / `runWithTeammateContext`，由 `utils/teammateContext.ts · createTeammateContext` 构造，`isInProcess: true`）。
 - **pane teammate**（独立进程，跑在 tmux/iTerm2 pane 里）：进程级"动态团队上下文"（`utils/teammate.ts · setDynamicTeamContext`，按宿主保存在 `teammateIdentities`）。
 
 `utils/teammate.ts` 的查询都先看同进程上下文、再看动态上下文：`getAgentId`、`getAgentName`、`getTeamName`、`getParentSessionId`、`isTeammate`、`isPlanModeRequired`（缺省读 `CLAUDE_CODE_PLAN_MODE_REQUIRED`）、`isTeamLead`（自身 agentId 等于 leadAgentId，或没有 agentId）。agentId 形如 `name@team`；leader 名固定 `team-lead`（`utils/swarm/constants.ts · TEAM_LEAD`）。成员名须匹配 `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`。
 
 ### 3.3 团队文件
 
-路径 `<teams 目录>/<规范化团队名>/config.json`（`getTeamDir` / `getTeamFilePath`）；开启存储 v5 时存在存储后端（键 `je.team(name)`）。字段（`sanitizeTeamFile`/`isValidMember`/`isValidLeadProcess` 校验）：`leadAgentId`、`leadProcess{pid, pidSpace, claimedAt, procStart?}`、`members[]{agentId, name, joinedAt, mode, isActive, tmuxPaneId, backendType, …}`、`teamAllowedPaths[]{toolName, path}`。
+路径 `<teams 目录>/<规范化团队名>/config.json`（`getTeamDir` / `getTeamFilePath`）；开启存储 v5 时存在存储后端（键 `STORAGE_SPACES.team(sanitizeName(teamName))`）。字段（`sanitizeTeamFile`/`isValidMember`/`isValidLeadProcess` 校验）：`leadAgentId`、`leadProcess{pid, pidSpace, claimedAt, procStart?}`、`members[]{agentId, name, joinedAt, mode, isActive, tmuxPaneId, backendType, …}`、`teamAllowedPaths[]{toolName, path}`。
 
 操作（`utils/swarm/teamHelpers.ts`）：
 
 | 函数 | 作用 |
 |---|---|
 | `readTeamFileAsync`（门面名，压缩名 nS） | 读（存储或文件），不存在返回 null |
-| `updateTeamFile` | 加锁读-改-写（文件锁 `config.json.lock`）；回调返回 false 不写；`bestEffortWrite` 写失败只记录。存储 v5 走 `updateTeamFileInStore`（锁可疑/不可读最多重试 5 次） |
+| `updateTeamFile` | 加锁读-改-写（文件锁：`config.json` 加 `.lock` 后缀）；回调返回 false 不写；`bestEffortWrite` 写失败只记录。存储 v5 走 `updateTeamFileInStore`（锁可疑/不可读最多重试 5 次） |
 | `removeTeamMember` / `removeMemberByAgentId`（`onlyIfJoinedBefore` 防误删重新加入的成员） / `removeTeammateFromTeamFile` | 删成员 |
 | `setMemberMode`、`syncTeammateMode`、`setMemberActive` | 改成员权限模式、活动状态 |
 | `setMemberPaneInfo` + `recordSpawnedTeammatePane` | 记录成员的 pane（tmuxPaneId、backendType） |
@@ -365,7 +365,7 @@ worker 侧（`utils/swarm/permissionSync.ts`）：`createPermissionRequest`（ID
 ```
 构造 agentContext{agentType: "teammate", isBackgroundAgent, parentSessionId, teamName, …}
 系统提示词 = 默认提示词（teammate 版）+ "# Custom Agent Instructions" 自定义代理提示 [+ append]，或 replace
-必需工具 = SendMessage (+ TaskCreate/Get/List/Update，有任务列表工具时)
+必需工具 = SendMessage (+ TaskCreate、TaskGet、TaskList、TaskUpdate，有任务列表工具时)
 首次（非 standalone）尝试领取任务列表里的任务 tryClaimNextTask
 loop（直到中止或退出）:
   ├─ 历史超过自动压缩阈值 → compactConversation（PreCompact 钩子阻止时继续不压缩）
@@ -391,9 +391,9 @@ pane teammate 的空闲通知由 `utils/swarm/teammateInit.ts · initializeTeamm
 
 ```
 leader: TeamCreate → 写团队文件、registerTeamForSessionCleanup
-leader: Agent/spawn → detectAndGetBackend / isInProcessEnabled
+leader: Agent（spawn） → detectAndGetBackend / isInProcessEnabled
    ├ in-process: spawnInProcessTeammate → startInProcessTeammate → runInProcessTeammate
-   └ pane: 创建 pane（TmuxBackend/ITermBackend）→ respawn-pane 运行 claude（buildInheritedCliFlags）
+   └ pane: 创建 pane（TmuxBackend、ITermBackend）→ respawn-pane 运行 claude（buildInheritedCliFlags）
           → setMemberPaneInfo；teammate 进程 setDynamicTeamContext、initializeTeammateHooks
 teammate: 执行 → 需要权限时 permission_request → leader 审批 → permission_response
 teammate: 回合结束 → idle_notification → leader 看到 <teammate-message>
@@ -407,7 +407,7 @@ leader: 杀 pane / killInProcessTeammate → removeMemberByAgentId；会话结�
 ## 4. 协调者模式（coordinator）
 
 - 判定：`coordinator/coordinatorMode.ts · isCoordinatorMode` —— `CLAUDE_CODE_COORDINATOR_MODE` 为真，并且不处于某受限场景（除非 `CLAUDE_CODE_REMOTE`）。恢复会话时 `matchSessionMode(sessionMode)` 把 env 切到与会话记录一致，记 `tengu_coordinator_mode_switched`，返回"Entered/Exited coordinator mode to match resumed session."。
-- 内置代理：协调者模式下 `getBuiltInAgents` 只返回 worker 代理（`_unattributed/chunk-ncsga3m8`）：`tools: ["*"]`、`maxTurns: 500`、`permissionMode: "bubble"`；worker 系统提示词要求：只做被分配的事、改动后提交（不许 `git add .`）、可再分派（深度允许时）、auto 模式被拒时原样报告、输出给协调者（"What you did or found" + 一句 Summary）。
+- 内置代理：协调者模式下 `getBuiltInAgents` 只返回 worker 代理（`chunk-ncsga3m8`，现 `coordinator/workerAgent.ts`）：`tools: ["*"]`、`maxTurns: 500`、`permissionMode: "bubble"`；worker 系统提示词要求：只做被分配的事、改动后提交（不许 `git add .`）、可再分派（深度允许时）、auto 模式被拒时原样报告、输出给协调者（"What you did or found" + 一句 Summary）。
 - 系统提示词 `getCoordinatorSystemPrompt`：角色是"跨多个 worker 编排软件工程任务的协调者"；工具 Agent（派新 worker）、SendMessage（继续已有 worker）、TaskStop、Workflow（可用时）、Skill（只读加载）、PR 活动订阅、跨会话 peer（ListAgents/SendMessage）；模型参数规则（`CLAUDE_CODE_COORDINATOR_FORCE_WORKER_INHERIT_MODEL` 或 `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` 时忽略 model）；通讯工具模式下"裸文本不会到达用户，每轮必须以通讯工具结束"。
 - user context `getCoordinatorUserContext` → `workerToolsContext`：列 worker 可用工具（`CLAUDE_CODE_SIMPLE` 时只有 Bash/PowerShell/Read/Edit/Agent）、Artifact 交付规则、MCP 服务器名、scratchpad 目录、skill 指引（`CLAUDE_CODE_COORDINATOR_SKILL_GUIDANCE`）。
 - scratchpad：`isScratchpadEnabled`（GrowthBook `tengu_scratch`，或 Artifact 工具可用）。
@@ -432,7 +432,7 @@ stdin/stdout 上逐行 JSON（stream-json）。控制帧：
 {"type":"keep_alive"}                                     // 任一方随时可发
 ```
 
-316 的 zod 定义在 `_unattributed/chunk-bwbq4xvm`（约 780KB 的 schema 大 chunk）；`entrypoints/sdk/*.ts` 名下匹配到的多是发送/处理助手。协议表本身带方向标注（`var X4 = [g(schema, "client"|"agent"|"both", responseSchema), …]`），以下按它整理。
+316 的 zod 定义在 `chunk-bwbq4xvm`（约 780KB 的 schema 大 chunk；写作时在 `_unattributed/`，现已放入 `entrypoints/sdk/`）；`entrypoints/sdk/*.ts` 名下匹配到的多是发送/处理助手。协议表本身带方向标注（`var X4 = [g(schema, "client"|"agent"|"both", responseSchema), …]`），以下按它整理。
 
 ### 5.2 control request 全表（98 种）
 
@@ -483,7 +483,7 @@ stdin/stdout 上逐行 JSON（stream-json）。控制帧：
 
 ### 5.4 与 2.1.88 的差异
 
-旧版 `controlSchemas.ts` 只有 23 个 subtype（apply_flag_settings、can_use_tool、cancel_async_message、elicitation、get_context_usage、get_settings、hook_callback、initialize、interrupt、mcp_message、mcp_reconnect、mcp_set_servers、mcp_status、mcp_toggle、reload_plugins、rewind_files、seed_read_state、set_max_thinking_tokens、set_model、set_permission_mode、stop_task 及 success/error）。316 增至 98 种请求，新增云会话、Chrome、UI 表面、设备钩子、远程工具、turn_handoff、claim_session、文件/目录读取、任务控制、反馈等，并显式标注每个请求的发起方（client/agent/both）；control_response 增加 `pending_*_requests` 列表；新增 `control_request_progress` 系统消息。旧版 `system` 子类型约 15 种，316 为 56 种。
+旧版 `controlSchemas.ts` 只有 23 个 subtype（apply_flag_settings、can_use_tool、cancel_async_message、elicitation、get_context_usage、get_settings、hook_callback、initialize、interrupt、mcp_message、mcp_reconnect、mcp_set_servers、mcp_status、mcp_toggle、reload_plugins、rewind_files、seed_read_state、set_max_thinking_tokens、set_model、set_permission_mode、stop_task 及 success/error）。316 增至 98 种请求，新增云会话、Chrome、UI 表面、设备钩子、远程工具、turn_handoff、claim_session、文件/目录读取、任务控制、反馈等，并显式标注每个请求的发起方（client/agent/both）；control_response 增加 `pending_…_requests` 列表（`pending_permission_requests`、`pending_control_requests`、`pending_dialog_requests`、`pending_elicitation_requests`、`pending_human_requests`、`pending_user_dialog_requests`）；新增 `control_request_progress` 系统消息。旧版 `system` 子类型约 15 种，316 为 56 种。
 
 ---
 
@@ -504,23 +504,23 @@ stdin/stdout 上逐行 JSON（stream-json）。控制帧：
 
 | 模块 | 职责 |
 |---|---|
-| `reconstructed/src/bridge/bridgeMain.ts` | 参数解析 `parseArgs`、入口 `bridgeMain`、无头入口 `runBridgeHeadless`、主循环 `runBridgeLoop`、`stopWorkWithRetry`、worktree 清理、退避常量 `DEFAULT_BACKOFF`、`--help` 文本 |
-| `reconstructed/src/bridge/bridgeApi.ts` | `createBridgeApiClient`（Environments API 全部调用）、`handleErrorStatus`、`BridgeFatalError`、untrusted_device 自动恢复（另混入大量与 bridge 无关的内容块小助手，见建议） |
-| `reconstructed/src/bridge/sessionRunner.ts` | `createSessionSpawner`：子 CLI 参数与环境、stdout 活动解析、句柄（kill/writeStdin/updateAccessToken） |
-| `reconstructed/src/bridge/workSecret.ts` | `decodeWorkSecret`、`registerWorker`、`buildCCRv2SdkUrl`、`sameSessionId`、网关 URL 规范化 |
-| `reconstructed/src/bridge/pollConfig.ts`、`pollConfigDefaults.ts` | 轮询间隔配置 schema 与默认值（`tengu_bridge_poll_interval_config`） |
-| `reconstructed/src/bridge/capacityWake.ts` | `createCapacityWake`：会话结束腾出容量时提前唤醒轮询等待 |
-| `reconstructed/src/bridge/bridgeUI.ts` | `createBridgeLogger`：横幅、QR、状态行、会话列表 |
-| `reconstructed/src/bridge/bridgeStatusUtil.ts` | 连接 URL、shimmer、/rc 状态标签、OSC8 链接 |
-| `reconstructed/src/bridge/bridgePointer.ts` | `bridge-pointer.json` 读写/清除/跨 worktree 查找 |
-| `reconstructed/src/bridge/trustedDevice.ts` | 可信设备强制判断、token 读取、注册（`/api/auth/trusted_devices`）、拒绝提示 |
-| `reconstructed/src/bridge/jwtUtils.ts` | `decodeJwtPayload/Expiry`、`createTokenRefreshScheduler` |
-| `reconstructed/src/bridge/bridgeEnabled.ts` | `isBridgeEnabled`、各 `tengu_*` 开关、`getCcrAutoConnectDefault`、`checkBridgeMinVersion` |
-| `reconstructed/src/bridge/bridgeConfig.ts` | `getBridgeBaseUrl`、`getBridgeAccessToken` |
-| `reconstructed/src/bridge/createSession.ts` | `createBridgeSession`（预创建会话）、`postPeerMessage`（向别的会话投递消息） |
-| `reconstructed/src/bridge/debugUtils.ts` | 调试日志脱敏截断、错误详情、`parseRetryAfterMs`、`logBridgeSkip` |
-| `reconstructed/src/bridge/types.ts` | 登录要求等文案常量、`BRIDGE_FOLDER_ALREADY_SERVED` |
-| `reconstructed/src/bridge/bridgeDebug.ts` | `injectBridgeFault` 故障注入 |
+| `reconstructed/src/bridge/bridgeMain.js` | 参数解析 `parseArgs`、入口 `bridgeMain`、无头入口 `runBridgeHeadless`、主循环 `runBridgeLoop`、`stopWorkWithRetry`、worktree 清理、退避常量 `DEFAULT_BACKOFF`、`--help` 文本 |
+| `reconstructed/src/bridge/bridgeApi.js` | `createBridgeApiClient`（Environments API 全部调用）、`handleErrorStatus`、`BridgeFatalError`、untrusted_device 自动恢复（另混入大量与 bridge 无关的内容块小助手，见建议） |
+| `reconstructed/src/bridge/sessionRunner.js` | `createSessionSpawner`：子 CLI 参数与环境、stdout 活动解析、句柄（kill/writeStdin/updateAccessToken） |
+| `reconstructed/src/bridge/workSecret.js` | `decodeWorkSecret`、`registerWorker`、`buildCCRv2SdkUrl`、`sameSessionId`、网关 URL 规范化 |
+| `reconstructed/src/bridge/pollConfig.js`、`pollConfigDefaults.ts` | 轮询间隔配置 schema 与默认值（`tengu_bridge_poll_interval_config`） |
+| `reconstructed/src/bridge/capacityWake.js` | `createCapacityWake`：会话结束腾出容量时提前唤醒轮询等待 |
+| `reconstructed/src/bridge/bridgeUI.js` | `createBridgeLogger`：横幅、QR、状态行、会话列表 |
+| `reconstructed/src/bridge/bridgeStatusUtil.js` | 连接 URL、shimmer、/rc 状态标签、OSC8 链接 |
+| `reconstructed/src/bridge/bridgePointer.js` | `bridge-pointer.json` 读写/清除/跨 worktree 查找 |
+| `reconstructed/src/bridge/trustedDevice.js` | 可信设备强制判断、token 读取、注册（`/api/auth/trusted_devices`）、拒绝提示 |
+| `reconstructed/src/bridge/jwtUtils.js` | `decodeJwtPayload/Expiry`、`createTokenRefreshScheduler` |
+| `reconstructed/src/bridge/bridgeEnabled.js` | `isBridgeEnabled`、各 `tengu_*` 开关、`getCcrAutoConnectDefault`、`checkBridgeMinVersion` |
+| `reconstructed/src/bridge/bridgeConfig.js` | `getBridgeBaseUrl`、`getBridgeAccessToken` |
+| `reconstructed/src/bridge/createSession.js` | `createBridgeSession`（预创建会话）、`postPeerMessage`（向别的会话投递消息） |
+| `reconstructed/src/bridge/debugUtils.js` | 调试日志脱敏截断、错误详情、`parseRetryAfterMs`、`logBridgeSkip` |
+| `reconstructed/src/bridge/types.js` | 登录要求等文案常量、`FOLDER_ALREADY_SERVED_ERROR_TYPE` |
+| `reconstructed/src/bridge/bridgeDebug.js` | `injectBridgeFault` 故障注入 |
 
 ### 关键流程
 
@@ -532,7 +532,7 @@ bridgeMain(argv, storageV5, credentials)                         bridge/bridgeMa
  ├─ enableConfigs / initSinks；工作区信任（未信任则 offerBridgeWorkspaceTrust，信任后重置 GrowthBook）
  ├─ --chrome 策略检查；登录检查（getBridgeAccessToken / getBridgeAccessTokenAsync），否则打印 BRIDGE_LOGIN_ERROR 退出
  ├─ 首次使用确认（全局配置记录）；--continue → readBridgePointerAcrossWorktrees 找最近 pointer
- ├─ getBridgeBaseUrl（不可用即退出）；选择 spawn 模式（项目配置 remoteControlSpawnMode，未设时交互询问 same-dir/worktree）
+ ├─ getBridgeBaseUrl（不可用即退出）；选择 spawn 模式（项目配置 remoteControlSpawnMode，未设时交互询问 same-dir、worktree）
  ├─ --session-id / pointer 恢复：readBridgePointer → 同进程仍在跑则拒绝；getBridgeSessionOrStatus 查会话，404 清 pointer
  ├─ createBridgeApiClient({baseUrl, getAccessToken, onAuth401, getTrustedDeviceToken, untrustedDevice, …})
  ├─ tryRegisterEnvironment → api.registerBridgeEnvironment (POST /v1/environments/bridge)
@@ -606,7 +606,7 @@ runBridgeLoop                                                     bridge/bridgeM
 
 **poll 响应**：`{id, state, secret, data:{type:"session"|…, id, mode?}}`；heartbeat 响应 `{lease_extended, state}`。
 
-**子进程环境**（`sessionRunner`）：`CLAUDE_CODE_ENVIRONMENT_KIND=bridge`、`CLAUDE_CODE_SESSION_ACCESS_TOKEN`、`CLAUDE_CODE_WORKER_EPOCH`、`CLAUDE_CODE_RESUME_INTERRUPTED_TURN(_MAX_AGE_MS)`（epoch>1 时）、`CLAUDE_CODE_BRIDGE_OWNER_ACCOUNT_UUID/ORG_UUID`、`CLAUDE_CODE_BRIDGE_SOURCE_DIR`、`CLAUDE_CODE_BRIDGE_MCP_CARRIER`、`CLAUDE_CODE_BRIDGE_PROMPT_SHA256`、`CLAUDE_CODE_BRIDGE_CHILD_{AUTO_DEFAULT,ARTIFACT,MACHINE_SETTINGS,PROJECTS_ENTRYPOINT,CLI_ENTRYPOINT}`、`SESSION_INGRESS_URL`（有 mcp_config 时）、`CLAUDE_CODE_EXIT_AFTER_STOP_DELAY`（idle 退出）；同时清除宿主的 OAuth/API key/FD 类凭证变量（`CLAUDE_CODE_OAUTH_TOKEN`、`*_FILE_DESCRIPTOR`、`CLAUDE_CODE_ACCOUNT_UUID` 等）。子进程退出码映射为 `completed / idle / interrupted / failed`。
+**子进程环境**（`sessionRunner`）：`CLAUDE_CODE_ENVIRONMENT_KIND=bridge`、`CLAUDE_CODE_SESSION_ACCESS_TOKEN`、`CLAUDE_CODE_WORKER_EPOCH`、`CLAUDE_CODE_RESUME_INTERRUPTED_TURN(_MAX_AGE_MS)`（epoch>1 时）、`CLAUDE_CODE_BRIDGE_OWNER_ACCOUNT_UUID/ORG_UUID`、`CLAUDE_CODE_BRIDGE_SOURCE_DIR`、`CLAUDE_CODE_BRIDGE_MCP_CARRIER`、`CLAUDE_CODE_BRIDGE_PROMPT_SHA256`、`CLAUDE_CODE_BRIDGE_CHILD_AUTO_DEFAULT`/`CLAUDE_CODE_BRIDGE_CHILD_ARTIFACT`/`CLAUDE_CODE_BRIDGE_CHILD_MACHINE_SETTINGS`/`CLAUDE_CODE_BRIDGE_CHILD_PROJECTS_ENTRYPOINT`/`CLAUDE_CODE_BRIDGE_CHILD_CLI_ENTRYPOINT`、`SESSION_INGRESS_URL`（有 mcp_config 时）、`CLAUDE_CODE_EXIT_AFTER_STOP_DELAY`（idle 退出）；同时清除宿主的 OAuth/API key/FD 类凭证变量（`CLAUDE_CODE_OAUTH_TOKEN`、`…_FILE_DESCRIPTOR`（如 `CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR`、`CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR`）、`CLAUDE_CODE_ACCOUNT_UUID` 等）。子进程退出码映射为 `completed / idle / interrupted / failed`。
 
 ### 配置项、环境变量与开关
 
@@ -651,7 +651,7 @@ runBridgeLoop                                                     bridge/bridgeM
 | DELETE | `/v1/environments/bridge/{envId}` | deregisterEnvironment |
 | POST | `/v1/environments/bridge/{envId}/offline` | markEnvironmentOffline |
 | POST | `/v1/environments/{envId}/bridge/reconnect` | reconnectSession（`{session_id}`） |
-| POST | `/v1/sessions/{id}/archive` 或 `/v1/code/sessions/{cse}/archive` | archiveSession（409 视为已归档） |
+| POST | `/v1/sessions/{id}/archive` 或 `/v1/code/sessions/${toInfraSessionId(r)}/archive` | archiveSession（409 视为已归档） |
 | POST | `/v1/code/sessions/{id}/tool_hosts/refuse` | refuseToolHost |
 | GET | `/v1/code/sessions?limit=1`、`/v1/code/sessions/watch` (SSE) | sessionsWatch.mintResumeToken / open |
 | POST | `/v1/code/sessions/{id}/worker/register` | registerWorker |
@@ -701,32 +701,32 @@ REPL 里执行 `/remote-control`（或启动参数、恢复会话时自动重连
 
 | 模块 | 职责 |
 |---|---|
-| `reconstructed/src/bridge/initReplBridge.ts` | 入口与门控：重连目标与属主校验、策略/OAuth/信任设备/版本检查、标题派生，调用核心 |
-| `reconstructed/src/bridge/remoteBridgeCore.ts` | 核心 `initEnvLessBridgeCore`：建/复用会话、取凭证、建传输、帧分派、FlushGate、恢复、拆除；`withRetry`/`withRetryAndAuthRecovery` 等助手 |
-| `reconstructed/src/bridge/codeSessionApi.ts` | `createCodeSession`（POST /v1/code/sessions）、`fetchRemoteCredentials`（POST …/bridge）、HTTP 失败分类、untrusted_device 子原因 |
-| `reconstructed/src/bridge/replBridgeTransport.ts` | `createV2ReplTransport`：epoch、SSE 读流、CCRClient 写流、关闭码 4090–4094 |
-| `reconstructed/src/bridge/bridgeMessaging.ts` | `isSDKControlRequest/Response`、`isEligibleBridgeMessage`（出站过滤）、`handleIngressMessage`（入站分派）、`BoundedUUIDSet`、回写 control_response |
-| `reconstructed/src/bridge/flushGate.ts` | `FlushGate`：回放历史/重连时暂存出站帧 |
-| `reconstructed/src/bridge/envLessBridgeConfig.ts` | `tengu_bridge_repl_v2_config` 配置与最低版本检查 |
-| `reconstructed/src/bridge/sessionIdCompat.ts` | `cse_` ↔ `session_` 前缀互转（另混入 CCR MCP 代理 URL 代码） |
-| `reconstructed/src/bridge/inboundAttachments.ts` | 远端发来的文件附件下载、落盘 uploads、内联图片、`@"path"` 前缀 |
-| `reconstructed/src/bridge/inboundMessages.ts` | base64 图片 media_type 补全（另混入远程工具执行结果转换） |
-| `reconstructed/src/bridge/bridgePermissionCallbacks.ts` | 从 allow 决定中取审批票据 |
-| `reconstructed/src/bridge/replBridgeHandle.ts` | 当前桥句柄的 session_* 兼容 ID |
-| `reconstructed/src/remote/sdkMessageAdapter.ts` | SDK 消息 → 本地消息（查看远程会话用） |
-| `reconstructed/src/remote/RemoteSessionManager.ts`、`remotePermissionBridge.ts` | 可中继控制帧判定、为远程权限请求合成 assistant 消息 |
-| `reconstructed/src/server/directConnectManager.ts`、`server/types.ts` | WebSocket 直连 `claude server` 会话；connect 响应 schema |
-| `reconstructed/src/assistant/sessionHistory.ts` | 远程会话事件分页、判断远程回合是否进行中、会话端点 URL/头 |
+| `reconstructed/src/bridge/initReplBridge.js` | 入口与门控：重连目标与属主校验、策略/OAuth/信任设备/版本检查、标题派生，调用核心 |
+| `reconstructed/src/bridge/remoteBridgeCore.js` | 核心 `initEnvLessBridgeCore`：建/复用会话、取凭证、建传输、帧分派、FlushGate、恢复、拆除；`withRetry`/`withRetryAndAuthRecovery` 等助手 |
+| `reconstructed/src/bridge/codeSessionApi.js` | `createCodeSession`（POST /v1/code/sessions）、`fetchRemoteCredentials`（POST …/bridge）、HTTP 失败分类、untrusted_device 子原因 |
+| `reconstructed/src/bridge/replBridgeTransport.js` | `createV2ReplTransport`：epoch、SSE 读流、CCRClient 写流、关闭码 4090–4094 |
+| `reconstructed/src/bridge/bridgeMessaging.js` | `isSDKControlRequest/Response`、`isEligibleBridgeMessage`（出站过滤）、`handleIngressMessage`（入站分派）、`BoundedUUIDSet`、回写 control_response |
+| `reconstructed/src/bridge/flushGate.js` | `FlushGate`：回放历史/重连时暂存出站帧 |
+| `reconstructed/src/bridge/envLessBridgeConfig.js` | `tengu_bridge_repl_v2_config` 配置与最低版本检查 |
+| `reconstructed/src/bridge/sessionIdCompat.js` | `cse_` ↔ `session_` 前缀互转（另混入 CCR MCP 代理 URL 代码） |
+| `reconstructed/src/bridge/inboundAttachments.js` | 远端发来的文件附件下载、落盘 uploads、内联图片、`@"path"` 前缀 |
+| `reconstructed/src/bridge/inboundMessages.js` | base64 图片 media_type 补全（另混入远程工具执行结果转换） |
+| `reconstructed/src/bridge/bridgePermissionCallbacks.js` | 从 allow 决定中取审批票据 |
+| `reconstructed/src/bridge/replBridgeHandle.js` | 当前桥句柄的 session_* 兼容 ID |
+| `reconstructed/src/remote/sdkMessageAdapter.js` | SDK 消息 → 本地消息（查看远程会话用） |
+| `reconstructed/src/remote/RemoteSessionManager.js`、`remotePermissionBridge.ts` | 可中继控制帧判定、为远程权限请求合成 assistant 消息 |
+| `reconstructed/src/server/directConnectManager.js`、`server/types.ts` | WebSocket 直连 `claude server` 会话；connect 响应 schema |
+| `reconstructed/src/assistant/sessionHistory.js` | 远程会话事件分页、判断远程回合是否进行中、会话端点 URL/头 |
 
 ### 关键流程
 
 ```
 initReplBridge(options)                                   bridge/initReplBridge.ts
  ├─ 读 CLAUDE_BRIDGE_REATTACH_* 环境交接 / 恢复指针（PX）→ reattachTarget、seq、mustReattach
- │   └─ 属主校验：tt({site:"restored"|"env_handoff"}) 与当前登录比对；不符 → applyOwnerVeto（抑制历史回填）
- ├─ 门控：P9o(桥开关) → OAuth 令牌 → allow_remote_control 策略（latched/org_denied/route_missing）
+ │   └─ 属主校验：resolveOwnerCheckIdentity({site:"restored"|"env_handoff"}) 与当前登录比对；不符 → applyOwnerVeto（抑制历史回填）
+ ├─ 门控：isBridgeEnabledBlocking(桥开关) → OAuth 令牌 → allow_remote_control 策略（latched、org_denied、route_missing）
  │        → outboundOnly 时 allow_remote_sessions → 本地另一进程持有？（tengu_bridge_resume_respects_local_owner）
- │        → OAuth 死令牌跨进程退避（bridgeOauthDeadExpiresAt/FailCount）→ trusted device（wts）
+ │        → OAuth 死令牌跨进程退避（bridgeOauthDeadExpiresAt、bridgeOauthDeadFailCount）→ trusted device（preflightTrustedDeviceBlocking）
  │        → getOrganizationUUID → checkEnvLessBridgeMinVersion
  ├─ 标题：initialName > 当前会话标题 > AI 标题 > 最近人类输入；之后第 1/3 条用户消息触发 AI 生成
  └─ initEnvLessBridgeCore({...全部回调})                   bridge/remoteBridgeCore.ts
@@ -756,7 +756,7 @@ initReplBridge(options)                                   bridge/initReplBridge.
 
 #### 会话 ID 兼容
 
-服务端 v2 用 `cse_<id>`，v1 兼容层（归档、旧 API）用 `session_<id>`，裸 ID 相同。`bridge/sessionIdCompat.ts · toCompatSessionId`（cse→session）、`toInfraSessionId`（session→cse）、`stripSessionIdPrefix`、`matchSessionIdForm`；`assistant/sessionHistory.ts · buildSessionEndpoint` 在 v2 下走 `/v1/code/sessions/{cse_id}`，v1 下走 `/v1/sessions/{session_id}` 并加 `anthropic-beta: ccr-byoc-2025-07-29`、`x-organization-uuid`。是否启用前缀 shim 受 `tengu_bridge_repl_v2_cse_shim_enabled`（默认 true）控制（`isCseShimEnabled`，在 initReplBridge 开头注入）。
+服务端 v2 用 `cse_<id>`，v1 兼容层（归档、旧 API）用 `session_<id>`，裸 ID 相同。`bridge/sessionIdCompat.ts · toCompatSessionId`（cse→session）、`toInfraSessionId`（session→cse）、`sessionIdBody`（去前缀）、`inSessionIdCostumeOf`（按参考 ID 的前缀形式转换）；`assistant/sessionHistory.ts · buildSessionEndpoint` 在 v2 下走 `/v1/code/sessions/{cse_id}`，v1 下走 `/v1/sessions/{session_id}` 并加 `anthropic-beta: ccr-byoc-2025-07-29`、`x-organization-uuid`。是否启用前缀 shim 受 `tengu_bridge_repl_v2_cse_shim_enabled`（默认 true）控制（`isCseShimEnabled`，在 initReplBridge 开头注入）。
 
 #### 服务端控制请求（远端 → 本地，`chunk-1qpz7qcd.js#__i`）
 
@@ -791,10 +791,10 @@ initReplBridge(options)                                   bridge/initReplBridge.
 
 ### 数据结构（从代码读出）
 
-- **`/bridge` 响应**：`{worker_jwt: string, expires_in: number, api_base_url: string, worker_epoch: number, mcp_config?}`；请求体可带 `{expected_epoch}`；409 体内 `error.expected_epoch/actual_epoch`。
+- **`/bridge` 响应**：`{worker_jwt: string, expires_in: number, api_base_url: string, worker_epoch: number, mcp_config?}`；请求体可带 `expected_epoch`；409 体内 `expected_epoch`、`actual_epoch`。
 - **创建会话请求**：`{title, bridge: {}, tags?, session_grouping_id?, config: {cwd, model?, sources?, outcomes?, reuse_outcome_branches?}}`；响应 `session.id` 必须以 `cse_` 开头。
 - **失败对象**：`{terminal: true, reason: "grouping_rejected"|"request_rejected"|"malformed_response"|"invalid_session_id"|"untrusted_device"|"session_stale_relogin", status?, detail?, refusal?, source?}`；`{terminal: false, reason: "oauth_rejected"}`；瞬时失败为 `null`。
-- **untrusted_device 拒绝**（`classifyUntrustedDeviceRefusal`）：`{kind: "token_refused"}`、`{kind: "signature_wanted", subReason: "served_call_unsigned"}`、`{kind: "unrecognized", subReason}`。
+- **untrusted_device 拒绝**（`readUntrustedDeviceRefusal`，`chunk-kgtpkbhq.js#zJ`）：`{kind: "token_refused"}`、`{kind: "signature_wanted", subReason: "served_call_unsigned"}`、`{kind: "unrecognized", subReason}`。
 - **入站帧**：`control_request {request_id, request: {subtype, …}}`、`control_response {response: {subtype: "success"|"error", request_id, response?|error?}}`、`control_cancel_request {request_id}`、`queued_notification {notification}`、`user {uuid, message, parent_tool_use_id, isReplay?}`。
 - **env-less 配置**（`DEFAULT_ENV_LESS_BRIDGE_CONFIG`）：init_retry_max_attempts 3、init_retry_base_delay_ms 500、init_retry_jitter_fraction 0.25、init_retry_max_delay_ms 4000、http_timeout_ms 10000、uuid_dedup_buffer_size 2000、heartbeat_interval_ms 20000、heartbeat_jitter_fraction 0.1、token_refresh_buffer_ms 300000、teardown_archive_timeout_ms 1500、connect_timeout_ms 15000、oauth_retry_max_attempts 3、oauth_retry_base_delay_ms 2000、min_version "0.0.0"。
 - **直连**：`connectResponseSchema {session_id, ws_url, work_dir?}`；WebSocket 上 NDJSON 帧。
@@ -824,7 +824,7 @@ GrowthBook（这几个模块里读到的；默认值在括号内）：
 | POST | `/v1/sessions/{session_id}/archive`、`/unarchive`（v2 下 `/v1/code/sessions/{id}/…`） | 归档/解档 |
 | GET | `{sessionUrl}/worker/events/stream` | SSE 读事件（长轮询回退） |
 | POST | `{sessionUrl}/worker/register` | 无 epoch 时注册 worker（`bridge/workSecret.ts · registerWorker`） |
-| GET | `/api/oauth/files/{file_uuid}/content[?model_copy=inference_highres]` | 下载入站附件 |
+| GET | `/api/oauth/files/{uuid}/content`（可加 `?model_copy=inference_highres`） | 下载入站附件 |
 | — | `/v2/ccr-sessions/{id}/mcp?mcp_server_id=…`、`/v2/ccr-sessions/{id}/memory/mcp` | 云会话 MCP 代理（sessionIdCompat.ts 里的混入代码） |
 
 公共请求头（`oauthHeaders`）：`Authorization: Bearer`、`Content-Type: application/json`、`anthropic-version: 2023-06-01`、`anthropic-client-platform`、`User-Agent`。
@@ -863,9 +863,9 @@ GrowthBook（这几个模块里读到的；默认值在括号内）：
 ### 未解之处
 
 - `chunk-4cm44bmp.js#_Ks` 内大量单字母局部（`e`、`r`、`i`、`y`、`R`、`_`、`S` 等出现几十次）未逐一命名；状态机变量 `I`、`re`、`Be`、`Se`、`Me`、`ae` 的确切语义（已拆除/owner changed/恢复中/…）只做了推测，未写入命名表。
-- `chunk-cg2r2hy6.js#ji` 的 `D`（`aa(K())` 的结果，疑似"绑定会话键"）、`tt(...)` 的 server vouch 机制没有完全读懂。
+- `chunk-cg2r2hy6.js#ji` 的 `D`（`pinSessionId(getSessionId())` 的结果，疑似"绑定会话键"）、`resolveOwnerCheckIdentity(...)`（`chunk-cg2r2hy6.js#tt`）的 server vouch 机制没有完全读懂。
 - `tengu_luminous_seal`、`tengu_amber_ferry`、`tengu_amber_relay` 等代号开关的具体作用未确认。
-- `chunk-1qpz7qcd.js#__i` 的 `side_question`、`fork_conversation` 分支细节没有展开（该声明在 `_unattributed`）。
+- `chunk-1qpz7qcd.js#__i` 的 `side_question`、`fork_conversation` 分支细节没有展开（写作时该声明在 `_unattributed`，现为 `handleReplBridgeControlRequest`，`bridge/replControlHandler.ts`）。
 - `chunk-n4bsg1hp.js#Mn`（单个附件解析，11KB）只命名了函数，内部局部未命名。
 
 ---
@@ -876,11 +876,11 @@ GrowthBook（这几个模块里读到的；默认值在括号内）：
 
 | 模块 | 职责 |
 |---|---|
-| `reconstructed/src/utils/cron.ts` | 5 字段 cron 解析（`parseCronExpression`：`*`、`*/n`、`a-b/n`、列表，星期 7=0）、下次运行（`computeNextCronRun`，最多查约一年，日与星期都受限时 OR 语义，DST 缺口处理）、`cronToHuman`、间隔写法转换 `parseScheduleInput`（5m/2h/1d，最小 1 分钟） |
-| `reconstructed/src/utils/cronTasks.ts` | `.claude/scheduled_tasks.json` 读写（`readCronTasks`/`writeCronTasks`）、`addCronTask`、`removeCronTasks`、`markCronTasksFired`、`listAllCronTasks`；带抖动的下次时间 |
-| `reconstructed/src/utils/cronJitterConfig.ts` | 抖动配置（GrowthBook `tengu_kairos_cron_config`，60s 刷新） |
-| `reconstructed/src/utils/cronScheduler.ts` | 调度器 `createCronScheduler` |
-| `reconstructed/src/utils/cronTasksLock.ts` | 调度锁 `.claude/scheduled_tasks.lock` |
+| `reconstructed/src/utils/cron.js` | 5 字段 cron 解析（`parseCronExpression`：`*`、`*/n`、`a-b/n`、列表，星期 7=0）、下次运行（`computeNextCronRun`，最多查约一年，日与星期都受限时 OR 语义，DST 缺口处理）、`cronToHuman`、间隔写法转换 `parseScheduleInput`（5m/2h/1d，最小 1 分钟） |
+| `reconstructed/src/utils/cronTasks.js` | `.claude/scheduled_tasks.json` 读写（`readCronTasks`/`writeCronTasks`）、`addCronTask`、`removeCronTasks`、`markCronTasksFired`、`listAllCronTasks`；带抖动的下次时间 |
+| `reconstructed/src/utils/cronJitterConfig.js` | 抖动配置（GrowthBook `tengu_kairos_cron_config`，60s 刷新） |
+| `reconstructed/src/utils/cronScheduler.js` | 调度器 `createCronScheduler` |
+| `reconstructed/src/utils/cronTasksLock.js` | 调度锁 `.claude/scheduled_tasks.lock` |
 
 ### 8.2 数据
 
@@ -903,7 +903,7 @@ createCronScheduler({onFire, onFireTask, onMissed, isLoading, assistantMode, dir
        首次加载：错过的一次性任务 → onMissed 或 buildMissedTaskNotification（要求先用 AskUserQuestion 确认）
    每秒 check()；文件监听（chokidar）变化时重载
  check():
-   对每个可归属任务：首次计算 nextFireAt（带抖动）→ 到点：onFireTask/onFire(prompt)，记 tengu_scheduled_task_fire
+   对每个可归属任务：首次计算 nextFireAt（带抖动）→ 到点：onFireTask、onFire(prompt)，记 tengu_scheduled_task_fire
      循环 → 重新计算并批量写 lastFiredAt；一次性 → 删除（处理器要求保留的除外）
      处理器抛错：持久化一次性任务保留到以后会话，其余丢弃本次
  stop()：释放锁、关监听
@@ -987,9 +987,17 @@ GrowthBook（本领域非 bridge 部分）：`tengu_amber_flint`（团队）、`
 
 ## 12. 未解之处
 
-- `_unattributed` 中与本领域强相关、未在本领域命名的代码：服务端控制请求分派 `chunk-1qpz7qcd.js#__i`、SDK schema 大 chunk `chunk-bwbq4xvm.js`、`monitor_mcp/monitor_ws/mcp_task/auto_mode_scan` 的任务实现（`chunk-kxyd0g16`、`chunk-xf84t5b0`）、终止事件 `ya`（`chunk-aepeg2w5`）、task-notification 构造 `bi`（`chunk-gppkhxdv`）。
+- 写作时在 `_unattributed`、与本领域强相关、未在本领域命名的代码（place-rest 后均已落位）：服务端控制请求分派 `chunk-1qpz7qcd.js#__i`、SDK schema 大 chunk `chunk-bwbq4xvm.js`、`monitor_mcp/monitor_ws/mcp_task/auto_mode_scan` 的任务实现（`chunk-kxyd0g16`、`chunk-xf84t5b0`）、终止事件 `ya`（`chunk-aepeg2w5`）、task-notification 构造 `bi`（`chunk-gppkhxdv`）。
 - `chunk-e6aww6q8.js#wwt`（`getOwnToolSurface`）、`#ZBo` 的确切语义。
 - `utils/agentContext.ts` 下若干 AsyncLocalStorage 封装（`chunk-e6aww6q8.js#Pet`、`#q2e`、`chunk-s61vbvea.js#Cyn`、`chunk-tyg7f3ek.js#ip`、`chunk-7kr2r08r.js#Rn`）的用途只做了推测。
 - `chunk-18hwfzwa.js#tKo` 常量组（频率/冷却）用途未确认；`chunk-aat7wt0p.js#pLi`（token 序列匹配）用途未确认。
 - 子代理 `runAgent` 内部（tools 领域）未逐行核对；本章 1.2 只描述到调用关系。
 - 第 6、7 章各自的未解之处见章内。
+
+## 13. 引用校验结果
+
+校验时间 2026-11-03 04:39（UTC），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+
+- 共检查 1375 处引用：名字 998/1002（另 4 个只在 2.1.88 中存在），路径 155/159（另 4 个只在 2.1.88 中存在），字面量 173/175（另 2 个只在 2.1.88 中存在），声明id 39/39；占位符与含空格的说明性文字 222 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`approve/reject`、`Ctrl-C/D`、`secret.use_code_sessions`、`--session-timeout`、`sessionTimeoutMs`、`bridge/replBridge.ts`、`initBridgeCore`、`startWorkPollLoop`、`companionMuted`
+- 未通过：0 处。
