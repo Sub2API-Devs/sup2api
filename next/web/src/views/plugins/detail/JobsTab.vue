@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SButton, SCard, SCode, SHint, STable, toast, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SCard, SCode, SHint, STable, toast, type TableColumn } from '@sub2api/ui'
 import PluginStatusBadge from '../parts/PluginStatusBadge.vue'
 import { formatDateTime } from '@/utils/format'
 import { notifyError } from '@/utils/errors'
@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/auth'
 import { durationMs, formatDuration, type PluginDetail, type PluginJob } from '../pluginUtil'
 
 const props = defineProps<{ detail: PluginDetail }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const auth = useAuthStore()
 
 const jobs = ref<PluginJob[]>(props.detail.jobs || [])
@@ -36,6 +36,11 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+function jobTitle(j: PluginJob): string {
+  const title = j.title
+  return title?.[locale.value] || title?.en || ''
 }
 
 async function runNow(j: PluginJob) {
@@ -64,7 +69,14 @@ onMounted(load)
     </template>
     <STable :columns="columns" :rows="jobs" :loading="loading">
       <template #cell-id="{ row }">
-        <span class="font-mono font-medium">{{ row.id }}</span>
+        <div v-if="jobTitle(row)" class="font-medium text-fg">{{ jobTitle(row) }}</div>
+        <div class="flex items-center gap-1.5">
+          <span class="font-mono" :class="jobTitle(row) ? 'text-xs text-fg-muted' : 'font-medium'">{{ row.id }}</span>
+          <SBadge v-if="row.scope" :tone="row.scope === 'node' ? 'info' : 'gray'">{{ t(row.scope === 'node' ? 'plugins.jobs.scopeNode' : 'plugins.jobs.scopeCluster') }}</SBadge>
+        </div>
+        <router-link v-if="row.task && auth.has('task:read')" :to="{ path: '/system/tasks', query: row.scope === 'node' ? { tab: 'nodes' } : {} }" class="text-xs text-primary-600 hover:underline dark:text-primary-400">
+          {{ t('plugins.jobs.viewInTasks') }}
+        </router-link>
       </template>
       <template #cell-schedule="{ row }">
         <SCode inline :text="row.schedule" />

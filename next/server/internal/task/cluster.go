@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
@@ -33,6 +34,13 @@ const (
 	leaseGrace        = time.Minute
 	executorGroupSize = 4
 	executorQueue     = 16
+)
+
+// queuePlugin runs the plugin tasks, so slow plugin tasks do not hold up
+// core tasks.
+const (
+	queuePlugin        = "plugin"
+	queuePluginWorkers = 4
 )
 
 // Variables so tests can shorten them.
@@ -99,7 +107,10 @@ type clusterBackend struct {
 	clientID string
 	version  string
 	canWork  func() bool
-	group    *background.Group
+	// group and pluginGroup admit the runs of core and plugin tasks into
+	// the node's background executor, each with its own share.
+	group       *background.Group
+	pluginGroup *background.Group
 
 	client *river.Client[pgx.Tx]
 
@@ -120,16 +131,18 @@ func newClusterBackend(ctx context.Context, log *slog.Logger, db *store.DB, reg 
 	b.runCtx, b.cancel = context.WithCancel(context.WithoutCancel(ctx))
 	if exec != nil {
 		b.group = exec.Group(b.runCtx, executorGroupSize, executorQueue)
+		b.pluginGroup = exec.Group(b.runCtx, executorGroupSize, executorQueue)
 	}
 	workers := river.NewWorkers()
 	if err := river.AddWorkerSafely(workers, &taskWorker{b: b}); err != nil {
 		return nil, err
 	}
+	queues := map[string]river.QueueConfig{queueCore: {MaxWorkers: queueCoreWorkers}, queuePlugin: {MaxWorkers: queuePluginWorkers}}
 	client, err := river.NewClient(riverpgxv5.New(db.Pool), &river.Config{
 		ID:                          clientID,
 		Logger:                      log.With("subsystem", "river"),
 		Workers:                     workers,
-		Queues:                      map[string]river.QueueConfig{queueCore: {MaxWorkers: queueCoreWorkers}},
+		Queues:                      queues,
 		MaxAttempts:                 5,
 		RescueStuckJobsAfter:        rescueStuckAfter,
 		CompletedJobRetentionPeriod: completedRetain,
@@ -157,10 +170,14 @@ func (b *clusterBackend) start(ctx context.Context) error {
 	return nil
 }
 
-// add records t in scheduled_tasks and adds its periodic runs.
+// add records a core task in scheduled_tasks (the rows of plugin tasks are
+// written by the plugin task bridge, internal/job) and adds its periodic
+// runs.
 func (b *clusterBackend) add(ctx context.Context, t *Task) error {
-	if err := b.upsert(ctx, t); err != nil {
-		return fmt.Errorf("record task %s: %w", t.Name, err)
+	if t.Source == SourceCore {
+		if err := b.upsert(ctx, t); err != nil {
+			return fmt.Errorf("record task %s: %w", t.Name, err)
+		}
 	}
 	if t.Schedule == nil {
 		return nil
@@ -170,9 +187,9 @@ func (b *clusterBackend) add(ctx context.Context, t *Task) error {
 	if b.periodic[t.Name] {
 		return nil
 	}
-	name, attempts, period := t.Name, t.Attempts(), t.Period
+	name, attempts, period, queue := t.Name, t.Attempts(), t.Period, t.queue()
 	job := river.NewPeriodicJob(t.Schedule, func() (river.JobArgs, *river.InsertOpts) {
-		return taskArgs{Name: name}, &river.InsertOpts{Queue: queueCore, MaxAttempts: attempts,
+		return taskArgs{Name: name}, &river.InsertOpts{Queue: queue, MaxAttempts: attempts,
 			UniqueOpts: river.UniqueOpts{ByArgs: true, ByPeriod: period}}
 	}, &river.PeriodicJobOpts{ID: name, RunOnStart: t.RunOnStart})
 	if _, err := b.client.PeriodicJobs().AddSafely(job); err != nil {
@@ -180,6 +197,17 @@ func (b *clusterBackend) add(ctx context.Context, t *Task) error {
 	}
 	b.periodic[t.Name] = true
 	return nil
+}
+
+// remove drops the periodic runs of name. Runs already inserted stay and
+// meet an unregistered task (see taskWorker.Work).
+func (b *clusterBackend) remove(name string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.periodic[name] {
+		b.client.PeriodicJobs().RemoveByID(name)
+		delete(b.periodic, name)
+	}
 }
 
 func (b *clusterBackend) upsert(ctx context.Context, t *Task) error {
@@ -256,7 +284,7 @@ func (b *clusterBackend) enqueue(ctx context.Context, tx pgx.Tx, name string, ar
 			return fmt.Errorf("task %s: args are %d bytes, at most %d", name, len(raw), maxArgsBytes)
 		}
 	}
-	insert := &river.InsertOpts{Queue: queueCore, MaxAttempts: t.Attempts(), ScheduledAt: opts.RunAt}
+	insert := &river.InsertOpts{Queue: t.queue(), MaxAttempts: t.Attempts(), ScheduledAt: opts.RunAt}
 	if opts.UniqueKey != "" {
 		insert.UniqueOpts = river.UniqueOpts{ByArgs: true, ByState: unfinishedStates}
 	}
@@ -277,7 +305,7 @@ func (b *clusterBackend) trigger(ctx context.Context, name string) error {
 		return core.ErrTaskUnknown
 	}
 	_, err := b.client.Insert(ctx, taskArgs{Name: name, Key: manualKey, Manual: true}, &river.InsertOpts{
-		Queue: queueCore, MaxAttempts: 1, UniqueOpts: river.UniqueOpts{ByArgs: true, ByState: unfinishedStates}})
+		Queue: t.queue(), MaxAttempts: 1, UniqueOpts: river.UniqueOpts{ByArgs: true, ByState: unfinishedStates}})
 	return err
 }
 
@@ -299,10 +327,12 @@ func (b *clusterBackend) shutdown(ctx context.Context) {
 		}
 		cancel()
 	}
-	if b.group != nil {
-		closeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		_ = b.group.Close(closeCtx)
-		cancel()
+	for _, g := range []*background.Group{b.group, b.pluginGroup} {
+		if g != nil {
+			closeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			_ = g.Close(closeCtx)
+			cancel()
+		}
 	}
 	b.cancel()
 }
@@ -337,10 +367,14 @@ func (w *taskWorker) Work(ctx context.Context, job *river.Job[taskArgs]) error {
 		}
 		return river.JobCancel(fmt.Errorf("task %s is not registered on any node that picked it up", job.Args.Name))
 	}
-	if b.group == nil {
+	group := b.group
+	if t.Source != SourceCore {
+		group = b.pluginGroup
+	}
+	if group == nil {
 		return b.work(ctx, t, job)
 	}
-	permit, err := b.group.Acquire(ctx)
+	permit, err := group.Acquire(ctx)
 	if err != nil {
 		// This node stopped admitting background work: let another one run it.
 		return river.JobSnooze(snoozeElsewhere)
@@ -364,6 +398,10 @@ func (b *clusterBackend) work(ctx context.Context, t *Task, job *river.Job[taskA
 		}
 	}
 	leased, err := b.takeLease(ctx, t, job.ID)
+	if errors.Is(err, errTaskRemoved) {
+		record(runOutput{Status: StatusSkipped, Message: "the task was removed"})
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -376,10 +414,12 @@ func (b *clusterBackend) work(ctx context.Context, t *Task, job *river.Job[taskA
 	}
 
 	res, herr := callHandler(ctx, t, core.TaskRun{Name: t.Name, ScheduledAt: job.ScheduledAt, Attempt: job.Attempt,
-		Args: job.Args.Args, Manual: job.Args.Manual, NodeID: b.nodeID})
+		Args: job.Args.Args, Manual: job.Args.Manual, NodeID: b.nodeID, RunID: strconv.FormatInt(job.ID, 10),
+		QueuedAt: job.CreatedAt})
 	timedOut := ctx.Err() == context.DeadlineExceeded
 	o := runOutput{Count: res.Count, Message: truncate(res.Message)}
 	var retry *core.TaskRetryAfterError
+	var skip *core.TaskSkippedError
 	var ret error
 	switch {
 	case herr == nil:
@@ -387,6 +427,8 @@ func (b *clusterBackend) work(ctx context.Context, t *Task, job *river.Job[taskA
 	case errors.As(herr, &retry):
 		o.Status, o.Message = StatusSkipped, truncate(herr.Error())
 		ret = river.JobSnooze(retry.Delay)
+	case errors.As(herr, &skip):
+		o.Status, o.Message = StatusSkipped, truncate(skip.Reason)
 	case timedOut:
 		o.Status, o.Error, ret = StatusTimeout, truncate(herr.Error()), herr
 	default:
@@ -403,6 +445,9 @@ func (b *clusterBackend) work(ctx context.Context, t *Task, job *river.Job[taskA
 	return ret
 }
 
+// errTaskRemoved is takeLease's answer for a plugin task without a row.
+var errTaskRemoved = errors.New("task: removed")
+
 // takeLease claims the task's lease for job (§7.4); false when another run
 // holds it.
 func (b *clusterBackend) takeLease(ctx context.Context, t *Task, jobID int64) (bool, error) {
@@ -415,11 +460,15 @@ func (b *clusterBackend) takeLease(ctx context.Context, t *Task, jobID int64) (b
 		return false, err
 	}
 	if tag.RowsAffected() == 0 {
-		// A task registered on this node but missing its row (it was
-		// pruned): record it and try once more.
+		// A task registered on this node but missing its row: a core task's
+		// row was pruned, record it and try once more; a plugin task's row
+		// is gone because the task was removed.
 		var exists bool
 		if err := b.db.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM scheduled_tasks WHERE name = $1)`, t.Name).Scan(&exists); err != nil {
 			return false, err
+		}
+		if !exists && t.Source != SourceCore {
+			return false, errTaskRemoved
 		}
 		if !exists {
 			if err := b.upsert(ctx, t); err != nil {

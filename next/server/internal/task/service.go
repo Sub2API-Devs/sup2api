@@ -66,8 +66,39 @@ func New(opts Options) (*Service, error) {
 func (s *Service) Registry() *Registry { return s.reg }
 
 // Register adds a core task.
-func (s *Service) Register(spec core.TaskSpec) error {
-	t, err := s.reg.Add(spec, SourceCore, "")
+func (s *Service) Register(spec core.TaskSpec) error { return s.register(spec, SourceCore, "") }
+
+// RegisterPlugin adds a task of plugin pluginKey; source is
+// SourcePluginManifest or SourcePluginRuntime. The plugin task bridge
+// (internal/job) registers these and writes their scheduled_tasks rows.
+func (s *Service) RegisterPlugin(spec core.TaskSpec, source Source, pluginKey string) error {
+	if source == SourceCore {
+		return fmt.Errorf("%w: %s: RegisterPlugin is for plugin tasks", core.ErrTaskInvalid, spec.Name)
+	}
+	return s.register(spec, source, pluginKey)
+}
+
+// Unregister removes a task from this node: a node task stops running here,
+// a cluster task is no longer enqueued by this node (runs already queued
+// meet an unknown task, §7.2). Its scheduled_tasks row stays with its owner.
+func (s *Service) Unregister(name string) bool {
+	t, ok := s.reg.Get(name)
+	if !ok {
+		return false
+	}
+	switch t.Scope {
+	case core.TaskNode:
+		s.node.remove(name)
+	case core.TaskCluster:
+		if c := s.clusterBackend(); c != nil {
+			c.remove(name)
+		}
+	}
+	return s.reg.Remove(name)
+}
+
+func (s *Service) register(spec core.TaskSpec, source Source, pluginKey string) error {
+	t, err := s.reg.Add(spec, source, pluginKey)
 	if err != nil {
 		return err
 	}

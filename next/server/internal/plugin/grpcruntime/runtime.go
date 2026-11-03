@@ -61,6 +61,9 @@ type Options struct {
 	// Sticky serves HostService.ClearStickyBindings; nil makes it fail with
 	// UNAVAILABLE.
 	Sticky core.StickyBindingClearer
+	// Tasks serves the runtime task calls of HostService (SyncTasks ...
+	// EnqueueTask); nil makes them fail with UNAVAILABLE.
+	Tasks core.PluginTasks
 	// Environment serves HostService.GetEnvironment; nil makes it fail with
 	// UNAVAILABLE.
 	Environment core.EnvironmentResolver

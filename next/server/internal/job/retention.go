@@ -11,7 +11,7 @@ import (
 const RetentionTask = "core.jobs.retention"
 
 // RetentionTaskSpec runs PurgeRuns every RetentionInterval on one node.
-func (s *Scheduler) RetentionTaskSpec() core.TaskSpec {
+func (s *Bridge) RetentionTaskSpec() core.TaskSpec {
 	return core.TaskSpec{
 		Name:  RetentionTask,
 		Title: core.LocalizedText{"en": "Trim plugin job runs", "zh": "清理插件任务记录"},
@@ -31,7 +31,7 @@ func (s *Scheduler) RetentionTaskSpec() core.TaskSpec {
 
 // PurgeRuns keeps the newest KeepRuns runs per (plugin, job) and marks runs
 // stuck in "running" for longer than StaleAfter as failed.
-func (s *Scheduler) PurgeRuns(ctx context.Context) (int64, error) {
+func (s *Bridge) PurgeRuns(ctx context.Context) (int64, error) {
 	if _, err := s.db.Pool.Exec(ctx, `UPDATE plugin_job_runs
 		SET status = $1, finished_at = now(), message = 'abandoned: the node running it went away'
 		WHERE status = $2 AND started_at < now() - make_interval(secs => $3)`,

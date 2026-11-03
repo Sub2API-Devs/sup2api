@@ -6,13 +6,13 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { api, isApiError } from '@sub2api/host'
-import { SBadge, SButton, SDateTime, SDropdown, SFilterBar, SGrid, SHint, SInput, SPageHeader, SSelect, SStatCard, SStatusBadge, SStatusDot, STable, STabs, toast, useAutoRefresh, type TableColumn } from '@sub2api/ui'
+import { SBadge, SButton, SDateTime, SDropdown, SFilterBar, SGrid, SHint, SInput, SPageHeader, SSelect, SStatCard, SStatusBadge, SStatusDot, SSwitch, STable, STabs, toast, useAutoRefresh, type TableColumn } from '@sub2api/ui'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
 import NodeTaskCell from './NodeTaskCell.vue'
 import RecentRuns from './RecentRuns.vue'
 import TaskDrawer from './TaskDrawer.vue'
-import { STATUSES, clusterStatus, describeSchedule, formatDuration, nodeTaskNames, runTone, sortClusterTasks, taskTitle, type NodeTask, type TasksOverview } from './tasks'
+import { STATUSES, clusterStatus, describeSchedule, formatDuration, nodeTaskNames, runTone, sortClusterTasks, taskTitle, type ClusterTask, type NodeTask, type TasksOverview } from './tasks'
 
 const REFRESH_MS = 10_000
 
@@ -20,6 +20,7 @@ const { t, te, locale } = useI18n()
 const auth = useAuthStore()
 const route = useRoute(), router = useRouter()
 const canRun = computed(() => auth.has('task:run'))
+const canManage = computed(() => auth.has('task:manage'))
 
 const overview = ref<TasksOverview | null>(null)
 const loading = ref(true)
@@ -102,7 +103,7 @@ const clusterColumns = computed<TableColumn[]>(() => [
   { key: 'next', label: t('tasks.col.next'), nowrap: true },
   { key: 'stats', label: t('tasks.col.stats'), nowrap: true },
   { key: 'failures', label: t('tasks.col.failures'), align: 'right' },
-  ...(canRun.value ? [{ key: 'actions', label: t('tasks.col.actions'), align: 'right' as const }] : [])
+  ...(canRun.value || canManage.value ? [{ key: 'actions', label: t('tasks.col.actions'), align: 'right' as const }] : [])
 ])
 
 // ------------------------------------------------------------------ nodes
@@ -161,6 +162,23 @@ async function runTask(name: string, nodeID = '') {
       next.delete(key)
       submitted.value = next
     }, 3000)
+  }
+}
+
+// Plugin cluster tasks can be switched off (task:manage); every node stops
+// registering a stopped task.
+const switching = ref('')
+async function setEnabled(task: ClusterTask, enabled: boolean) {
+  switching.value = task.name
+  try {
+    await api.patch(`/system/tasks/${encodeURIComponent(task.name)}`, { enabled })
+    task.enabled = enabled
+    toast(t(enabled ? 'tasks.switchedOn' : 'tasks.switchedOff', { name: title(task) }), 'success')
+    setTimeout(() => void load(), 1500)
+  } catch (e) {
+    taskError(e)
+  } finally {
+    switching.value = ''
   }
 }
 
@@ -238,9 +256,21 @@ function openTask(name: string, node = '') {
           <span :class="row.consecutive_failures ? 'font-semibold text-danger-600 dark:text-danger-400' : 'text-fg-muted'" data-testid="task-failures">{{ row.consecutive_failures }}</span>
         </template>
         <template #cell-actions="{ row }">
-          <SButton size="xs" variant="ghost" icon="play" :disabled="submitted.has(`${row.name}@`) || !row.registered" :data-testid="`task-run-${row.name}`" @click.stop="runTask(row.name)">
-            {{ submitted.has(`${row.name}@`) ? t('tasks.submitted') : t('tasks.runNow') }}
-          </SButton>
+          <div class="flex items-center justify-end gap-2" @click.stop>
+            <SSwitch
+              v-if="canManage && row.source !== 'core'"
+              :model-value="row.enabled"
+              size="sm"
+              :disabled="switching === row.name"
+              :aria-label="t('tasks.enabledLabel')"
+              :title="t('tasks.enabledLabel')"
+              :data-testid="`task-enabled-${row.name}`"
+              @update:model-value="setEnabled(row, $event)"
+            />
+            <SButton v-if="canRun" size="xs" variant="ghost" icon="play" :disabled="submitted.has(`${row.name}@`) || !row.registered" :data-testid="`task-run-${row.name}`" @click.stop="runTask(row.name)">
+              {{ submitted.has(`${row.name}@`) ? t('tasks.submitted') : t('tasks.runNow') }}
+            </SButton>
+          </div>
         </template>
       </STable>
 

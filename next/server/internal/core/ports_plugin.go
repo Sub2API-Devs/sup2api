@@ -244,6 +244,10 @@ type Generation interface {
 	AccountRankers() []AccountRankerBinding
 	Routes(pluginKey string) []RouteBinding
 	Jobs() []JobBinding
+	// JobRunner is the job runner of a plugin granted "jobs": it runs the
+	// plugin's runtime tasks (HostService.SyncTasks ...), which no manifest
+	// job describes.
+	JobRunner(pluginKey string) (AppPlugin, bool)
 	Subscriptions() []SubscriptionBinding
 	// ReadAsset reads a file from the active package of a plugin.
 	ReadAsset(pluginKey, path string) (data []byte, contentType string, err error)

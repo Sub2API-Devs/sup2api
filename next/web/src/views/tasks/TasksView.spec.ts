@@ -6,10 +6,10 @@ import { i18n } from '@/i18n'
 import TasksView from './TasksView.vue'
 import type { TasksOverview } from './tasks'
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), toast: vi.fn(), run: true }))
-vi.mock('@sub2api/host', async (importOriginal) => ({ ...await importOriginal<typeof import('@sub2api/host')>(), api: { get: mocks.get, post: mocks.post } }))
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn(), toast: vi.fn(), run: true, manage: true }))
+vi.mock('@sub2api/host', async (importOriginal) => ({ ...await importOriginal<typeof import('@sub2api/host')>(), api: { get: mocks.get, post: mocks.post, patch: mocks.patch } }))
 vi.mock('@sub2api/ui', async (original) => ({ ...await original<object>(), toast: (...a: unknown[]) => mocks.toast(...a) }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (p: string) => p === 'task:run' ? mocks.run : true }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: (p: string) => p === 'task:run' ? mocks.run : p === 'task:manage' ? mocks.manage : true }) }))
 
 const overview = (): TasksOverview => ({
   summary: { total: 3, running: 0, failing: 1, failed_24h: 2, leader: 'node-a' },
@@ -19,7 +19,9 @@ const overview = (): TasksOverview => ({
       recent: ['succeeded', 'skipped'], stats_24h: { runs: 1440, failed: 0, skipped: 2, avg_ms: 95, max_ms: 820 }, queued: 0 },
     { name: 'core.ccgateway.park_runtimes', title: { en: 'Park runtimes', zh: '停止红色账号的容器' }, source: 'core', plugin_key: null, schedule: '@every 1m0s', timeout_ms: 50000, max_attempts: 1, enabled: true, registered: true, running: false, lease_node: null,
       last: { node: 'node-b', status: 'failed', duration_ms: 120, count: 0, error: 'docker down' }, last_success_at: null, consecutive_failures: 2, next_run_at: null,
-      recent: ['failed', 'failed'], stats_24h: { runs: 10, failed: 2, skipped: 0, avg_ms: 120, max_ms: 200 }, queued: 0 }
+      recent: ['failed', 'failed'], stats_24h: { runs: 10, failed: 2, skipped: 0, avg_ms: 120, max_ms: 200 }, queued: 0 },
+    { name: 'plugin.dynweight.evaluate', title: { en: 'Dynamic weight · evaluate', zh: '动态权重 · evaluate' }, source: 'plugin_manifest', plugin_key: 'dynweight', schedule: '@every 10s', timeout_ms: 60000, max_attempts: 1, enabled: true, registered: true, running: false, lease_node: null,
+      last: null, last_success_at: null, consecutive_failures: 0, next_run_at: null, recent: [], stats_24h: { runs: 0, failed: 0, skipped: 0, avg_ms: 0, max_ms: 0 }, queued: 0 }
   ],
   nodes: [
     { node_id: 'node-a', alive: true, tasks: [{ name: 'core.authz.version_poll', title: { en: 'Permission version', zh: '刷新权限版本' }, schedule: '@every 30s', timeout_ms: 10000, require_work: false, running: false, last_finished_at: '2026-11-03T00:00:00Z', duration_ms: 3, status: 'succeeded', count: 0, consecutive_failures: 0, skipped: 0, recent: ['succeeded'], failed_24h: 0 }] },
@@ -39,6 +41,8 @@ describe('scheduled tasks page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.run = true
+    mocks.manage = true
+    mocks.patch.mockResolvedValue({ name: 'plugin.dynweight.evaluate', enabled: false })
     i18n.global.locale.value = 'zh'
     mocks.get.mockImplementation(async (path: string) => {
       if (path === '/system/tasks') return overview()
@@ -69,6 +73,24 @@ describe('scheduled tasks page', () => {
     await flushPromises()
     expect(mocks.post).toHaveBeenCalledWith('/system/tasks/core.account.usage_limits/run', {})
     expect(wrapper.get('[data-testid="task-run-core.account.usage_limits"]').text()).toBe('已提交')
+    wrapper.unmount()
+  })
+
+  it('switches a plugin task off; core tasks have no switch', async () => {
+    const wrapper = await render()
+    expect(wrapper.find('[data-testid="task-enabled-core.account.usage_limits"]').exists()).toBe(false)
+    const sw = wrapper.get('[data-testid="task-enabled-plugin.dynweight.evaluate"]')
+    await sw.setValue(false)
+    await flushPromises()
+    expect(mocks.patch).toHaveBeenCalledWith('/system/tasks/plugin.dynweight.evaluate', { enabled: false })
+    expect(mocks.toast).toHaveBeenCalledWith(expect.stringContaining('已停用'), 'success')
+    wrapper.unmount()
+  })
+
+  it('has no switch without task:manage', async () => {
+    mocks.manage = false
+    const wrapper = await render()
+    expect(wrapper.find('[data-testid="task-enabled-plugin.dynweight.evaluate"]').exists()).toBe(false)
     wrapper.unmount()
   })
 

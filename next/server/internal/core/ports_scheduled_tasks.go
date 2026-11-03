@@ -80,6 +80,12 @@ type TaskRun struct {
 	Args        json.RawMessage // the arguments of an enqueued run; nil for a periodic one
 	Manual      bool
 	NodeID      string // the node running it
+	// RunID identifies the run on the console: the river_job id of a
+	// cluster run, the history id of a node run.
+	RunID string
+	// QueuedAt is when a cluster run was inserted (ScheduledAt moves on
+	// with every retry or snooze); a node run's start.
+	QueuedAt time.Time
 }
 
 // TaskResult is what one run reports to its run record.
@@ -126,3 +132,38 @@ func (e *TaskRetryAfterError) Error() string {
 
 // TaskRetryAfter returns a TaskRetryAfterError for d.
 func TaskRetryAfter(d time.Duration) error { return &TaskRetryAfterError{Delay: d} }
+
+// TaskSkippedError ends a run as skipped: it did nothing, is not a failure
+// and is not retried (a plugin task whose plugin is disabled, a slot another
+// node already ran). Reason becomes the run's message.
+type TaskSkippedError struct{ Reason string }
+
+func (e *TaskSkippedError) Error() string { return "task: skipped: " + e.Reason }
+
+// TaskSkipped returns a TaskSkippedError for reason.
+func TaskSkipped(reason string) error { return &TaskSkippedError{Reason: reason} }
+
+// PluginTask is one runtime task of a plugin: a cluster task the plugin
+// registers through HostService (TASK-FRAMEWORK-DESIGN §11.2, CONTRACTS
+// §77.8), stored as a scheduled_tasks row with source plugin_runtime.
+type PluginTask struct {
+	ID string
+	// Schedule is "@every <d>", a 5-field cron (UTC) or "" for a task that
+	// only runs what is enqueued.
+	Schedule   string
+	Args       json.RawMessage // passed to every periodic run
+	TimeoutSec int
+	// Enabled is the console switch (task:manage); the plugin only reads it.
+	Enabled bool
+}
+
+// PluginTasks (owner: internal/job) serves the task calls of HostService
+// for the instance of plugin key at version. Changes from an instance that
+// is not the plugin's active version are ignored (ignored true, no error).
+type PluginTasks interface {
+	SyncPluginTasks(ctx context.Context, key, version string, tasks []PluginTask) (ignored bool, err error)
+	UpsertPluginTask(ctx context.Context, key, version string, t PluginTask) (ignored bool, err error)
+	DeletePluginTask(ctx context.Context, key, version, id string) (ignored, deleted bool, err error)
+	ListPluginTasks(ctx context.Context, key string) ([]PluginTask, error)
+	EnqueuePluginTask(ctx context.Context, key, id string, args json.RawMessage, opts EnqueueOpts) error
+}

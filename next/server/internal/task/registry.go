@@ -53,6 +53,14 @@ type Task struct {
 	Period time.Duration
 }
 
+// queue is the River queue of the task's cluster runs.
+func (t *Task) queue() string {
+	if t.Source == SourceCore {
+		return queueCore
+	}
+	return queuePlugin
+}
+
 // Attempts is the number of attempts of one cluster run.
 func (t *Task) Attempts() int {
 	if t.MaxAttempts > 0 {
@@ -186,4 +194,11 @@ func newTask(spec core.TaskSpec, source Source, pluginKey string) (*Task, error)
 		return invalid("Scope must be node or cluster")
 	}
 	return t, nil
+}
+
+// Describe validates spec as a task of source and pluginKey without
+// registering it and returns what registering it would record (schedule
+// text, attempts).
+func Describe(spec core.TaskSpec, source Source, pluginKey string) (*Task, error) {
+	return newTask(spec, source, pluginKey)
 }

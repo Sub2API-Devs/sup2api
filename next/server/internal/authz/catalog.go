@@ -117,6 +117,7 @@ var coreModules = []coreModule{
 	{"task", lt("Scheduled tasks", "定时任务"), []corePerm{
 		{"task:read", "View scheduled tasks", "查看定时任务", false},
 		{"task:run", "Run scheduled tasks manually", "手动运行定时任务", true},
+		{"task:manage", "Switch plugin scheduled tasks on and off", "启用或停用插件定时任务", true},
 	}},
 	{"gateway", lt("Gateway", "网关"), []corePerm{
 		{"gateway:use", "Call the gateway", "调用网关", false},

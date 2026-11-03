@@ -256,6 +256,7 @@ func (g *fakeGen) Scheduler(string) (core.SchedulerPlugin, bool)    { return nil
 func (g *fakeGen) AccountRankers() []core.AccountRankerBinding      { return nil }
 func (g *fakeGen) Routes(string) []core.RouteBinding                { return nil }
 func (g *fakeGen) Jobs() []core.JobBinding                          { return nil }
+func (g *fakeGen) JobRunner(string) (core.AppPlugin, bool)          { return nil, false }
 func (g *fakeGen) Subscriptions() []core.SubscriptionBinding        { return nil }
 func (g *fakeGen) ReadAsset(string, string) ([]byte, string, error) { return nil, "", core.ErrNotFound }
 

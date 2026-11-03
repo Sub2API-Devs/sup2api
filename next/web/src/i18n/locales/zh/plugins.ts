@@ -317,7 +317,10 @@ export default {
     next: '下次',
     never: '从未运行',
     runNow: '立即执行',
-    triggered: '已触发任务 "{id}"'
+    triggered: '已触发任务 "{id}"',
+    scopeCluster: '全集群一次',
+    scopeNode: '每个节点',
+    viewInTasks: '在定时任务中查看'
   },
 
   events: {

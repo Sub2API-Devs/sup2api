@@ -96,7 +96,7 @@ type boot struct {
 	ctl  *rollout.Controller
 	inst *install.Service
 	mkt  *market.Service
-	jobs *job.Scheduler
+	jobs *job.Bridge
 	dlv  *delivery.Service
 
 	// HTTP

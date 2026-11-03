@@ -6094,3 +6094,54 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - `core.usage.reconcile`：运行等本轮领取的对账全部结束才返回，`count` 是领取条数，耗时是真实的一轮。行租约、幂等键、状态机不变。
 - 不再使用的锁：Redis `account:refresh:sweep`、`usage:reconcile`；PG 会话 advisory 锁 `account.usage_limits`。
 - 滚动升级：0.1.235 节点仍跑原循环，0.1.236 节点跑任务，同一件事可能各做一次，都幂等（对账靠行租约，用量汇总靠 `SKIP LOCKED`，用量限制写入前重查，结算靠幂等键，helper 回放靠回执事务与 outbox 摘要）。不改 schema，可以自动回滚。
+
+### 77.8 插件定时任务（第二批，2026-11-04 用户要求；核心 0.1.237，Host API 9）
+
+插件任务全部走框架，`internal/job` 原来的调度（每节点算触发时间、Redis 锁 `job:{plugin}:{job}:{slot}`）删除，包里只剩把插件任务接到框架的桥（`job.Bridge`）。设计见 `docs/TASK-FRAMEWORK-DESIGN.md` §11。
+
+**manifest `jobs[]`**
+
+| 字段 | 说明 |
+| --- | --- |
+| `scope` | `cluster`（默认，不写就是它，现有插件不用重发）或 `node` |
+| `title` | 控制台显示的名称（多语言），没有时显示“插件名 · id” |
+
+- `node` 任务：每个加载了这个插件的节点各跑一次，用自己的插件实例；最多 10 个，间隔不小于 5 秒，超时不超过 600 秒；需要后台许可（`RequireWork`）。声明了 `node` 任务的插件，`hostCompat` 不能包含 0.1.236 及更早的核心（旧核心会把它当全集群任务跑），打包检查报 `below_node_jobs_core`。
+- `cluster` 任务：任务名 `plugin.<key>.<id>`，`scheduled_tasks.source = 'plugin_manifest'`。行由运行着插件当前版本的节点按 manifest 写入，所有节点从行登记（River 主节点不一定装了这个插件）；执行节点本机没有这个插件时每 5 秒推迟一次，超过任务超时才记失败。插件停用或卸载时删行，换版本时按新版本改写。
+- 旧 manifest 超出框架上限的（超时超过 1 小时、间隔小于 5 秒）在登记时截断并记 WARN。
+- 每次运行仍写 `plugin_job_runs`（插件页“任务”页签），加 `scope` 列（迁移 0084 已加）。计划运行用 `plugin_job_runs_slot_uniq` 认领时段：和仍自己调度的旧核心混跑时，同一时段也只跑一次。
+
+**协议（`app.proto`）**
+
+- `RunJobRequest` 加 `args`（单次运行的参数）、`scope`、`attempt`、`run_id`。
+- `RunJobResponse` 加 `count`（处理条数）、`retry_after_ms`（> 0：本次没做事；全集群任务这么久之后再跑、不算失败，每节点任务记为跳过）。
+- 旧核心不发、不读这些字段。
+
+**Host API 9（`host.proto`，需要 `jobs` 授权）：运行时任务**
+
+| 方法 | 作用 |
+| --- | --- |
+| `SyncTasks(tasks[])` | 用这组任务整体替换本插件的运行时任务（声明式，重复调用无副作用） |
+| `UpsertTask(task)` | 新增或修改一个 |
+| `DeleteTask(id)` | 删除一个，已排队的运行不再执行 |
+| `ListTasks()` | 列出本插件的运行时任务（含控制台开关 `enabled`） |
+| `EnqueueTask(id, args, run_at_unix, unique_key)` | 提交一次运行：运行时任务或 `cluster` manifest 任务 |
+
+- 运行时任务都是全集群任务：`scheduled_tasks.source = 'plugin_runtime'`，`args` 每次周期运行都带上。执行时调本插件的 `RunJob`，`job_id` 为任务 id。
+- 只有插件当前生效版本的实例能改：灰度期间其他版本的调用返回成功、`ignored: true`、不改任何东西。
+- 限制：每插件 200 个；间隔不小于 10 秒；超时 0（60 秒）到 3600 秒；参数是 JSON、不超过 64 KiB；未执行的运行最多 1 万个；`unique_key` 不超过 128 字节。超出数量返回 `RESOURCE_EXHAUSTED`，格式不对返回 `INVALID_ARGUMENT`；id 不能和 manifest 任务重名。
+- 插件停用时保留运行时任务（不登记、不运行），卸载时删除。
+- 写入后本节点立刻重新登记，并发布 `task:changed`；各节点收到后（另每 60 秒自检一次）从表重建本节点的插件任务。
+- Host API 从 8 升到 9：**先升外壳，再用新外壳签核心包**（2026-10-31 外壳只认 Host API 7 导致中断 10 分钟）。
+
+**SDK**
+
+- `pluginsdk.JobMux`：`HandleJob(id, func(ctx, JobRun) (JobResult, error))`，实现 `JobRunner`；没有处理函数的 id 返回 `NOT_FOUND`（记为失败，不会静默成功）。
+- `host.Tasks()`：`Sync`、`Upsert`、`Delete`、`List`、`Enqueue(ctx, id, args, RunAt(t), UniqueKey(k))`。核心早于 Host API 9 时返回 `ErrTasksUnimplemented`，插件应当当作非致命错误。
+
+**控制台**
+
+- 新权限 `task:manage`“启用或停用插件定时任务”（敏感）。
+- `PATCH /system/tasks/:name` `{"enabled": bool}`：只允许插件的全集群任务（manifest 和运行时都可以）；核心任务和每节点任务返回 400 `task_not_editable`，不存在 404 `task_not_found`。写审计 `task.set_enabled`，发布 `task:changed`。停用的任务各节点不再登记、不再投递；已排队的运行不执行（还在登记它的节点上记为跳过，其余节点推迟 10 分钟后取消）。插件更新、`SyncTasks` 都保留这个开关。
+- “定时任务”页全集群任务表：插件任务行有启用开关（`task:manage`）。插件详情“任务”页签显示范围、名称和“在定时任务中查看”链接。
+- River 新增队列 `plugin`（4 个 worker），插件任务的运行和核心任务分开，慢插件不挤占核心任务。

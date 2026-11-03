@@ -68,6 +68,9 @@ export default {
   onNode: 'on {node}',
   runNow: 'Run now',
   submitted: 'Submitted',
+  enabledLabel: 'Enabled',
+  switchedOn: '{name} is on',
+  switchedOff: '{name} is off; runs already queued do not run',
   runAll: 'All nodes',
   runOn: 'Run on {node}',
   nodeOffline: 'Offline',
@@ -112,7 +115,8 @@ export default {
     task_not_found: 'Scheduled task not found',
     node_required: 'Pick a node first',
     node_offline: 'The node is not online',
-    task_not_ready: 'Scheduled tasks are not running on this node yet'
+    task_not_ready: 'Scheduled tasks are not running on this node yet',
+    task_not_editable: 'Only plugin cluster tasks can be switched on and off'
   },
   nodesColumn: 'Scheduled tasks',
   nodesCount: '{total}, {failing} failing'

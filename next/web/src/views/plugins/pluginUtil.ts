@@ -334,6 +334,10 @@ export interface JobRun {
 
 export interface PluginJob {
   id: string
+  title?: Record<string, string>
+  scope?: 'cluster' | 'node'
+  /** The job's name on the scheduled task page (plugin.<key>.<id>). */
+  task?: string
   schedule: string
   timeout_sec?: number
   next_run_at?: string | null // assumed

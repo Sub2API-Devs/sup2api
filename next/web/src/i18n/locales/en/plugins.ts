@@ -317,7 +317,10 @@ export default {
     next: 'next',
     never: 'Never run',
     runNow: 'Run now',
-    triggered: 'Job "{id}" triggered'
+    triggered: 'Job "{id}" triggered',
+    scopeCluster: 'Once per cluster',
+    scopeNode: 'Every node',
+    viewInTasks: 'View in scheduled tasks'
   },
 
   events: {

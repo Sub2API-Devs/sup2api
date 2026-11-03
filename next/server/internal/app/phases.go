@@ -300,6 +300,7 @@ func (b *boot) startPluginRuntime(trust *pkg.TrustStore) error {
 	rt, err := grpcruntime.New(grpcruntime.Options{
 		DB: b.db, Redis: b.rdb, Bus: b.cl.Bus, Locker: b.cl.Locker, Cipher: b.cipher, Node: b.cl.Registry, Launcher: launcher,
 		Egress: egress, Authorizer: b.az, Ledger: b.bill, Prices: b.bill, Schemas: schemas, Accounts: b.acc, Sticky: gateway.NewStickyClearer(b.rdb), Environment: b.env, Notifier: b.ntf, Users: b.idm,
+		Tasks:       b.jobBridge(),
 		HostVersion: b.version, DataDir: cfg.Plugins.DataDir, RunDir: cfg.Plugins.RunDir,
 		StrictNetwork: cfg.Plugins.StrictNetwork, Seccomp: cfg.Plugins.Seccomp, MaxMemoryMB: cfg.Plugins.MaxMemoryMB,
 		Logger: b.log,
@@ -432,15 +433,15 @@ func (b *boot) buildTasks() error {
 	return nil
 }
 
-// buildBackground constructs the job scheduler and the event delivery loop and
-// registers their teardown. It is idempotent so the boot path and admission
-// share one pair of instances: registerRoutes hands the console the scheduler
-// built here, and admission starts that same scheduler.
+// buildBackground constructs the plugin job bridge and the event delivery
+// loop and registers their teardown. It is idempotent so the boot path and
+// admission share one pair of instances: registerRoutes hands the console the
+// bridge built here, and admission starts that same bridge.
 func (b *boot) buildBackground() {
-	if b.jobs != nil {
+	if b.dlv != nil {
 		return
 	}
-	b.jobs = job.New(b.db, b.cl.Locker, b.reg, b.log, b.cfg.NodeID, job.Options{Executor: b.work})
+	b.jobBridge()
 	b.stopper.add("jobs", func(c context.Context) { _ = b.jobs.Stop(c) })
 	b.dlv = delivery.New(b.db, b.cl.Locker, b.cl.Bus, b.reg, b.log, b.cfg.NodeID, delivery.Options{CanRun: b.canWork, Subscriptions: b.acc.LifecycleSubscriptions})
 	if b.tasks != nil {
@@ -462,20 +463,32 @@ func (b *boot) buildBackground() {
 	}
 }
 
-// startBackground starts the scheduler and delivery loop built by
-// buildBackground, once. It is what admission runs (m.start) on a managed
-// core, and what run() calls directly on a standalone one.
+// jobBridge returns the plugin job bridge, built on first use: the plugin
+// runtime serves the runtime task calls of HostService through it before
+// the background starts.
+func (b *boot) jobBridge() *job.Bridge {
+	if b.jobs == nil {
+		b.jobs = job.New(b.db, b.reg, b.cl.Bus, b.log, b.cfg.NodeID, job.Options{Version: b.version})
+	}
+	return b.jobs
+}
+
+// startBackground starts the delivery loop, the cluster tasks and the plugin
+// job bridge built by buildBackground, once. It is what admission runs
+// (m.start) on a managed core, and what run() calls directly on a standalone
+// one.
 func (b *boot) startBackground() error {
 	b.buildBackground()
 	b.startOnce.Do(func() {
-		if b.startErr = b.jobs.Start(b.ctx); b.startErr == nil {
-			b.startErr = b.dlv.Start(b.ctx)
-		}
+		b.startErr = b.dlv.Start(b.ctx)
 		if b.startErr == nil {
 			if b.startErr = b.buildTasks(); b.startErr == nil {
 				// River itself starts and stops with background admission.
 				b.startErr = b.tasks.StartCluster(b.ctx)
 			}
+		}
+		if b.startErr == nil {
+			b.startErr = b.jobs.Start(b.ctx, b.tasks)
 		}
 	})
 	if b.startErr != nil {

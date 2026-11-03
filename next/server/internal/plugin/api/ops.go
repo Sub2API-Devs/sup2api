@@ -107,17 +107,21 @@ func (a *API) nodes(c *gin.Context) {
 
 // JobInfo is a manifest job with its latest run.
 type JobInfo struct {
-	ID         string     `json:"id"`
-	Schedule   string     `json:"schedule"`
-	TimeoutSec int        `json:"timeout_sec"`
-	NextRunAt  *time.Time `json:"next_run_at"`
-	LastRun    *JobRun    `json:"last_run"`
+	ID         string                 `json:"id"`
+	Title      manifest.LocalizedText `json:"title,omitempty"`
+	Scope      string                 `json:"scope"` // cluster | node
+	Task       string                 `json:"task"`  // its name on the scheduled task page
+	Schedule   string                 `json:"schedule"`
+	TimeoutSec int                    `json:"timeout_sec"`
+	NextRunAt  *time.Time             `json:"next_run_at"`
+	LastRun    *JobRun                `json:"last_run"`
 }
 
 // JobRun is a plugin_job_runs row.
 type JobRun struct {
 	ID          int64      `json:"id"`
 	JobID       string     `json:"job_id"`
+	Scope       string     `json:"scope"`
 	NodeID      string     `json:"node_id"`
 	ScheduledAt time.Time  `json:"scheduled_at"`
 	StartedAt   time.Time  `json:"started_at"`
@@ -127,7 +131,7 @@ type JobRun struct {
 	Message     string     `json:"message"`
 }
 
-const jobRunCols = `id, job_id, node_id, scheduled_at, started_at, finished_at, status, manual, message`
+const jobRunCols = `id, job_id, scope, node_id, scheduled_at, started_at, finished_at, status, manual, message`
 
 func scanRuns(rows interface {
 	Next() bool
@@ -139,7 +143,7 @@ func scanRuns(rows interface {
 	out := []JobRun{}
 	for rows.Next() {
 		var r JobRun
-		if err := rows.Scan(&r.ID, &r.JobID, &r.NodeID, &r.ScheduledAt, &r.StartedAt, &r.FinishedAt, &r.Status, &r.Manual, &r.Message); err != nil {
+		if err := rows.Scan(&r.ID, &r.JobID, &r.Scope, &r.NodeID, &r.ScheduledAt, &r.StartedAt, &r.FinishedAt, &r.Status, &r.Manual, &r.Message); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -164,7 +168,11 @@ func (a *API) jobInfos(ctx context.Context, key string, m *manifest.Manifest) ([
 	out := []JobInfo{}
 	now := time.Now().UTC()
 	for _, j := range m.Jobs {
-		ji := JobInfo{ID: j.ID, Schedule: j.Schedule, TimeoutSec: j.TimeoutSec}
+		ji := JobInfo{ID: j.ID, Title: j.Title, Scope: manifest.JobScopeCluster, Task: "plugin." + key + "." + j.ID,
+			Schedule: j.Schedule, TimeoutSec: j.TimeoutSec}
+		if j.NodeScope() {
+			ji.Scope = manifest.JobScopeNode
+		}
 		if sch, err := pkg.ParseSchedule(j.Schedule); err == nil {
 			next := sch.Next(now)
 			ji.NextRunAt = &next

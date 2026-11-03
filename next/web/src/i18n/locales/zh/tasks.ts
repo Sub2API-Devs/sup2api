@@ -68,6 +68,9 @@ export default {
   onNode: '在 {node}',
   runNow: '立即运行',
   submitted: '已提交',
+  enabledLabel: '启用',
+  switchedOn: '已启用 {name}',
+  switchedOff: '已停用 {name}，排队中的运行不会执行',
   runAll: '所有节点',
   runOn: '在 {node} 运行',
   nodeOffline: '离线',
@@ -112,7 +115,8 @@ export default {
     task_not_found: '找不到这个定时任务',
     node_required: '请先选择节点',
     node_offline: '这个节点不在线',
-    task_not_ready: '本节点的定时任务还没有启动'
+    task_not_ready: '本节点的定时任务还没有启动',
+    task_not_editable: '只有插件的全集群任务可以启用或停用'
   },
   nodesColumn: '定时任务',
   nodesCount: '{total} 个，失败 {failing} 个'

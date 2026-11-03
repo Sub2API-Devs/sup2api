@@ -140,6 +140,7 @@ func (g *recGen) Scheduler(string) (core.SchedulerPlugin, bool)            { ret
 func (g *recGen) AccountRankers() []core.AccountRankerBinding              { return nil }
 func (g *recGen) Routes(string) []core.RouteBinding                        { return nil }
 func (g *recGen) Jobs() []core.JobBinding                                  { return nil }
+func (g *recGen) JobRunner(string) (core.AppPlugin, bool)                  { return nil, false }
 func (g *recGen) Subscriptions() []core.SubscriptionBinding                { return nil }
 func (g *recGen) ReadAsset(string, string) ([]byte, string, error)         { return nil, "", nil }
 

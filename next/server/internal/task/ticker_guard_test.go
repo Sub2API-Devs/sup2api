@@ -47,6 +47,7 @@ var tickerAllowed = map[string]struct {
 	// The framework itself.
 	"task/cluster.go": {1, "River admission watch"},
 	"task/node.go":    {1, "node task state refresh"},
+	"job/job.go":      {1, "plugin job registration resync (TASK-FRAMEWORK-DESIGN §11.3)"},
 }
 
 // tickersIn counts the time.NewTicker and time.Tick calls of the non-test Go

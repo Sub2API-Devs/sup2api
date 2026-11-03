@@ -16,16 +16,21 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
 // Console permissions (TASK-FRAMEWORK-DESIGN §10.1).
 const (
-	PermRead = "task:read"
-	PermRun  = "task:run"
+	PermRead   = "task:read"
+	PermRun    = "task:run"
+	PermManage = "task:manage"
 )
 
-// ActionRunManual is the audit_logs action of a manual run.
-const ActionRunManual = "task.run_manual"
+// Audit actions: a manual run, a plugin task switched on or off.
+const (
+	ActionRunManual = "task.run_manual"
+	ActionSetEnable = "task.set_enabled"
+)
 
 // Console statuses beyond the run statuses: a cluster run not finished yet.
 const (
@@ -46,6 +51,7 @@ var (
 	errNodeRequired = core.NewError(http.StatusBadRequest, "node_required", "node_id is required for a node task")
 	errNodeOffline  = core.NewError(http.StatusConflict, "node_offline", "the node is not online")
 	errTaskNotReady = core.NewError(http.StatusServiceUnavailable, "task_not_ready", "scheduled tasks are not running on this node")
+	errNotEditable  = core.NewError(http.StatusBadRequest, "task_not_editable", "only plugin cluster tasks can be switched on and off")
 )
 
 // LiveNodes lists the nodes online now (cluster.Registry).
@@ -60,6 +66,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router, nodes LiveNodes) {
 	r.Perm(http.MethodGet, "/system/tasks/:name", PermRead, h.detail)
 	r.Perm(http.MethodGet, "/system/tasks/:name/runs", PermRead, h.runs)
 	r.Perm(http.MethodPost, "/system/tasks/:name/run", PermRun, h.run)
+	r.Perm(http.MethodPatch, "/system/tasks/:name", PermManage, h.patch)
 }
 
 type handlers struct {
@@ -770,4 +777,57 @@ func decodeRuns(raw []string) []NodeTaskRun {
 		}
 	}
 	return out
+}
+
+// ---------------------------------------------------------------- patch
+
+type patchBody struct {
+	Enabled *bool `json:"enabled"`
+}
+
+// patch switches a plugin cluster task on or off. The plugin task bridge
+// (internal/job) of every node follows the row on task:changed: a stopped
+// task is unregistered, so it is neither enqueued nor run.
+func (h *handlers) patch(c *gin.Context) {
+	ctx := audit.Context(c)
+	name := c.Param("name")
+	var body patchBody
+	if !httpapi.BindJSON(c, &body) {
+		return
+	}
+	if body.Enabled == nil {
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("enabled is required"))
+		return
+	}
+	if h.s.opts.DB == nil {
+		httpapi.Fail(c, errTaskNotReady)
+		return
+	}
+	var source string
+	err := h.s.opts.DB.Pool.QueryRow(ctx, `UPDATE scheduled_tasks SET enabled = $2, updated_at = now()
+		WHERE name = $1 AND source IN ($3, $4) RETURNING source`, name, *body.Enabled,
+		string(SourcePluginManifest), string(SourcePluginRuntime)).Scan(&source)
+	if store.IsNoRows(err) {
+		if _, known := h.s.scopeOf(ctx, name); known {
+			httpapi.Fail(c, errNotEditable)
+			return
+		}
+		httpapi.Fail(c, errTaskNotFound)
+		return
+	}
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	if h.s.opts.Bus != nil {
+		if perr := h.s.opts.Bus.Publish(ctx, core.ChannelTaskChanged, []byte(`{}`)); perr != nil {
+			h.s.log.Warn("task: announce task change", "task", name, "err", perr)
+		}
+	}
+	uid, _ := core.UserID(ctx)
+	if aerr := audit.Audit(ctx, h.s.opts.DB.Pool, uid, ActionSetEnable, "task", name,
+		map[string]any{"enabled": *body.Enabled, "source": source}); aerr != nil {
+		h.s.log.Warn("task: audit task switch", "task", name, "err", aerr)
+	}
+	httpapi.OK(c, gin.H{"name": name, "enabled": *body.Enabled})
 }

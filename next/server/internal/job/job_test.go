@@ -3,33 +3,42 @@ package job
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	pluginv1 "github.com/Sub2API-Devs/sup2api/next/sdk/gen/pluginv1"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/background"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/task"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
 // ---------------------------------------------------------------- fakes
 
-func newMemLocker() *testutil.MemLocker { return testutil.NewMemLocker() }
-
 type fakeGen struct {
 	core.Generation
-	jobs []core.JobBinding
+	plugins []core.PluginInfo
+	jobs    []core.JobBinding
+	app     core.AppPlugin
 }
 
-func (g *fakeGen) Jobs() []core.JobBinding { return g.jobs }
-
+func (g *fakeGen) Plugins() []core.PluginInfo { return g.plugins }
+func (g *fakeGen) Jobs() []core.JobBinding    { return g.jobs }
+func (g *fakeGen) JobRunner(key string) (core.AppPlugin, bool) {
+	if _, ok := g.Plugin(key); ok {
+		return g.app, g.app != nil
+	}
+	return nil, false
+}
 func (g *fakeGen) Plugin(key string) (core.PluginInfo, bool) {
-	for _, j := range g.jobs {
-		if j.Plugin.Key == key {
-			return j.Plugin, true
+	for _, p := range g.plugins {
+		if p.Key == key {
+			return p, true
 		}
 	}
 	return core.PluginInfo{}, false
@@ -39,10 +48,6 @@ type fakeRegistry struct {
 	mu  sync.Mutex
 	gen core.Generation
 	fns []func(core.Generation)
-}
-
-func newRegistry(jobs ...core.JobBinding) *fakeRegistry {
-	return &fakeRegistry{gen: &fakeGen{jobs: jobs}}
 }
 
 func (r *fakeRegistry) Current() core.Generation {
@@ -58,20 +63,54 @@ func (r *fakeRegistry) OnChange(fn func(core.Generation)) func() {
 	return func() {}
 }
 
-func (r *fakeRegistry) set(jobs ...core.JobBinding) {
+// set switches to a generation running plugin p (none when p is nil) with
+// the jobs of its manifest.
+func (r *fakeRegistry) set(p *core.PluginInfo, app core.AppPlugin) {
+	gen := &fakeGen{app: app}
+	if p != nil {
+		gen.plugins = []core.PluginInfo{*p}
+		for _, j := range p.Manifest.Jobs {
+			gen.jobs = append(gen.jobs, core.JobBinding{Plugin: *p, Job: j, Client: app})
+		}
+	}
 	r.mu.Lock()
-	r.gen = &fakeGen{jobs: jobs}
-	fns, gen := r.fns, r.gen
+	r.gen = gen
+	fns := append([]func(core.Generation){}, r.fns...)
 	r.mu.Unlock()
 	for _, fn := range fns {
 		fn(gen)
 	}
 }
 
+type memBus struct {
+	mu   sync.Mutex
+	subs map[string][]func([]byte)
+}
+
+func (b *memBus) Publish(_ context.Context, channel string, payload []byte) error {
+	b.mu.Lock()
+	hs := append([]func([]byte){}, b.subs[channel]...)
+	b.mu.Unlock()
+	for _, h := range hs {
+		h(payload)
+	}
+	return nil
+}
+
+func (b *memBus) Subscribe(channel string, h func([]byte)) func() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.subs == nil {
+		b.subs = map[string][]func([]byte){}
+	}
+	b.subs[channel] = append(b.subs[channel], h)
+	return func() {}
+}
+
 type fakeApp struct {
 	mu    sync.Mutex
 	calls []*pluginv1.RunJobRequest
-	run   func(ctx context.Context, in *pluginv1.RunJobRequest) (string, error)
+	run   func(ctx context.Context, in *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error)
 }
 
 func (a *fakeApp) OnEvents(context.Context, *pluginv1.OnEventsRequest) (*pluginv1.OnEventsResponse, error) {
@@ -83,14 +122,10 @@ func (a *fakeApp) RunJob(ctx context.Context, in *pluginv1.RunJobRequest) (*plug
 	a.calls = append(a.calls, in)
 	run := a.run
 	a.mu.Unlock()
-	msg := "ok"
 	if run != nil {
-		var err error
-		if msg, err = run(ctx, in); err != nil {
-			return nil, err
-		}
+		return run(ctx, in)
 	}
-	return &pluginv1.RunJobResponse{Message: msg}, nil
+	return &pluginv1.RunJobResponse{Message: "ok", Count: 2}, nil
 }
 
 func (a *fakeApp) snapshot() []*pluginv1.RunJobRequest {
@@ -101,335 +136,382 @@ func (a *fakeApp) snapshot() []*pluginv1.RunJobRequest {
 
 // ---------------------------------------------------------------- helpers
 
-func jobBinding(key, id, schedule string, timeoutSec int, app core.AppPlugin) core.JobBinding {
-	return core.JobBinding{
-		Plugin: core.PluginInfo{Key: key, Version: "1.0.0"},
-		Job:    manifest.Job{ID: id, Schedule: schedule, TimeoutSec: timeoutSec},
-		Client: app,
-	}
+type env struct {
+	db  *store.DB
+	bus *memBus
 }
 
-func addPlugin(t *testing.T, db *store.DB, key string) {
+func newEnv(t *testing.T) env { return env{db: testutil.DB(t), bus: &memBus{}} }
+
+// plugin records plugin key as enabled at version and returns its info.
+func (e env) plugin(t *testing.T, key, version string, jobs ...manifest.Job) *core.PluginInfo {
 	t.Helper()
-	if _, err := db.Pool.Exec(context.Background(),
-		`INSERT INTO plugins (key, name, status) VALUES ($1, '{"en":"x"}', 'enabled')`, key); err != nil {
-		t.Fatal(err)
-	}
+	_, err := e.db.Pool.Exec(context.Background(), `INSERT INTO plugins (key, name, status, active_version)
+		VALUES ($1, '{"en":"Demo","zh":"演示"}', 'enabled', $2)
+		ON CONFLICT (key) DO UPDATE SET status = 'enabled', active_version = EXCLUDED.active_version`, key, version)
+	require.NoError(t, err)
+	return &core.PluginInfo{Key: key, Version: version,
+		Manifest: &manifest.Manifest{Key: key, Version: version, Name: manifest.LocalizedText{"en": "Demo", "zh": "演示"}, Jobs: jobs}}
 }
 
-func start(t *testing.T, db *store.DB, l core.Locker, reg core.PluginRegistry, node string) *Scheduler {
+type node struct {
+	tasks  *task.Service
+	bridge *Bridge
+	reg    *fakeRegistry
+}
+
+// node starts a core node: the task service (both backends) and the bridge.
+func (e env) node(t *testing.T, id string, p *core.PluginInfo, app core.AppPlugin) node {
 	t.Helper()
-	s := New(db, l, reg, nil, node, Options{})
-	if err := s.Start(context.Background()); err != nil {
-		t.Fatal(err)
-	}
+	reg := &fakeRegistry{}
+	reg.set(p, app)
+	tasks, err := task.New(task.Options{NodeID: id, Version: "test", Bus: e.bus, DB: e.db, Executor: background.New(8)})
+	require.NoError(t, err)
+	require.NoError(t, tasks.StartNode(t.Context()))
+	require.NoError(t, tasks.StartCluster(t.Context()))
+	b := New(e.db, reg, e.bus, nil, id, Options{Version: "test", Resync: time.Hour})
+	require.NoError(t, b.Start(t.Context(), tasks))
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = s.Stop(ctx)
+		_ = b.Stop(context.Background())
+		tasks.Stop(context.Background())
 	})
-	return s
+	return node{tasks: tasks, bridge: b, reg: reg}
 }
 
-func eventually(t *testing.T, d time.Duration, what string, fn func() bool) {
+func waitFor(t *testing.T, what string, d time.Duration, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(d)
-	for time.Now().Before(deadline) {
-		if fn() {
-			return
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
 		}
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 	}
-	t.Fatalf("timed out waiting for %s", what)
 }
 
 type runRow struct {
-	id        int64
-	node      string
-	scheduled time.Time
-	status    string
-	manual    bool
-	message   string
-	finished  *time.Time
+	Scope, Node, Status, Message string
+	Manual                       bool
+	ScheduledAt                  time.Time
 }
 
-func runs(t *testing.T, db *store.DB, key, job string) []runRow {
+func runRows(t *testing.T, db *store.DB, key, jobID string) []runRow {
 	t.Helper()
-	rows, err := db.Pool.Query(context.Background(), `SELECT id, node_id, scheduled_at, status, manual, message, finished_at
-		FROM plugin_job_runs WHERE plugin_key = $1 AND job_id = $2 ORDER BY id`, key, job)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rows, err := db.Pool.Query(context.Background(), `SELECT scope, node_id, status, message, manual, scheduled_at
+		FROM plugin_job_runs WHERE plugin_key = $1 AND job_id = $2 ORDER BY id`, key, jobID)
+	require.NoError(t, err)
 	defer rows.Close()
 	var out []runRow
 	for rows.Next() {
 		var r runRow
-		if err := rows.Scan(&r.id, &r.node, &r.scheduled, &r.status, &r.manual, &r.message, &r.finished); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, rows.Scan(&r.Scope, &r.Node, &r.Status, &r.Message, &r.Manual, &r.ScheduledAt))
 		out = append(out, r)
 	}
+	require.NoError(t, rows.Err())
 	return out
 }
 
-// ---------------------------------------------------------------- unit tests
-
-func TestParseSchedule(t *testing.T) {
-	s, err := ParseSchedule("@every 5m")
-	if err != nil {
-		t.Fatal(err)
-	}
-	base := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
-	// Nodes that evaluate at different instants in the same period agree.
-	for _, off := range []time.Duration{time.Second, 2 * time.Minute, 4*time.Minute + 59*time.Second} {
-		if got := s.Next(base.Add(off)); !got.Equal(base.Add(5 * time.Minute)) {
-			t.Errorf("Next(+%v) = %v", off, got)
-		}
-	}
-	c, err := ParseSchedule("0 3 * * *")
-	if err != nil {
-		t.Fatal(err)
-	}
-	loc := time.FixedZone("UTC+8", 8*3600)
-	got := c.Next(time.Date(2026, 1, 1, 10, 0, 0, 0, loc)) // 02:00 UTC
-	if want := time.Date(2026, 1, 1, 3, 0, 0, 0, time.UTC); !got.Equal(want) {
-		t.Errorf("cron Next = %v, want %v (UTC)", got, want)
-	}
-	tz, err := ParseSchedule("CRON_TZ=Asia/Shanghai 0 3 * * *")
-	if err == nil {
-		got := tz.Next(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-		if want := time.Date(2026, 1, 1, 19, 0, 0, 0, time.UTC); !got.Equal(want) {
-			t.Errorf("CRON_TZ Next = %v, want %v", got, want)
-		}
-	}
-	if _, err := ParseSchedule("every day"); err == nil {
-		t.Error("invalid schedule accepted")
-	}
+type scheduledRow struct {
+	Source, Schedule string
+	TimeoutMS        int64
+	MaxAttempts      int
 }
 
-// ---------------------------------------------------------------- db tests
+func readTask(t *testing.T, db *store.DB, name string) (scheduledRow, bool) {
+	t.Helper()
+	var r scheduledRow
+	err := db.Pool.QueryRow(context.Background(), `SELECT source, schedule, timeout_ms, max_attempts
+		FROM scheduled_tasks WHERE name = $1`, name).Scan(&r.Source, &r.Schedule, &r.TimeoutMS, &r.MaxAttempts)
+	if store.IsNoRows(err) {
+		return r, false
+	}
+	require.NoError(t, err)
+	return r, true
+}
 
-func TestTwoNodesRunEachSlotOnce(t *testing.T) {
+// requireCode checks the API error code of err.
+func requireCode(t *testing.T, err error, want *core.Error) {
+	t.Helper()
+	var got *core.Error
+	require.ErrorAs(t, err, &got)
+	require.Equal(t, want.Code, got.Code, err.Error())
+}
+
+func registered(n node, name string) bool {
+	_, ok := n.tasks.Registry().Get(name)
+	return ok
+}
+
+// ---------------------------------------------------------------- tests
+
+// A cluster job becomes the cluster task plugin.<key>.<id> with its row, runs
+// once per slot on one node and is recorded for the plugin page.
+func TestClusterJobRunsOncePerSlot(t *testing.T) {
 	t.Parallel()
-	db := testutil.DB(t)
-	addPlugin(t, db, "guard")
-	locker := newMemLocker()
-	app := &fakeApp{}
-	b := jobBinding("guard", "tick", "@every 1s", 0, app)
-	reg1, reg2 := newRegistry(b), newRegistry(b)
-	s1 := start(t, db, locker, reg1, "n1")
-	start(t, db, locker, reg2, "n2")
+	e := newEnv(t)
+	p := e.plugin(t, "demo", "1.0.0", manifest.Job{ID: "sync", Schedule: "@every 5s", TimeoutSec: 30})
+	appA, appB := &fakeApp{}, &fakeApp{}
+	e.node(t, "node-a", p, appA)
+	e.node(t, "node-b", p, appB)
 
-	eventually(t, 20*time.Second, "several slots", func() bool { return len(app.snapshot()) >= 4 })
-	// Disable on both nodes, then let in-flight runs finish.
-	reg1.set()
-	reg2.set()
-	eventually(t, 5*time.Second, "schedule rebuilt", func() bool {
-		_, ok := s1.NextRun("guard", "tick")
-		return !ok
+	row, ok := readTask(t, e.db, "plugin.demo.sync")
+	require.True(t, ok)
+	require.Equal(t, scheduledRow{Source: "plugin_manifest", Schedule: "@every 5s", TimeoutMS: 30000, MaxAttempts: 1}, row)
+
+	waitFor(t, "two slots", 25*time.Second, func() bool {
+		n := 0
+		for _, r := range runRows(t, e.db, "demo", "sync") {
+			if r.Status == StatusSucceeded {
+				n++
+			}
+		}
+		return n >= 2
 	})
-	time.Sleep(2 * time.Second)
-
-	calls := app.snapshot()
-	seen := map[int64]bool{}
+	slots := map[time.Time]bool{}
+	for _, r := range runRows(t, e.db, "demo", "sync") {
+		require.Equal(t, "cluster", r.Scope)
+		require.False(t, r.Manual)
+		require.True(t, r.ScheduledAt.Equal(r.ScheduledAt.Truncate(5*time.Second)), "slot %s is not aligned", r.ScheduledAt)
+		require.False(t, slots[r.ScheduledAt], "slot %s ran twice", r.ScheduledAt)
+		slots[r.ScheduledAt] = true
+	}
+	calls := append(appA.snapshot(), appB.snapshot()...)
+	require.NotEmpty(t, calls)
 	for _, c := range calls {
-		if seen[c.ScheduledAtUnix] {
-			t.Fatalf("slot %d ran twice", c.ScheduledAtUnix)
-		}
-		seen[c.ScheduledAtUnix] = true
-		if c.Manual || c.JobId != "tick" {
-			t.Fatalf("unexpected request %+v", c)
-		}
-	}
-	rs := runs(t, db, "guard", "tick")
-	if len(rs) != len(calls) {
-		t.Fatalf("%d runs recorded for %d calls", len(rs), len(calls))
-	}
-	for _, r := range rs {
-		if !seen[r.scheduled.Unix()] || r.status != StatusSucceeded || r.message != "ok" || r.finished == nil {
-			t.Fatalf("bad run %+v", r)
-		}
-	}
-	// No more runs after the plugin left the generation.
-	n := len(app.snapshot())
-	time.Sleep(1500 * time.Millisecond)
-	if m := len(app.snapshot()); m != n {
-		t.Fatalf("job ran after disable: %d -> %d", n, m)
+		require.Equal(t, "sync", c.GetJobId())
+		require.Equal(t, "cluster", c.GetScope())
+		require.EqualValues(t, 1, c.GetAttempt())
+		require.NotEmpty(t, c.GetRunId())
 	}
 }
 
-// The slot lock is not fenced, so it is not what makes a slot run once: two
-// nodes that both hold "the" lock (here: each has its own locker, as after
-// a Redis restart) race the insert, and the unique slot index lets one in.
-func TestSlotRunsOnceWithoutTheLock(t *testing.T) {
+// A slot a core before 0.1.237 already ran (it schedules jobs itself and
+// records the slot) is skipped.
+func TestClusterJobSkipsASlotRecordedElsewhere(t *testing.T) {
 	t.Parallel()
-	db := testutil.DB(t)
-	addPlugin(t, db, "guard")
+	e := newEnv(t)
+	p := e.plugin(t, "demo", "1.0.0", manifest.Job{ID: "sync", Schedule: "@every 1h"})
 	app := &fakeApp{}
-	b := jobBinding("guard", "tick", "@every 1h", 0, app)
-	s1 := start(t, db, newMemLocker(), newRegistry(), "n1")
-	s2 := start(t, db, newMemLocker(), newRegistry(), "n2")
-
-	base := time.Now().Truncate(time.Second).Add(-time.Hour)
-	const slots = 20
-	for i := range slots {
-		slot := base.Add(time.Duration(i) * time.Second)
-		var wg sync.WaitGroup
-		begin := make(chan struct{})
-		for _, s := range []*Scheduler{s1, s2} {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				<-begin
-				s.runScheduled(b, slot)
-			}()
-		}
-		close(begin)
-		wg.Wait()
-	}
-
-	if n := len(app.snapshot()); n != slots {
-		t.Fatalf("plugin called %d times for %d slots", n, slots)
-	}
-	rs := runs(t, db, "guard", "tick")
-	if len(rs) != slots {
-		t.Fatalf("%d runs recorded for %d slots", len(rs), slots)
-	}
-	for _, r := range rs {
-		if r.status != StatusSucceeded {
-			t.Fatalf("bad run %+v", r)
-		}
-	}
+	n := e.node(t, "node-a", p, app)
+	slot := time.Now().UTC().Truncate(time.Hour)
+	_, err := e.db.Pool.Exec(context.Background(), `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status, manual)
+		VALUES ('demo', 'sync', 'old-core', $1, now(), 'succeeded', false)`, slot)
+	require.NoError(t, err)
+	_, err = n.bridge.run(context.Background(), "demo", "sync", core.TaskCluster, time.Minute, false,
+		core.TaskRun{Name: "plugin.demo.sync", ScheduledAt: slot, Attempt: 1, QueuedAt: time.Now()})
+	var skip *core.TaskSkippedError
+	require.ErrorAs(t, err, &skip)
+	require.Empty(t, app.snapshot())
 }
 
-func TestRunNowConflictAndTimeout(t *testing.T) {
+func TestManualRunAndPluginResult(t *testing.T) {
 	t.Parallel()
-	db := testutil.DB(t)
-	addPlugin(t, db, "guard")
-	release := make(chan struct{})
-	app := &fakeApp{run: func(ctx context.Context, in *pluginv1.RunJobRequest) (string, error) {
-		select {
-		case <-release:
-			return "manual done", nil
-		case <-ctx.Done():
-			return "", ctx.Err()
-		}
+	e := newEnv(t)
+	p := e.plugin(t, "demo", "1.0.0", manifest.Job{ID: "report", Schedule: "0 3 * * *", TimeoutSec: 60})
+	app := &fakeApp{run: func(context.Context, *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
+		return &pluginv1.RunJobResponse{Message: "3 reports", Count: 3}, nil
 	}}
-	// Scheduled far in the future so only manual runs happen.
-	s := start(t, db, newMemLocker(), newRegistry(jobBinding("guard", "rollup", "0 0 1 1 *", 2, app)), "n1")
-	ctx := context.Background()
-
-	if err := s.RunNow(ctx, "guard", "rollup", 7); err != nil {
-		t.Fatal(err)
-	}
-	var ce *core.Error
-	if err := s.RunNow(ctx, "guard", "rollup", 7); !errors.As(err, &ce) || ce.Code != "conflict" {
-		t.Fatalf("second RunNow = %v, want conflict", err)
-	}
-	close(release)
-	eventually(t, 10*time.Second, "manual run finished", func() bool {
-		rs := runs(t, db, "guard", "rollup")
-		return len(rs) == 1 && rs[0].status == StatusSucceeded
+	n := e.node(t, "node-a", p, app)
+	require.NoError(t, n.bridge.RunNow(context.Background(), "demo", "report", 7))
+	waitFor(t, "the manual run", 10*time.Second, func() bool {
+		rows := runRows(t, e.db, "demo", "report")
+		return len(rows) == 1 && rows[0].Status == StatusSucceeded
 	})
-	r := runs(t, db, "guard", "rollup")[0]
-	if !r.manual || r.message != "manual done" || r.node != "n1" {
-		t.Fatalf("run = %+v", r)
-	}
-	if c := app.snapshot(); len(c) != 1 || !c[0].Manual {
-		t.Fatalf("calls = %+v", c)
-	}
-
-	// Timeout: the plugin blocks past timeoutSec (2s).
-	app.mu.Lock()
-	app.run = func(ctx context.Context, _ *pluginv1.RunJobRequest) (string, error) {
-		<-ctx.Done()
-		return "", ctx.Err()
-	}
-	app.mu.Unlock()
-	if err := s.RunNow(ctx, "guard", "rollup", 7); err != nil {
-		t.Fatal(err)
-	}
-	eventually(t, 15*time.Second, "timeout recorded", func() bool {
-		rs := runs(t, db, "guard", "rollup")
-		return len(rs) == 2 && rs[1].status == StatusTimeout
+	r := runRows(t, e.db, "demo", "report")[0]
+	require.True(t, r.Manual)
+	require.Equal(t, "3 reports", r.Message)
+	require.True(t, app.snapshot()[0].GetManual())
+	waitFor(t, "the task row", 5*time.Second, func() bool {
+		var status *string
+		var count *int
+		require.NoError(t, e.db.Pool.QueryRow(context.Background(), `SELECT last_status, last_count FROM scheduled_tasks
+			WHERE name = 'plugin.demo.report'`).Scan(&status, &count))
+		return status != nil && *status == "succeeded" && count != nil && *count == 3
 	})
 
-	// Failure message.
-	app.mu.Lock()
-	app.run = func(context.Context, *pluginv1.RunJobRequest) (string, error) { return "", fmt.Errorf("boom") }
-	app.mu.Unlock()
-	eventually(t, 10*time.Second, "lock released", func() bool { return s.RunNow(ctx, "guard", "rollup", 7) == nil })
-	eventually(t, 10*time.Second, "failure recorded", func() bool {
-		rs := runs(t, db, "guard", "rollup")
-		return len(rs) == 3 && rs[2].status == StatusFailed && rs[2].message == "boom"
-	})
+	requireCode(t, n.bridge.RunNow(context.Background(), "demo", "missing", 7), core.ErrNotFound)
+	requireCode(t, n.bridge.RunNow(context.Background(), "nope", "report", 7), core.ErrNotFound)
 }
 
-func TestRunNowLookup(t *testing.T) {
+// A node job runs on every node running the plugin, each on its own
+// instance; it has no scheduled_tasks row.
+func TestNodeJobRunsOnEveryNode(t *testing.T) {
 	t.Parallel()
-	db := testutil.DB(t)
-	addPlugin(t, db, "guard")
-	addPlugin(t, db, "off")
-	s := start(t, db, newMemLocker(), newRegistry(jobBinding("guard", "rollup", "@every 1h", 0, &fakeApp{})), "n1")
-	ctx := context.Background()
-	cases := map[[2]string]string{
-		{"guard", "nope"}: "not_found",
-		{"off", "rollup"}: "plugin_unavailable",
-		{"ghost", "x"}:    "not_found",
+	e := newEnv(t)
+	p := e.plugin(t, "demo", "1.0.0", manifest.Job{ID: "warm", Schedule: "@every 1h", TimeoutSec: 10, Scope: manifest.JobScopeNode})
+	appA, appB := &fakeApp{}, &fakeApp{}
+	a := e.node(t, "node-a", p, appA)
+	b := e.node(t, "node-b", p, appB)
+	require.True(t, registered(a, "plugin.demo.warm"))
+	require.True(t, registered(b, "plugin.demo.warm"))
+	_, hasRow := readTask(t, e.db, "plugin.demo.warm")
+	require.False(t, hasRow)
+
+	// The node tasks need background admission; these services always have it.
+	require.NoError(t, a.bridge.RunNow(context.Background(), "demo", "warm", 1))
+	waitFor(t, "a run on both nodes", 10*time.Second, func() bool {
+		return len(appA.snapshot()) == 1 && len(appB.snapshot()) == 1
+	})
+	require.Equal(t, "node", appA.snapshot()[0].GetScope())
+	waitFor(t, "two run rows", 5*time.Second, func() bool {
+		rows := runRows(t, e.db, "demo", "warm")
+		return len(rows) == 2 && rows[0].Status == StatusSucceeded && rows[1].Status == StatusSucceeded
+	})
+	nodes := map[string]bool{}
+	for _, r := range runRows(t, e.db, "demo", "warm") {
+		require.Equal(t, "node", r.Scope)
+		nodes[r.Node] = true
 	}
-	for in, code := range cases {
-		err := s.RunNow(ctx, in[0], in[1], 1)
-		var ce *core.Error
-		if !errors.As(err, &ce) || ce.Code != code {
-			t.Errorf("RunNow(%v) = %v, want %s", in, err, code)
+	require.Equal(t, map[string]bool{"node-a": true, "node-b": true}, nodes)
+}
+
+// The River leader may not run the plugin: every node registers the cluster
+// jobs from the rows, and a node without the plugin puts its run off.
+func TestNodeWithoutThePlugin(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	p := e.plugin(t, "demo", "1.0.0", manifest.Job{ID: "sync", Schedule: "@every 1h", TimeoutSec: 30})
+	e.node(t, "node-a", p, &fakeApp{})
+	b := e.node(t, "node-b", nil, nil)
+	require.True(t, registered(b, "plugin.demo.sync"), "registered from the row")
+
+	ctx := context.Background()
+	run := core.TaskRun{Name: "plugin.demo.sync", ScheduledAt: time.Now(), Attempt: 1, QueuedAt: time.Now()}
+	_, err := b.bridge.run(ctx, "demo", "sync", core.TaskCluster, 30*time.Second, false, run)
+	var retry *core.TaskRetryAfterError
+	require.ErrorAs(t, err, &retry)
+
+	run.QueuedAt = time.Now().Add(-time.Minute)
+	_, err = b.bridge.run(ctx, "demo", "sync", core.TaskCluster, 30*time.Second, false, run)
+	require.Error(t, err)
+	require.False(t, errors.As(err, &retry))
+
+	_, err = e.db.Pool.Exec(ctx, `UPDATE plugins SET status = 'disabled' WHERE key = 'demo'`)
+	require.NoError(t, err)
+	_, err = b.bridge.run(ctx, "demo", "sync", core.TaskCluster, 30*time.Second, false, run)
+	var skip *core.TaskSkippedError
+	require.ErrorAs(t, err, &skip)
+}
+
+// Disabling the plugin removes its rows and registrations; enabling it again
+// brings them back. A new version's jobs replace the old ones.
+func TestPluginChangesFollowTheActiveVersion(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	ctx := context.Background()
+	app := &fakeApp{}
+	p := e.plugin(t, "demo", "1.0.0", manifest.Job{ID: "sync", Schedule: "@every 1h"}, manifest.Job{ID: "old", Schedule: "@every 1h"})
+	n := e.node(t, "node-a", p, app)
+	require.True(t, registered(n, "plugin.demo.old"))
+
+	_, err := e.db.Pool.Exec(ctx, `UPDATE plugins SET status = 'disabled' WHERE key = 'demo'`)
+	require.NoError(t, err)
+	require.NoError(t, n.bridge.reconcile(ctx))
+	_, ok := readTask(t, e.db, "plugin.demo.sync")
+	require.False(t, ok)
+	require.False(t, registered(n, "plugin.demo.sync"))
+
+	// Version 2.0.0: "old" is gone, "sync" runs every 30 minutes, and a
+	// lagging node still on 1.0.0 does not write its rows back.
+	_, err = e.db.Pool.Exec(ctx, `UPDATE plugins SET status = 'enabled', active_version = '2.0.0' WHERE key = 'demo'`)
+	require.NoError(t, err)
+	require.NoError(t, n.bridge.reconcile(ctx))
+	_, ok = readTask(t, e.db, "plugin.demo.sync")
+	require.False(t, ok, "a node on 1.0.0 must not write the rows of 2.0.0")
+
+	v2 := e.plugin(t, "demo", "2.0.0", manifest.Job{ID: "sync", Schedule: "*/30 * * * *", Title: manifest.LocalizedText{"en": "Sync", "zh": "同步"}})
+	n.reg.set(v2, app)
+	require.NoError(t, n.bridge.reconcile(ctx))
+	row, ok := readTask(t, e.db, "plugin.demo.sync")
+	require.True(t, ok)
+	require.Equal(t, "*/30 * * * *", row.Schedule)
+	require.Equal(t, 5, row.MaxAttempts)
+	_, ok = readTask(t, e.db, "plugin.demo.old")
+	require.False(t, ok)
+	require.False(t, registered(n, "plugin.demo.old"))
+	got, _ := n.tasks.Registry().Get("plugin.demo.sync")
+	require.Equal(t, core.LocalizedText{"en": "Sync", "zh": "同步"}, got.Title)
+}
+
+// Older manifests may declare a timeout or interval the framework does not
+// run; they are cut to its limits.
+func TestJobLimits(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	p := e.plugin(t, "demo", "1.0.0",
+		manifest.Job{ID: "long", Schedule: "0 3 * * *", TimeoutSec: 7200},
+		manifest.Job{ID: "fast", Schedule: "@every 1s"},
+	)
+	n := e.node(t, "node-a", p, &fakeApp{})
+	long, _ := readTask(t, e.db, "plugin.demo.long")
+	require.EqualValues(t, time.Hour.Milliseconds(), long.TimeoutMS)
+	fast, _ := readTask(t, e.db, "plugin.demo.fast")
+	require.Equal(t, "@every 5s", fast.Schedule)
+	require.EqualValues(t, 60000, fast.TimeoutMS) // timeoutSec 0 takes the default
+	got, _ := n.tasks.Registry().Get("plugin.demo.long")
+	require.Equal(t, core.LocalizedText{"en": "Demo · long", "zh": "演示 · long"}, got.Title)
+}
+
+// A plugin that has not done the work yet asks for a later run: a cluster job
+// is put off without counting as a failure.
+func TestPluginRetryAfter(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	p := e.plugin(t, "demo", "1.0.0", manifest.Job{ID: "sync", Schedule: "@every 1h"})
+	app := &fakeApp{run: func(context.Context, *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
+		return &pluginv1.RunJobResponse{RetryAfterMs: 2000}, nil
+	}}
+	n := e.node(t, "node-a", p, app)
+	_, err := n.bridge.run(context.Background(), "demo", "sync", core.TaskCluster, time.Minute, false,
+		core.TaskRun{Name: "plugin.demo.sync", ScheduledAt: time.Now(), Attempt: 1, Manual: true, QueuedAt: time.Now()})
+	var retry *core.TaskRetryAfterError
+	require.ErrorAs(t, err, &retry)
+	require.Equal(t, 2*time.Second, retry.Delay)
+	rows := runRows(t, e.db, "demo", "sync")
+	require.Len(t, rows, 1)
+	require.Equal(t, StatusSkipped, rows[0].Status)
+}
+
+// A run of a plugin error or timeout is recorded with its message.
+func TestFailedAndTimedOutRuns(t *testing.T) {
+	t.Parallel()
+	e := newEnv(t)
+	p := e.plugin(t, "demo", "1.0.0", manifest.Job{ID: "sync", Schedule: "@every 1h"})
+	app := &fakeApp{run: func(ctx context.Context, in *pluginv1.RunJobRequest) (*pluginv1.RunJobResponse, error) {
+		if in.GetManual() {
+			return nil, errors.New("upstream down")
 		}
-	}
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}}
+	n := e.node(t, "node-a", p, app)
+	run := core.TaskRun{Name: "plugin.demo.sync", ScheduledAt: time.Now(), Attempt: 1, Manual: true, QueuedAt: time.Now()}
+	_, err := n.bridge.run(context.Background(), "demo", "sync", core.TaskCluster, time.Minute, false, run)
+	require.ErrorContains(t, err, "upstream down")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	run.Manual = false
+	run.ScheduledAt = time.Now().UTC().Truncate(time.Second)
+	_, err = n.bridge.run(ctx, "demo", "sync", core.TaskCluster, time.Minute, false, run)
+	require.Error(t, err)
+	rows := runRows(t, e.db, "demo", "sync")
+	require.Len(t, rows, 2)
+	require.Equal(t, StatusFailed, rows[0].Status)
+	require.Equal(t, "upstream down", rows[0].Message)
+	require.Equal(t, StatusTimeout, rows[1].Status)
 }
 
-func TestStartRecoversAbandonedRuns(t *testing.T) {
+func TestStopUnregisters(t *testing.T) {
 	t.Parallel()
-	db := testutil.DB(t)
-	addPlugin(t, db, "guard")
-	ctx := context.Background()
-	// Two slots (one scheduled run per slot is a unique index): n1's is
-	// recovered, n2's is left alone.
-	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status)
-		VALUES ('guard', 'a', 'n1', now() - interval '1 minute', now(), 'running'), ('guard', 'a', 'n2', now(), now(), 'running')`); err != nil {
-		t.Fatal(err)
-	}
-	start(t, db, newMemLocker(), newRegistry(), "n1")
-	rs := runs(t, db, "guard", "a")
-	if rs[0].status != StatusFailed || rs[0].finished == nil || rs[1].status != StatusRunning {
-		t.Fatalf("runs = %+v", rs)
-	}
-}
-
-func TestPurgeRuns(t *testing.T) {
-	t.Parallel()
-	db := testutil.DB(t)
-	addPlugin(t, db, "guard")
-	ctx := context.Background()
-	// Distinct slots: one scheduled run per slot is a unique index.
-	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status, message)
-		SELECT 'guard', 'a', 'n1', now() - make_interval(mins => 2000 - g), now(), 'succeeded', g::text FROM generate_series(1, 1005) g`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Pool.Exec(ctx, `INSERT INTO plugin_job_runs (plugin_key, job_id, node_id, scheduled_at, started_at, status)
-		VALUES ('guard', 'b', 'n1', now(), now(), 'succeeded'),
-		       ('guard', 'b', 'n1', now() - interval '2 days', now() - interval '2 days', 'running')`); err != nil {
-		t.Fatal(err)
-	}
-	s := New(db, newMemLocker(), newRegistry(), nil, "n1", Options{})
-	n, err := s.PurgeRuns(ctx)
-	if err != nil || n != 5 {
-		t.Fatalf("purged %d, %v; want 5", n, err)
-	}
-	a := runs(t, db, "guard", "a")
-	if len(a) != 1000 || a[0].message != "6" || a[999].message != "1005" {
-		t.Fatalf("kept %d runs, first %q", len(a), a[0].message)
-	}
-	b := runs(t, db, "guard", "b")
-	if len(b) != 2 || b[1].status != StatusFailed {
-		t.Fatalf("job b runs = %+v", b)
-	}
+	e := newEnv(t)
+	p := e.plugin(t, "demo", "1.0.0", manifest.Job{ID: "sync", Schedule: "@every 1h"},
+		manifest.Job{ID: "warm", Schedule: "@every 1h", Scope: manifest.JobScopeNode})
+	n := e.node(t, "node-a", p, &fakeApp{})
+	require.True(t, registered(n, "plugin.demo.sync"))
+	require.True(t, registered(n, "plugin.demo.warm"))
+	require.NoError(t, n.bridge.Stop(context.Background()))
+	require.False(t, registered(n, "plugin.demo.sync"))
+	require.False(t, registered(n, "plugin.demo.warm"))
+	requireCode(t, n.bridge.RunNow(context.Background(), "demo", "sync", 1), core.ErrUnavailable)
 }

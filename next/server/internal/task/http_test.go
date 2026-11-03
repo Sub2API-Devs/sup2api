@@ -270,3 +270,32 @@ func jsonNumber(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }
+
+func TestPatchSwitchesPluginTasksOnly(t *testing.T) {
+	t.Parallel()
+	e, _ := newAPIEnv(t)
+	pluginRow(t, e.db, "plugin.demo.sync", "demo")
+	var changed atomic.Int32
+	e.bus.Subscribe(core.ChannelTaskChanged, func([]byte) { changed.Add(1) })
+
+	code, _ := e.call(t, http.MethodPatch, "/system/tasks/plugin.demo.sync", `{"enabled":false}`, PermRead, PermRun)
+	require.Equal(t, http.StatusForbidden, code)
+	code, body := e.call(t, http.MethodPatch, "/system/tasks/plugin.demo.sync", `{"enabled":false}`, PermManage)
+	require.Equal(t, http.StatusOK, code, body)
+	var enabled bool
+	require.NoError(t, e.db.Pool.QueryRow(context.Background(), `SELECT enabled FROM scheduled_tasks WHERE name = 'plugin.demo.sync'`).Scan(&enabled))
+	require.False(t, enabled)
+	require.EqualValues(t, 1, changed.Load())
+	var audits int
+	require.NoError(t, e.db.Pool.QueryRow(context.Background(), `SELECT count(*) FROM audit_logs WHERE action = $1 AND target_id = 'plugin.demo.sync'`,
+		ActionSetEnable).Scan(&audits))
+	require.Equal(t, 1, audits)
+
+	code, body = e.call(t, http.MethodPatch, "/system/tasks/core.test.ok", `{"enabled":false}`, PermManage)
+	require.Equal(t, http.StatusBadRequest, code)
+	require.Equal(t, "task_not_editable", body["error"].(map[string]any)["code"])
+	code, body = e.call(t, http.MethodPatch, "/system/tasks/plugin.demo.none", `{"enabled":false}`, PermManage)
+	require.Equal(t, http.StatusNotFound, code, body)
+	code, _ = e.call(t, http.MethodPatch, "/system/tasks/plugin.demo.sync", `{}`, PermManage)
+	require.Equal(t, http.StatusBadRequest, code)
+}

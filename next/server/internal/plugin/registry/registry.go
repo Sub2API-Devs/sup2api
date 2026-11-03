@@ -154,6 +154,7 @@ type generation struct {
 	rankers   []core.AccountRankerBinding // sorted by rank order, then plugin key
 	routes    map[string][]core.RouteBinding
 	jobs      []core.JobBinding
+	runners   map[string]core.AppPlugin
 	subs      []core.SubscriptionBinding
 	observers []core.ObservationBinding
 	channels  []core.NotificationChannelBinding
@@ -482,6 +483,10 @@ func (g *generation) addJobsAndEvents(ext Extension, info core.PluginInfo, m *ma
 		return
 	}
 	if grants.Has("jobs") {
+		if g.runners == nil {
+			g.runners = map[string]core.AppPlugin{}
+		}
+		g.runners[info.Key] = app
 		for _, j := range m.Jobs {
 			g.jobs = append(g.jobs, core.JobBinding{Plugin: info, Job: j, Client: app})
 		}
@@ -582,6 +587,11 @@ func (g *generation) Endpoints() []core.EndpointBinding         { return g.endpo
 func (g *generation) AccountTypes() []core.AccountTypeBinding   { return g.accTypes }
 func (g *generation) Jobs() []core.JobBinding                   { return g.jobs }
 func (g *generation) Subscriptions() []core.SubscriptionBinding { return g.subs }
+
+func (g *generation) JobRunner(key string) (core.AppPlugin, bool) {
+	app, ok := g.runners[key]
+	return app, ok
+}
 
 func (g *generation) Plugin(key string) (core.PluginInfo, bool) {
 	p, ok := g.byKey[key]

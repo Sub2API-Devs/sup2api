@@ -209,19 +209,25 @@ func (b *nodeBackend) run(nj *nodeJob, manual bool) {
 	nj.mu.Lock()
 	nj.state.LastStartedAt = &started
 	nj.mu.Unlock()
+	runID := b.runID(started)
 	ctx, cancel := context.WithTimeout(b.runCtx, t.Timeout)
-	res, err := callHandler(ctx, t, core.TaskRun{Name: t.Name, ScheduledAt: started, Attempt: 1, Manual: manual, NodeID: b.nodeID})
+	res, err := callHandler(ctx, t, core.TaskRun{Name: t.Name, ScheduledAt: started, Attempt: 1, Manual: manual, NodeID: b.nodeID, RunID: runID,
+		QueuedAt: started})
 	timedOut := ctx.Err() == context.DeadlineExceeded
 	cancel()
 	finished := time.Now().UTC()
-	run := NodeTaskRun{StartedAt: started, FinishedAt: finished, Manual: manual, Count: res.Count, Message: truncate(res.Message)}
+	run := NodeTaskRun{ID: runID, StartedAt: started, FinishedAt: finished, Manual: manual, Count: res.Count, Message: truncate(res.Message)}
 	var retry *core.TaskRetryAfterError
+	var skip *core.TaskSkippedError
 	switch {
 	case err == nil:
 		run.Status = StatusSucceeded
 	case errors.As(err, &retry):
 		run.Status = StatusSkipped
 		run.Message = truncate(err.Error())
+	case errors.As(err, &skip):
+		run.Status = StatusSkipped
+		run.Message = truncate(skip.Reason)
 	case timedOut:
 		run.Status, run.Error = StatusTimeout, truncate(err.Error())
 	default:
@@ -230,9 +236,16 @@ func (b *nodeBackend) run(nj *nodeJob, manual bool) {
 	b.finish(nj, run, true)
 }
 
+// runID is the history id of a run started at started.
+func (b *nodeBackend) runID(started time.Time) string {
+	return strconv.FormatInt(b.runSeq.Add(1), 10) + "-" + strconv.FormatInt(started.UnixMilli(), 10)
+}
+
 // finish records one run in the task's state and, with history, its history.
 func (b *nodeBackend) finish(nj *nodeJob, run NodeTaskRun, history bool) {
-	run.ID = strconv.FormatInt(b.runSeq.Add(1), 10) + "-" + strconv.FormatInt(run.StartedAt.UnixMilli(), 10)
+	if run.ID == "" {
+		run.ID = b.runID(run.StartedAt)
+	}
 	run.DurationMS = run.FinishedAt.Sub(run.StartedAt).Milliseconds()
 	nj.mu.Lock()
 	st := &nj.state
