@@ -15,7 +15,7 @@
 | 步 | 内容 | 主要文件 | 验证 | 状态 |
 | --- | --- | --- | --- | --- |
 | A1 | **迁移**：0076–0083 River v1–v8（从 `riverpgxv5@v0.49.0` 生成，补版本行）；0084 `scheduled_tasks`、`river_job_task_name_idx`、`plugin_job_runs.scope`；0085 停容器的列、`status_changed_at` 触发器与回填、`blocked_revision`/`blocked_at`。加依赖 River v0.49.0、gocron v2.22.0 | `server/internal/migrations/`、`server/internal/task/rivermig/`、`server/go.mod` | 迁移文件与模块 SQL 一致；空库、已迁移库重复执行；非超级用户执行；`rivermigrate` 校验为最新；触发器只在三列变化时写时间 | 完成 |
-| A2 | **接口与登记**：`core.Tasks` 等类型；`internal/task` 的 registry、名字与字段校验、计划解析（`job.ParseSchedule` 移到 `internal/task/schedule.go`，`internal/job` 改为引用）、ByPeriod 计算 | `server/internal/core/ports_scheduled_tasks.go`、`server/internal/task/{registry,schedule}.go` | 单元测试：校验规则、重复名、计划与 cron 最小间隔 | 待做 |
+| A2 | **接口与登记**：`core.Tasks` 等类型；`internal/task` 的 registry、名字与字段校验、计划解析（`job.ParseSchedule` 移到 `internal/task/schedule.go`，`internal/job` 改为引用）、ByPeriod 计算 | `server/internal/core/ports_scheduled_tasks.go`、`server/internal/task/{registry,schedule}.go` | 单元测试：校验规则、重复名、计划与 cron 最小间隔 | 完成 |
 | A3 | **node 后端**：gocron 调度、单例、`RequireWork`、超时与 panic、Redis 状态与历史、`task:run` 事件、`Trigger` | `server/internal/task/node.go`、`status.go` | 两个“节点”都跑；上次未完成跳过；许可为假时跳过；关停等待；Redis 写入、截断、TTL | 待做 |
 | A4 | **cluster 后端**：River 客户端与许可观察、通用 worker、周期配置、时段唯一、租约、单次任务与 `UniqueKey`、`EnqueueTx`、重试与 snooze、`RecordOutput`、`scheduled_tasks` 写入、`core.task.housekeeping` | `server/internal/task/cluster.go`、`lease.go`、`housekeeping.go` | PG 测试：两客户端同一时段一次；主节点停掉后接任；超过间隔不叠跑；租约过期可接手；许可撤销/恢复；重试次数；单次任务按时、去重、事务回滚不投递；未知任务 snooze | 待做 |
 | A5 | **接入启动流程**：`phases.go` 创建服务、`StartNode`、`StartCluster`、关停顺序；单机与托管两种模式 | `server/internal/app/` | app 测试：单机启动后两个后端都在跑；托管核心准入前 River 不启动、准入后启动、排空后停止 | 待做 |

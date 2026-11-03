@@ -21,6 +21,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/background"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/task"
 )
 
 // Run statuses stored in plugin_job_runs.status.
@@ -460,30 +461,6 @@ func (s *Scheduler) execute(ctx context.Context, b core.JobBinding, id int64, sl
 	}
 }
 
-// ParseSchedule parses a 5-field cron expression (evaluated in UTC unless it
-// starts with CRON_TZ=) or "@every <duration>". "@every" slots are aligned
-// to multiples of the duration so all nodes compute the same trigger times.
-func ParseSchedule(spec string) (cron.Schedule, error) {
-	sched, err := cronParser.Parse(spec)
-	if err != nil {
-		return nil, err
-	}
-	switch v := sched.(type) {
-	case cron.ConstantDelaySchedule:
-		return everySchedule{d: v.Delay}, nil
-	case *cron.SpecSchedule:
-		return utcSchedule{s: v}, nil
-	}
-	return sched, nil
-}
-
-var cronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)
-
-type everySchedule struct{ d time.Duration }
-
-func (e everySchedule) Next(t time.Time) time.Time { return t.Truncate(e.d).Add(e.d) }
-
-type utcSchedule struct{ s *cron.SpecSchedule }
-
-// Next evaluates the spec in UTC; an explicit CRON_TZ keeps its location.
-func (u utcSchedule) Next(t time.Time) time.Time { return u.s.Next(t.UTC()) }
+// ParseSchedule parses a manifest job schedule; the syntax and the slot
+// alignment are the task framework's (task.ParseSchedule).
+func ParseSchedule(spec string) (cron.Schedule, error) { return task.ParseSchedule(spec) }
