@@ -52,7 +52,11 @@ for (const d of D) {
 }
 
 const label = new Array(D.length).fill(null); // {path, kind, method, order}
-// 1. explicit placements
+// 1. explicit placements (a target under vendor/, or starting with an npm
+// package name, is third-party code)
+const vendorPkgNames = fs.existsSync(path.join(A, 'vendor/packages.json'))
+  ? Object.keys(JSON.parse(fs.readFileSync(path.join(A, 'vendor/packages.json'), 'utf8')).packages).filter((k) => !/^(src|utils|services|components|tools|commands|hooks|ink|cli)$/.test(k))
+  : [];
 const namingDir = 'naming';
 if (fs.existsSync(namingDir)) {
   for (const f of fs.readdirSync(namingDir).filter((f) => /^placement.*\.json$/.test(f))) {
@@ -61,8 +65,9 @@ if (fs.existsSync(namingDir)) {
       const d = byId.get(id);
       if (d) {
         const p = typeof target === 'string' ? target : target.path;
-        const kind = p.startsWith('vendor/') ? 'vendor' : p.startsWith('_misplaced/') ? 'unattributed' : 'first-party';
-        label[d.i] = { path: kind === 'vendor' ? p.slice('vendor/'.length) : p, kind, method: 'placement', by: f };
+        const isPkgPath = p.startsWith('@') || vendorPkgNames.some((k) => p.startsWith(k + '/'));
+        const kind = p.startsWith('vendor/') || isPkgPath ? 'vendor' : p.startsWith('_misplaced/') ? 'unattributed' : 'first-party';
+        label[d.i] = { path: p.startsWith('vendor/') ? p.slice('vendor/'.length) : p, kind, method: 'placement', by: f };
       }
     }
   }
@@ -220,6 +225,26 @@ for (const [chunk, list] of byChunk) {
     prevLabeled = false;
     label[d.i] = { path: `_unattributed/${chunk.replace(/\.js$/, '')}/part-${String(run).padStart(3, '0')}.js`, kind: 'unattributed', method: 'leftover' };
   }
+}
+
+// 6. canonical paths: "x.ts" and "x.tsx" (or .js/.jsx) given by different
+// sources are one source file; keep the JSX-capable extension.
+{
+  const byStem = new Map();
+  for (const l of label) {
+    if (l.kind !== 'first-party' && l.kind !== 'unattributed') continue;
+    const stem = l.path.replace(/\.(tsx?|jsx?|mjs)$/, '');
+    let s = byStem.get(stem);
+    if (!s) byStem.set(stem, (s = new Set()));
+    s.add(l.path);
+  }
+  const canon = new Map();
+  for (const s of byStem.values()) {
+    if (s.size < 2) continue;
+    const pick = [...s].find((p) => /\.tsx$/.test(p)) ?? [...s].find((p) => /\.jsx$/.test(p)) ?? [...s].sort()[0];
+    for (const p of s) canon.set(p, pick);
+  }
+  for (const l of label) if (canon.has(l.path)) l.path = canon.get(l.path);
 }
 
 // ---------- output ----------

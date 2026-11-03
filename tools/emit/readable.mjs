@@ -28,7 +28,7 @@ const FORMAT = !argv.includes('--no-format');
 const readJsonl = (p) => fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
 import { renameModule } from '../rename/lib/rename.mjs';
-import { loadNaming } from '../rename/lib/naming.mjs';
+import { loadNaming, emptyModule } from '../rename/lib/naming.mjs';
 import { planFromTree } from '../rename/lib/global.mjs';
 
 const D = readJsonl('analysis/scan/decls.jsonl');
@@ -55,6 +55,12 @@ const docLines = (text) => String(text).split(/\r?\n/).map((l) => ' * ' + l.repl
 const jsdoc = (text) => ['/**', ...docLines(text), ' */'].join('\n');
 const refFileSet = new Set(JSON.parse(fs.readFileSync('analysis/reference/files.json', 'utf8')).map((f) => f.file));
 const vendorPkgs = fs.existsSync('analysis/vendor/packages.json') ? JSON.parse(fs.readFileSync('analysis/vendor/packages.json', 'utf8')).packages : {};
+// resource import kinds as Bun wrote them (text / file)
+const resourceType = new Map();
+for (const f of fs.readdirSync('original').filter((x) => /.js$/.test(x))) {
+  const head = fs.readFileSync(path.join('original', f), 'utf8').slice(0, 4000);
+  for (const m of head.matchAll(/from "\.\/([^"]+)" with \{ type: "(\w+)" \}/g)) resourceType.set(m[1], m[2]);
+}
 const symbols = []; // {name, file, line, id, source, kind, doc?}
 function vendorLine(from) {
   const pk = Object.keys(vendorPkgs).filter((k) => from === k || from.startsWith(k + '/')).sort((a, b) => b.length - a.length)[0];
@@ -63,6 +69,14 @@ function vendorLine(from) {
 }
 const idOf = (d) => `${d.file}#${d.names[0] ?? '@' + d.start}`;
 const byId = new Map(D.map((d) => [idOf(d), d]));
+// `var v; … var v;` re-declarations share an id ("file#v"); a module's decl
+// list then repeats the id, and the n-th occurrence means the n-th declaration.
+const byIdAll = new Map();
+for (const d of D) { const k = idOf(d); if (!byIdAll.has(k)) byIdAll.set(k, []); byIdAll.get(k).push(d); }
+function declsOf(ids) {
+  const seen = new Map();
+  return ids.map((id) => { const n = seen.get(id) ?? 0; seen.set(id, n + 1); const all = byIdAll.get(id); return all[Math.min(n, all.length - 1)]; });
+}
 const declByLocal = new Map();
 const declAt = new Map(D.map((d) => [d.file + ':' + d.start, d]));
 const declsByFile = new Map();
@@ -75,12 +89,18 @@ for (const d of D) {
 
 // binding lookup per chunk: minified name -> {off, rec}
 const topByMin = new Map(); // file -> Map(min -> {off, rec})
-const importByKey = new Map(); // file -> Map("from|imported" -> {off, rec})
+// A chunk can import the same name twice (`import{randomUUID as Ge}from"crypto"`
+// … `import{randomUUID as Pt}from"crypto"`); use edges only say "crypto|randomUUID",
+// so every alias is kept and all of them are imported.
+const importByKey = new Map(); // file -> Map("from|imported" -> [{off, rec}])
 for (const [file, recs] of Object.entries(top)) {
   const a = new Map(), b = new Map();
   for (const [k, r] of Object.entries(recs)) {
-    if (r.kind === 'import') b.set(`${r.from}|${r.imported}`, { off: +k.slice(1), rec: r });
-    else a.set(r.min, { off: +k.slice(1), rec: r });
+    if (r.kind === 'import') {
+      const key = `${r.from}|${r.imported}`;
+      if (!b.has(key)) b.set(key, []);
+      b.get(key).push({ off: +k.slice(1), rec: r });
+    } else a.set(r.min, { off: +k.slice(1), rec: r });
   }
   topByMin.set(file, a);
   importByKey.set(file, b);
@@ -88,97 +108,218 @@ for (const [file, recs] of Object.entries(top)) {
 
 // output path of a reconstructed module
 function outPath(p, kind) {
-  if (kind === 'vendor') return path.posix.join('vendor', p);
+  // vendor files keep their package path; non-JS ones (bundled package.json /
+  // schema .json wrapped in a CommonJS factory) get ".js" appended
+  if (kind === 'vendor') return path.posix.join('vendor', /\.[cm]?js$/.test(p) ? p : p + '.js');
   if (kind === 'runtime') return 'runtime/bun-runtime.js';
   return path.posix.join('src', p.replace(/\.(tsx?|jsx|mjs)$/, '.js'));
 }
 
-// ---------- rename + slice every chunk that contributes ----------
+// ---------- rename every chunk ----------
 const wanted = Object.entries(segMods).filter(([p]) => !ONLY || p.startsWith(ONLY));
-const chunks = new Set();
-for (const [, m] of wanted) for (const c of Object.keys(m.chunks)) chunks.add(c);
-// Imports of contributing chunks name bindings of other chunks: rename those too
-// so every top-level name used below is the engine's final one.
+// Imports of contributing chunks name bindings of other chunks, so every chunk
+// is renamed (the engine's final names are the single source of truth).
 const naming = loadNaming('naming/final');
 console.time('[emit] global plan');
 const { plan } = planFromTree('original', naming.modules);
 console.timeEnd('[emit] global plan');
-const declText = new Map();
-const finalName = new Map(); // file -> Map(original offset -> final name), top-level and imports
+const chunkFiles = fs.readdirSync('original').filter((f) => /\.m?js$/.test(f) && !/\.min\.js$/.test(f));
+const overrides = new Map(); // chunk -> Map(binding offset -> name), module-level dedupe
+const renamed = new Map(); // chunk -> {code, offsetMap, fm}
 let conflicts = 0;
-for (const file of fs.readdirSync('original').filter((f) => f === 'cli.js' || /^chunk-.*.js$/.test(f))) {
+function renameChunk(file) {
   const source = fs.readFileSync(path.join('original', file), 'utf8');
-  const r = renameModule(file, source, naming.modules.get(file), plan);
-  conflicts += r.conflicts.length;
+  let entry = naming.modules.get(file) ?? emptyModule();
+  const ov = overrides.get(file);
+  if (ov) {
+    entry = { top: entry.top, locals: new Map(entry.locals), exports: entry.exports };
+    for (const [off, name] of ov) entry.locals.set(off, { name, source: 'emit', confidence: 9, note: 'module-level dedupe', from: 'emit' });
+  }
+  const r = renameModule(file, source, entry, plan);
   const fm = new Map();
   for (const x of r.renamed) if (x.key?.startsWith('@')) fm.set(+x.key.slice(1), x.to);
-  finalName.set(file, fm);
-  if (!chunks.has(file)) continue;
-  for (const d of declsByFile.get(file) ?? []) declText.set(idOf(d), r.code.slice(r.offsetMap(d.start), r.offsetMap(d.end)));
+  renamed.set(file, { code: r.code, offsetMap: r.offsetMap, fm, conflicts: r.conflicts.length });
 }
-// patch the name records used for import synthesis with the engine's decisions
+for (const f of chunkFiles) renameChunk(f);
+// final top-level / import names, as the engine applied them
+function patchNames() {
+  for (const [file, recs] of Object.entries(top)) {
+    const fm = renamed.get(file)?.fm;
+    if (!fm) continue;
+    for (const [k, r] of Object.entries(recs)) r.name = fm.get(+k.slice(1)) ?? r.min;
+  }
+}
+
+// ---------- output modules (x.ts and x.tsx collapse to x.js) ----------
+const outputs = new Map(); // out file -> {from, kind, decls[], chunks{}, methods{}}
+for (const [p, m] of wanted) {
+  const file = outPath(p, m.kind);
+  const o = outputs.get(file);
+  if (!o) { outputs.set(file, { from: p, kind: m.kind, decls: [...m.decls], chunks: { ...m.chunks }, methods: { ...m.methods } }); continue; }
+  o.decls.push(...m.decls);
+  for (const [c, n] of Object.entries(m.chunks)) o.chunks[c] = (o.chunks[c] ?? 0) + n;
+  for (const [k, n] of Object.entries(m.methods)) o.methods[k] = (o.methods[k] ?? 0) + n;
+}
+const pathOfDecl = (id) => { const x = declPath.get(id); return x ? outPath(x.path, x.kind) : null; };
+
+// Bindings visible at the top of an output module. Each has an identity key
+// (two entries with the same key are the same thing and may share a name) and
+// says where it can be renamed (chunk + binding offset), if anywhere.
+function moduleBindings(file, o) {
+  const out = [];
+  const seen = new Set();
+  const add = (e) => { const k = e.key + '|' + e.name; if (!seen.has(k)) { seen.add(k); out.push(e); } };
+  for (const d of declsOf(o.decls)) {
+    const id = idOf(d);
+    for (const n of d.names) {
+      const t = topByMin.get(d.file)?.get(n);
+      if (t) add({ name: t.rec.name, key: d.file + '@' + t.off, chunk: d.file, off: t.off, prio: 0 });
+    }
+    for (const r of d.refs) {
+      if (r.startsWith('=')) {
+        const t = topByMin.get(d.file)?.get(r.slice(1));
+        const tDecl = declByLocal.get(d.file + '#' + r.slice(1));
+        if (!t || !tDecl || pathOfDecl(idOf(tDecl)) === file) continue;
+        // imported under its own name; renamable only at its definition
+        add({ name: t.rec.name, key: d.file + '@' + t.off, chunk: d.file, off: t.off, prio: 1 });
+        continue;
+      }
+      const bar = r.indexOf('|');
+      const locals = importByKey.get(d.file)?.get(r.slice(0, bar) + '|' + r.slice(bar + 1));
+      if (!locals) continue;
+      const tgt = resolveExport(r.slice(0, bar), r.slice(bar + 1));
+      if (!tgt) continue;
+      for (const local of locals) {
+        let key;
+        if (tgt.ext) key = 'ext:' + tgt.ext + '|' + tgt.imported;
+        else {
+          key = tgt.chunk + '@' + tgt.off;
+          if (pathOfDecl(idOf(tgt.decl)) === file && local.rec.name === tgt.name) continue;
+        }
+        add({ name: local.rec.name, key, chunk: d.file, off: local.off, prio: 2 });
+      }
+    }
+  }
+  return out;
+}
+// Follows chunk re-exports (`import {x as y} from "./chunk-b.js"` / from "crypto",
+// then `export {y}`) to the declaring chunk or the external module.
+const importByMin = new Map(); // chunk -> Map(local min name -> import record)
 for (const [file, recs] of Object.entries(top)) {
-  const fm = finalName.get(file);
-  if (!fm) continue;
-  for (const [k, r] of Object.entries(recs)) r.name = fm.get(+k.slice(1)) ?? r.min;
+  const m = new Map();
+  for (const r of Object.values(recs)) if (r.kind === 'import') m.set(r.min, r);
+  importByMin.set(file, m);
 }
+function resolveExport(from, imported, depth = 0) {
+  if (!/^chunk-|^cli\.js$/.test(from)) return { ext: from, imported };
+  if (depth > 8) return null;
+  const tLocal = exportsOf.get(from)?.[imported];
+  if (!tLocal) return null;
+  const tDecl = declByLocal.get(from + '#' + tLocal);
+  const tt = topByMin.get(from)?.get(tLocal);
+  if (tDecl && tt) return { chunk: from, off: tt.off, decl: tDecl, name: tt.rec.name };
+  const im = importByMin.get(from)?.get(tLocal);
+  return im ? resolveExport(im.from, im.imported, depth + 1) : null;
+}
+const ALLOWED_DUP_KEYS = /^ext:/;
+for (let round = 0; round < 8; round++) {
+  patchNames();
+  const touched = new Set();
+  let clashes = 0;
+  for (const [file, o] of outputs) {
+    const byName = new Map();
+    for (const e of moduleBindings(file, o)) {
+      let a = byName.get(e.name);
+      if (!a) byName.set(e.name, (a = []));
+      a.push(e);
+    }
+    const used = new Set(byName.keys());
+    for (const [name, list] of byName) {
+      const keys = [...new Set(list.map((e) => e.key))];
+      if (keys.length < 2) continue;
+      // keep the first identity (definitions in this module first), rename the rest
+      list.sort((x, y) => x.prio - y.prio || (x.key < y.key ? -1 : 1));
+      const keep = list[0].key;
+      for (const k of keys) {
+        if (k === keep || (ALLOWED_DUP_KEYS.test(k) && ALLOWED_DUP_KEYS.test(keep) && false)) continue;
+        const e = list.find((x) => x.key === k);
+        let n = 2, cand;
+        do cand = name + '_' + n++; while (used.has(cand));
+        used.add(cand);
+        let ov = overrides.get(e.chunk);
+        if (!ov) overrides.set(e.chunk, (ov = new Map()));
+        ov.set(e.off, cand);
+        touched.add(e.chunk);
+        clashes++;
+      }
+    }
+  }
+  console.log('[emit] dedupe round', round, 'clashes', clashes, 'chunks', touched.size);
+  if (!touched.size) break;
+  for (const f of touched) renameChunk(f);
+}
+patchNames();
+const declText = new Map();
+for (const d of D) {
+  const r = renamed.get(d.file);
+  if (r) declText.set(d, r.code.slice(r.offsetMap(d.start), r.offsetMap(d.end)));
+}
+for (const r of renamed.values()) conflicts += r.conflicts;
 
 // ---------- assemble ----------
 const manifest = {};
 const resources = new Set();
-const pathOfDecl = (id) => { const x = declPath.get(id); return x ? outPath(x.path, x.kind) : null; };
-for (const [p, m] of wanted) {
-  const file = outPath(p, m.kind);
-  const imports = new Map(); // module specifier -> Map(importedName -> localName)
+for (const [file, o] of outputs) {
+  const imports = new Map(); // module specifier -> Map("imported\0local" -> [imported, local])
   const externalImports = new Map();
   const body = [];
-  const exportNames = new Set();
-  for (const id of m.decls) {
-    const d = byId.get(id);
-    // use edges -> imports
+  const aliasLines = new Set();
+  for (const d of declsOf(o.decls)) {
+    const id = idOf(d);
     for (const r of d.refs) {
       if (r.startsWith('=')) {
         const t = topByMin.get(d.file)?.get(r.slice(1));
-        const tDecl = declByLocal.get(`${d.file}#${r.slice(1)}`);
+        const tDecl = declByLocal.get(d.file + '#' + r.slice(1));
         if (!t || !tDecl) continue;
         const tp = pathOfDecl(idOf(tDecl));
         if (tp && tp !== file) addImport(imports, rel(file, tp), t.rec.name, t.rec.name);
         continue;
       }
       const bar = r.indexOf('|');
-      const from = r.slice(0, bar), imported = r.slice(bar + 1);
-      const local = importByKey.get(d.file)?.get(`${from}|${imported}`);
-      const alias = local?.rec.name ?? imported;
-      if (!/^chunk-|^cli\.js$/.test(from)) {
-        if (/^__cc_resource_/.test(alias) || /\.(txt|md|json|node|woff2|asset|html|mjs|js)$/.test(from)) { resources.add(from); addImport(externalImports, rel(file, 'assets/' + from), imported, alias); continue; }
-        addImport(externalImports, from, imported, alias);
-        continue;
+      const from0 = r.slice(0, bar), imported0 = r.slice(bar + 1);
+      const tgt = resolveExport(from0, imported0);
+      if (!tgt) continue;
+      for (const local of importByKey.get(d.file)?.get(from0 + '|' + imported0) ?? [{ rec: { name: imported0 } }]) {
+        const alias = local.rec.name;
+        if (tgt.ext) {
+          const from = tgt.ext, imported = tgt.imported;
+          if (/^__cc_resource_/.test(alias) || /\.(txt|md|json|node|woff2|asset|html|mjs|js|zst)$/.test(from)) { resources.add(from); addImport(externalImports, rel(file, 'assets/' + from), imported, alias, true); continue; }
+          addImport(externalImports, from, imported, alias);
+          continue;
+        }
+        const tName = tgt.name;
+        const tp = pathOfDecl(idOf(tgt.decl));
+        if (!tp) continue;
+        if (tp === file) { if (alias !== tName) aliasLines.add('const ' + alias + ' = ' + tName + '; //@ cross-chunk alias'); continue; }
+        addImport(imports, rel(file, tp), tName, alias);
       }
-      const tLocal = exportsOf.get(from)?.[imported];
-      const tDecl = tLocal && declByLocal.get(`${from}#${tLocal}`);
-      if (!tDecl) continue;
-      const tName = topByMin.get(from)?.get(tLocal)?.rec.name ?? tLocal;
-      const tp = pathOfDecl(idOf(tDecl));
-      if (!tp) continue;
-      if (tp === file) { if (alias !== tName) body.push(`const ${alias} = ${tName}; //@ cross-chunk alias`); continue; }
-      addImport(imports, rel(file, tp), tName, alias);
     }
     const dp = declPath.get(id);
     const mm = match.get(id);
     if (declDocs.has(id)) body.push(jsdoc(declDocs.get(id)));
-    body.push(`//@ ${d.file}:${d.start}-${d.end} ${dp?.method ?? ''}${mm ? ' = ' + mm.refName + (mm.score !== undefined ? ` (${mm.score})` : '') : ''}`);
-    body.push(declText.get(id) ?? '/* missing */');
+    body.push('//@ ' + d.file + ':' + d.start + '-' + d.end + ' ' + (dp?.method ?? '') + (mm ? ' = ' + mm.refName + (mm.score !== undefined ? ' (' + mm.score + ')' : '') : ''));
+    body.push(declText.get(d) ?? '/* missing */');
   }
-  // names other modules import from this one
-  manifest[file] = { from: p, kind: m.kind, decls: m.decls, chunks: m.chunks, methods: m.methods, imports: [...imports.keys()] };
-  manifest[file].exportsPending = exportNames;
+  body.push(...aliasLines);
+  manifest[file] = { from: o.from, kind: o.kind, decls: o.decls, chunks: o.chunks, methods: o.methods, imports: [...imports.keys()] };
+  manifest[file].exportsPending = new Set();
   manifest[file].lines = { imports, externalImports, body };
 }
 // exports: every name another module imports
 for (const [file, info] of Object.entries(manifest)) {
   for (const [spec, names] of info.lines.imports) {
     const target = path.posix.normalize(path.posix.join(path.posix.dirname(file), spec));
-    if (manifest[target]) for (const n of names.keys()) manifest[target].exportsPending.add(n);
+    if (manifest[target]) for (const [imported] of names.values()) manifest[target].exportsPending.add(imported);
   }
 }
 let written = 0, formatFailures = 0;
@@ -198,11 +339,16 @@ for (const [file, info] of Object.entries(manifest)) {
   ];
   const imp = [];
   for (const [spec, names] of [...externalImports, ...imports]) {
-    const def = names.get('default');
-    const ns = names.get('*');
-    const named = [...names].filter(([k]) => k !== 'default' && k !== '*').map(([k, v]) => (k === v ? k : `${k} as ${v}`));
-    if (ns) imp.push(`import * as ${ns} from ${JSON.stringify(spec)};`);
-    if (def || named.length) imp.push(`import ${[def, named.length ? `{ ${named.join(', ')} }` : null].filter(Boolean).join(', ')} from ${JSON.stringify(spec)};`);
+    const pairs = [...names.values()];
+    const resource = pairs.some((x) => x[2]);
+    const attr = resource ? ' with { type: "' + (resourceType.get(spec.replace(/^.*assets\//, '')) ?? 'file') + '" }' : '';
+    for (const [, local] of pairs.filter(([k]) => k === '*')) imp.push('import * as ' + local + ' from ' + JSON.stringify(spec) + ';');
+    const defs = pairs.filter(([k]) => k === 'default').map(([, l]) => l);
+    const named = pairs.filter(([k]) => k !== 'default' && k !== '*').map(([k, v]) => (k === v ? k : k + ' as ' + v));
+    // one default per statement; extra default aliases become named "default as x"
+    const extraDefaults = defs.slice(1).map((l) => 'default as ' + l);
+    const all = [...named, ...extraDefaults];
+    if (defs.length || all.length) imp.push('import ' + [defs[0], all.length ? '{ ' + all.join(', ') + ' }' : null].filter(Boolean).join(', ') + ' from ' + JSON.stringify(spec) + attr + ';');
   }
   const ex = [...info.exportsPending];
   let text = [...head, ...imp, '', ...body, '', ex.length ? `export { ${ex.join(', ')} };` : ''].join('\n') + '\n';
@@ -238,10 +384,10 @@ fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null,
 fs.writeFileSync(path.join(OUT, 'symbols.jsonl'), symbols.map((x) => JSON.stringify(x)).join('\n') + '\n');
 console.log({ written, formatFailures, resources: resources.size, renameConflicts: conflicts });
 
-function addImport(map, spec, imported, local) {
+function addImport(map, spec, imported, local, resource = false) {
   let m = map.get(spec);
   if (!m) map.set(spec, (m = new Map()));
-  m.set(imported, local);
+  m.set(imported + '\0' + local, [imported, local, resource]);
 }
 function rel(from, to) {
   let r = path.posix.relative(path.posix.dirname(from), to);
