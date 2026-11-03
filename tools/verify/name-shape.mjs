@@ -114,6 +114,14 @@ for (const file of files) {
 }
 fs.writeFileSync(path.join(OUT, 'flags.jsonl'), flags.map((x) => JSON.stringify(x)).join('\n') + '\n');
 fs.writeFileSync(path.join(OUT, 'statements.jsonl'), stmts.map((x) => JSON.stringify(x)).join('\n') + '\n');
-const summary = { flagged: flags.length, statements: stmts.length, multiDeclaratorStatements: stmts.filter((s) => s.declarators.length > 1).length, perRule, perOrigin: Object.fromEntries(Object.entries(perOrigin).sort((a, b) => b[1] - a[1])) };
+// Human verdicts per flagged statement (naming/_name-shape-verdicts.jsonl, not a
+// naming table: the leading underscore keeps the rename engine from loading it):
+// {file, stmt, verdict: 误报|错位重排|改名, why, by}. A statement is adjudicated
+// when a verdict exists for it; fixes themselves live in naming/semantic-*.
+const verdicts = new Map();
+if (fs.existsSync('naming/_name-shape-verdicts.jsonl')) for (const v of readJsonl('naming/_name-shape-verdicts.jsonl')) verdicts.set(`${v.file}:${v.stmt}`, v);
+const unadjudicated = stmts.filter((s) => !verdicts.has(`${s.file}:${s.start}`));
+fs.writeFileSync(path.join(OUT, 'unadjudicated.jsonl'), unadjudicated.map((x) => JSON.stringify(x)).join('\n') + (unadjudicated.length ? '\n' : ''));
+const summary = { flagged: flags.length, statements: stmts.length, adjudicated: stmts.length - unadjudicated.length, unadjudicated: unadjudicated.length, multiDeclaratorStatements: stmts.filter((s) => s.declarators.length > 1).length, perRule, perOrigin: Object.fromEntries(Object.entries(perOrigin).sort((a, b) => b[1] - a[1])) };
 fs.writeFileSync(path.join(OUT, 'summary.json'), JSON.stringify(summary, null, 1));
 console.log(JSON.stringify(summary, null, 1));
