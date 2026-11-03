@@ -1,0 +1,188 @@
+{"id":"chunk-ndmse9kj.js#mco","doc":"校验压缩边界：边界 uuid、被覆盖消息、保留消息是否仍一致，不一致时拒绝"}
+{"id":"chunk-ndmse9kj.js#ze","doc":"以 withProject 方式派生会话，处理 fork/parentId 并拒绝无法重新标识的会话"}
+{"id":"chunk-ndmse9kj.js#QDi","doc":"判定配置目录是否管理员所有、是否组/他人可写或为符号链接"}
+{"id":"chunk-7rha57gt.js#S6n","doc":"应用远程控制下发的 apply_flag_settings（effort 等），对远程控制禁止的项给出说明"}
+{"id":"chunk-7rha57gt.js#bKs","doc":"解析并种下远程控制会话的 effort 等级（含 ultracode/auto），未知值报错"}
+{"id":"chunk-s61vbvea.js#Yvt","doc":"等待会话附件文件到达，返回 cleared/aborted/expired/files_arriving 等结果"}
+{"id":"chunk-bbtre4r8.js#Jdo","doc":"识别因 DISABLE_TELEMETRY / DO_NOT_TRACK / 非必要流量开关而关闭远程控制的原因"}
+{"id":"chunk-s61vbvea.js#bw","doc":"设备绑定被拒原因文案表（--project 会话、home 目录、自托管池等）"}
+{"id":"chunk-s61vbvea.js#Ati","doc":"判断工作目录是否根目录、home 目录或配置目录，这些目录不能绑定设备"}
+{"id":"chunk-fszf8f4f.js#DNo","doc":"从环境变量或已存储记录解析当前设备绑定，返回 resolved/stored/missing 来源"}
+{"id":"chunk-zethn0a3.js#B","doc":"设备 MCP 服务器的工具调用分发；未知工具报错"}
+{"id":"chunk-zethn0a3.js#v","doc":"拒绝声明的会话与本设备所服务会话不一致的调用并上报 tengu_device_tool_refused"}
+{"id":"chunk-zethn0a3.js#J","doc":"返回本设备运行环境信息（平台、架构）的 identify 工具定义"}
+{"id":"chunk-8rjc1mgh.js#H","doc":"下载会话附件：校验文件名、只在第一方 API 提供方下可用"}
+{"id":"chunk-ebk61d3a.js#sBn","doc":"解析 bridge meta MCP 的 tools[] 列表，非数组时告警"}
+{"id":"chunk-cshk0jw3.js#g","doc":"Projects 回复门：对 SDK 轮次错误写记录（bridge_projects_reply_gate）"}
+{"id":"chunk-cg2r2hy6.js#mn","doc":"远程工作密钥被拒时尝试刷新；宿主无刷新途径时报告"}
+{"id":"chunk-z7wtv7tg.js#FHt","doc":"读写 cloud-plugins 同意状态文件"}
+{"id":"chunk-z7wtv7tg.js#Otn","doc":"从设置目录读取云端插件声明，处理超读上限与 schema 拒绝"}
+{"id":"chunk-z7wtv7tg.js#Xe","doc":"判断插件市场来源：非法、本地市场、需要凭据等"}
+{"id":"chunk-z7wtv7tg.js#Qe","doc":"云端插件转发的主状态机：空闲/跳过/读取失败/内部错误"}
+{"id":"chunk-z7wtv7tg.js#cFn","doc":"把本机插件选择转发到云会话：检查同意、超时、上报 tengu_cloud_plugins_admission"}
+{"id":"chunk-z7wtv7tg.js#Dt","doc":"云会话没有采用本机插件时的提示文本"}
+{"id":"chunk-mx88mbsd.js#dFs","doc":"结构化输出多次失败（含被模型回退撤回）时的错误文本"}
+{"id":"chunk-bdmhadbm.js#lLs","doc":"轮询读取 session ingress 令牌文件，未就绪时间隔重试"}
+{"id":"chunk-he8wyk3b.js#v","doc":"/import 命令主流程：汇总找到的条目并按项目导入"}
+{"id":"chunk-0pmcg6nh.js#b","doc":"非交互 /model：确认模型可用，检查超时时提示重试"}
+{"id":"chunk-ndsajhew.js#he","doc":"查询促销状态，无登录或 teleport 组织时跳过"}
+{"id":"chunk-ndsajhew.js#D","doc":"打开优惠领取页，组织策略禁止时不打开"}
+{"id":"chunk-03rvwpge.js#r","doc":"/radio：在浏览器打开 Claude FM（https://clau.de/radio）"}
+{"id":"chunk-jh6bkx5v.js#SDe","doc":"重置用量限额的界面：调用重置接口并显示进度"}
+{"id":"chunk-0eepcc6r.js#re","doc":"ultrareview 启动确认对话框（含费用估算、可选把结果发到 PR）"}
+{"id":"chunk-s61vbvea.js#Zei","doc":"判断 ultrareview 不可用原因：配置不可用、熔断、第三方提供方"}
+{"id":"chunk-s61vbvea.js#qer","doc":"ultrareview 需要 claude.ai 账号登录；API key 登录时报错"}
+{"id":"chunk-p5jda2d9.js#re","doc":"询问是否自动启用 Chrome 集成的对话框"}
+{"id":"chunk-s5p7fp0c.js#dt","doc":"网关登录界面：显示网关 URL 来源（设置文件或托管设置）并完成登录"}
+{"id":"chunk-6bvzpeaf.js#ne","doc":"组织配置门拦截时显示的屏幕，支持重试"}
+{"id":"chunk-sycr1qkz.js#eo","doc":"工作流脚本权限对话框：展示脚本、允许/本地规则记住"}
+{"id":"chunk-p2qwpk2k.js#hl","doc":"通过 get_settings 读取云会话权限规则，版本不兼容时标记不可读"}
+{"id":"chunk-p2qwpk2k.js#zo","doc":"把自动模式规则修改写入用户设置文件"}
+{"id":"chunk-p2qwpk2k.js#Go","doc":"把规则写到文件并用 $VISUAL/$EDITOR 打开"}
+{"id":"chunk-bbtre4r8.js#aft","doc":"根据 Artifact 来源（组织外、他人撰写）生成提示文本"}
+{"id":"chunk-3nztfxrw.js#Pn","doc":"以 Prometheus 文本格式输出自托管 runner 指标（runner_id、version、client_label）"}
+{"id":"chunk-s61vbvea.js#Pm","doc":"history.jsonl 的读写与解析：加载、校验形状、记录粘贴内容"}
+{"id":"chunk-s61vbvea.js#ZL","doc":"通过存储接口列出记忆目录"}
+{"id":"chunk-s61vbvea.js#t0","doc":"读取记忆文件头（frontmatter），处理文件在列出与读取间消失"}
+{"id":"chunk-82kqcve8.js#Ha","doc":"生成\"共享记忆库\"提示段：只读/可写库、是否镜像到本地"}
+{"id":"chunk-82kqcve8.js#nl","doc":"生成团队记忆目录提示段（team/ 只读或可写）"}
+{"id":"chunk-4121qate.js#FH","doc":"$.tool.register 实现：校验 name/description/inputSchema"}
+{"id":"chunk-4121qate.js#Z_","doc":"校验 engine.create 返回的 $ 是否保留了上游的名词"}
+{"id":"chunk-4121qate.js#_C","doc":"$.clock.now/sleep/after/every 实现"}
+{"id":"chunk-4121qate.js#FUi","doc":"$.model.classify：让模型从给定标签里选一个"}
+{"id":"chunk-s61vbvea.js#Bqr","doc":"校验 $.state.set 参数（plugin/key/id/value/ifVersion）"}
+{"id":"chunk-4121qate.js#Gn","doc":"解析 next.to() 指向的层（user/append…），只允许托管插件使用"}
+{"id":"chunk-4121qate.js#sh","doc":"按层运行函数钩子链：next() 传递、拒绝向上传递、超时告警"}
+{"id":"chunk-4121qate.js#SP","doc":"流式钩子链：拉取 next() 流、处理下层拒绝与提前关闭"}
+{"id":"chunk-4121qate.js#Br","doc":"校验插件钩子传回的值是纯 JSON 数据（深度、类型、原型键）"}
+{"id":"chunk-4121qate.js#gf","doc":"校验提示词装饰段 { start, end }（UTF-16 偏移）"}
+{"id":"chunk-s61vbvea.js#Hei","doc":"上报 plugin_function_hooks_run（含 engine.create 捕获的错误）"}
+{"id":"chunk-s61vbvea.js#nr","doc":"把 JSON Schema 转成 TypeScript 类型文本（用于生成工具输入 d.ts）"}
+{"id":"chunk-s61vbvea.js#x4r","doc":"桌面 Client 表面的运行时源码（claude:surface-runtime），注入到 VM"}
+{"id":"chunk-4121qate.js#Tm","doc":"校验图片 source.file：绝对路径、无控制字符、非网络/设备路径"}
+{"id":"chunk-4121qate.js#Ui","doc":"校验 ui.render 钩子返回的树，失败时报出具体原因"}
+{"id":"chunk-4121qate.js#Dn","doc":"在工作流 VM 边界两侧复制值（数组长度、循环引用、深度上限）"}
+{"id":"chunk-4121qate.js#Jrs","doc":"加载钩子模块并调用 engine.create，装配 $ 与计时器"}
+{"id":"chunk-08945j39.js#gXe","doc":"远程会话管理：连接云会话、转发权限请求与对话框回答、处理未送达"}
+{"id":"chunk-08945j39.js#ye","doc":"Sessions v2 客户端：连接状态机、事件流读写"}
+{"id":"chunk-s61vbvea.js#Ui","doc":"让云会话在本机运行命令的同意文案表（无人值守、自动模式等）"}
+{"id":"chunk-g4k0hvs5.js#CBn","doc":"远程提供工具期间冻结项目/本地设置，自己的写入除外"}
+{"id":"chunk-012rhzq5.js#xe","doc":"会话工具服务：在 tengu_remote_tool_serving 开启时为云会话提供本机工具"}
+{"id":"chunk-3zy56vtn.js#De","doc":"启动工具宿主助手进程（--attach-serve、stream-json）"}
+{"id":"chunk-s61vbvea.js#QB","doc":"工具宿主登记：local/host/remote 等来源"}
+{"id":"chunk-xwsbadxw.js#m","doc":"decode-token：解析 JWT 头（只支持 ES256/RS256）并可校验签名"}
+{"id":"chunk-t3sg9e26.js#p","doc":"运行 git 子进程（代理、进度超时、无数据检测）"}
+{"id":"chunk-t3sg9e26.js#Xt","doc":"BYOC 准备仓库：解析目录/引用/目标分支，读取进度上限配置"}
+{"id":"chunk-3nztfxrw.js#j","doc":"自托管 runner API 错误文本（401、组织未开通等）"}
+{"id":"chunk-s61vbvea.js#pZs","doc":"按 laptop/ccr 两种场景收集协作记忆上下文并生成附件"}
+{"id":"chunk-wd9kxbpn.js#dt","doc":"让模型给后台作业起名（避开已用名字）"}
+{"id":"chunk-wd9kxbpn.js#mt","doc":"由转录推导后台作业状态：active/blocked/working/midturn"}
+{"id":"chunk-wd9kxbpn.js#Le","doc":"预分类失败时用模型判断作业是否阻塞/失败"}
+{"id":"chunk-s61vbvea.js#hqr","doc":"把 400 错误分类为 prompt_too_long、thinking_signature、cache_control 等"}
+{"id":"chunk-rbe666af.js#ies","doc":"压缩请求体并校验每个压缩块"}
+{"id":"chunk-s61vbvea.js#Q2t","doc":"Bedrock/Mantle 凭据、令牌过期、时钟偏差等错误的分类与提示"}
+{"id":"chunk-aqdf5t3e.js#pe","doc":"管理 Artifact 实时订阅：恢复、监听、mcp_write、自动回复"}
+{"id":"chunk-6ht21p2a.js#zzn","doc":"发布冲突时自动读回 Artifact 最新版本交给模型（artifact_guard_autoread）"}
+{"id":"chunk-2a8yx6fc.js#WWs","doc":"自动模式设置前的预收集报告（仓库、CLAUDE.md、已有设置、历史用法）"}
+{"id":"chunk-ksvdmrg0.js#Ln","doc":"后台守护进程控制服务：解析 JSON 请求、ping、会话租约"}
+{"id":"chunk-ksvdmrg0.js#ar","doc":"确保后台守护进程在运行（必要时经 agent_launcher 拉起）"}
+{"id":"chunk-ksvdmrg0.js#Etn","doc":"安装 systemd 用户服务（拒绝安装未包装运行的服务）"}
+{"id":"chunk-08945j39.js#Te","doc":"首条消息发送前等待本机设置上传完成，超时/失败后放行"}
+{"id":"chunk-zdgk9dc6.js#H","doc":"把 MCP 工具调用与交给模型的工具列表比对，不一致时拒绝"}
+{"id":"chunk-s61vbvea.js#Pvt","doc":"MCP 工具名超过 API 长度上限时不发给模型并告警（tengu_mcp_degraded）"}
+{"id":"chunk-s61vbvea.js#Ng","doc":"逐行读取记忆导出 NDJSON 流，带总时限与停滞检测"}
+{"id":"chunk-s61vbvea.js#Uh","doc":"从记忆库加载技能（Windows 不支持 O_NOFOLLOW 时跳过）"}
+{"id":"chunk-s61vbvea.js#Kh","doc":"记忆目录监听器：触发团队/多库同步、推送抑制、失败后暂停"}
+{"id":"chunk-s61vbvea.js#IC","doc":"多记忆库同步一轮：只读库未保存写入、冲突、批量删除保护"}
+{"id":"chunk-s61vbvea.js#mC","doc":"拉取一个记忆库：检查挂载目录、处理 404、按基线合并本地文件"}
+{"id":"chunk-3wydcdvj.js#F","doc":"解析 WIF（工作负载身份联合）凭据，env 四元组或缓存"}
+{"id":"chunk-82kqcve8.js#fa","doc":"组织记忆库发现：读写缓存、选择器、授权缺失处理"}
+{"id":"chunk-82kqcve8.js#ln","doc":"记忆库 HTTP 客户端（/memories、/memories/export，session-jwt 认证）"}
+{"id":"chunk-s1zey0a9.js#XQs","doc":"生成 Projects 线程会话的说明：谁在说话、协调者消息的地位"}
+{"id":"chunk-0wdgqhcf.js#QHs","doc":"Artifact 数据库动作 read_db/write_db 的实现（校验、权限、批量写）"}
+{"id":"chunk-b91jfdd4.js#Cin","doc":"用 WebSocket 订阅事件流作为 Monitor 事件源"}
+{"id":"chunk-22r83hv0.js#aCt","doc":"检查 JSON Schema 是否对象根且可满足，否则结构化输出无法通过"}
+{"id":"chunk-xkyzvvf1.js#s","doc":"深度冻结纯数据（拒绝函数、非纯原型、稀疏数组）"}
+{"id":"chunk-s61vbvea.js#bk","doc":"用 gh/glab 查询当前分支 PR 状态"}
+{"id":"chunk-s61vbvea.js#JZn","doc":"检查仓库 git 布局（common dir、worktree、admin dir）是否可信"}
+{"id":"chunk-s61vbvea.js#MW","doc":"为隔离 git 子进程构造环境（清 GIT_CONFIG*、OPENSSL_CONF、PATH 等）"}
+{"id":"chunk-s61vbvea.js#IZs","doc":"读取检出内的 git 配置与 config.worktree，判断能否安全使用"}
+{"id":"chunk-s61vbvea.js#CZs","doc":"为构建复制仓库（索引、属性、per-worktree 配置），供隔离 git 使用"}
+{"id":"chunk-s61vbvea.js#EVo","doc":"安全打开 history.jsonl（拒绝符号链接、特殊文件，校验哈希）"}
+{"id":"chunk-s61vbvea.js#YZs","doc":"把本机钩子注册到云会话并接收回调（静默、停止、捕获状态）"}
+{"id":"chunk-8p2yt59w.js#C","doc":"读取 CLAUDE_CODE_HOST_CREDS_FILE（拒绝组/他人可读）"}
+{"id":"chunk-21ppfwx8.js#je","doc":"运行插件的命令源（command source）生成插件目录，带超时"}
+{"id":"chunk-21ppfwx8.js#wt","doc":"运行插件市场声明的 headersHelper 取得下载请求头"}
+{"id":"chunk-22r83hv0.js#Kar","doc":"解析 <event> 轮询事件 XML 信封（单元素、标签与属性校验）"}
+{"id":"chunk-q8cqcff6.js#FRi","doc":"生成 shell 脚本：在 policyHelper 子进程环境中逐一 unset 敏感变量"}
+{"id":"chunk-q8cqcff6.js#ws","doc":"执行一次 policyHelper（校验路径、取输出、解析信封）"}
+{"id":"chunk-q8cqcff6.js#cr","doc":"policyHelper 运行器：按 OS 选择助手、刷新、失败时由静态设置载荷兜底"}
+{"id":"chunk-n37wdxq8.js#h","doc":"生成\"帮我修复这些设置问题\"的提示词"}
+{"id":"chunk-s61vbvea.js#Ol","doc":"检查工作树隔离是否可靠（符号链接、.git 条目、仓库内外位置）"}
+{"id":"chunk-rbe666af.js#rw","doc":"p-map 默认导出（第三方）：限制并发的异步 map"}
+{"id":"chunk-207srz4f.js#A2t","doc":"print 模式等待后台任务的默认上限（600000 ms），可被 CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS 覆盖"}
+{"id":"chunk-6ht21p2a.js#qRo","doc":"把 Artifact 内容读给模型：处理权限询问、他人撰写内容提示、页面与文件选择"}
+{"id":"chunk-1h8hk15j.js#aDr","doc":"本地工作流任务的执行与状态更新（Dynamic workflow 完成/失败）"}
+{"id":"chunk-3nztfxrw.js#Guo","doc":"自托管 runner 的 checkout 生命周期钩子：带预算运行并记录日志"}
+{"id":"chunk-3nztfxrw.js#zuo","doc":"会话结束后的 post-session 钩子，带时间预算"}
+{"id":"chunk-4121qate.js#txt","doc":"校验 ui.render 树的节点数与深度上限"}
+{"id":"chunk-aqdf5t3e.js#LGe","doc":"实时订阅不可用的原因文本（特性开关关闭、非主循环会话等）"}
+{"id":"chunk-s61vbvea.js#p_n","doc":"跟踪重复执行的只读 Bash 命令（tail/grep 等），用于提示改用后台或 Monitor"}
+{"id":"chunk-0eepcc6r.js#ie","doc":"ultrareview 启动对话框正文：说明审查流程、是否把结果作为普通评论发到 PR"}
+{"id":"chunk-0eepcc6r.js#Mo","doc":"/ultrareview 命令定义：需要 allow_remote_sessions，在云会话中运行"}
+{"id":"chunk-0wdgqhcf.js#Ao","doc":"Artifact 发布来源相关的提示文本表（共享范围、持久唤醒、实时订阅停止等）"}
+{"id":"chunk-0wdgqhcf.js#$r","doc":"校验 write_db 的 writes 批量参数（1-N 条 {op, collection, doc_id, data|file_path}）"}
+{"id":"chunk-0wdgqhcf.js#Fr","doc":"read_db 结果附带的读取范围说明（谁能读 data/users 子树等）"}
+{"id":"chunk-1bmxdqa0.js#z","doc":"把上一轮未完成的写入带到新一轮执行，处理路径移动、home 外、无写工具等情况"}
+{"id":"chunk-22r83hv0.js#L","doc":"遍历输出 JSON Schema，检查深度/节点数上限与不支持的关键字"}
+{"id":"chunk-2a8yx6fc.js#un","doc":"预收集 home 目录下其他 git 仓库（遵守权限、时间预算，网络 home 不遍历）"}
+{"id":"chunk-2a8yx6fc.js#ao","doc":"扫描仓库中的包管理/容器配置文件（.npmrc、pip.conf、pyproject.toml、Dockerfile）"}
+{"id":"chunk-2a8yx6fc.js#po","doc":"把自动模式设置写入用户设置文件（校验、解析失败时报错）"}
+{"id":"chunk-3g8vhh6f.js#je","doc":"存储空间表：transcript/history/globalConfig/settings 等各自的存储后端描述"}
+{"id":"chunk-3jhw7vrg.js#B","doc":"为自动模式分类器构造 Artifact 相关上下文（路径、房间）"}
+{"id":"chunk-3nztfxrw.js#FHn","doc":"打开 runner 的标准输出写入器（非阻塞描述符、独立线程、EPIPE 处理）"}
+{"id":"chunk-3zy56vtn.js#Be","doc":"工具宿主助手主循环：处理队列条目、环境 id 校验、结果回传"}
+{"id":"chunk-4121qate.js#OZr","doc":"工作流/钩子 VM 的启动源码字符串（在隔离 realm 中求值）"}
+{"id":"chunk-4121qate.js#i_","doc":"VM 边界复制出值的源码字符串（深度上限、错误包装）"}
+{"id":"chunk-4121qate.js#kat","doc":"创建钩子运行用的隔离 VM realm，装入全局与宿主函数包装"}
+{"id":"chunk-4121qate.js#Qrs","doc":"链接钩子模块及其导入（处理栈溢出、错误状态）"}
+{"id":"chunk-4nwcj4sh.js#Y","doc":"解析钩子 matcher 语法中的序列/二选一结构"}
+{"id":"chunk-5ac1fnqf.js#he","doc":"设备钩子 worker 主体：策略禁用、等待、转发钩子到云会话"}
+{"id":"chunk-6ht21p2a.js#Qt","doc":"比较待发布内容与线上版本（相同、控制字符、不可显示等）"}
+{"id":"chunk-6ht21p2a.js#XUs","doc":"发布冲突后恢复 Artifact 源文件（artifact_source_restore）"}
+{"id":"chunk-82kqcve8.js#Qs","doc":"组织记忆凭据：向凭据存储与存储后端交付 org memory 令牌"}
+{"id":"chunk-82kqcve8.js#ec","doc":"计划文件（plans/*.md）的存储与监听"}
+{"id":"chunk-aqdf5t3e.js#si","doc":"持久唤醒订阅失败的提示文本表"}
+{"id":"chunk-c0w5a81j.js#be","doc":"选择主模型目录来源：已发布目录或编译内置行为（非必要流量关闭时跳过）"}
+{"id":"chunk-e7z1g8a9.js#c8","doc":"生成代理/会话地址的显示描述（main、in-process、teammate、local_agent）"}
+{"id":"chunk-f9mnszgj.js#zTo","doc":"Workflow 工具的脚本 API 文档（阶段、模型、effort、agent 调用参数）"}
+{"id":"chunk-fd653dqq.js#b","doc":"后台会话会合点客户端：心跳、服务端错误、下一轮提示排队"}
+{"id":"chunk-ksvdmrg0.js#CAr","doc":"解析 CLAUDE_CODE_PROCESS_WRAPPER 等后台启动器配置"}
+{"id":"chunk-ksvdmrg0.js#Vn","doc":"后台二进制接管：新版本替换正在运行的后台守护进程"}
+{"id":"chunk-n5fvvrgq.js#xr","doc":"插件提供的 highlight.js 语言注册与解析"}
+{"id":"chunk-ndmse9kj.js#UMe","doc":"设置保留/安装状态切片（policySettings、userSettings）"}
+{"id":"chunk-ndmse9kj.js#j","doc":"会话用量计数切片（输入/输出/缓存 token）"}
+{"id":"chunk-ndmse9kj.js#Se","doc":"会话启动来源切片（cli、fresh 等）"}
+{"id":"chunk-nz9pbsr3.js#G","doc":"可编辑选择框的无障碍输入行为（编辑文本、取消）"}
+{"id":"chunk-q46gm202.js#Dbo","doc":"Claude Code 已知环境变量清单（CLAUDECODE、CLAUDE_CODE_CHILD_SESSION 等）"}
+{"id":"chunk-q8cqcff6.js#ro","doc":"policyHelper 子进程需清除的凭据类环境变量表"}
+{"id":"chunk-q8cqcff6.js#tr","doc":"解析 policyHelpers 设置项（按 OS、结构校验、审批状态）"}
+{"id":"chunk-qbkav8vn.js#c","doc":"访客 vitals 上报子进程管理（退出、SIGTERM/SIGKILL）"}
+{"id":"chunk-qh5wq2v1.js#te","doc":"前台工具宿主的状态行文本（云会话连接、断开、重连）"}
+{"id":"chunk-qh5wq2v1.js#Ke","doc":"前台工具宿主控制：特性开关、广告、门控状态"}
+{"id":"chunk-r1wk8q25.js#me","doc":"teleport 中继：转发派生会话请求，处理账号记忆撤回"}
+{"id":"chunk-s1zey0a9.js#YQs","doc":"Projects 线程成员说明：消息到达代理的三种方式"}
+{"id":"chunk-s61vbvea.js#Wm","doc":"advisor 工具的状态与提示文本"}
+{"id":"chunk-s61vbvea.js#gC","doc":"推送本地记忆变更到记忆库（并发写保留、批量膨胀保护）"}
+{"id":"chunk-s61vbvea.js#FC","doc":"团队记忆根目录同步与 manifest 校正"}
+{"id":"chunk-s61vbvea.js#zZs","doc":"远程提供工具调用日志的内存模型（received/running/completed/failed）"}
+{"id":"chunk-s61vbvea.js#Mw","doc":"远程后台命令跟踪：上线、宣告、撤回"}
+{"id":"chunk-s61vbvea.js#OG","doc":"从 Bash AST 计算命令形状键，用于重复命令计数"}
+{"id":"chunk-t3sg9e26.js#sn","doc":"配置远程凭据助手，删除过期的 git-mount 凭据助手"}
+{"id":"chunk-t3sg9e26.js#st","doc":"带重试与总时长上限的 git fetch"}
+{"id":"chunk-vn5yv2ce.js#V","doc":"Artifact 资源上传/复制/列表/删除只能在中继可用时运行，否则给出原因"}
+{"id":"chunk-vn5yv2ce.js#BGs","doc":"读取 Artifact 资源（artifact_asset_read）"}
+{"id":"chunk-w4p2kd11.js#v","doc":"Artifact 评论监视器主循环（armed/stopped/clear 状态）"}
+{"id":"chunk-yf82ynbr.js#ne","doc":"敏感目录/文件名表（.ssh、.aws、.azure、.gnupg 等），用于读写权限判断"}
+{"id":"chunk-z7wtv7tg.js#xt","doc":"插件被云会话拒绝的原因文本表"}
+{"id":"runner-scaffold-q2rf9gg9.mjs#main","doc":"hillclimb 技能的 runner 脚手架主程序：解析参数、跑基线与用例、写 results.jsonl"}
