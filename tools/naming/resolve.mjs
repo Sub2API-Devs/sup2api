@@ -45,7 +45,10 @@ for (const src of sources) {
     if (!m) cands.set(c.file, (m = new Map()));
     const off = +c.key.slice(1);
     const cur = m.get(off);
-    const rank = (x) => (PRIORITY[x.source] ?? 0) * 10 + (x.confidence ?? 0.5);
+    // React Compiler temporaries (t0, _temp3) carry no meaning: any other name wins.
+    // Within the reference source, token alignment (via align-*) beats the
+    // older shape-signature names (spot check 24:1, docs/process/ref-align.md).
+    const rank = (x) => (/^(t\d+|_temp\d*)$/.test(x.name) ? 0 : (PRIORITY[x.source] ?? 0) * 10 + (x.confidence ?? 0.5) + (/^align-/.test(x.via ?? '') ? 1 : 0));
     if (!cur || rank(c) > rank(cur)) m.set(off, c);
   }
 }
