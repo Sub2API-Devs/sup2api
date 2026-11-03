@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SButton, SCheckbox, SDisclosure, SField, SHint, SInput, SSelect, STable, STextarea, createItemId, type SelectOption, type TableColumn } from '@sub2api/ui'
+import { SButton, SDisclosure, SField, SHint, SInput, SSelect, SSwitch, STable, STextarea, createItemId, type SelectOption, type TableColumn } from '@sub2api/ui'
 import FailureRuleDetails from './FailureRuleDetails.vue'
 import { newFailureRule, readableStatusCodes, ruleFormErrors, ruleSummaryKey, type FailureMatch, type FailureRule } from './failurePolicy'
 
@@ -12,6 +12,7 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'name', label: t('failurePolicy.nameAndSource'), width: '200px' },
   { key: 'codes', label: t('failurePolicy.codesShort'), width: '180px' },
   { key: 'keywords', label: t('failurePolicy.keywordsShort'), class: 'min-w-64' },
+  { key: 'regex', label: t('failurePolicy.regexLabel'), width: '96px' },
   ...(props.disabled ? [] : [{ key: 'actions', label: t('common.actions'), width: '130px' }])
 ])
 const errors = computed(() => new Map(rules.value.map(rule => [rule.id, props.showErrors ? ruleFormErrors(rule, t('failurePolicy.invalidRule')) : {}])))
@@ -128,14 +129,6 @@ function summary(rule: FailureRule) {
             @update:model-value="setKeywords(row, $event)"
           />
         </SField>
-        <SCheckbox
-          :model-value="!!row.match.keyword_regex"
-          :label="t('failurePolicy.regexLabel')"
-          :disabled="disabled"
-          class="mt-2"
-          data-testid="rule-regex"
-          @update:model-value="row.match.keyword_regex = $event"
-        />
         <SHint
           size="xs"
           class="mt-2"
@@ -143,6 +136,15 @@ function summary(rule: FailureRule) {
         >
           {{ summary(row) }}
         </SHint>
+      </template>
+      <template #cell-regex="{ row }">
+        <SSwitch
+          :model-value="!!row.match.keyword_regex"
+          :disabled="disabled"
+          :aria-label="t('failurePolicy.regexLabel')"
+          data-testid="rule-regex"
+          @update:model-value="row.match.keyword_regex = $event"
+        />
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center gap-1">

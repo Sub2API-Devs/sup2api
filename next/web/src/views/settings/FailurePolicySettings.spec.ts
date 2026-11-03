@@ -78,7 +78,9 @@ describe('simplified failure settings', () => {
     expect(i18n.global.t('failurePolicy.title')).toBe('调度策略')
     expect(wrapper.find('[data-testid="settings-reset"]').exists()).toBe(false)
     for (const label of ['历史版本', '累计等待上限', 'Retry-After', '换号出口限制']) expect(wrapper.text()).not.toContain(label)
-    expect(wrapper.get('[data-testid="retry-rules"]').findAllComponents(SSwitch)).toHaveLength(0)
+    // The only per-rule switch is Go regex; rules have no enable switch.
+    expect(wrapper.get('[data-testid="retry-rules"]').findAll('[data-testid="rule-regex"]').map(s => s.attributes('aria-label'))).toEqual(['Go 正则'])
+    expect(wrapper.get('[data-testid="retry-rules"]').findAllComponents(SSwitch)).toHaveLength(1)
   })
   it('saves a fixed v4 plan and ignores inactive empty retry counts', async () => {
     const wrapper = mount(FailurePolicySettings, { global })
@@ -221,7 +223,7 @@ describe('rule interaction', () => {
     await wrapper.get('[data-reorder-handle="0"]').trigger('keydown', { key: 'ArrowDown' })
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([[rules[1], rules[0]]])
     expect(wrapper.find('[aria-haspopup="menu"]').exists()).toBe(false)
-    expect(wrapper.findAll('thead th').map(cell => cell.text())).toEqual(['', '规则名称 / 错误来源', '错误码', '关键词', '操作'])
+    expect(wrapper.findAll('thead th').map(cell => cell.text())).toEqual(['', '规则名称 / 错误来源', '错误码', '关键词', 'Go 正则', '操作'])
   })
   it('validates inline conditions before Save and keeps errors attached after reorder', async () => {
     const wrapper = mount(FailurePolicySettings, { global })
@@ -252,7 +254,8 @@ describe('rule interaction', () => {
       enabled: true, action: 'disable', match: { status_codes: '', keywords: ['quota', 'permission denied'] }
     })
     expect(table.find('[data-testid="rule-action"]').exists()).toBe(false)
-    expect(table.findAllComponents(SSwitch)).toHaveLength(0)
+    expect(table.findAll('[data-testid="rule-regex"]').map(s => s.attributes('aria-label'))).toEqual(['Go 正则'])
+    expect(table.findAllComponents(SSwitch)).toHaveLength(1)
     expect(wrapper.text()).not.toContain('高级匹配范围')
   })
   it('preserves scope and fixes condition matching to AND when editing inline', async () => {
@@ -298,9 +301,9 @@ describe('explanations', () => {
   it('explains when retries happen and shows the attempt order step by step', async () => {
     const wrapper = mount(FailurePolicySettings, { global })
     await flushPromises()
-    expect(wrapper.get('[data-testid="retry-notes"]').text()).toContain('只有命中下方「触发条件」任一条的错误才会重试')
+    expect(wrapper.get('[data-testid="retry-notes"]').text()).toContain('只有命中下方「触发规则」任一条的错误才会重试')
     expect(wrapper.get('[data-testid="disable-notes"]').text()).toContain('额度重置后自动恢复')
-    expect(wrapper.get('[data-testid="retry-rules"]').text()).toContain('触发条件')
+    expect(wrapper.get('[data-testid="retry-rules"]').text()).toContain('触发规则')
     expect(wrapper.get('[data-testid="account-rules"]').text()).toContain('禁用条件')
     const controls = mount(FailurePolicyControls, {
       props: { modelValue: { ...fixture(), max_retries: 3, retries_per_account: 1 }, disabled: false, errors: {} },
