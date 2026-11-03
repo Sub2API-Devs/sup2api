@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SButton, SCheckbox, SDisclosure, SField, SHint, SInput, STable, STextarea, createItemId, type TableColumn } from '@sub2api/ui'
+import { SButton, SCheckbox, SDisclosure, SField, SHint, SInput, SSelect, STable, STextarea, createItemId, type SelectOption, type TableColumn } from '@sub2api/ui'
 import FailureRuleDetails from './FailureRuleDetails.vue'
-import { newFailureRule, ruleFormErrors, type FailureRule } from './failurePolicy'
+import { newFailureRule, readableStatusCodes, ruleFormErrors, ruleSummaryKey, type FailureMatch, type FailureRule } from './failurePolicy'
 
 const rules = defineModel<FailureRule[]>({ required: true })
 const props = defineProps<{ account: boolean; disabled: boolean; showErrors?: boolean; regexErrors?: Record<string, string> }>()
 const { t } = useI18n()
 const columns = computed<TableColumn[]>(() => [
-  { key: 'name', label: t('failurePolicy.name'), width: '190px' },
-  { key: 'codes', label: t('failurePolicy.codesShort'), width: '210px' },
+  { key: 'name', label: t('failurePolicy.nameAndSource'), width: '200px' },
+  { key: 'codes', label: t('failurePolicy.codesShort'), width: '180px' },
   { key: 'keywords', label: t('failurePolicy.keywordsShort'), class: 'min-w-64' },
   ...(props.disabled ? [] : [{ key: 'actions', label: t('common.actions'), width: '130px' }])
 ])
@@ -35,11 +35,30 @@ function setKeywords(rule: FailureRule, value: string) {
 function hasScope(rule: FailureRule) {
   return rule.match.groups.length || rule.match.models.length || rule.match.protocols.length
 }
+function sourceOptions(rule: FailureRule): SelectOption[] {
+  // Core errors are only shown for rules that already use them.
+  const sources: FailureMatch['source'][] = rule.match.source === 'core' ? ['upstream', 'transport', 'core'] : ['upstream', 'transport']
+  return sources.map(value => ({ value, label: t(`failurePolicy.sources.${value}`) }))
+}
+function setSource(rule: FailureRule, value: unknown) {
+  if (props.disabled) return
+  rule.match.source = value as FailureMatch['source']
+  // Transport failures have no HTTP status.
+  if (rule.match.source === 'transport') rule.match.status_codes = ''
+}
+function summary(rule: FailureRule) {
+  return t(`failurePolicy.summary.${ruleSummaryKey(rule)}`, { codes: readableStatusCodes(rule.match.status_codes, t('failurePolicy.codeSeparator')) })
+}
 </script>
 <template>
   <section :data-testid="account ? 'account-rules' : 'retry-rules'">
-    <div class="mb-3 flex items-center justify-between gap-3">
-      <SHint>{{ t('failurePolicy.orderHint') }}</SHint>
+    <div class="mb-3 flex items-start justify-between gap-3">
+      <div>
+        <p class="text-sm font-medium text-fg">
+          {{ t(account ? 'failurePolicy.disableConditions' : 'failurePolicy.retryConditions') }}
+        </p>
+        <SHint>{{ t(account ? 'failurePolicy.disableConditionsHint' : 'failurePolicy.retryConditionsHint') }} {{ t('failurePolicy.orderHint') }}</SHint>
+      </div>
       <SButton
         v-if="!disabled"
         icon="plus"
@@ -69,12 +88,15 @@ function hasScope(rule: FailureRule) {
             data-testid="rule-name"
           />
         </SField>
-        <SHint
-          v-if="row.match.source !== 'upstream'"
-          size="xs"
-        >
-          {{ t(`failurePolicy.sources.${row.match.source}`) }}
-        </SHint>
+        <SSelect
+          :model-value="row.match.source"
+          :options="sourceOptions(row)"
+          :disabled="disabled"
+          :aria-label="t('failurePolicy.source')"
+          class="mt-2"
+          data-testid="rule-source"
+          @update:model-value="setSource(row, $event)"
+        />
         <SDisclosure
           v-if="hasScope(row)"
           :label="t('failurePolicy.scopeDetails')"
@@ -116,6 +138,13 @@ function hasScope(rule: FailureRule) {
           data-testid="rule-regex"
           @update:model-value="row.match.keyword_regex = $event"
         />
+        <SHint
+          size="xs"
+          class="mt-2"
+          data-testid="rule-summary"
+        >
+          {{ summary(row) }}
+        </SHint>
       </template>
       <template #cell-actions="{ row }">
         <div class="flex items-center gap-1">

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
-import { SInput, SModal, SSwitch } from '@sub2api/ui'
+import { SInput, SModal, SSelect, SSwitch } from '@sub2api/ui'
 import { ApiError } from '@sub2api/host'
 import { i18n } from '@/i18n'
 import FailurePolicySettings from './FailurePolicySettings.vue'
@@ -221,7 +221,7 @@ describe('rule interaction', () => {
     await wrapper.get('[data-reorder-handle="0"]').trigger('keydown', { key: 'ArrowDown' })
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([[rules[1], rules[0]]])
     expect(wrapper.find('[aria-haspopup="menu"]').exists()).toBe(false)
-    expect(wrapper.findAll('thead th').map(cell => cell.text())).toEqual(['', '规则名称', '错误码', '关键词', '操作'])
+    expect(wrapper.findAll('thead th').map(cell => cell.text())).toEqual(['', '规则名称 / 错误来源', '错误码', '关键词', '操作'])
   })
   it('validates inline conditions before Save and keeps errors attached after reorder', async () => {
     const wrapper = mount(FailurePolicySettings, { global })
@@ -292,5 +292,41 @@ describe('rule preview', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="policy-preview-result"]').text()).not.toContain('换号出口限制')
     expect(api.put).not.toHaveBeenCalled()
+  })
+})
+describe('explanations', () => {
+  it('explains when retries happen and shows the attempt order step by step', async () => {
+    const wrapper = mount(FailurePolicySettings, { global })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="retry-notes"]').text()).toContain('只有命中下方「触发条件」任一条的错误才会重试')
+    expect(wrapper.get('[data-testid="disable-notes"]').text()).toContain('额度重置后自动恢复')
+    expect(wrapper.get('[data-testid="retry-rules"]').text()).toContain('触发条件')
+    expect(wrapper.get('[data-testid="account-rules"]').text()).toContain('禁用条件')
+    const controls = mount(FailurePolicyControls, {
+      props: { modelValue: { ...fixture(), max_retries: 3, retries_per_account: 1 }, disabled: false, errors: {} },
+      global
+    })
+    const sequence = controls.get('[data-testid="retry-sequence"]').text()
+    expect(sequence).toContain('A → A → B → C')
+    for (const label of ['账号 A', '首次请求', '原账号重试', '账号 B', '换号重试']) expect(sequence).toContain(label)
+  })
+  it('says in words when each rule matches and clears status codes for network errors', async () => {
+    const rule = newFailureRule('transient', false)
+    rule.match.status_codes = '408,429,500-599'
+    const wrapper = mount(FailureRulesTable, { props: { modelValue: [rule], account: false, disabled: false }, global })
+    expect(wrapper.get('[data-testid="rule-summary"]').text()).toBe('上游返回 408、429、500–599 时命中，不看错误内容。')
+    rule.match.keywords = ['overloaded']
+    await wrapper.setProps({ modelValue: [rule] })
+    expect(wrapper.get('[data-testid="rule-summary"]').text()).toContain('且错误内容包含任一关键词')
+    wrapper.findComponent(SSelect).vm.$emit('update:modelValue', 'transport')
+    await flushPromises()
+    expect(rule.match).toMatchObject({ source: 'transport', status_codes: '' })
+    rule.match.keywords = []
+    await wrapper.setProps({ modelValue: [rule] })
+    expect(wrapper.get('[data-testid="rule-summary"]').text()).toBe('所有连接或网络错误（没有收到上游响应）都命中。')
+    expect(wrapper.get('[data-testid="rule-codes"]').attributes('disabled')).toBeDefined()
+    rule.match.source = 'upstream'
+    await wrapper.setProps({ modelValue: [rule] })
+    expect(wrapper.get('[data-testid="rule-summary"]').text()).toBe('还没有填写错误码或关键词，这条规则不会命中。')
   })
 })

@@ -12,6 +12,8 @@ const auth = useAuthStore()
 const canManage = computed(() => auth.has('settings:manage'))
 const { policy, configured, migrationNeeded, migrationMessage, loading, saving, error, errors, regexErrors, dirty, isLoaded, load, save } = useFailurePolicy()
 const disabled = computed(() => !canManage.value || !!saving.value)
+const retryNotes = ['retryNote1', 'retryNote2', 'retryNote3', 'retryNote4']
+const disableNotes = ['disableNote1', 'disableNote2', 'disableNote3', 'disableNote4']
 const ruleErrors = computed(() =>
   Object.entries(errors.value)
     .filter(([key]) => /^(retry_rules|account_rules)/.test(key))
@@ -78,6 +80,17 @@ onMounted(load)
             :aria-label="t('failurePolicy.retryEnabled')"
           />
         </template>
+        <ul
+          class="my-4 list-disc space-y-1 rounded-lg border border-line bg-surface-2 px-5 py-3 pl-8 text-sm leading-6 text-fg-muted"
+          data-testid="retry-notes"
+        >
+          <li
+            v-for="key in retryNotes"
+            :key="key"
+          >
+            {{ t(`failurePolicy.${key}`) }}
+          </li>
+        </ul>
         <FailurePolicyControls
           v-model="policy"
           :disabled="disabled"
@@ -120,6 +133,17 @@ onMounted(load)
             :aria-label="t('failurePolicy.accountEnabled')"
           />
         </template>
+        <ul
+          class="my-4 list-disc space-y-1 rounded-lg border border-line bg-surface-2 px-5 py-3 pl-8 text-sm leading-6 text-fg-muted"
+          data-testid="disable-notes"
+        >
+          <li
+            v-for="key in disableNotes"
+            :key="key"
+          >
+            {{ t(`failurePolicy.${key}`) }}
+          </li>
+        </ul>
         <div class="py-4">
           <FailureRulesTable
             v-model="policy.account_rules"

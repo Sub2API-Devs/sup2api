@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SHint, SInput, SSettingRow, SSwitch } from '@sub2api/ui'
-import { retryAccountSequence, type FailurePolicyForm } from './failurePolicy'
+import { SHint, SInput, SSettingRow, SSteps, SSwitch, type StepItem } from '@sub2api/ui'
+import { retryAccountSequence, retrySteps, type FailurePolicyForm } from './failurePolicy'
 const policy = defineModel<FailurePolicyForm>({ required: true })
 defineProps<{ disabled: boolean; errors: Record<string, string> }>()
 const { t } = useI18n()
 const sequence = computed(() => retryAccountSequence(policy.value).join(' → '))
+const steps = computed<StepItem[]>(() =>
+  retrySteps(policy.value).map((s, i) => ({
+    key: String(i),
+    title: t('failurePolicy.stepTitle', { account: s.account }),
+    description: t(`failurePolicy.steps.${s.kind}`),
+    state: 'pending'
+  }))
+)
 </script>
 <template>
   <SSettingRow
@@ -65,9 +73,15 @@ const sequence = computed(() => retryAccountSequence(policy.value).join(' → ')
   </SSettingRow>
   <div
     v-if="sequence"
-    class="py-3"
+    class="space-y-3 py-4"
     data-testid="retry-sequence"
   >
-    <SHint>{{ t('failurePolicy.sequence', { sequence }) }} {{ t('failurePolicy.sequenceHint') }}</SHint>
+    <div>
+      <p class="text-sm font-medium text-fg">
+        {{ t('failurePolicy.sequenceTitle') }}
+      </p>
+      <SHint>{{ t('failurePolicy.sequence', { sequence }) }} {{ t('failurePolicy.sequenceHint') }}</SHint>
+    </div>
+    <SSteps :steps="steps" />
   </div>
 </template>

@@ -308,3 +308,25 @@ const MENUS = [
 ]
 
 on('GET', '/me/balance', () => ({ balance: '12.34000000', updated_at: now() }))
+
+// Failure policy (CONTRACTS §69): the production policy of 2026-11-04.
+const failureRule = (id: string, name: string, codes: string, keywords: string[], account: boolean) => ({
+  id, name, enabled: true,
+  match: { source: 'upstream', status_codes: codes, keywords, keyword_regex: false, mode: 'all', groups: [], models: [], protocols: [] },
+  action: account ? 'disable' : 'retry', same_account_retries: 0, exhausted_action: '', egress: '', cooldown_seconds: 0
+})
+let failurePolicy = {
+  schema_version: 4, revision: 4, retry_enabled: true, max_retries: 3, retries_per_account: 1, switch_account: true, reset_sticky: true,
+  egress: 'account_configured', backoff_ms: 200, max_wait_ms: 0, respect_retry_after: false, account_enabled: true,
+  retry_rules: [failureRule('http-transient', 'HTTP transient errors', '408,429,500-599', [], false)],
+  account_rules: [
+    failureRule('login-invalid', 'Login invalid (401)', '401', ['oauth access token has been revoked', 'oauth token has been revoked', 'oauth refresh token is no longer valid'], true),
+    failureRule('account-on-hold', 'Account on hold (403)', '403', ['oauth_account_on_hold', 'oauth authentication is currently not allowed for this organization'], true),
+    failureRule('migrated-disable', 'Existing automatic disable', '', ['your credit balance is too low', 'this organization has been disabled.', 'you exceeded your current quota'], true)
+  ]
+}
+on('GET', '/settings/failure-policy', () => ({ configured: true, policy: failurePolicy }))
+on('PUT', '/settings/failure-policy', (req) => {
+  failurePolicy = { ...req.body.policy, revision: failurePolicy.revision + 1 }
+  return { configured: true, policy: failurePolicy }
+})

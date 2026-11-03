@@ -44,32 +44,28 @@ export default {
   description:
     'The core controls retries, account switching and automatic account actions. Reset only releases account affinity; it does not delete chat history. Committed or uncertain requests are not replayed.',
   retryEnabled: 'Automatic retries',
-  retrySectionHint:
-    'Configure the total retry budget, account switching and matching conditions. Switching automatically clears the original sticky binding.',
+  retrySectionHint: 'When an upstream request fails, retry it with the counts and order below, switching to another account when needed.',
   disableSection: 'Automatic disabling',
   maxRetries: 'Maximum additional retries',
-  maxRetriesHint: '0 disables retries. Same-account retries and switches share this budget (up to 9).',
+  maxRetriesHint: 'How many more attempts a failed request gets (the first request not included); same-account retries and switches both count. 0 disables retries, up to 9.',
   backoff: 'Initial backoff (ms)',
-  backoffHint: 'Initial retry delay; subsequent retries use exponential backoff.',
+  backoffHint: 'Wait before the first retry; it doubles each time (for example 200 → 400 → 800 ms).',
   maxWait: 'Total wait budget (ms)',
   retryAfter: 'Respect upstream Retry-After',
   accountEnabled: 'Automatic disabling',
-  accountHint: "Matching rules disable the account, subject to the account's permission.",
+  accountHint: 'Upstream errors that match a disable condition disable the account, so no more requests go to it.',
   retriesPerAccount: 'Retries allocated to each account',
-  retriesPerAccountHint:
-    'Switch on the next retry after this count. The initial request is excluded; requests after switching count. 0 switches on every retry. Applies only when switching is enabled.',
+  retriesPerAccountHint: 'Retries on one account before switching; the request after a switch counts for the new account. 0 switches on the first failure.',
   switchAccount: 'Switch accounts at the retry limit',
-  switchAccountHint:
-    'When enabled, rotate at the per-account limit. When disabled, all retries stay on the original account. Cooldown or disabling causes an early switch when enabled, otherwise stops retries.',
+  switchAccountHint: 'On: once the account’s retries are used up, switch to another account and rebind the session to it (the new account writes the prompt cache again). Off: every retry uses the original account.',
   sequence: 'Request order: {sequence}.',
-  sequenceHint:
-    'The first item is the initial request; the rest are retries. Letters represent accounts. Continues only while retry rules match and accounts remain eligible; stops on success.',
+  sequenceHint: 'Letters are different accounts. Stops at the first success; an error outside the retry conditions, or an account that was just disabled, returns early or switches at once (see above).',
   sharedRetry: 'Retry / switch using the shared plan',
   unifiedMigration:
     'The saved policy remains active until you save. The new plan removes separate egress and wait limits. Disabled, return-error and no-action rules are omitted; cooldown conditions become disable rules. Review before saving.',
   retry_rules: 'Automatic retry',
   account_rules: 'Automatic disable rules',
-  orderHint: 'Drag the leading handle to reorder. The first matching rule wins.',
+  orderHint: 'Drag the handle on the left to reorder; the first rule from the top that matches wins.',
   codesShort: 'Status codes',
   keywordsShort: 'Keywords',
   scopeDetails: 'Matching scope',
@@ -77,6 +73,7 @@ export default {
   moreKeywords: 'Show {count} more',
   invalidRule: 'Enter valid values. Status codes accept 400–599 and ranges; enter codes or keywords.',
   name: 'Rule name',
+  nameAndSource: 'Rule name / error source',
   source: 'Error source',
   codes: 'Status codes (optional, multiple allowed)',
   codesHint:
@@ -98,13 +95,13 @@ export default {
   action: 'Action',
   cooldown: 'Cooldown (seconds)',
   egress: 'Switch egress constraint',
-  egressHint: "Never changes the account's proxy. Constraints remain effective across the request; no eligible account returns an error.",
+  egressHint: "Never changes the account’s proxy. Constraints remain effective across the request; no eligible account returns an error.",
   sameRetries: 'Additional retries per account',
   exhausted: 'After same-account retries',
   sources: {
-    upstream: 'Upstream HTTP response',
-    transport: 'Connection or transport failure',
-    core: 'Core preparation or scheduling failure'
+    upstream: 'Upstream error',
+    transport: 'Connection or network error',
+    core: 'Core internal error'
   },
   modes: {
     all: 'AND: all provided conditions',
@@ -122,7 +119,7 @@ export default {
   egresses: {
     same_proxy: 'Same proxy configuration only',
     proxy_only: 'Proxy-bound accounts only',
-    account_configured: "Each account's configured egress (includes direct)"
+    account_configured: "Each account’s configured egress (includes direct)"
   },
   reload: 'Reload',
   publish: 'Publish policy',
@@ -146,5 +143,32 @@ export default {
   errorText: 'Error text',
   history: 'Load revision history',
   restore: 'Use revision as draft',
-  decisions: 'Scheduling policy decisions'
+  decisions: 'Scheduling policy decisions',
+  sequenceTitle: 'Request order when every attempt fails',
+  stepTitle: 'Account {account}',
+  steps: { first: 'First request', same: 'Retry on the same account', switch: 'Retry on another account' },
+  retryNote1: 'Only errors that match a retry condition below are retried; any other error (for example 400, 401, 403) goes straight back to the client.',
+  retryNote2: 'When the failure disables the account (a disable condition matched, or the plugin found the 5-hour / 7-day quota used up), there is no retry on that account: the request switches at once.',
+  retryNote3: 'A response that already started, or a request that was sent with an uncertain outcome, is never retried, so nothing runs twice.',
+  retryNote4: 'When the core already knows before sending that this model’s quota on the account is used up, it switches without sending and keeps the session binding.',
+  disableNote1: 'An upstream error that matches a disable condition below sets the account to automatically disabled (red): it is no longer scheduled until it is re-authorized or restored by hand.',
+  disableNote2: 'Applies only to accounts whose settings allow automatic disabling.',
+  disableNote3: 'The timed disable the plugin applies when the 5-hour / 7-day quota is used up is not controlled here; it lifts by itself when the quota resets (yellow).',
+  disableNote4: 'With both status codes and keywords, both must match; empty status codes mean any status, keywords ignore case.',
+  retryConditions: 'Retry conditions',
+  retryConditionsHint: 'Only errors that match one of them are retried; others go straight back to the client.',
+  disableConditions: 'Disable conditions',
+  disableConditionsHint: 'Any match disables the account.',
+  codeSeparator: ', ',
+  summary: {
+    upstreamCodes: 'Matches when the upstream answers {codes}, whatever the error says.',
+    upstreamCodesKeywords: 'Matches when the upstream answers {codes} and the error contains any keyword.',
+    upstreamAnyKeywords: 'Matches any upstream status whose error contains any keyword.',
+    coreCodes: 'Matches core internal errors with status {codes}.',
+    coreCodesKeywords: 'Matches core internal errors with status {codes} that contain any keyword.',
+    coreAnyKeywords: 'Matches core internal errors that contain any keyword.',
+    transportAll: 'Matches every connection or network error (no upstream response).',
+    transportKeywords: 'Matches connection or network errors that contain any keyword.',
+    incomplete: 'No status codes or keywords yet: this rule never matches.'
+  }
 }

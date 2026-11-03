@@ -217,3 +217,36 @@ export function retryAccountSequence(policy: FailurePolicyForm): string[] {
   }
   return sequence
 }
+
+export type RetryStepKind = 'first' | 'same' | 'switch'
+export interface RetryStep {
+  account: string
+  kind: RetryStepKind
+}
+
+/** retryAccountSequence with what each attempt is: the first request, a retry on the same account or a switch. */
+export function retrySteps(policy: FailurePolicyForm): RetryStep[] {
+  return retryAccountSequence(policy).map((account, i, all) => ({
+    account,
+    kind: i === 0 ? 'first' : account === all[i - 1] ? 'same' : 'switch'
+  }))
+}
+
+/** The status codes as people read them: "408、429、500–599". */
+export function readableStatusCodes(value: string, separator: string): string {
+  return normalizeStatusCodes(value)
+    .split(',')
+    .filter(Boolean)
+    .map(code => code.replace(/\s*-\s*/, '–'))
+    .join(separator)
+}
+
+/** The key under failurePolicy.summary that says when a rule matches. */
+export function ruleSummaryKey(rule: FailureRule): string {
+  const codes = normalizeStatusCodes(rule.match.status_codes) !== ''
+  const keywords = rule.match.keywords.some(k => k.trim())
+  if (rule.match.source === 'transport') return keywords ? 'transportKeywords' : 'transportAll'
+  if (!codes && !keywords) return 'incomplete'
+  const prefix = rule.match.source === 'core' ? 'core' : 'upstream'
+  return `${prefix}${codes ? 'Codes' : 'Any'}${keywords ? 'Keywords' : ''}`
+}
