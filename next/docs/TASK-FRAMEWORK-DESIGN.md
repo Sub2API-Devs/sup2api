@@ -343,9 +343,9 @@ River v0.49.0 的 PostgreSQL 迁移在 `riverdriver/riverpgxv5@v0.49.0/migration
 | `0082_river_v007.sql` | 7 | `river_notification` 等 |
 | `0083_river_v008.sql` | 8 | PostgreSQL 为空操作（`SELECT 1`） |
 
-- 生成：用锁定版本模块里的 SQL（等同 `river migrate-get --line main --version N --up`），只把 `/* TEMPLATE: schema */` 替换为空（表放 `public`），文件头注明来源模块、版本与原文件 SHA-256。其余原样，不自己改写 River 的 DDL，以免以后 River 的迁移对不上。
-- 每个文件末尾补一行版本记录，让以后 `rivermigrate` 的校验与升级认得这份库：v1–v4 写 `INSERT INTO river_migration (version) VALUES (N) ON CONFLICT DO NOTHING`，v5 起写 `INSERT INTO river_migration (line, version) VALUES ('main', N) ON CONFLICT DO NOTHING`（v5 自己会把旧行搬到新结构）。
-- 测试：生成脚本放 `server/internal/task/rivermig/gen_test.go`（`go test -run TestRiverMigrationsMatchModule`）：对比 migrations 目录里的文件与依赖模块里的 SQL，River 依赖升级而迁移没更新时测试失败。
+- 生成：用锁定版本模块里的 SQL（`riverpgxv5.Driver.GetMigrationFS`，等同 `river migrate-get --line main --version N --up`），只把 `/* TEMPLATE: schema */` 替换为空（表放 `public`），文件头注明来源模块、版本与原文件 SHA-256。不改写 River 的 DDL，以免以后 River 的迁移对不上。
+- 可重复执行：核心从 `FirstIdempotentMigration`（0026）起的迁移都必须能再跑一遍（`TestMigrationsFromFirstIdempotentRunTwice`），River 的 SQL 不满足。所以每个文件把 River 的 SQL 包在一个 `DO` 块里：`river_migration` 已有这个版本就直接返回，否则 `EXECUTE` River 的 SQL，再写版本行（v1–v4 `INSERT INTO river_migration (version)`，v5 起 `(line, version)`，都 `ON CONFLICT DO NOTHING`；v5 自己会把旧行搬到新结构）。版本行也让 `rivermigrate` 的校验与以后的升级认得这份库。
+- 测试：`internal/migrations/river_migrations_test.go` 的 `TestRiverMigrationsMatchModule` 按上面的规则从依赖模块生成期望内容并与目录里的文件逐字比较，`go.mod` 里 River 的版本也要一致；`SUB2API_WRITE_RIVER_MIGRATIONS=1` 时写出文件。
 - 以后升级 River：先把新增版本导出成新的核心迁移（编号接着往后），再升依赖。
 
 ### 9.2 `0084_scheduled_tasks.sql`
