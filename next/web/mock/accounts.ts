@@ -345,6 +345,8 @@ export const accounts: any[] = [
   { id: 26, name: 'cc-pending', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: 1, priority: 5, weight: 1, max_concurrency: 4, schedulable: true, models: ['claude-sonnet-4-5'], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-3600), credentials: {} },
   // Row without a proxy: its container egresses directly.
   { id: 27, name: 'cc-noproxy', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: null, priority: 6, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: null, created_at: now(-7200), credentials: {} },
+  // Disabled for longer than park_after_hours: its container is stopped (mock/ccgateway.ts reports account_parked until started).
+  { id: 28, name: 'cc-parked', plugin_key: 'ccgateway', type: 'managed', created_by: 1, group_ids: [1], proxy_id: 1, priority: 7, weight: 1, max_concurrency: 4, schedulable: true, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'disabled', status_reason: 'disabled by an operator', in_use: 0, cooldown_until: null, orphaned: false, last_used_at: now(-86400), created_at: now(-86400 * 10), credentials: {}, runtime_parked: true },
   // Its plugin was uninstalled without purge_accounts: kept as an orphaned account.
   { id: 15, name: 'legacy-vendor', plugin_key: 'legacy_vendor', type: 'apikey', created_by: null, type_label: { en: 'API key', zh: 'API Key' }, group_ids: [], proxy_id: null, priority: 10, weight: 1, max_concurrency: 5, schedulable: false, models: [], model_mapping: {}, rpm_limit: 0, tpm_limit: 0, status: 'active', status_reason: '', in_use: 0, orphaned: true, created_at: now(-86400 * 90) }
 ]
@@ -516,7 +518,7 @@ const statusKey = (a: { status: string; schedulable: boolean }) =>
   a.status === 'disabled' ? 'disabled' : a.status === 'active' && a.schedulable ? 'active' : 'auto_disabled'
 
 /** The stored mock account (for other fixtures, e.g. the CCGateway containers); undefined when missing. */
-export function mockAccount(id: number): { status: string; proxy_id: number | null; plugin_key: string; type: string } | undefined {
+export function mockAccount(id: number): { status: string; proxy_id: number | null; plugin_key: string; type: string; runtime_parked?: boolean } | undefined {
   return accounts.find((a) => a.id === id)
 }
 

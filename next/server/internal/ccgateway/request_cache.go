@@ -327,7 +327,7 @@ func (s *Service) forgetAccount(id int64, key string) {
 	delete(c.routes, key)
 	c.mu.Unlock()
 	r.close()
-	s.forgetBlocked()
+	s.forgetBlocked(strconv.FormatInt(id, 10), key)
 }
 
 // AccountChanged follows a committed change of account id on this node (the

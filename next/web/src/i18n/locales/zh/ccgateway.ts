@@ -339,6 +339,8 @@ export default {
     proxy_not_found: '选择的代理不存在或你无权使用，请换一个代理',
     proxy_unavailable: '绑定的代理已不存在或协议不受支持，请换一个代理',
     account_deleted: '账号已删除',
+    account_parked: '账号停机满设定时长；测试、重新授权或点“启动”会再启动',
+    runtime_parked: '账号容器已停止（停机满设定时长），请先启动容器',
     draft_not_found: '这个容器已不存在（可能因长时间未操作被自动清理），请重新启动容器',
     runtime_not_ready: '原账号容器尚未就绪，请先同步运行环境再重新授权',
     runtime_cleanup_failed: '运行环境清理失败，可重试',
@@ -527,15 +529,17 @@ export default {
   runtimes: {
     title: '账号容器', hint: '每个 Claude Code 账号一个容器。授权在账号页完成：新建账号时会自动启动容器并引导登录；这里只显示状态。',
     account: '账号', container: '容器', cliVersion: 'CC 版本', auth: 'Claude 授权', typeOAuth: 'OAuth（容器内登录）', typeApiKey: 'API Key',
-    state: { ready: '已就绪', preparing: '准备中', error: '异常', unavailable: '不可用', unknown: '未知' },
+    state: { ready: '已就绪', preparing: '准备中', error: '异常', unavailable: '不可用', unknown: '未知', parked: '已停止（停机满设定时长）' },
     checking: '检查中', authorized: '凭据已保存', notAuthorized: '未保存凭据', noAuthNeeded: '无需授权',
     goAuthorize: '去账号页授权', goEdit: '在账号页查看', openAccounts: '新建 / 管理账号', empty: '还没有 Claude Code 账号，请在账号页新建。', loadFailed: '账号列表加载失败',
     refreshAuth: '刷新授权',
     refreshStarted: '已启动重新授权。完成授权流程以刷新凭证。',
     refreshFailed: '启动重新授权失败。',
+    start: '启动', started: '容器已启动', startFailed: '启动容器失败',
   },
 
     remote: {
+      parkTitle: '停用账号的容器', parkLabel: '红色账号停机多久后停止容器', parkUnit: '小时', parkHint: '账号处于红色（需要人处理）满这么多小时后停止它的容器，保留数据和登录；测试、重新授权或在容器列表点“启动”会再启动。0 表示不停止。', parkInvalid: '停止容器的小时数须为 0 到 {max} 的整数',
       unconfigured: '未配置',
       admin_key: '容器管理密钥（CCG_ADMIN_KEY）', api_key: '容器模型密钥（CCG_API_KEY）', keysHint: '填写与目标容器一致的密钥，只写不回显；留空保留已有值。',
       networkPool: '容器 IP 地址池（IPv4 CIDR）', networkAllocation: 'IP 分配方式', networkShort: '账号容器使用的内网地址池与分配方式；上游出口仍由账号代理决定。', networkRandom: '随机分配（默认）', networkSequential: '顺序分配', networkHint: '默认 10.0.0.0/8，可指定 10、172.16–31 或 192.168 内的私有网段（最大前缀 /24）。随机模式会随机选择各账号子网及容器 IP，避开已占用网络。修改后自动重建账号网络和容器，保留 Claude 授权与数据；重建期间请求可能中断。这里配置的是容器内网 IP，上游出口仍由账号代理决定。', networkSaved: '配置已保存，账号网络正在后台按新地址池和分配方式重建。',

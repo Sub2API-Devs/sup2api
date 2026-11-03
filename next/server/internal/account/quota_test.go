@@ -439,7 +439,7 @@ func TestAccountResetStatusRestoresScheduling(t *testing.T) {
 					t.Fatal(err)
 				}
 				var beforeAccount, afterAccount string
-				const preserved = `SELECT (to_jsonb(a) - ARRAY['status','status_reason','updated_at'])::text FROM accounts a WHERE id=$1`
+				const preserved = `SELECT (to_jsonb(a) - ARRAY['status','status_reason','status_changed_at','updated_at'])::text FROM accounts a WHERE id=$1`
 				if err := e.db.Pool.QueryRow(ctx, preserved, id).Scan(&beforeAccount); err != nil {
 					t.Fatal(err)
 				}

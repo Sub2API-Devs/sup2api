@@ -59,6 +59,9 @@ func (s *Service) QueryAccountQuota(ctx context.Context, accountID int64, operat
 		if reason := d.unavailable(); reason != "" {
 			return nil, usageFail(reason, reasonMessages[reason])
 		}
+		if d.Parked {
+			return nil, usageFail(reasonRuntimeParked, reasonMessages[reasonRuntimeParked])
+		}
 		res, closeConn, e = s.runtimeRequest(ctx, d.Key, http.MethodGet, "admin/usage", nil, d.Revision)
 		if e != nil {
 			te := transportError(e)

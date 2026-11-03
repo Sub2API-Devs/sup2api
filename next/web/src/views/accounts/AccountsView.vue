@@ -150,6 +150,10 @@ function statusOf(a: Account): StatusView {
     view.detail = view.detail ? `${view.detail}\n${release}` : release
   }
   if (cooling) view.note = t('accounts.cooldownUntil', { time: formatTime(a.cooldown_until) })
+  if (a.runtime_parked) {
+    const parked = t('accounts.runtimeParked')
+    view.detail = view.detail ? `${view.detail}\n${parked}` : parked
+  }
   return view
 }
 

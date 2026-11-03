@@ -15,6 +15,7 @@ import { runPool } from '@/views/accounts/pool'
 import type { CcgRuntimeHealth } from '@/api/types'
 import { containerPhase, type CcgContainer } from './ccgAuthFlow'
 import { useCcgText } from './ccgError'
+import { longCall } from './ccgApi'
 import CredentialStatusNotice from './CredentialStatusNotice.vue'
 import CLISettings from './CLISettings.vue'
 import RetainedRuntimes from './RetainedRuntimes.vue'
@@ -87,7 +88,7 @@ const emit = defineEmits<{ (event: 'overrides', count: number | null): void }>()
 
 const { t } = useI18n()
 const router = useRouter()
-const { blockedTitle } = useCcgText()
+const { blockedTitle, describe } = useCcgText()
 const auth = useAuthStore()
 /** Bumped by reload(): the retained list below reloads with the table. */
 const retainedRevision = ref(0)
@@ -371,10 +372,29 @@ const viewText = (w: WorkerLogInfo | null) => (!w
 function containerBadge(r: Row): { tone: 'success' | 'warning' | 'danger' | 'gray'; label: string } {
   if (r.error) return { tone: 'danger', label: t('ccgateway.runtimes.state.unavailable') }
   if (r.phase === 'ready') return { tone: 'success', label: t('ccgateway.runtimes.state.ready') }
+  if (r.phase === 'blocked' && r.reason === 'account_parked') return { tone: 'gray', label: t('ccgateway.runtimes.state.parked') }
   if (r.phase === 'blocked') return { tone: 'danger', label: blockedTitle(r.reason) }
   if (r.phase === 'error') return { tone: 'danger', label: t('ccgateway.runtimes.state.error') }
   if (r.phase === 'preparing') return { tone: 'warning', label: t('ccgateway.runtimes.state.preparing') }
   return { tone: 'gray', label: t('ccgateway.runtimes.state.unknown') }
+}
+const canStart = computed(() => auth.has('settings:manage') || auth.has('account:update') || auth.has('account:own:update'))
+const parked = (r: Row) => r.phase === 'blocked' && r.reason === 'account_parked'
+const starting = ref<number | null>(null)
+
+/** Starts a container stopped because its account stayed red; it is stopped again after another park_after_hours. */
+async function start(r: Row) {
+  if (!canStart.value || starting.value !== null) return
+  starting.value = r.id
+  try {
+    await api.post(`/system/ccgateway/accounts/${r.id}/sync`, {}, longCall())
+    toast(t('ccgateway.runtimes.started'), 'success')
+  } catch (e) {
+    toast(describe(e) || t('ccgateway.runtimes.startFailed'), 'error')
+  } finally {
+    starting.value = null
+    await inspect(r)
+  }
 }
 const needsAuth = (r: Row) => r.type === 'managed' && r.loggedIn !== true
 const editLink = (r: Row) => ({ path: '/accounts', query: { edit: String(r.id) } })
@@ -467,6 +487,7 @@ async function refreshAuth(r: Row) {
         </template>
         <template #cell-actions="{ row }">
           <div class="flex items-center justify-end gap-2">
+            <SButton v-if="parked(row) && canStart" size="sm" icon="play" :loading="starting === row.id" :disabled="starting !== null" :data-testid="`ccgateway-runtime-start-${row.id}`" @click="start(row)">{{ t('ccgateway.runtimes.start') }}</SButton>
             <CLISettings v-if="auth.has('settings:read')" :account-id="row.id" :disabled="row.phase !== 'ready'" @changed="inspect(row)" />
             <SButton v-if="row.type === 'managed' && canAccounts" size="sm" variant="ghost" icon="refresh" icon-only :title="t('ccgateway.runtimes.refreshAuth')" :aria-label="t('ccgateway.runtimes.refreshAuth')" @click="refreshAuth(row)" />
             <SButton v-if="canAccounts" size="sm" :variant="needsAuth(row) ? 'primary' : 'ghost'" :to="editLink(row)" data-testid="ccgateway-runtime-edit">

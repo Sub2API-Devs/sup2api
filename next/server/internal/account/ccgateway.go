@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
@@ -335,4 +336,50 @@ func (s *Service) resetForReauth(ctx context.Context, tx pgx.Tx, a *row) (bool, 
 		return false, err
 	}
 	return release, nil
+}
+
+// fillRuntimeParked sets runtime_parked on the CCGateway accounts of views
+// (one query); a failed read leaves it out.
+func (s *Service) fillRuntimeParked(ctx context.Context, views []*View) {
+	if s.d.CCGateway == nil {
+		return
+	}
+	var ids []int64
+	for _, v := range views {
+		if v.PluginKey == "ccgateway" {
+			ids = append(ids, v.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	parked, err := s.d.CCGateway.ParkedRuntimes(ctx, ids)
+	if err != nil {
+		slog.WarnContext(ctx, "account: read parked runtimes", "err", err)
+		return
+	}
+	for _, v := range views {
+		if v.PluginKey == "ccgateway" {
+			p := parked[v.ID]
+			v.RuntimeParked = &p
+		}
+	}
+}
+
+// wakeCCGateway starts the stopped runtime of a CCGateway account before
+// something needs it (a console test) and waits until it is ready.
+func (s *Service) wakeCCGateway(ctx context.Context, id int64, pluginKey string) error {
+	if pluginKey != "ccgateway" || s.d.CCGateway == nil {
+		return nil
+	}
+	return s.d.CCGateway.WakeRuntime(ctx, id)
+}
+
+// runtimeParked reports whether the account's CCGateway runtime is parked
+// (false for other plugins).
+func (s *Service) runtimeParked(ctx context.Context, id int64, pluginKey string) (bool, error) {
+	if pluginKey != "ccgateway" || s.d.CCGateway == nil {
+		return false, nil
+	}
+	return s.d.CCGateway.RuntimeParked(ctx, id)
 }

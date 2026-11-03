@@ -68,6 +68,7 @@ const latestFeatureConfig = ref<RemoteConfig | null>(null)
 const latestGlobalPolicy = computed(() => latestFeatureConfig.value && normalizeRequestPolicy(latestFeatureConfig.value.request_policy))
 const groupChanged = computed(() => JSON.stringify(featureGroups.value) !== JSON.stringify(saved.value?.cc_feature_groups ?? {}))
 const images = reactive<RuntimeImages>({ app: '', egress: '', controller: '' })
+const MAX_PARK_HOURS = 720
 const network = reactive({ pool: DEFAULT_POOL, allocation: 'random' as 'random' | 'sequential' })
 const policyChanged = computed(() => JSON.stringify(requestPolicy.value) !== JSON.stringify(normalizeRequestPolicy(saved.value?.request_policy)))
 const networkChanged = computed(() => network.pool.trim() !== (saved.value?.network?.pool || DEFAULT_POOL) || network.allocation !== (saved.value?.network?.allocation || 'random'))
@@ -87,8 +88,17 @@ const overridesText = computed(() => {
   if (n === null || n === undefined) return ''
   return n > 0 ? t('ccgateway.requestLogs.overrides', { n }) : t('ccgateway.requestLogs.overridesNone')
 })
+/** Hours a red account waits before its container is stopped; null: an older core without the setting. */
+const savedParkHours = computed<number | null>(() => typeof saved.value?.park_after_hours === 'number' ? saved.value.park_after_hours : null)
+/** A number input emits numbers once typed in. */
+const parkHours = ref<string | number>('')
+const parkHoursValue = computed(() => {
+  const v = String(parkHours.value ?? '').trim()
+  return /^\d+$/.test(v) ? Number(v) : NaN
+})
+const parkChanged = computed(() => savedParkHours.value !== null && parkHoursValue.value !== savedParkHours.value)
 /** Unsaved settings of the other tabs would be replaced by the configuration an install returns. */
-const otherDirty = computed(() => imagesChanged.value || networkChanged.value || policyChanged.value || groupChanged.value || logDefaultChanged.value)
+const otherDirty = computed(() => imagesChanged.value || networkChanged.value || policyChanged.value || groupChanged.value || logDefaultChanged.value || parkChanged.value)
 const imageLabel = (key: typeof IMAGE_KEYS[number]) => t(`ccgateway.remote.image${key[0].toUpperCase()}${key.slice(1)}`)
 
 // ---------------------------------------------------------------- controller connection
@@ -172,6 +182,7 @@ function assign(config: RemoteConfig) {
   for (const key of IMAGE_KEYS) images[key] = config.images?.[key] || ''
   network.pool = config.network?.pool || DEFAULT_POOL
   network.allocation = config.network?.allocation || 'random'
+  parkHours.value = typeof config.park_after_hours === 'number' ? String(config.park_after_hours) : ''
   const rule = config.request_logs
   requestLogDefault.value = rule && typeof rule === 'object' && isDefault(rule.level) ? rule.level : 'off'
   const controller = config.mode === 'controller'
@@ -236,6 +247,7 @@ function connectionPayload(s: RemoteConfig): Record<string, unknown> {
 function otherSettingsProblem(): string {
   const bad = IMAGE_KEYS.map(k => imagesPayload.value[k]).find(ref => ref && !IMAGE_RE.test(ref))
   if (bad) return t('ccgateway.remote.imageInvalid', { ref: bad })
+  if (savedParkHours.value !== null && !(parkHoursValue.value >= 0 && parkHoursValue.value <= MAX_PARK_HOURS)) return t('ccgateway.remote.parkInvalid', { max: MAX_PARK_HOURS })
   return validRequestPolicy(requestPolicy.value) && Object.values(featureGroups.value).every(g => typeof g.enabled === 'boolean' && typeof g.allow_account_override === 'boolean' && validFeatureOverrides(g.overrides)) ? '' : t('ccgateway.policy.invalid')
 }
 async function save() {
@@ -259,7 +271,8 @@ async function save() {
     images: { ...imagesPayload.value, ...(gateway ? { gateway } : {}), ...(guard ? { guard } : {}) },
     network: { pool: network.pool.trim() || DEFAULT_POOL, allocation: network.allocation },
     // Only to a core that reports the rule (an older one would not know it).
-    ...(savedLogDefault.value !== null ? { request_logs: { level: requestLogDefault.value } } : {})
+    ...(savedLogDefault.value !== null ? { request_logs: { level: requestLogDefault.value } } : {}),
+    ...(savedParkHours.value !== null ? { park_after_hours: parkHoursValue.value } : {})
   }, { signal: AbortSignal.timeout(55000) })
   assign(response)
   runtimeRevision.value++
@@ -379,6 +392,14 @@ onBeforeUnmount(() => {
                 <div class="flex items-center gap-2 whitespace-nowrap">
                   <SSegmented :model-value="requestLogDefault" :options="logDefaultOptions" size="sm" :disabled="disabled" :aria-label="t('ccgateway.requestLogs.defaultLabel')" data-testid="request-log-default" @update:model-value="requestLogDefault = isDefault($event) ? $event : requestLogDefault" />
                   <SHint v-if="overridesText" inline size="xs" data-testid="request-log-overrides">{{ overridesText }}</SHint>
+                </div>
+              </SSettingRow>
+            </SSettingsGroup>
+            <SSettingsGroup v-if="savedParkHours !== null" v-show="activeTab === 'deployment'" :title="t('ccgateway.remote.parkTitle')" data-testid="settings-parking">
+              <SSettingRow :label="t('ccgateway.remote.parkLabel')" :description="t('ccgateway.remote.parkHint')">
+                <div class="flex items-center gap-2 whitespace-nowrap">
+                  <SInput v-model="parkHours" type="number" min="0" :max="MAX_PARK_HOURS" step="1" class="w-24" :disabled="disabled" :aria-label="t('ccgateway.remote.parkLabel')" data-testid="park-after-hours" />
+                  <span class="text-sm text-fg-muted">{{ t('ccgateway.remote.parkUnit') }}</span>
                 </div>
               </SSettingRow>
             </SSettingsGroup>

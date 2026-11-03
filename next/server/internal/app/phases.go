@@ -234,6 +234,9 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	go b.keys.Run(b.ctx)
 	go b.prx.Run(b.ctx)
 	go b.acc.Run(b.ctx)
+	if err := b.ccg.RegisterTasks(b.tasks); err != nil {
+		return nil, fmt.Errorf("ccgateway tasks: %w", err)
+	}
 	go b.ccg.Run(b.ctx)
 
 	// The reconcile loop closes pre-charged usage rows (CONTRACTS §25.4). It

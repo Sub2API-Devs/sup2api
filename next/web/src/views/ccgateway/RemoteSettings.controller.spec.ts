@@ -248,6 +248,31 @@ describe('controller connection', () => {
     w.unmount()
   })
 
+  it('saves the hours before a red account container stops, and checks them', async () => {
+    const w = await render(controller({ park_after_hours: 3 }))
+    expect(input(w, 'park-after-hours').value).toBe('3')
+    await w.get('[data-testid="park-after-hours"]').setValue('800')
+    await submit(w)
+    expect(mocks.put).not.toHaveBeenCalled()
+    expect(w.text()).toContain('0 到 720')
+    await w.get('[data-testid="park-after-hours"]').setValue('0')
+    mocks.put.mockResolvedValue(controller({ park_after_hours: 0 }))
+    await submit(w)
+    expect(mocks.put.mock.calls[0]![1]).toMatchObject({ park_after_hours: 0 })
+    w.unmount()
+  })
+
+  it('hides the parking setting for an older core and never sends it', async () => {
+    const w = await render(controller({ images: { app: '', egress: '', controller: '' } }))
+    expect(w.find('[data-testid="park-after-hours"]').exists()).toBe(false)
+    await w.get('[data-testid="controller-endpoint"]').setValue('https://ccg.example.com:8443')
+    await w.get('[data-testid="controller-admin-key"]').setValue('k'.repeat(64))
+    mocks.put.mockResolvedValue(controller())
+    await submit(w)
+    expect(mocks.put.mock.calls[0]![1]).not.toHaveProperty('park_after_hours')
+    w.unmount()
+  })
+
   it('keeps the guard image override when saving (CONTRACTS §76)', async () => {
     const w = await render(controller({ images: { app: '', egress: '', controller: '', guard: 'ccgateway-guard:local' } }))
     await w.get('[data-testid="controller-endpoint"]').setValue('https://ccg.example.com:8443')

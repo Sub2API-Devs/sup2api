@@ -33,6 +33,15 @@ func (s *Service) ReauthDraft(ctx context.Context, accountID, _ int64, _ *int64)
 	if reason := d.unavailable(); reason != "" {
 		return "", false, reasonError(core.ErrInvalidArgument, reason)
 	}
+	if d.Parked {
+		// Re-authorizing a stopped runtime starts it first.
+		if err := s.WakeRuntime(ctx, accountID); err != nil {
+			return "", false, err
+		}
+		if d, err = s.desired(ctx, accountID, false); err != nil {
+			return "", false, err
+		}
+	}
 	res, close, err := s.runtimeRequest(ctx, d.Key, http.MethodGet, "status", nil, "")
 	if err != nil {
 		return "", false, transportError(err)

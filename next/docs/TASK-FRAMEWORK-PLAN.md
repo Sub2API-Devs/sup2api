@@ -21,7 +21,7 @@
 | A5 | **接入启动流程**：`phases.go` 创建服务、`StartNode`、`StartCluster`、关停顺序；单机与托管两种模式 | `server/internal/app/` | app 测试：单机启动后两个后端都在跑；托管核心准入前 River 不启动、准入后启动、排空后停止 | 完成 |
 | A6 | **HTTP 接口**：`/system/tasks`、`/:name`、`/:name/runs`、`/:name/run`；权限 `task:read`/`task:run`、运维角色、菜单、审计 | `server/internal/task/http.go`、`server/internal/authz/{catalog,menus,roles}.go` | 接口测试：权限、404/400/409、历史筛选与翻页、统计、审计 | 完成 |
 | A7 | **控制台页面**：概览、全集群任务、每节点矩阵、详情抽屉（历史、错误、耗时趋势）、手动运行、节点页入口、中英文 | `web/src/views/tasks/`、`web/src/api/`、`web/src/router/`、i18n | `npm run check`（类型、lint、vitest）；页面单元测试：状态颜色、计划描述、空数据、节点离线 | 完成 |
-| A8 | **停容器**：`core.ccgateway.park_runtimes`、`desiredIn` 的 `parked`、阻断去重扩到所有 `!Enabled`、唤醒（重新授权、测试、运行环境“启动”）、额度查询回 `runtime_parked`、设置项 `park_after_hours`、控制台文案与原因码 | `server/internal/ccgateway/`、`server/internal/account/`、`web/src/views/{accounts,ccgateway,settings}` | 停容器设计 §9 的单元测试全部；同步只下发一次 `enabled:false` | 待做 |
+| A8 | **停容器**：`core.ccgateway.park_runtimes`、`desiredIn` 的 `parked`、阻断去重扩到所有 `!Enabled`、唤醒（重新授权、测试、运行环境“启动”）、额度查询回 `runtime_parked`、设置项 `park_after_hours`、控制台文案与原因码 | `server/internal/ccgateway/`、`server/internal/account/`、`web/src/views/{accounts,ccgateway,settings}` | 停容器设计 §9 的单元测试全部；同步只下发一次 `enabled:false` | 完成 |
 | A9 | **迁移 0.1.235 的 13 个现有循环**，删除原循环和锁：A9a account（#3、#6、#8、#9）；A9b authz #18、webui #41；A9c ccgateway #21、helper #12b；A9d 清理类（#17、#28、#31、#32b、#34b） | 各包 + `app/phases.go` | 原有测试改为通过任务入口调用，结果不变；原 Redis 锁 key 不再出现 | 待做 |
 | A10 | **防回退检查**：`internal/` 下 `time.NewTicker`/`time.Tick` 白名单测试（0.1.236 要迁的暂列白名单） | `server/internal/task/ticker_guard_test.go` | 测试通过；新增 ticker 会失败 | 待做 |
 | A11 | **文档**：CONTRACTS §77（接口、表、原因码 `account_parked`/`runtime_parked`、任务约定、不再接受新的业务 ticker） | `docs/CONTRACTS.md` | — | 待做 |

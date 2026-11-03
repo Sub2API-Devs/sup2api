@@ -113,6 +113,11 @@ func (s *Service) test(c *gin.Context) {
 		httpapi.Fail(c, err)
 		return
 	}
+	// A stopped CCGateway runtime is started first (up to a minute).
+	if err := s.wakeCCGateway(ctx, a.ID, a.PluginKey); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
 	ctx, cancel := context.WithTimeout(ctx, testTimeout)
 	defer cancel()
 	// The account's model mapping applies to test calls too (CONTRACTS §18).

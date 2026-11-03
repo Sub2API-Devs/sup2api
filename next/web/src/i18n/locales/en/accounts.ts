@@ -286,10 +286,12 @@ export default {
     refreshHint: 'Click quota to refresh usage now',
     refreshed: 'Usage updated',
     refreshBlocked: {
-      runtime_not_ready: 'The account runtime is not synchronized yet, so its quota cannot be queried. Try again shortly.'
+      runtime_not_ready: 'The account runtime is not synchronized yet, so its quota cannot be queried. Try again shortly.',
+      runtime_parked: 'The account container is stopped (disabled for the configured hours), so its quota cannot be queried. Testing or re-authorizing starts it.'
     }
   },
   autoReleaseAt: 'Auto-enables at {time}',
+  runtimeParked: 'Container stopped (disabled for the configured hours); testing or re-authorizing starts it',
   resetStatus: 'Reset status',
   resetStatusHint: 'Clear the disable, error reason and cooldown and restore enabled; the scheduling switch stays unchanged',
   resetStatusTitle: 'Reset account status',

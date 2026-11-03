@@ -45,6 +45,9 @@ func sameRuntimeConfig(a, b Config) bool {
 	// The request log default travels with each request's policy: a change
 	// needs no runtime reconciled, only the cached configuration dropped.
 	a.RequestLogs, b.RequestLogs = nil, nil
+	// Parking is read by the park task and by each reconcile from the
+	// database: a changed setting reconfigures no runtime.
+	a.ParkAfterHours, b.ParkAfterHours = nil, nil
 	a.bundled, b.bundled = nil, nil
 	return av == bv && reflect.DeepEqual(a, b)
 }
@@ -94,6 +97,10 @@ type Config struct {
 	// RequestLogs is the default request log rule of every account without
 	// its own setting (CONTRACTS §65); nil is off.
 	RequestLogs *RequestLogDefault `json:"request_logs,omitempty"`
+	// ParkAfterHours: the runtime of an account red (needs a person) for
+	// this many hours is stopped; 0 never stops one, nil is the default 3
+	// (parking.go).
+	ParkAfterHours *int `json:"park_after_hours,omitempty"`
 
 	// bundled holds the image references of the active plugin package
 	// (§53.10), set when the configuration is loaded; never saved.
@@ -196,6 +203,7 @@ func (c Config) Public() map[string]any {
 		"cc_feature_groups":         c.featureGroups(),
 		"feature_revision":          c.FeatureRevision,
 		"request_logs":              RequestLogDefault{Level: c.DefaultRequestLog()},
+		"park_after_hours":          c.parkAfterHours(),
 	}
 }
 
@@ -366,14 +374,14 @@ func mergeConfig(c, old Config) (Config, error) {
 	}
 	// Network, request policy and images are independent of the target and
 	// kept when disconnected too (the install uses the saved images).
-	for _, merge := range []func(*Config, Config) error{mergeNetwork, mergeRequestPolicy, mergeImages, mergeRequestLogs} {
+	for _, merge := range []func(*Config, Config) error{mergeNetwork, mergeRequestPolicy, mergeImages, mergeRequestLogs, mergeParking} {
 		if err := merge(&c, old); err != nil {
 			return c, err
 		}
 	}
 	if c.Mode == "disabled" {
 		// Not configured: no target, no keys.
-		return Config{Mode: "disabled", AccountRuntimes: true, Network: c.Network, RequestPolicy: c.RequestPolicy, Images: c.Images, CCFeatureGroups: c.CCFeatureGroups, FeatureRevision: c.FeatureRevision, RequestLogs: c.RequestLogs}, nil
+		return Config{Mode: "disabled", AccountRuntimes: true, Network: c.Network, RequestPolicy: c.RequestPolicy, Images: c.Images, CCFeatureGroups: c.CCFeatureGroups, FeatureRevision: c.FeatureRevision, RequestLogs: c.RequestLogs, ParkAfterHours: c.ParkAfterHours}, nil
 	}
 	if legacy {
 		return mergeLegacy(c, old)

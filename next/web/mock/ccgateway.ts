@@ -7,7 +7,7 @@ import { mockProxyStatus } from './resources'
 if (process.env.SUB2API_MOCK_CCGATEWAY) {
   const base = '/system/ccgateway'
   // Per-account containers ("一账号一容器") behind a controller endpoint (CONTRACTS §53.9).
-  let config: Record<string, unknown> = {account_runtimes:true,mode:'controller',scheme:'https',host:'15.204.107.38',port:18443,base_path:'',has_admin_key:true,has_api_key:false,has_controller_ca:true,controller_ca_fingerprint:'76349628e4eaf86a5a217cf48429af2e5e16f5231f983105cd0d89f2fa08c92a',has_password:false,has_private_key:false,has_passphrase:false,user:'',auth_mode:'',host_key_fingerprint:'',request_policy:{schema_version:1,unknown_field:'reject',allow_fast:true,allow_effort:true,custom_tool_prefix:'ccgateway',tool_search:'request',thinking_disabled_compat:'pass',level:'low',relay_mode:'build',build_attachment_sources:{platform_name:'worker',os_version:'worker'},betas:[]},request_logs:{level:'summary'}}
+  let config: Record<string, unknown> = {account_runtimes:true,mode:'controller',scheme:'https',host:'15.204.107.38',port:18443,base_path:'',has_admin_key:true,has_api_key:false,has_controller_ca:true,controller_ca_fingerprint:'76349628e4eaf86a5a217cf48429af2e5e16f5231f983105cd0d89f2fa08c92a',has_password:false,has_private_key:false,has_passphrase:false,user:'',auth_mode:'',host_key_fingerprint:'',request_policy:{schema_version:1,unknown_field:'reject',allow_fast:true,allow_effort:true,custom_tool_prefix:'ccgateway',tool_search:'request',thinking_disabled_compat:'pass',level:'low',relay_mode:'build',build_attachment_sources:{platform_name:'worker',os_version:'worker'},betas:[]},request_logs:{level:'summary'},park_after_hours:3}
   // SUB2API_MOCK_CCG_LOG_DEFAULT=full|off starts with that default request log rule (REQUEST-LOG-ASYNC-DESIGN.md §6:
   // a full default has no end; the Worker's full retention and budget still apply).
   if (['off','summary','full'].includes(process.env.SUB2API_MOCK_CCG_LOG_DEFAULT||'')) config.request_logs={level:process.env.SUB2API_MOCK_CCG_LOG_DEFAULT}
@@ -116,6 +116,8 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
     on('GET', `${prefix}/status`, (req) => {
       const r = resolve(req)
       if (!isRuntime(r)) return r
+      // A parked runtime (ACCOUNT-RUNTIME-PARKING-DESIGN.md §6): stopped until synced again.
+      if (prefix.endsWith(':id') && mockAccount(Number(req.params.id))?.runtime_parked) return { status: 'blocked', reason: 'account_parked', container: `ccg-${r.key}-app`, key: r.key }
       const running = runningImage.get(r.key) || `sha256:${digest('app-0.1.15')}`
       const target = installed?.app_image || expected.app
       return { status: ready(r.key) ? 'ready' : converging.get(r.key) || 'creating', container: `ccg-${r.key}-app`, key: r.key, current_image: running, target_image: target, image_update_available: running !== target }
@@ -135,6 +137,8 @@ if (process.env.SUB2API_MOCK_CCGATEWAY) {
       const r = resolve(req)
       if (!isRuntime(r)) return r
       await sleep(600)
+      const parked = prefix.endsWith(':id') ? mockAccount(Number(req.params.id)) : undefined
+      if (parked?.runtime_parked) parked.runtime_parked = false
       ready(r.key)
       return { synced: true }
     })

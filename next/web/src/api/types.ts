@@ -526,6 +526,8 @@ export interface Account {
   cooldown_until?: string | null
   cooldown_reason?: string // assumed
   orphaned?: boolean
+  /** CCGateway only: the account stayed red long enough and its container is stopped; testing or re-authorizing starts it. */
+  runtime_parked?: boolean
   /** Owner (CONTRACTS §21.2); null for legacy rows, which only all-level keys can see. */
   created_by?: number | null
   /** Email of the owner, kept after the user was deleted. */
@@ -583,7 +585,7 @@ export interface CcgRuntimeStatus {
 	image_update_available?: boolean
 	target_image_available?: boolean
   status: 'creating' | 'ready' | 'blocked' | 'pending' | (string & {})
-  /** Why a blocked runtime is stopped (account_deleted: only a deleted account's runtime stops). */
+  /** Why a blocked runtime is stopped: account_deleted, or account_parked (the account stayed red for park_after_hours). */
   reason?: string
   container?: string
 }
@@ -705,6 +707,8 @@ export interface CcgRemoteConfig {
   feature_revision?: number
   /** Always true for configurations saved by this console: per-account containers are the only mode. */
   account_runtimes: boolean
+  /** Hours an account stays red before its container is stopped; 0 never stops it (default 3). */
+  park_after_hours?: number
   /** controller: connected to a controller endpoint; ssh / local: legacy connections still honored (CONTRACTS §53.9). */
   mode: 'disabled' | 'local' | 'ssh' | 'controller'
   /** Controller endpoint protocol; '' or absent means https (§53.9). */

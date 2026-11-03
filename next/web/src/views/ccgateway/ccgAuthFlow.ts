@@ -55,6 +55,8 @@ export const CCG_REASONS = [
   'proxy_not_found',
   'proxy_unavailable',
   'account_deleted',
+  'account_parked',
+  'runtime_parked',
   'draft_not_found',
   'draft_not_authorized',
   // §3 controller

@@ -594,4 +594,17 @@ describe('account request log settings of the core', () => {
     expect(lastOverrides(w)).toBe(0)
     w.unmount()
   })
+  it('shows a parked container as stopped and starts it with sync', async () => {
+    let parked = true
+    mocks.get.mockImplementation(async (path: string) => path.endsWith('/status') ? (parked ? { status: 'blocked', reason: 'account_parked', container: 'cc-25' } : { status: 'ready', container: 'cc-25' }) : path.endsWith('/health') ? { logged_in: true } : { enabled: true })
+    mocks.post.mockImplementation(async () => { parked = false; return { synced: true } })
+    const w = await render()
+    expect(w.text()).toContain('已停止（停机满设定时长）')
+    await w.get('[data-testid="ccgateway-runtime-start-25"]').trigger('click')
+    await flushPromises()
+    expect(mocks.post).toHaveBeenCalledWith('/system/ccgateway/accounts/25/sync', {}, expect.objectContaining({ signal: expect.any(AbortSignal) }))
+    expect(w.text()).toContain('已就绪')
+    expect(w.find('[data-testid="ccgateway-runtime-start-25"]').exists()).toBe(false)
+    w.unmount()
+  })
 })

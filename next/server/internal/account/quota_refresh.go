@@ -50,6 +50,14 @@ const lifecycleQuotaReady = `(l.status='applied' OR (l.status='pending' AND l.co
 // synchronized the account's runtime. A disabled account is only kept out of
 // scheduling (2026-10-22 user decision); its quota is queried like any other.
 func (s *Service) quotaBlocked(ctx context.Context, a *row, bt core.AccountTypeBinding) (string, error) {
+	// A stopped runtime cannot be asked; this is not a failed query.
+	parked, err := s.runtimeParked(ctx, a.ID, a.PluginKey)
+	if err != nil {
+		return "", err
+	}
+	if parked {
+		return "runtime_parked", nil
+	}
 	if bt.Type.Lifecycle == nil {
 		return "", nil
 	}
@@ -65,6 +73,7 @@ func (s *Service) quotaBlocked(ctx context.Context, a *row, bt core.AccountTypeB
 
 var quotaBlockedMessages = map[string]string{
 	"runtime_not_ready": "The account runtime is not synchronized yet; the quota can be refreshed once it is.",
+	"runtime_parked":    "The account's container is stopped (disabled for the configured hours); test or re-authorize the account to start it.",
 }
 
 // quotaNotReady answers a query the account cannot take now: the background

@@ -279,10 +279,12 @@ export default {
     refreshHint: '点击配额立即刷新用量',
     refreshed: '用量已更新',
     refreshBlocked: {
-      runtime_not_ready: '账号运行环境尚未同步完成，暂时无法查询额度，请稍后再试'
+      runtime_not_ready: '账号运行环境尚未同步完成，暂时无法查询额度，请稍后再试',
+      runtime_parked: '账号容器已停止（停机满设定时长），无法查询额度；测试或重新授权会自动启动'
     }
   },
   autoReleaseAt: '{time} 自动启用',
+  runtimeParked: '容器已停止（停机满设定时长），测试或重新授权会自动启动',
   resetStatus: '重置状态',
   resetStatusHint: '清除禁用、错误原因与冷却，恢复为启用状态；不改变允许调度开关',
   resetStatusTitle: '重置账号状态',

@@ -339,6 +339,8 @@ export default {
     proxy_not_found: 'The chosen proxy does not exist or is not yours to use; pick another one',
     proxy_unavailable: 'the bound proxy no longer exists or has an unsupported protocol; pick another one',
     account_deleted: 'the account was deleted',
+    account_parked: 'the account stayed disabled for the configured hours; testing, re-authorizing or Start runs it again',
+    runtime_parked: 'the account container is stopped (disabled for the configured hours); start it first',
     draft_not_found: 'This container no longer exists (it may have been cleaned up after a long pause); start the container again',
     runtime_not_ready: 'The existing container is not ready. Synchronize its runtime before re-authorizing.',
     runtime_cleanup_failed: 'Runtime cleanup failed; retry the operation.',
@@ -527,15 +529,17 @@ export default {
   runtimes: {
     title: 'Account containers', hint: 'One container per Claude Code account. Authorization happens on the Accounts page: creating an account starts its container and walks you through the login. This list only shows the state.',
     account: 'Account', container: 'Container', cliVersion: 'CC version', auth: 'Claude authorization', typeOAuth: 'OAuth (signed in inside the container)', typeApiKey: 'API Key',
-    state: { ready: 'Ready', preparing: 'Preparing', error: 'Error', unavailable: 'Unavailable', unknown: 'Unknown' },
+    state: { ready: 'Ready', preparing: 'Preparing', error: 'Error', unavailable: 'Unavailable', unknown: 'Unknown', parked: 'Stopped (disabled for the configured hours)' },
     checking: 'Checking', authorized: 'Credentials saved', notAuthorized: 'No saved credentials', noAuthNeeded: 'No authorization needed',
     goAuthorize: 'Authorize on the Accounts page', goEdit: 'Open on the Accounts page', openAccounts: 'Create / manage accounts', empty: 'No Claude Code account yet; create one on the Accounts page.', loadFailed: 'Accounts could not be loaded',
     refreshAuth: 'Refresh authorization',
     refreshStarted: 'Re-authorization started. Complete the flow to refresh credentials.',
     refreshFailed: 'Failed to start re-authorization.',
+    start: 'Start', started: 'Container started', startFailed: 'Starting the container failed',
   },
 
     remote: {
+      parkTitle: 'Containers of disabled accounts', parkLabel: 'Stop the container after an account stays red for', parkUnit: 'hours', parkHint: 'The container of an account red (needs a person) for this many hours is stopped, keeping its data and login; testing, re-authorizing or Start in the container list runs it again. 0 never stops it.', parkInvalid: 'Hours before stopping a container must be a whole number from 0 to {max}',
       unconfigured: 'Not configured',
       admin_key: 'Container admin key (CCG_ADMIN_KEY)', api_key: 'Container API key (CCG_API_KEY)', keysHint: 'Use target container keys. Saved values are never returned; leave blank to retain.',
       networkPool: 'Container IP pool (IPv4 CIDR)', networkAllocation: 'IP allocation', networkShort: 'Private address pool and allocation for account containers; upstream egress still follows the account proxy.', networkRandom: 'Random (default)', networkSequential: 'Sequential', networkHint: 'Defaults to 10.0.0.0/8. Choose a private IPv4 range within 10/8, 172.16/12, or 192.168/16, with prefix at most /24. Random allocation randomizes account subnets and container addresses and avoids occupied networks. Changes rebuild account networks and containers while retaining Claude authorization and data; active requests may be interrupted. These are internal IPs; upstream egress is determined by each account proxy.', networkSaved: 'Saved. Account networks are being rebuilt in the background with the new IP pool and allocation mode.',

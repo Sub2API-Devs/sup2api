@@ -45,8 +45,11 @@ type accountDesired struct {
 	PurgeRequested bool `json:"-"`
 	// Retained: the deleted account's runtime is kept (blocked) until its
 	// purge_after. Purged: it was purged already.
-	Retained bool           `json:"-"`
-	Purged   bool           `json:"-"`
+	Retained bool `json:"-"`
+	Purged   bool `json:"-"`
+	// Parked: the account stayed red for park_after_hours and its runtime
+	// is stopped (parking.go) until it is woken or the account changes.
+	Parked   bool           `json:"-"`
 	CLI      *RuntimeCLI    `json:"cli,omitempty"`
 	Network  RuntimeNetwork `json:"network"`
 	Revision string         `json:"revision"`
@@ -170,15 +173,18 @@ func (s *Service) desiredIn(ctx context.Context, q store.Querier, id int64, cred
   a.proxy_id IS NOT NULL AND (p.id IS NULL OR p.protocol NOT IN ('http','https','socks5')),
   concat_ws('|',a.id,a.type,a.proxy_id,a.deleted_at,p.updated_at,encode(a.credentials_enc,'hex'),(a.settings - 'account_email')::text,r.retired_at),
   COALESCE(p.protocol,''),COALESCE(p.host,''),COALESCE(p.port,0),COALESCE(p.username,''),p.password_enc,a.type,a.credentials_enc,
-  COALESCE(r.key, a.id::text), a.settings
+  COALESCE(r.key, a.id::text), a.settings, COALESCE(`+sqlRuntimeParked+`, false)
   FROM accounts a LEFT JOIN proxies p ON p.id=a.proxy_id LEFT JOIN ccgateway_runtimes r ON r.account_id=a.id
   WHERE a.id=$1 AND a.plugin_key='ccgateway' AND a.type IN ('managed','apikey')`, id).
-		Scan(&d.Deleted, &d.PurgeRequested, &d.Retained, &d.Purged, &d.ProxyUnusable, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &d.Kind, &accountCredentials, &d.Key, &settings)
+		Scan(&d.Deleted, &d.PurgeRequested, &d.Retained, &d.Purged, &d.ProxyUnusable, &version, &spec.Protocol, &spec.Host, &spec.Port, &spec.Username, &password, &d.Kind, &accountCredentials, &d.Key, &settings, &d.Parked)
 	if err != nil {
 		return d, err
 	}
 	d.AccountID = id
-	d.Enabled = !d.Deleted
+	// A parked runtime is blocked like a deleted account's: stopped, its
+	// container, volumes and login kept. The revision does not change, so
+	// waking it starts the same container.
+	d.Enabled = !d.Deleted && !d.Parked
 	d.Revision = revisionOf(version)
 	d.Locale, d.Timezone = accountEnvironment(settings)
 	if d.Enabled && credentials && !d.ProxyUnusable {
@@ -373,6 +379,10 @@ func (s *Service) Reconcile(ctx context.Context, key string) error {
 		}
 	} else if d.ProxyUnusable {
 		return nil
+	} else if !d.Enabled && s.blockedRecently(key, d.Revision) {
+		// A parked runtime was blocked already (a blocked runtime reports
+		// "pending", so the status check below would block it every pass).
+		return nil
 	}
 	// Check remote readiness without rewriting an unchanged configuration.
 	res, close, e := s.runtimeRequest(ctx, key, "GET", "status", nil, "")
@@ -388,8 +398,8 @@ func (s *Service) Reconcile(ctx context.Context, key string) error {
 			return nil
 		}
 	}
-	if e = s.putConfig(ctx, key, d); e == nil && d.Deleted {
-		s.markBlocked(key, d.Revision)
+	if e = s.putConfig(ctx, key, d); e == nil && !d.Enabled {
+		s.markBlocked(key, d.AccountID, d.Revision)
 	}
 	return e
 }
@@ -402,8 +412,9 @@ func (s *Service) Reconcile(ctx context.Context, key string) error {
 var blockedFor = 10 * time.Minute
 
 type blockedMark struct {
-	revision string
-	at       time.Time
+	revision  string
+	accountID int64
+	at        time.Time
 }
 
 func (s *Service) blockedRecently(key, revision string) bool {
@@ -415,20 +426,33 @@ func (s *Service) blockedRecently(key, revision string) bool {
 
 // forgetBlocked follows an account, proxy or configuration change: a
 // runtime blocked again at the same revision (disabled, enabled, disabled) is
-// blocked again.
-func (s *Service) forgetBlocked() {
+// blocked again. With keys (runtime keys or account ids) only those runtimes
+// are forgotten: a change of one account does not block every parked
+// runtime again.
+func (s *Service) forgetBlocked(keys ...string) {
 	s.blockedMu.Lock()
-	s.blocked = nil
-	s.blockedMu.Unlock()
+	defer s.blockedMu.Unlock()
+	if len(keys) == 0 {
+		s.blocked = nil
+		return
+	}
+	for k, m := range s.blocked {
+		for _, key := range keys {
+			if key != "" && (k == key || (m.accountID > 0 && strconv.FormatInt(m.accountID, 10) == key)) {
+				delete(s.blocked, k)
+				break
+			}
+		}
+	}
 }
 
-func (s *Service) markBlocked(key, revision string) {
+func (s *Service) markBlocked(key string, accountID int64, revision string) {
 	s.blockedMu.Lock()
 	defer s.blockedMu.Unlock()
 	if s.blocked == nil {
 		s.blocked = map[string]blockedMark{}
 	}
-	s.blocked[key] = blockedMark{revision: revision, at: time.Now()}
+	s.blocked[key] = blockedMark{revision: revision, accountID: accountID, at: time.Now()}
 }
 
 // putConfig applies d to the runtime key on the controller (PUT config).
@@ -474,7 +498,7 @@ func (s *Service) putConfig(ctx context.Context, key string, d accountDesired) e
 // because the reconcile pass still covers the runtime within a minute.
 func (s *Service) Kick(key string) {
 	// A kick follows a change: block again even at a revision blocked before.
-	s.forgetBlocked()
+	s.forgetBlocked(key)
 	select {
 	case s.kick <- key:
 	default:
@@ -678,6 +702,11 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 		httpapi.Fail(c, failure)
 		return
 	}
+	if d.Parked && !d.Deleted {
+		// Stopped: start it (sync) or re-authorize / test the account first.
+		httpapi.Fail(c, reasonError(core.ErrConflict, reasonRuntimeParked))
+		return
+	}
 	if reason := d.unavailable(); reason != "" {
 		// Say why instead of a 409 from a runtime that cannot follow.
 		httpapi.Fail(c, reasonError(core.ErrInvalidArgument, reason))
@@ -705,8 +734,15 @@ func (s *Service) serveRuntime(c *gin.Context, ctx context.Context, d accountDes
 	httpapi.OK(c, out)
 }
 
-// serveSync reconciles the runtime of d now (POST .../sync).
+// serveSync reconciles the runtime of d now (POST .../sync); a parked one is
+// woken first (the runtime list's "Start").
 func (s *Service) serveSync(c *gin.Context, ctx context.Context, d accountDesired) {
+	if d.Parked {
+		if _, e := s.wake(ctx, d.AccountID); e != nil {
+			httpapi.Fail(c, e)
+			return
+		}
+	}
 	if e := s.Reconcile(ctx, d.Key); e != nil {
 		httpapi.Fail(c, syncFailure(e))
 		return
@@ -867,6 +903,10 @@ func (s *Service) serveStatus(c *gin.Context, ctx context.Context, d accountDesi
 	accountID := strconv.FormatInt(d.AccountID, 10)
 	if d.Deleted {
 		httpapi.OK(c, map[string]string{"account_id": accountID, "key": d.Key, "container": "", "status": "blocked", "revision": "", "reason": reasonAccountDeleted})
+		return
+	}
+	if d.Parked {
+		httpapi.OK(c, map[string]string{"account_id": accountID, "key": d.Key, "container": "", "status": "blocked", "revision": "", "reason": reasonAccountParked})
 		return
 	}
 	status, failure := s.runtimeStatus(ctx, d)

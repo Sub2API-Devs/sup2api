@@ -224,6 +224,10 @@ type View struct {
 	limitDisabled bool
 	// LastTest is the last console test (CONTRACTS §50); null until tested.
 	LastTest *LastTest `json:"last_test"`
+	// RuntimeParked (CCGateway accounts only): the account stayed red for
+	// the configured hours and its container is stopped; testing or
+	// re-authorizing it starts it again.
+	RuntimeParked *bool `json:"runtime_parked,omitempty"`
 	// SubscriptionType is the plan the account's runtime reported ("max",
 	// "pro" ...), CONTRACTS §59; null while unknown.
 	SubscriptionType *string `json:"subscription_type"`
@@ -320,6 +324,7 @@ func (s *Service) views(ctx context.Context, rows []*row) ([]*View, error) {
 		},
 		func() { s.fillUsage(ctx, out) },
 		func() { s.fillRefresh(ctx, rows, out) },
+		func() { s.fillRuntimeParked(ctx, out) },
 		func() {
 			lifecycleErr = errViewPanicked
 			lifecycleErr = s.fillLifecycleStatus(ctx, out)

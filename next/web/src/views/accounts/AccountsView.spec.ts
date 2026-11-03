@@ -254,6 +254,14 @@ describe('account status recovery', () => {
     expect(w.get('[data-testid="account-schedulable-switch"]').attributes('aria-checked')).toBe('true')
   })
 
+  it('says in the status tooltip that a parked account container is stopped', () => {
+    Object.assign(list.items.value[0], { status: 'disabled', status_reason: 'credentials rejected', runtime_parked: true })
+    const w = render()
+    const [reason, parked] = statusTip(w)!.split('\n')
+    expect(reason).toBe('credentials rejected')
+    expect(parked).toContain('容器已停止')
+  })
+
   it('keeps a badge without a reason out of the tab order', () => {
     Object.assign(list.items.value[0], { status: 'active', schedulable: true, status_reason: '', cooldown_until: null })
     const w = render()
