@@ -1,0 +1,4 @@
+{
+ "ink/stdinReader.ts": "2.1.316 新增：终端 stdin 读取状态机（按键解析推进、粘贴/鼠标前缀丢弃、超时刷出未完成转义序列），从 line-width-cache.ts 拆出。",
+ "ink/eventLoopLag.ts": "2.1.316 新增：事件循环延迟监视器（引用计数开启、按 50 ms 定时器判定迟到），从 line-width-cache.ts 拆出。"
+}
