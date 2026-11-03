@@ -4,6 +4,12 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-03 ccgateway **0.1.125**（`d0e4f7573`，北京时间 14:00 左右；插件包 `2a3656b5…07d3`，只发插件，核心仍 0.1.234）：
+- 内容：定制 CLI 2.1.316 升为 `ccgateway-v46-shape-prompt-text`（ELF `2125d0b0…0b41`）+ 新 Worker（`3cf2744a…d93`）。修复 0.1.124 在 #82 实测中发现的两处缺口：Worker 的应答观察器见到上游 `Content-Encoding`（CLI 写回的已是解压字节）就不读，导致续接请求缺 `diagnostics`、子代理配不上父线程；记忆改为读到 `message_stop` 时、写给客户端之前就记入并释放线程（否则客户端立刻发出的子代理请求会看到父线程"忙"）；CLI 派生 prompt id 的哈希去掉 `cache_control`，同一轮工具循环共用一个 prompt id。离线 e2e 假上游加 `FAKE_GZIP=1`。验证见迁移记录第 12 节。
+- 只对新账号生效；#82 按用户要求原地升到 v46（`runtimes/d4bc3f8af1a1028aa/worker {"components":["worker","cli"]}`，容器不重建）。
+- 核验：控制器 0.1.125 healthy，`up_to_date: true`，账号容器只换了控制器。#82 实测没做成：#82 自 04:44 UTC 起被上游限流自动禁用（`rate limited until 2026-11-03T08:50:00Z`），只含 #82 的临时分组 4 个请求全是 529 `no_account`；临时分组 16 / Key 120 已删，#82 回到分组 9，请求日志回到"跟随"。当时 35 个 ccgateway 账号只有 2 个 active（19 个登录失效、13 个限流待自动恢复），全站 529 `no_account` 从 2026-11-02 23:00 UTC 起每小时都有，与本次发布无关。
+- 脚本 `stage/ccgateway-0.1.125/`；v46 release 在 `~/sup2api/checks/cli-releases/release-v46-2.1.316`；备份 `backups/ccgateway-0.1.125`（`28b4b049…`）。
+
 2026-11-03 ccgateway **0.1.124** + 核心 **0.1.234**（`e3f5dde61`，北京时间 04:12–04:22；插件包 `41cdb81b…3e23`，核心 manifest `54879cc2…01ca`，计划 `1bddf37536cb5745bd8097f264830b7c` completed/13，无迁移、schema 不变 `c4cddb7f…`，Host API 8，内置插件为 0.1.233 的一套把 ccgateway 换成 0.1.124）：
 - 内容（用户 2026-11-03 决定"①②③ 都做，②③ 默认开"，分析 `artifacts/cc-thirdparty/`）：CC 改 base URL 接入时发的第三方形状，由网关转成第一方形状。定制 CLI 2.1.316 升为 `ccgateway-v45-first-party-shape`（ELF `724ebb33…3bde`，只给新账号）。
   - ① 我们自己的不一致（不受开关）：子代理 `x-claude-code-agent-type` 不再写 `custom`；请求体顶层键序与 beta 顺序按原生；`prompt-caching-scope`/`cache-diagnosis`/`extended-cache-ttl` 与请求体一致。
