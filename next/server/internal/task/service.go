@@ -10,7 +10,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/background"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
 // Options wires the service to this node.
@@ -22,6 +24,11 @@ type Options struct {
 	// CanWork is the node's background admission (nil: always admitted).
 	CanWork func() bool
 	Logger  *slog.Logger
+	// DB, Executor and ClientID serve the cluster backend (StartCluster).
+	// ClientID names this node's River client; empty uses NodeID.
+	DB       *store.DB
+	Executor *background.Executor
+	ClientID string
 }
 
 // Service implements core.Tasks: one registry, the node backend (gocron) and
@@ -34,6 +41,7 @@ type Service struct {
 
 	mu      sync.Mutex
 	cancels []func()
+	cluster *clusterBackend
 }
 
 var _ core.Tasks = (*Service)(nil)
@@ -67,7 +75,11 @@ func (s *Service) Register(spec core.TaskSpec) error {
 	case core.TaskNode:
 		err = s.node.add(t)
 	case core.TaskCluster:
-		err = fmt.Errorf("%w: cluster tasks are not available yet", core.ErrTaskNotReady)
+		// Before StartCluster the task is only registered; StartCluster
+		// records and schedules every registered cluster task.
+		if c := s.clusterBackend(); c != nil {
+			err = c.add(context.Background(), t)
+		}
 	}
 	if err != nil {
 		s.reg.Remove(t.Name)
@@ -88,8 +100,51 @@ func (s *Service) StartNode(ctx context.Context) error {
 	return nil
 }
 
+// StartCluster starts the cluster backend: it records every registered
+// cluster task in scheduled_tasks and runs River while CanWork holds.
+func (s *Service) StartCluster(ctx context.Context) error {
+	if s.opts.DB == nil {
+		return fmt.Errorf("%w: no database", core.ErrTaskNotReady)
+	}
+	if _, ok := s.reg.Get(HousekeepingTask); !ok {
+		if _, err := s.reg.Add(s.housekeepingSpec(), SourceCore, ""); err != nil {
+			return err
+		}
+	}
+	s.mu.Lock()
+	if s.cluster != nil {
+		s.mu.Unlock()
+		return nil
+	}
+	clientID := s.opts.ClientID
+	if clientID == "" {
+		clientID = s.opts.NodeID
+	}
+	c, err := newClusterBackend(ctx, s.log, s.opts.DB, s.reg, s.opts.NodeID, clientID, s.opts.Version, s.opts.CanWork, s.opts.Executor)
+	if err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	s.cluster = c
+	s.mu.Unlock()
+	if err := c.start(ctx); err != nil {
+		c.shutdown(ctx)
+		s.mu.Lock()
+		s.cluster = nil
+		s.mu.Unlock()
+		return err
+	}
+	return nil
+}
+
+func (s *Service) clusterBackend() *clusterBackend {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cluster
+}
+
 // Trigger runs a task once now (core.Tasks).
-func (s *Service) Trigger(_ context.Context, name string) error {
+func (s *Service) Trigger(ctx context.Context, name string) error {
 	t, ok := s.reg.Get(name)
 	if !ok {
 		return core.ErrTaskUnknown
@@ -97,7 +152,11 @@ func (s *Service) Trigger(_ context.Context, name string) error {
 	if t.Scope == core.TaskNode {
 		return s.node.trigger(name)
 	}
-	return core.ErrTaskNotReady
+	c := s.clusterBackend()
+	if c == nil {
+		return core.ErrTaskNotReady
+	}
+	return c.trigger(ctx, name)
 }
 
 // RunOnNodes asks node nodeID ("" for every node) to run node task name now.
@@ -135,13 +194,24 @@ func (s *Service) onRunRequest(payload []byte) {
 }
 
 // Enqueue submits one run of a cluster task (core.Tasks).
-func (s *Service) Enqueue(context.Context, string, any, core.EnqueueOpts) error {
-	return core.ErrTaskNotReady
+func (s *Service) Enqueue(ctx context.Context, name string, args any, opts core.EnqueueOpts) error {
+	c := s.clusterBackend()
+	if c == nil {
+		return core.ErrTaskNotReady
+	}
+	return c.enqueue(ctx, nil, name, args, opts)
 }
 
 // EnqueueTx submits one run of a cluster task inside tx (core.Tasks).
-func (s *Service) EnqueueTx(context.Context, pgx.Tx, string, any, core.EnqueueOpts) error {
-	return core.ErrTaskNotReady
+func (s *Service) EnqueueTx(ctx context.Context, tx pgx.Tx, name string, args any, opts core.EnqueueOpts) error {
+	if tx == nil {
+		return fmt.Errorf("%w: nil transaction", core.ErrTaskInvalid)
+	}
+	c := s.clusterBackend()
+	if c == nil {
+		return core.ErrTaskNotReady
+	}
+	return c.enqueue(ctx, tx, name, args, opts)
 }
 
 // NodeStates returns this node's node task states (tests, console).
@@ -156,6 +226,9 @@ func (s *Service) Stop(ctx context.Context) {
 	s.mu.Unlock()
 	for _, c := range cancels {
 		c()
+	}
+	if c := s.clusterBackend(); c != nil {
+		c.shutdown(ctx)
 	}
 	s.node.stop(ctx)
 }
