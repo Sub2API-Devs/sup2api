@@ -1,0 +1,12 @@
+{"id":"chunk-gjx0rh1b.js#td","doc":"清理以 PID 命名的过期目录：名字里的 PID 对应进程已不存在、且目录修改时间超过保留时限时递归删除；出错静默忽略。"}
+{"id":"chunk-gjx0rh1b.js#nd","doc":"清理以 PID 命名的过期 seed 索引文件：文件名匹配 seed 索引格式、修改时间超过保留时限且对应进程已不存在时删除（只删文件，不是目录）；出错静默忽略。"}
+{"id":"chunk-0h4e7gnq.js#fi","doc":"取子代理最近一次自我报告的文本，有 warning 时拼在前面；报告来源与当前一致时不取，返回 undefined。被 runAgent 使用。"}
+{"id":"chunk-0h4e7gnq.js#Ld","doc":"上报子代理预加载技能的遥测（tengu_skill_tool_invocation，execution_context=preload、invocation_trigger=agent-preload）；技能名按官方市场/MCP/内建/打包区分脱敏。"}
+{"id":"chunk-m2yw48pg.js#b","doc":"命令里的每个 git push 都不带额外选项且只推 origin 时为真；webSetupPostPushHook 用它限定只在普通推送后触发。"}
+{"id":"chunk-m2yw48pg.js#k","doc":"判断这次 git 操作是否推向 GitHub：创建 PR 时看 PR URL 的托管方是否为 github，否则看缓存的远端主机是否是 github.com。"}
+{"id":"chunk-s61vbvea.js#Mei","doc":"标记某分发的按键已作答，并删除同环境中更早的已作答记录。"}
+{"id":"chunk-ndmse9kj.js#UMe","doc":"设置读取的全局缓存：合并结果、各来源结果、已解析文件、目录列表、托管文件链接/保护、策略层遍历计数、插件基础层与保留层（storage v5）。invalidateAll 递增 epoch 清空缓存（可保留用户层），seed*/unseed* 按 epoch 写入预读结果，*InstallVerdict 判定预读结果能否安装（install/raced/deferred）。"}
+{"id":"chunk-ndmse9kj.js#j","doc":"会话费用账本：总费用、API/工具耗时、增删行数、各模型用量、侧查询费用、安全停止次数、已花 token；支持 restore/snapshot 与按会话认领（claim/scopeTo/belongsTo），记账时触发 spendRecorded 信号。"}
+{"id":"chunk-s61vbvea.js#cti","doc":"列出给定路径的各级父目录（由近到远逆序后输出、跨路径去重），wipStash 用它找各级 .gitattributes。"}
+{"id":"chunk-aepeg2w5.js#GI","doc":"判断全局配置的改动是否只涉及低风险键：projects 下逐个项目比较，其余键必须都在 LOW_STAKES_GLOBAL_CONFIG_KEYS 里。"}
+{"id":"chunk-1t61stbc.js#C7o","doc":"第二个参数为假（非代理请求）且 querySource 为 repl_main_thread*、sdk、compact 时为真，供提示缓存断裂检测决定是否跟踪；不是压缩后清理。"}

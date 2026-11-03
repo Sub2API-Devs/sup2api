@@ -315,3 +315,136 @@ lead 点名的两组冲突：
 6. **`_misplaced/` 前缀的 kind 是 unattributed**，lead 统计未归属时会把它们算进去。
 7. **chunk-a16kyqj3 的其余部分**仍是 unattributed，应整体归入 vendor lodash-es。
 8. **7t4fmt2f 的 ai、di、li** 暂放 `_misplaced`：两侧是 policyLimits，但旧版 errorUtils 确实有 SSL 错误码集合，需要再看调用方。
+
+## 第二轮（第四阶段命名成员 r0…r9 的"发现的问题"）
+
+日期 2026-11-03。输入是 `docs/process/naming-r0.md` … `naming-r9.md` 的"发现的问题"节。每一处都用 `artifacts/tmp/fixer/r2look.mjs` 核对过：当前归属取自 `analysis/segments/decl-path.jsonl`，名字取自 `naming/final/top.json`，另看调用方、被调方、chunk 左右邻居和代码片段。
+
+### 交付
+
+| 文件 | 本轮改动 |
+|---|---|
+| `naming/placement-zz-fixes.json` | 追加 230 条，现共 1,957 条。第一轮条目都保留；同 id 只有 1 条被本轮覆盖 |
+| `naming/semantic-zz-fixes.jsonl` | 追加 12 条名字修正，现共 187 条。前 175 条与第一轮逐字节相同 |
+| `naming/docs-zz-fixes.jsonl` | 新建，12 条改正后的说明 |
+| `artifacts/tmp/fixer/` | 裁决表 `r2-decisions.tsv`、展开结果 `r2-applied.tsv`、`r2-names.tsv`；脚本 `r2-apply.mjs`、`r2-docs.mjs`、`r2look.mjs`；第一轮快照 `*.round1.json(l)` |
+
+重跑：
+
+```
+node --max-old-space-size=8000 artifacts/tmp/fixer/r2-apply.mjs --write
+node --max-old-space-size=8000 artifacts/tmp/fixer/write-semantic.mjs
+node artifacts/tmp/fixer/r2-docs.mjs
+```
+
+### 校验结果
+
+- **放置**：`validate.mjs` 检查全部 1,957 条。键都存在，路径都合法，没有 vendor 声明被搬回 first-party。其中 1,708 条已经是"目标等于当前路径"：第一轮的修正 lead 已经按 zz 重新切分生效。
+- **名字**：187 条的 key 都指向标识符起点，本轮 12 条与 `top.json` 的绑定位置逐一对上。
+
+修了一个旧缺陷：`write-semantic.mjs` 找名字的位置原来用 `indexOf`。它会在 "function" 里匹配到 `cti` 这类短名，现改为整词匹配。第一轮 175 条的 key 不受影响，已确认逐字节相同。
+
+### 放置：采纳 230 个声明
+
+| 成员 | r0 | r1 | r2 | r3 | r4 | r5 | r6 | r7 | r8 | r9 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 采纳声明数 | 14 | 30 | 24 | 14 | 13 | 31 | 24 | 37 | 20 | 23 |
+| 驳回声明数 | 0 | 8 | 3 | 2 | 1 | 16 | 7 | 13 | 3 | 8 |
+
+采纳依据（每条理由写在 `r2-decisions.tsv`）：
+
+- 唯一调用方所在模块；
+- chunk 两侧邻居同属一个模块（Bun 按语句连续切分）；
+- 代码里的字符串与 schema 能说明用途；
+- lodash 实现逐行一致。
+
+整段或整模块处理的几处：
+
+| 对象 | 去向 | 依据 |
+|---|---|---|
+| `tools/AgentTool/built-in/verificationAgent.ts`（整模块，2 个声明） | `tools/AgentTool/built-in/webFetchAgent.ts` | 内容是 web-fetch 内建代理定义和它的系统提示 |
+| `utils/plugins/publishedCatalogFloor.ts`（整模块） | `utils/model/modelCatalog/publishedCatalogFloor.ts` | 内容是模型目录下限 |
+| chunk-mvvq2nx1 5350–7285 | `utils/imageResizer.ts` | 图片解码与缩放管线。r2 只点了 7 个，同段的私有辅助一起搬；前半段才是图片错误文案 |
+| chunk-y6fv30yg 2554–5539（ConfirmStep 段） | `components/vertexSetup/VertexSetupWizard.tsx` | `oe` 的唯一调用方是 VertexSetupWizard，`_e` 构造 Vertex 设置 |
+| chunk-x5e9ztk0 6572–8000 | `tools/MemoryTool/UI.tsx` | 这 8 个声明都渲染 Memory 工具结果，不是 PowerShell |
+| chunk-dz3q485w 在 `services/projects/projectMemory.ts` 的 9 个声明 | `services/projects/channelMemory.ts` | 频道记忆 API。同文件的 claude.ai 项目 API 来自 chunk-j0nnxep0，不是一套 |
+
+第三方代码进 vendor 的有 13 个：
+
+- lodash-es 内部函数：safeGet、baseMerge、isIterateeCall、createAssigner、baseAssignValue、baseKeysIn、baseSet、basePickBy、baseZipObject；
+- lodash-es 公开函数：isEmpty、clamp、pickBy；
+- 内联的 countBy。
+
+新建的 17 个文件：
+
+- `tools/AgentTool/built-in/webFetchAgent.ts`、`tools/EnterWorktreeTool/UI.tsx`、`tools/ListMcpResourcesTool/UI.tsx`、`tools/MemoryTool/UI.tsx`。其中 EnterWorktreeTool/UI 与 ListMcpResourcesTool/UI 是 2.1.88 原有的文件名。
+- `utils/pathCaseFolding.ts`、`utils/instanceRegistry.ts`、`utils/keyedSemaphore.ts`、`utils/turnAttributionKey.ts`。
+- `hooks/useScreenReaderBell.ts`、`services/remoteManagedSettings/fetchSupport.ts`、`services/memorySync/mountRoots.ts`、`services/artifacts/autoEditAttribution.ts`、`utils/claudeAiSync/sessionRefsGate.ts`、`services/projects/channelMemory.ts`、`utils/sandbox/windowsNugetPackages.ts`、`utils/model/modelCatalog/publishedCatalogFloor.ts`、`cli/print/sessionTitles.ts`。
+
+### 放置：驳回 61 个声明
+
+1. **唯一调用方就在当前文件，或当前文件本身合理**：
+   - r1：2f5p3gsj#C（doctor 处理器在同文件）。
+   - r6：18hwfzwa#DQe。
+   - r9：Mgo、CandidateStatusRow、I7（已在 UserTextMessage）。
+   - r5：e6aww6q8#Wen。
+   - r6：s61vbvea#s4o、#i4o、#rni（attachmentFilesWait 整体都是"等待到达中的入站文件"，只是调用方在 cli/print）。
+   - r5：f9asxqh1#I5r、#O5r、#D5r（就是 pluginsScopeGate 该做的同步可用性门控）。
+   - r6：ag5x7vhf#uye（exportRenderer 自己也用它）。
+2. **调用方分散，找不到单一去处**：
+   - r1：82kqcve8#_J（8 个调用方遍及 memdir、autoDream、settingsSync）。
+   - r2：yxnffbzs#Hds（utils/messages 也用）。
+   - r3：hny2rpzz#ymt。
+   - r5：s1zey0a9#fZn；ptag3qm7#c、#qCi、#YCi；dz3q485w#je、#ke、#ds（toolsUsedSummary 也用）。
+   - r7：f25sswmp#Zot、dcmhvw5a#Oio、yf5m6p65#Pos。
+3. **依赖当前模块的私有状态，单独搬会切断**：
+   - r1：7t4fmt2f#T5e、#lIe（与 facade 名 extractServerErrorFields 同组，OAuth 也用）。
+   - r2：e6aww6q8#y5s、#_5s（依赖 conversationRecovery 的恢复计数状态 Uwe）。
+   - r5：dz3q485w#In（用 briefText 的私有重试表）。
+   - r3：4bsqyjz4#rzs（用 slackSend 内部函数，而它的调用方本身可疑）。
+4. **成员自己存疑或只是建议**：
+   - r1：K5t、z5t（成员判断是调用方解析出错）、aepeg2w5#tv。
+   - r6：ah34pb7m#qu、nt75hmzb#jqt。
+   - r9：logPressFill；queryHelpers 的 p6、tVn、nVn、rVn（原文是"更适合"）。
+   - r7：82kqcve8 的 qm、eR、uFe、T9r（原文是"偏"）。
+   - r4：tbfde207#B。
+   - r1：w5ndchqs#JXs（唯一调用方是 claude.ts 的 queryModel）。
+5. **没有可用的目标**：
+   - r5：gwvwj681#P/G、fnmk6x3n#u、18hwfzwa#EIe。EIe 用的是同文件的 TRUSTED_DEVICE_ENROLLED，更像整个 useNpmDeprecationNotification 模块名配错。
+   - r7：cjydagjy#Kt、q4qb1h08#q/pn、18hwfzwa#Yse、18hwfzwa#aCt（唯一合理去处是 `_new` 路径）、csq9ftr9#z。
+   - r8：bedrockVerify 的 pe、Se（是步骤组件，但在 bedrock 模块里可以接受）；actionNames.ts 整模块改名只是建议。
+6. **没有给出声明 id**：r9 的 nullRenderingAttachments、presenceCheck、`_new` 门面；r4 的 promo、v2e、H1r（成员自己说归属正确）。
+
+### 名字：12 条（semantic-zz，`r2-names.tsv`）
+
+当前名字都来自 reference 或是压缩名，不是门面名，所以 semantic 能覆盖。本轮没有遇到门面名本身错了的情况。
+
+| 声明 | 旧名 | 新名 | 来源 |
+|---|---|---|---|
+| aepeg2w5#GI | getProjectsDir | isLowStakesConfigChange | r0 |
+| 1t61stbc#C7o | runPostCompactCleanup | isCacheBreakTrackedSource（同时移到 promptCacheBreakDetection） | r2 |
+| e6aww6q8#y$i | CoordinatorTaskPanel | showAgentTaskView | r8 |
+| 4121qate#gs | isInstallationRelevantToCurrentProject | isManagedPathRestricted | r9 |
+| 4121qate#va | generateUniqueTeammateName | groupByHop | r9 |
+| e6aww6q8#Z3 | toggleTeammateVisibility | defaultDescribe | r9 |
+| 3dq9c61y#T | detectTerminal | hostPlatform | r9 |
+| e6aww6q8#xTe | isMainThreadSource_2 | getMainThreadCacheTtl | r9 |
+| e6aww6q8#msn | isMainThreadSource_3 | getMainThreadCacheTtlConfig | r9 |
+| e6aww6q8#N9e | （压缩名） | resolveMainThreadCacheTtl（0.9） | r9 |
+| s61vbvea#cti | SPINNER_FRAMES | listAncestorDirs | r0（wipStash 的 Gt 导入名错） |
+| e6aww6q8#FSt | VERIFICATION_AGENT | WEB_FETCH_BUILTIN_AGENT | r0 |
+
+除 N9e 外置信度都是 0.97。r2 说的真正主体 e6aww6q8#fRe 已由 r2 命名为 cleanupAfterCompaction，不用再写。
+
+### 说明：12 条（docs-zz-fixes）
+
+- **gjx0rh1b#td**：说明内容是对的（删的是以 PID 命名的目录），但"（名字配错）"已过时，第一轮已改名为 pruneStaleProcessDirs。r0 把它当成了下一个函数 nd 的说明。nd 删的是 seed 索引文件，不是目录，本轮补了说明。
+- **0h4e7gnq#fi、m2yw48pg#b**：去掉过时的"（旧版名配错，切分错误）"前缀，它们第一轮已改名并归位。r0 说"Ld、k 上方的 JSDoc 与代码不符"，指的就是紧挨着的这两条。Ld、k 本身也补写了更准确的说明。
+- **s61vbvea#Mei、ndmse9kj#UMe、ndmse9kj#j**：采用 r9 对照代码重写的说明，取代 docs-extensions 和 docs-p2 的旧说明。
+- **改了名或搬了位置的声明**：GI、C7o、cti 写了与新名一致的说明。C7o 的旧说明是"压缩后清理是否适用"，与它在缓存断裂检测里的用途不符。
+
+### 遗留
+
+1. `naming/placement-zzz-lead.json` 排序在 zz 之后，会覆盖 zz。它目前只有 3 条，与 zz 没有重合。
+2. 第一轮还剩 249 条没有生效（其中本轮 230 条），剩下 19 条要等 lead 下次切分时确认。
+3. 几处整模块名配错我没有改名，只记录在上面"驳回"第 5 类。
