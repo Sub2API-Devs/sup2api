@@ -31,7 +31,7 @@
 
 | 步 | 内容 | 验证 | 状态 |
 | --- | --- | --- | --- |
-| B1 | #20 `core.ccgateway.runtime_sync`：一个可工作节点跑、一轮并发 4、`sweepNow` 改 `Trigger`；阻断去重改用 `blocked_revision`/`blocked_at`（事件触发的单 key 同步也用） | 两节点交替执行时同一 revision 10 分钟内只下发一次；原同步测试不变 | 待做 |
+| B1 | #20 `core.ccgateway.runtime_sync`：一个可工作节点跑、一轮并发 4、`sweepNow` 改 `Trigger`；阻断去重改用 `blocked_revision`/`blocked_at`（事件触发的单 key 同步也用） | 两节点交替执行时同一 revision 10 分钟内只下发一次；原同步测试不变 | 完成 |
 | B2 | #7 `core.account.usage_limits`（删 advisory 锁）、#5 `core.account.credential_refresh`（删扫描级 Redis 锁，保留每账号锁）、#4 `core.account.quota_sweep`（node + `RequireWork`） | 原有测试；用量限制不叠跑；`usageLimitsLock` 不再出现 | 待做 |
 | B3 | #12a `core.helper.usage_replay`、#38 `core.usage.reconcile`（删 Redis 锁，Handler 等本轮结束）、#40 `core.usage.settlement_retry`（node + `RequireWork`） | 原有计费测试全部通过；对账条数进运行记录 | 待做 |
 | B4 | 白名单收紧到 §14.3；CONTRACTS 更新；全量验证；发布材料 | 全部通过 | 待做 |

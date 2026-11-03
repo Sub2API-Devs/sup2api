@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -330,13 +331,15 @@ func TestFeatureConfigHTTPAtomicAndNoRuntimeKick(t *testing.T) {
 	var gid int64
 	require.NoError(t, f.db.Pool.QueryRow(ctx, "INSERT INTO groups(name) VALUES('policy-save') RETURNING id").Scan(&gid))
 	f.account(false)
-	f.s.sweepNow = make(chan struct{}, 1)
+	tasks := newFakeTasks()
+	require.NoError(t, f.s.RegisterTasks(tasks))
 	body := `{"mode":"local","feature_revision":0,"cc_feature_groups":{"` + strconv.FormatInt(gid, 10) + `":{"enabled":true,"allow_account_override":true,"overrides":{"build_billing_sources":{"cc_version":"worker"}}}}}`
 	code, out := f.request(uid, "PUT", "/system/ccgateway/remote-config", body)
 	require.Equal(t, 200, code, out)
 	require.Equal(t, float64(1), data(out)["feature_revision"])
 	require.Empty(t, f.s.kick)
-	require.Empty(t, f.s.sweepNow)
+	time.Sleep(50 * time.Millisecond) // sweepSoon triggers on its own goroutine
+	require.Zero(t, tasks.triggered(RuntimeSyncTask))
 	// Stale write cannot clear groups; an omitted new field remains intact.
 	code, out = f.request(uid, "PUT", "/system/ccgateway/remote-config", `{"mode":"local","feature_revision":0,"cc_feature_groups":{}}`)
 	require.Equal(t, 409, code, out)

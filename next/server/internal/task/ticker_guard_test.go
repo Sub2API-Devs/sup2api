@@ -52,7 +52,6 @@ var tickerAllowed = map[string]struct {
 	// then.
 	"account/automatic_state.go": {1, "core.account.usage_limits (#7), 0.1.236"},
 	"app/helper_history.go":      {1, "core.helper.usage_replay (#12a), 0.1.236"},
-	"ccgateway/accounts.go":      {1, "core.ccgateway.runtime_sync (#20), 0.1.236"},
 	"usage/reconcile.go":         {1, "core.usage.reconcile (#38), 0.1.236"},
 	"usage/settler.go":           {1, "core.usage.settlement_retry (#40), 0.1.236"},
 }

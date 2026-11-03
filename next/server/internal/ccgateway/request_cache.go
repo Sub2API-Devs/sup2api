@@ -438,10 +438,18 @@ func (s *Service) onAccountChanged(payload []byte) {
 	}
 }
 
-// sweepSoon starts a reconcile pass of every runtime now.
+// sweepSoon asks for a reconcile pass of every runtime now (a manual run of
+// core.ccgateway.runtime_sync; one waits at most). It never blocks.
 func (s *Service) sweepSoon() {
-	select {
-	case s.sweepNow <- struct{}{}:
-	default:
+	tasks := s.tasks.Load()
+	if tasks == nil {
+		return
 	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := (*tasks).Trigger(ctx, RuntimeSyncTask); err != nil {
+			slog.Warn("CCGateway: trigger runtime sync", "err", err)
+		}
+	}()
 }

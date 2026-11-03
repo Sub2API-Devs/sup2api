@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
@@ -249,15 +251,21 @@ type Service struct {
 	FactsObserved func(ctx context.Context, accountID int64, observed core.AccountPreparationFacts, subscriptionChanged bool)
 	// cache keeps what forwarding a model request needs (request_cache.go).
 	cache requestCache
-	// sweepNow asks Run for a reconcile pass of every runtime now.
-	sweepNow chan struct{}
-	// blocked: runtimes this node blocked, by key (Reconcile).
+	// tasks triggers core.ccgateway.runtime_sync (RegisterTasks; nil
+	// without the task framework).
+	tasks atomic.Pointer[core.Tasks]
+	// blocked: runtimes this node blocked, by key (Reconcile); forgot: when
+	// a change asked to block a runtime (key or account id) again, and
+	// forgotAll when every runtime (blocked marks in the database older than
+	// these do not count).
 	blockedMu sync.Mutex
 	blocked   map[string]blockedMark
+	forgot    map[string]time.Time
+	forgotAll time.Time
 }
 
 func New(db *store.DB, cipher *secret.Cipher) *Service {
-	return &Service{DB: db, Cipher: cipher, kick: make(chan string, 64), sweepNow: make(chan struct{}, 1)}
+	return &Service{DB: db, Cipher: cipher, kick: make(chan string, 64)}
 }
 func (s *Service) decode(raw []byte) (Config, error) {
 	c, err := s.decodeStored(raw)

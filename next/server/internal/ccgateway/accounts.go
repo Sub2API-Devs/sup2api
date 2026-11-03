@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/environment"
@@ -21,6 +23,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
 
 // Runtime keys (CONTRACTS §49.7): an account's runtime is named after the
@@ -374,15 +377,18 @@ func (s *Service) Reconcile(ctx context.Context, key string) error {
 				return e
 			}
 			return tx.Commit(ctx)
-		case s.blockedRecently(key, d.Revision):
-			return nil
 		}
-	} else if d.ProxyUnusable {
+	}
+	if d.ProxyUnusable && !d.Deleted {
 		return nil
-	} else if !d.Enabled && s.blockedRecently(key, d.Revision) {
-		// A parked runtime was blocked already (a blocked runtime reports
-		// "pending", so the status check below would block it every pass).
-		return nil
+	}
+	if !d.Enabled {
+		// A deleted account's or parked runtime was blocked already (a
+		// blocked runtime reports "pending", so the status check below would
+		// block it every pass).
+		if blocked, e := s.blockedRecently(ctx, tx, key, d); e != nil || blocked {
+			return e
+		}
 	}
 	// Check remote readiness without rewriting an unchanged configuration.
 	res, close, e := s.runtimeRequest(ctx, key, "GET", "status", nil, "")
@@ -398,43 +404,115 @@ func (s *Service) Reconcile(ctx context.Context, key string) error {
 			return nil
 		}
 	}
-	if e = s.putConfig(ctx, key, d); e == nil && !d.Enabled {
-		s.markBlocked(key, d.AccountID, d.Revision)
+	if e = s.putConfig(ctx, key, d); e != nil || d.Enabled {
+		return e
 	}
-	return e
+	return s.markBlocked(ctx, tx, key, d)
 }
 
-// blockedFor is how long a runtime this node blocked is not blocked again.
-// The controller reports a blocked runtime as "pending", so without it every
-// node rewrote the configuration of every disabled account at every pass
-// (2026-10-11). Blocking again now and then still stops containers someone
-// started by hand.
+// blockedFor is how long a blocked runtime is not blocked again. The
+// controller reports a blocked runtime as "pending", so without it every
+// pass rewrote the configuration of every disabled account (2026-10-11).
+// Blocking again now and then still stops containers someone started by
+// hand.
 var blockedFor = 10 * time.Minute
 
+// blockedMark is a block this node sent; it covers runtimes without a row in
+// ccgateway_runtimes (legacy runtimes named after their account), which keep
+// their mark in memory only.
 type blockedMark struct {
 	revision  string
 	accountID int64
 	at        time.Time
 }
 
-func (s *Service) blockedRecently(key, revision string) bool {
+// blockedRevision is the database form of revision (its first 63 bits).
+func blockedRevision(revision string) int64 {
+	if len(revision) < 16 {
+		return 0
+	}
+	n, err := strconv.ParseUint(revision[:16], 16, 64)
+	if err != nil {
+		return 0
+	}
+	return int64(n >> 1)
+}
+
+// blockedRecently reports whether enabled:false was sent to runtime key at
+// d's revision less than blockedFor ago, by this node or any other
+// (ccgateway_runtimes.blocked_revision / blocked_at, read under the
+// runtime's advisory lock), and no change asked to block it again since.
+func (s *Service) blockedRecently(ctx context.Context, tx pgx.Tx, key string, d accountDesired) (bool, error) {
+	now := time.Now()
 	s.blockedMu.Lock()
-	defer s.blockedMu.Unlock()
 	m, ok := s.blocked[key]
-	return ok && m.revision == revision && time.Since(m.at) < blockedFor
+	forgot := s.forgotAll
+	for _, k := range []string{key, strconv.FormatInt(d.AccountID, 10)} {
+		if t := s.forgot[k]; t.After(forgot) {
+			forgot = t
+		}
+	}
+	s.blockedMu.Unlock()
+	if ok && m.revision == d.Revision && now.Sub(m.at) < blockedFor {
+		return true, nil
+	}
+	var revision *int64
+	var at *time.Time
+	err := tx.QueryRow(ctx, `SELECT blocked_revision, blocked_at FROM ccgateway_runtimes WHERE key = $1`, key).Scan(&revision, &at)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return revision != nil && at != nil && *revision == blockedRevision(d.Revision) &&
+		now.Sub(*at) < blockedFor && at.After(forgot), nil
+}
+
+// markBlocked records the enabled:false just sent to runtime key, in the
+// database for every node (committing tx, which releases the runtime's
+// lock) and in memory.
+func (s *Service) markBlocked(ctx context.Context, tx pgx.Tx, key string, d accountDesired) error {
+	now := time.Now()
+	s.blockedMu.Lock()
+	if s.blocked == nil {
+		s.blocked = map[string]blockedMark{}
+	}
+	s.blocked[key] = blockedMark{revision: d.Revision, accountID: d.AccountID, at: now}
+	s.blockedMu.Unlock()
+	if _, err := tx.Exec(ctx, `UPDATE ccgateway_runtimes SET blocked_revision = $2, blocked_at = $3 WHERE key = $1`,
+		key, blockedRevision(d.Revision), now); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // forgetBlocked follows an account, proxy or configuration change: a
 // runtime blocked again at the same revision (disabled, enabled, disabled) is
 // blocked again. With keys (runtime keys or account ids) only those runtimes
 // are forgotten: a change of one account does not block every parked
-// runtime again.
+// runtime again. Marks in the database written before now stop counting on
+// this node.
 func (s *Service) forgetBlocked(keys ...string) {
+	now := time.Now()
 	s.blockedMu.Lock()
 	defer s.blockedMu.Unlock()
 	if len(keys) == 0 {
-		s.blocked = nil
+		s.blocked, s.forgot, s.forgotAll = nil, nil, now
 		return
+	}
+	if s.forgot == nil {
+		s.forgot = map[string]time.Time{}
+	}
+	for k, t := range s.forgot {
+		if now.Sub(t) >= blockedFor {
+			delete(s.forgot, k)
+		}
+	}
+	for _, key := range keys {
+		if key != "" {
+			s.forgot[key] = now
+		}
 	}
 	for k, m := range s.blocked {
 		for _, key := range keys {
@@ -444,15 +522,6 @@ func (s *Service) forgetBlocked(keys ...string) {
 			}
 		}
 	}
-}
-
-func (s *Service) markBlocked(key string, accountID int64, revision string) {
-	s.blockedMu.Lock()
-	defer s.blockedMu.Unlock()
-	if s.blocked == nil {
-		s.blocked = map[string]blockedMark{}
-	}
-	s.blocked[key] = blockedMark{revision: revision, accountID: accountID, at: time.Now()}
 }
 
 // putConfig applies d to the runtime key on the controller (PUT config).
@@ -566,12 +635,88 @@ func (s *Service) runtimeKeys(ctx context.Context) ([]string, error) {
 	return keys, rows.Err()
 }
 
-// reconcileEvery is the reconcile pass of every runtime. Changes are applied
-// at once (Kick, account:changed, config:changed), so the pass only catches
-// what changed on the controller side (a runtime restarted or removed) and
-// missed messages (2026-10-11; it was every 3 s).
+// reconcileEvery is the reconcile pass of every runtime
+// (core.ccgateway.runtime_sync). Changes are applied at once (Kick,
+// account:changed, config:changed), so the pass only catches what changed on
+// the controller side (a runtime restarted or removed) and missed messages
+// (2026-10-11; it was every 3 s).
 var reconcileEvery = 60 * time.Second
 
+// runtimeSyncWorkers reconcile the runtimes of one pass concurrently.
+const runtimeSyncWorkers = 4
+
+// RuntimeSyncTask is the cluster task that reconciles every runtime.
+const RuntimeSyncTask = "core.ccgateway.runtime_sync"
+
+func runtimeSyncSpec(s *Service) core.TaskSpec {
+	return core.TaskSpec{
+		Name:  RuntimeSyncTask,
+		Title: core.LocalizedText{"en": "Synchronize every account runtime", "zh": "全量同步账号运行环境"},
+		Description: core.LocalizedText{
+			"en": "Applies the desired configuration to every account runtime the controller does not run as it should; changes are applied at once, this catches what changed on the controller and missed messages.",
+			"zh": "把期望配置应用到控制器上状态不对的每个账号运行环境。变更本来会立即应用，这里补上控制器侧的变化和漏掉的消息。",
+		},
+		Scope:   core.TaskCluster,
+		Every:   reconcileEvery,
+		Timeout: 10 * time.Minute,
+		Handler: s.syncRuntimes,
+	}
+}
+
+// syncRuntimes reconciles every runtime, runtimeSyncWorkers at a time, each
+// for at most 90 s. A runtime another node is reconciling is skipped (its
+// advisory lock). It reports how many runtimes it went through and how many
+// failed.
+func (s *Service) syncRuntimes(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+	cfg, e := s.Load(ctx)
+	if e != nil {
+		return core.TaskResult{}, e
+	}
+	if !cfg.AccountRuntimes {
+		return core.TaskResult{Message: "account runtimes are off"}, nil
+	}
+	keys, e := s.runtimeKeys(ctx)
+	if e != nil {
+		return core.TaskResult{}, e
+	}
+	var failed atomic.Int64
+	work := make(chan string)
+	var wg sync.WaitGroup
+	for range min(runtimeSyncWorkers, len(keys)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for key := range work {
+				c, cancel := context.WithTimeout(ctx, 90*time.Second)
+				if err := s.Reconcile(c, key); err != nil && ctx.Err() == nil {
+					failed.Add(1)
+				}
+				cancel()
+			}
+		}()
+	}
+feed:
+	for _, key := range keys {
+		select {
+		case work <- key:
+		case <-ctx.Done():
+			break feed
+		}
+	}
+	close(work)
+	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return core.TaskResult{Count: len(keys)}, err
+	}
+	msg := ""
+	if n := failed.Load(); n > 0 {
+		msg = fmt.Sprintf("%d of %d runtimes failed to synchronize", n, len(keys))
+	}
+	return core.TaskResult{Count: len(keys), Message: msg}, nil
+}
+
+// Run serves Kick and the account and configuration messages until ctx is
+// done; the pass over every runtime is core.ccgateway.runtime_sync.
 func (s *Service) Run(ctx context.Context) {
 	if s.kick != nil {
 		go s.reconcileKicked(ctx)
@@ -580,32 +725,7 @@ func (s *Service) Run(ctx context.Context) {
 		defer s.Bus.Subscribe(core.ChannelAccountChanged, s.onAccountChanged)()
 		defer s.Bus.Subscribe(core.ChannelConfigChanged, s.onConfigChanged)()
 	}
-	ticker := time.NewTicker(reconcileEvery)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		case <-s.sweepNow:
-		}
-		cfg, e := s.Load(ctx)
-		if e != nil || !cfg.AccountRuntimes {
-			continue
-		}
-		keys, e := s.runtimeKeys(ctx)
-		if e != nil {
-			continue
-		}
-		for _, key := range keys {
-			c, cancel := context.WithTimeout(ctx, 90*time.Second)
-			_ = s.Reconcile(c, key)
-			cancel()
-			if ctx.Err() != nil {
-				return
-			}
-		}
-	}
+	<-ctx.Done()
 }
 
 // startRetryFor / startRetryEvery bound the "start" retry in serveRuntime.
