@@ -55,7 +55,7 @@ const (
 	maxQuotaBody         = 64 << 10
 	maxQuotaError        = 512
 	maxQuotaErrorDetail  = 256
-	quotaFlushTick       = 5 * time.Second
+	quotaFlushTick       = 5 * time.Second // also core.account.quota_sweep's period
 	quotaIdle            = 10 * time.Minute
 )
 

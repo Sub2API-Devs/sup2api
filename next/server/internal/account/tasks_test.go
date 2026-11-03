@@ -98,7 +98,62 @@ func TestAccountTaskSpecs(t *testing.T) {
 			t.Fatalf("%s: %+v", name, spec)
 		}
 	}
+	for name, want := range map[string]struct {
+		scope core.TaskScope
+		every time.Duration
+	}{
+		UsageLimitsTask:       {core.TaskCluster, 5 * time.Second},
+		CredentialRefreshTask: {core.TaskCluster, 5 * time.Minute},
+		QuotaSweepTask:        {core.TaskNode, 5 * time.Second},
+	} {
+		spec := tasks.spec(t, name)
+		if spec.Scope != want.scope || spec.Every != want.every || spec.Timeout <= 0 {
+			t.Fatalf("%s: %+v", name, spec)
+		}
+	}
+	if !tasks.spec(t, QuotaSweepTask).RequireWork || !tasks.spec(t, CredentialRefreshTask).RunOnStart {
+		t.Fatal("quota sweep runs on working nodes only; credential refresh runs when a node takes over")
+	}
 	if tasks.registered(QuotaMirrorTask) {
 		t.Fatal("the quota mirror task is registered once the mirror is warm, not before")
+	}
+}
+
+// core.account.usage_limits folds the journal and then enforces: usage
+// recorded after a limit was saved disables the account at the next run.
+func TestUsageLimitsTaskFoldsAndEnforces(t *testing.T) {
+	e := setup(t)
+	ctx := t.Context()
+	tasks := registerTasks(t, e.svc)
+	id := e.mkRawAccount("anthropic", "apikey", "usage-task", "sk-good-key-123", true)
+	code, out := e.do("PUT", "/accounts/"+itoa(id)+"/usage-limit",
+		map[string]any{"enabled": true, "amount": "5", "period": "day", "period_count": 1, "timezone": "UTC"})
+	if code != 200 {
+		t.Fatal(code, out)
+	}
+	if _, err := e.db.Pool.Exec(ctx, `INSERT INTO usage_logs (request_id, user_id, api_key_id, group_id, account_id, protocol, endpoint, status_code, success,
+		total_cost, billing_status, billing_detail, rate_multiplier, input_tokens, output_tokens)
+		VALUES ('task-u1', 1, 1, 1, $1, 'anthropic.messages', '/v1/messages', 200, true, 6, 'billed', '{"cost":"5"}', 1.2, 100, 20)`, id); err != nil {
+		t.Fatal(err)
+	}
+	status := func() string {
+		var s string
+		if err := e.db.Pool.QueryRow(ctx, `SELECT status FROM accounts WHERE id = $1`, id).Scan(&s); err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	if s := status(); s != "active" {
+		t.Fatalf("status %s before the run", s)
+	}
+	if _, err := tasks.run(t, ctx, UsageLimitsTask); err != nil {
+		t.Fatal(err)
+	}
+	var pending int
+	if err := e.db.Pool.QueryRow(ctx, `SELECT count(*) FROM account_usage_deltas`).Scan(&pending); err != nil || pending != 0 {
+		t.Fatalf("journal rows left: %d (%v)", pending, err)
+	}
+	if s := status(); s != "auto_disabled" {
+		t.Fatalf("status %s after the run, want auto_disabled", s)
 	}
 }

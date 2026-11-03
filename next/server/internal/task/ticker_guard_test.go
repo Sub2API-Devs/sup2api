@@ -23,15 +23,14 @@ var tickerAllowed = map[string]struct {
 }{
 	// Write buffers: the interval is a batching window, full batches write
 	// early and shutdown flushes (§14.3 #1, #2, #10, #11, #29, #33, #34a, #39).
-	"account/service.go":    {1, "last_used_at write buffer (#1)"},
-	"account/quota.go":      {1, "passive quota sample buffer (#2)"},
-	"account/stats.go":      {2, "account statistics buffer and its settings reload (#10)"},
-	"apikey/apikey.go":      {1, "API key last-used buffer (#11)"},
-	"gateway/gateway.go":    {1, "hook counters (#29)"},
-	"observation/hub.go":    {1, "observation batches (#33)"},
-	"plugin/egress/logs.go": {2, "egress log buffer and its in-memory domain counters (#34a)"},
-	"account/quota_refresh.go": {2,
-		"claim watch inside one quota query (#22); core.account.quota_sweep moves in 0.1.236 (#4)"},
+	"account/service.go":       {1, "last_used_at write buffer (#1)"},
+	"account/quota.go":         {1, "passive quota sample buffer (#2)"},
+	"account/stats.go":         {2, "account statistics buffer and its settings reload (#10)"},
+	"apikey/apikey.go":         {1, "API key last-used buffer (#11)"},
+	"gateway/gateway.go":       {1, "hook counters (#29)"},
+	"observation/hub.go":       {1, "observation batches (#33)"},
+	"plugin/egress/logs.go":    {2, "egress log buffer and its in-memory domain counters (#34a)"},
+	"account/quota_refresh.go": {1, "claim watch inside one quota query (#22)"},
 	// Consumers, requests and process control (§14.3 #15, #22-#24, #32a,
 	// #35-#37).
 	"notify/worker.go":              {1, "notification delivery consumer (#32a)"},
@@ -50,10 +49,9 @@ var tickerAllowed = map[string]struct {
 	"task/node.go":    {1, "node task state refresh"},
 	// Move to the framework with the billing batch (0.1.236); drop them here
 	// then.
-	"account/automatic_state.go": {1, "core.account.usage_limits (#7), 0.1.236"},
-	"app/helper_history.go":      {1, "core.helper.usage_replay (#12a), 0.1.236"},
-	"usage/reconcile.go":         {1, "core.usage.reconcile (#38), 0.1.236"},
-	"usage/settler.go":           {1, "core.usage.settlement_retry (#40), 0.1.236"},
+	"app/helper_history.go": {1, "core.helper.usage_replay (#12a), 0.1.236"},
+	"usage/reconcile.go":    {1, "core.usage.reconcile (#38), 0.1.236"},
+	"usage/settler.go":      {1, "core.usage.settlement_retry (#40), 0.1.236"},
 }
 
 // tickersIn counts the time.NewTicker and time.Tick calls of the non-test Go

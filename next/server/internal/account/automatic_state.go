@@ -3,7 +3,6 @@ package account
 import (
 	"cmp"
 	"context"
-	"log/slog"
 	"maps"
 	"time"
 	"unicode/utf8"
@@ -23,6 +22,8 @@ var _ core.AccountAutomaticStateController = (*Service)(nil)
 // automaticStateSweepInterval paces the write-back of expired timed disables;
 // routing honours the release time on its own (Candidates).
 const automaticStateSweepInterval = time.Minute
+
+// usageLimitsInterval is core.account.usage_limits's period.
 const usageLimitsInterval = 5 * time.Second
 const maxAutomaticDisableDuration = 366 * 24 * time.Hour
 
@@ -231,24 +232,6 @@ func (s *Service) writeAutomaticStatus(ctx context.Context, tx pgx.Tx, action st
 func (s *Service) afterStatusChange(ctx context.Context, id int64, pluginKey, typ string) {
 	s.changed(ctx, id)
 	s.kickCCGateway(id, pluginKey, typ)
-}
-
-func (s *Service) runUsageLimitsLoop(ctx context.Context) {
-	ticker := time.NewTicker(usageLimitsInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-		}
-		if s.d.CanWork != nil && !s.d.CanWork() {
-			continue
-		}
-		if err := s.runUsageLimits(ctx); err != nil && ctx.Err() == nil {
-			slog.WarnContext(ctx, "account: usage limits", "err", err)
-		}
-	}
 }
 
 func (s *Service) SweepAutomaticState(ctx context.Context) (int, error) {

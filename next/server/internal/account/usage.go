@@ -54,8 +54,6 @@ const (
 	maxUsageLimitAmount = 1_000_000_000
 	// usageFoldBatch is how many journal rows one fold statement takes.
 	usageFoldBatch = 5000
-	// usageLimitsLock serialises folding and enforcing across nodes.
-	usageLimitsLock = "account.usage_limits"
 )
 
 // maxPeriodCount caps period_count so that one period lasts at most 366
@@ -714,8 +712,8 @@ func waiveUsageLimit(ctx context.Context, q store.Querier, id int64, until *time
 	return err
 }
 
-// foldUsage folds the usage journal into the hourly and lifetime sums. Callers
-// hold usageLimitsLock.
+// foldUsage folds the usage journal into the hourly and lifetime sums. Only
+// core.account.usage_limits calls it (one run at a time in the cluster).
 func foldUsage(ctx context.Context, q store.Querier) error {
 	for range 20 {
 		var n int
@@ -726,24 +724,10 @@ func foldUsage(ctx context.Context, q store.Querier) error {
 	return nil
 }
 
-// runUsageLimits is the sweep's share of usage: on one node at a time, fold
-// the journal, then apply every usage limit.
+// runUsageLimits is core.account.usage_limits: fold the journal, then apply
+// every usage limit. The framework runs it on one node at a time.
 func (s *Service) runUsageLimits(ctx context.Context) error {
-	conn, err := s.d.DB.Pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Release()
-	var locked bool
-	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock(hashtext($1))`, usageLimitsLock).Scan(&locked); err != nil || !locked {
-		return err
-	}
-	defer func() {
-		if _, err := conn.Exec(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock(hashtext($1))`, usageLimitsLock); err != nil {
-			_ = conn.Conn().Close(context.WithoutCancel(ctx)) // a closed session drops its locks
-		}
-	}()
-	if err := foldUsage(ctx, conn); err != nil {
+	if err := foldUsage(ctx, s.d.DB.Pool); err != nil {
 		return err
 	}
 	return s.EnforceUsageLimits(ctx, nil)

@@ -15,6 +15,9 @@ const (
 	LifecycleStatusTask    = "core.account.lifecycle_status"
 	PreparationCleanupTask = "core.account.preparation_cleanup"
 	QuotaMirrorTask        = "core.account.quota_mirror"
+	UsageLimitsTask        = "core.account.usage_limits"
+	CredentialRefreshTask  = "core.account.credential_refresh"
+	QuotaSweepTask         = "core.account.quota_sweep"
 )
 
 // RegisterTasks registers the cluster tasks of the account module and keeps
@@ -55,6 +58,41 @@ func (s *Service) RegisterTasks(tasks core.Tasks) error {
 		Every:   time.Minute,
 		Timeout: 50 * time.Second,
 		Handler: s.preparationCleanupTask,
+	}, {
+		Name:  UsageLimitsTask,
+		Title: core.LocalizedText{"en": "Apply account usage limits", "zh": "执行账号用量限制"},
+		Description: core.LocalizedText{
+			"en": "Folds the usage journal into hourly and lifetime sums, then disables accounts at their usage limit until the period ends and enables those back under it.",
+			"zh": "把用量流水汇总到每小时和累计用量，再把达到用量限制的账号禁用到周期结束，把回到限制以下的账号重新启用。",
+		},
+		Scope:   core.TaskCluster,
+		Every:   usageLimitsInterval,
+		Timeout: time.Minute,
+		Handler: s.usageLimitsTask,
+	}, {
+		Name:  CredentialRefreshTask,
+		Title: core.LocalizedText{"en": "Renew expiring credentials", "zh": "续期快过期的凭证"},
+		Description: core.LocalizedText{
+			"en": "Renews the OAuth credentials of active accounts whose type declares refresh, some time before they expire; each renewal holds its account's lock. Runs once when a new node takes over.",
+			"zh": "在过期前续期声明了续期能力的账号的 OAuth 凭证，每个账号续期时持有它自己的锁；新主节点接手时先跑一次。",
+		},
+		Scope:      core.TaskCluster,
+		Every:      refreshSweepInterval,
+		Timeout:    15 * time.Minute,
+		RunOnStart: true,
+		Handler:    s.credentialRefreshTask,
+	}, {
+		Name:  QuotaSweepTask,
+		Title: core.LocalizedText{"en": "Query due account quotas", "zh": "查询到期的账号额度"},
+		Description: core.LocalizedText{
+			"en": "Creates the missing quota rows and queries the quotas that are due on accounts whose type can query them; every node that may work takes its share (rows are claimed in the database).",
+			"zh": "为能查询额度的账号补建额度行，并查询到期的额度；每个可工作节点都跑，各自认领一部分（在数据库里认领）。",
+		},
+		Scope:       core.TaskNode,
+		Every:       quotaFlushTick,
+		Timeout:     5 * time.Minute,
+		RequireWork: true,
+		Handler:     s.quotaSweepTask,
 	}}
 	for _, spec := range specs {
 		if err := tasks.Register(spec); err != nil {
@@ -83,6 +121,23 @@ func (s *Service) lifecycleStatusTask(ctx context.Context, _ core.TaskRun) (core
 
 func (s *Service) preparationCleanupTask(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
 	n, err := s.sweepPreparations(ctx)
+	return core.TaskResult{Count: n}, err
+}
+
+func (s *Service) usageLimitsTask(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+	return core.TaskResult{}, s.runUsageLimits(ctx)
+}
+
+func (s *Service) credentialRefreshTask(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+	n, err := s.SweepRefresh(ctx)
+	if n > 0 {
+		slog.InfoContext(ctx, "account: credentials renewed", "accounts", n)
+	}
+	return core.TaskResult{Count: n}, err
+}
+
+func (s *Service) quotaSweepTask(ctx context.Context, _ core.TaskRun) (core.TaskResult, error) {
+	n, err := s.sweepDueQuotas(ctx)
 	return core.TaskResult{Count: n}, err
 }
 

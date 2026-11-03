@@ -49,11 +49,11 @@ type Deps struct {
 	// is saved (CONTRACTS §21.4); nil rejects proxy_url as unsupported.
 	Resolver core.ProxyResolver
 	// Locker serialises credential refreshes across nodes (CONTRACTS §48):
-	// one lock per account, and one node sweeps at a time. nil: this node
-	// only (single-node tests).
+	// one lock per account (the sweep is core.account.credential_refresh,
+	// one run at a time). nil: this node only (single-node tests).
 	Locker core.Locker
-	// CanWork admits the background refresh sweep (managed cores run it only
-	// once admitted); nil always allows.
+	// CanWork admits background quota queries on this node (managed cores
+	// run them only once admitted); nil always allows.
 	CanWork func() bool
 }
 
@@ -187,9 +187,6 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 func (s *Service) Run(ctx context.Context) {
 	go s.quota.run(ctx)
 	go s.runQuotaMirror(ctx)
-	go s.runQuotaSweep(ctx)
-	go s.runRefreshSweep(ctx)
-	go s.runUsageLimitsLoop(ctx)
 	defer s.watchChanges(ctx)()
 	tk := time.NewTicker(flushInterval)
 	defer tk.Stop()

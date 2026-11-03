@@ -204,43 +204,36 @@ func (s *Service) executeQuotaQuery(ctx context.Context, bt core.AccountTypeBind
 	return s.d.DB.AccountQuota(ctx, a.ID)
 }
 
-func (s *Service) runQuotaSweep(ctx context.Context) {
-	tick := time.NewTicker(quotaFlushTick)
-	defer tick.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-tick.C:
-			if err := s.sweepQuotas(ctx); err != nil && ctx.Err() == nil {
-				slog.WarnContext(ctx, "account: quota sweep", "err", err)
-			}
-		}
-	}
+func (s *Service) sweepQuotas(ctx context.Context) error {
+	_, err := s.sweepDueQuotas(ctx)
+	return err
 }
 
-func (s *Service) sweepQuotas(ctx context.Context) error {
+// sweepDueQuotas is core.account.quota_sweep on this node: it creates the
+// missing quota rows of one cursor page and queries the quotas due (rows
+// are claimed in PG, so the nodes share them). It returns how many were due.
+func (s *Service) sweepDueQuotas(ctx context.Context) (int, error) {
 	s.quotaSweepMu.Lock()
 	defer s.quotaSweepMu.Unlock()
 	if s.d.CanWork != nil && !s.d.CanWork() {
-		return nil
+		return 0, nil
 	}
 	g := s.gen()
 	if g == nil {
-		return nil
+		return 0, nil
 	}
 	keys := quotaSweepTypes(g)
 	if len(keys) == 0 {
-		return nil
+		return 0, nil
 	}
 	if err := s.initializeQuotaPage(ctx, keys); err != nil {
-		return err
+		return 0, err
 	}
 	ids, err := s.dueQuotaIDs(ctx, keys)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	return s.queryDueQuotas(ctx, ids)
+	return len(ids), s.queryDueQuotas(ctx, ids)
 }
 
 // quotaSweepTypes lists the "plugin/type" pairs whose quota is queryable and

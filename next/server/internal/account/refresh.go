@@ -36,10 +36,9 @@ import (
 // is not tried again until the credentials change.
 
 const (
-	// refreshSweepInterval is the sweep period (sub2api check_interval 5 min).
+	// refreshSweepInterval is the period of core.account.credential_refresh
+	// (sub2api check_interval 5 min).
 	refreshSweepInterval = 5 * time.Minute
-	// refreshFirstSweep delays the first sweep after start.
-	refreshFirstSweep = 30 * time.Second
 	// refreshLockTTL bounds one account's renewal.
 	refreshLockTTL = time.Minute
 	// refreshTimeout bounds the plugin calls and the upstream request.
@@ -376,32 +375,10 @@ func (s *Service) lockRefresh(ctx context.Context, id int64) (release func(), he
 
 // ---------------------------------------------------------------- sweep
 
-// runRefreshSweep renews due credentials every refreshSweepInterval until
-// ctx is done. With a Locker only one node sweeps at a time.
-func (s *Service) runRefreshSweep(ctx context.Context) {
-	t := time.NewTimer(refreshFirstSweep)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-		if s.d.CanWork == nil || s.d.CanWork() {
-			n, err := s.SweepRefresh(ctx)
-			if err != nil && ctx.Err() == nil {
-				slog.WarnContext(ctx, "account: credential refresh sweep", "err", err)
-			} else if n > 0 {
-				slog.InfoContext(ctx, "account: credential refresh sweep", "renewed", n)
-			}
-		}
-		t.Reset(refreshSweepInterval)
-	}
-}
-
 // SweepRefresh renews the credentials of every active account whose type
-// declares refresh and whose expiry is within its type's beforeExpirySec.
-// It returns how many were renewed.
+// declares refresh and whose expiry is within its type's beforeExpirySec
+// (core.account.credential_refresh, one run at a time in the cluster; each
+// renewal also holds its account's lock). It returns how many were renewed.
 func (s *Service) SweepRefresh(ctx context.Context) (int, error) {
 	g := s.gen()
 	if g == nil {
@@ -415,16 +392,6 @@ func (s *Service) SweepRefresh(ctx context.Context) (int, error) {
 	}
 	if len(keys) == 0 {
 		return 0, nil
-	}
-	if s.d.Locker != nil {
-		lk, ok, err := s.d.Locker.TryLock(ctx, "account:refresh:sweep", 2*time.Minute)
-		if err != nil || !ok {
-			return 0, err
-		}
-		defer lk.Release()
-		var cancel context.CancelFunc
-		ctx, cancel = core.KeepLock(ctx, lk)
-		defer cancel()
 	}
 	renewed := 0
 	var mu sync.Mutex
