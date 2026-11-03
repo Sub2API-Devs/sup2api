@@ -73,6 +73,7 @@ const children: RouteRecordRaw[] = [
   { path: 'market', component: () => import('@/views/plugins/MarketView.vue'), meta: { perm: 'plugin:market:read', title: 'nav.items.market' } },
   { path: 'publishers', component: () => import('@/views/plugins/PublishersView.vue'), meta: { perm: 'publisher:read', title: 'nav.items.publishers' } },
   { path: 'nodes', component: () => import('@/views/nodes/NodesView.vue'), meta: { perm: 'node:read', title: 'nav.items.nodes' } },
+  { path: 'system/tasks', component: () => import('@/views/tasks/TasksView.vue'), meta: { perm: 'task:read', title: 'nav.items.tasks' } },
   { path: 'system/upgrades', component: () => import('@/views/upgrades/UpgradesView.vue'), meta: { perm: 'system:update:read', title: 'upgrades.title' } },
   { path: 'system/audit', component: () => import('@/views/upgrades/AuditView.vue'), meta: { perm: 'audit:read', title: 'observe.audit' } },
 

@@ -73,6 +73,7 @@ const MODULES: ModuleDef[] = [
   { module: 'publisher', label: L('Publishers', '发布者'), source: 'core', status: 'active', permissions: [
     { key: 'publisher:read', label: L('View', '查看') }, { key: 'publisher:manage', label: L('Manage', '管理'), sensitive: true }] },
   { module: 'node', label: L('Cluster', '集群'), source: 'core', status: 'active', permissions: [{ key: 'node:read', label: L('View nodes', '查看节点') }] },
+  { module: 'task', label: L('Scheduled tasks', '定时任务'), source: 'core', status: 'active', permissions: [{ key: 'task:read', label: L('View scheduled tasks', '查看定时任务') }, { key: 'task:run', label: L('Run scheduled tasks manually', '手动运行定时任务') }] },
   { module: 'gateway', label: L('Gateway', '网关'), source: 'core', status: 'active', permissions: [{ key: 'gateway:use', label: L('Call gateway', '调用网关') }] },
   { module: 'settings', label: L('Settings', '系统设置'), source: 'core', status: 'active', permissions: [
     { key: 'settings:read', label: L('View', '查看') }, { key: 'settings:manage', label: L('Manage', '管理') }] },

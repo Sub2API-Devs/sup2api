@@ -24,6 +24,7 @@ export default {
     market: '插件市场',
     publishers: '发布者',
     nodes: '集群节点',
+    tasks: '定时任务',
     settings: '设置',
     myApiKeys: 'API 密钥',
     myUsage: '使用记录'

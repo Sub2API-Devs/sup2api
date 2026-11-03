@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { SDateTime, statusTone, useAutoRefresh, SBadge, SButton, SChip, SCode, SGrid, SHint, SPageHeader, SStatCard, SStatusDot, STable, type TableColumn, type Tone, type StatusTone } from '@sub2api/ui'
+import { api } from '@sub2api/host'
+import { SDateTime, statusTone, useAutoRefresh, SBadge, SButton, SChip, SCode, SGrid, SHint, SLink, SPageHeader, SStatCard, SStatusDot, STable, type TableColumn, type Tone, type StatusTone } from '@sub2api/ui'
 import type { NodeInfo } from '@/api/types'
 import type { NodePluginState } from '@/api/admin'
 import { notifyError } from '@/utils/errors'
 import { fetchFirstPage } from '@/composables/lookups'
+import { useAuthStore } from '@/stores/auth'
+import { nodeTaskCounts, type NodeTasks } from '../tasks/tasks'
 import TopologyGraph from './TopologyGraph.vue'
 
 const { t } = useI18n()
@@ -15,6 +18,10 @@ const STALE_SECONDS = 30
 const REFRESH_MS = 5000
 
 const nodes = ref<NodeInfo[]>([])
+const auth = useAuthStore()
+const canReadTasks = computed(() => auth.has('task:read'))
+/** Node task states per node (System → Scheduled tasks), when readable. */
+const nodeTasks = ref<NodeTasks[]>([])
 const loading = ref(true)
 const lastLoaded = ref<Date | null>(null)
 const tick = ref(Date.now())
@@ -28,6 +35,10 @@ async function load(manual = false) {
   try {
     const items = await fetchFirstPage<NodeInfo>('/nodes')
     nodes.value = [...items].sort((a, b) => a.node_id.localeCompare(b.node_id))
+    if (canReadTasks.value) {
+      // The node list stays usable when the task overview cannot be read.
+      nodeTasks.value = await api.get<{ nodes: NodeTasks[] }>('/system/tasks').then((o) => o.nodes || [], () => nodeTasks.value)
+    }
     lastLoaded.value = new Date()
     failures = 0
   } catch (e) {
@@ -125,7 +136,8 @@ const columns = computed<TableColumn[]>(() => [
   { key: 'host_version', label: t('common.version') },
   { key: 'started_at', label: t('nodes.uptime') },
   { key: 'last_heartbeat', label: t('nodes.heartbeat') },
-  { key: 'plugins', label: t('nodes.plugins') }
+  { key: 'plugins', label: t('nodes.plugins') },
+  ...(canReadTasks.value ? [{ key: 'tasks', label: t('tasks.nodesColumn'), nowrap: true }] : [])
 ])
 
 const healthy = computed(() => nodes.value.filter((n) => !isStale(n)).length)
@@ -188,6 +200,14 @@ const versions = computed(() => new Set(nodes.value.map((n) => n.host_version)).
           </SChip>
           <SHint v-if="!badges.get(row.boot_id)?.length" inline>—</SHint>
         </div>
+      </template>
+      <template #cell-tasks="{ row }">
+        <SLink v-if="nodeTaskCounts(nodeTasks, row.node_id)" :to="{ path: '/system/tasks', query: { tab: 'nodes', node: row.node_id } }" data-testid="node-tasks">
+          <span :class="nodeTaskCounts(nodeTasks, row.node_id)!.failing ? 'text-danger-600 dark:text-danger-400' : ''">
+            {{ t('tasks.nodesCount', nodeTaskCounts(nodeTasks, row.node_id)!) }}
+          </span>
+        </SLink>
+        <SHint v-else inline>—</SHint>
       </template>
     </STable>
   </div>

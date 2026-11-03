@@ -24,6 +24,7 @@ export default {
     market: 'Plugin market',
     publishers: 'Publishers',
     nodes: 'Cluster nodes',
+    tasks: 'Scheduled tasks',
     settings: 'Settings',
     myApiKeys: 'API keys',
     myUsage: 'Usage records'

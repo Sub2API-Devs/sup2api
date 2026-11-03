@@ -27,3 +27,34 @@ on('GET','/plugins/:key/history',req=>paginate(history.filter(r=>r.plugin_key===
   ...['created','activating','active'].map((state,i)=>({id:100+i,plugin_key:r.plugin_key,rollout_id:r.id,node_id:'',boot_id:'',state,version:r.target_version,message:JSON.stringify({action:'upgrade'}),created_at:now(-30+i*8)})),
   ...r.nodes.map((n,i)=>({id:103+i,plugin_key:r.plugin_key,rollout_id:r.id,node_id:n.node_id,boot_id:n.boot_id,state:n.state,version:n.state==='failed'?r.from_version:r.target_version,message:JSON.stringify({fallback:n.state==='failed'?r.from_version:'',error:n.error}),created_at:now(-10)}))
 ]).sort((a,b)=>b.id-a.id),req.query))
+
+// Scheduled tasks (System → Scheduled tasks).
+const taskTitle = (en: string, zh: string) => ({ en, zh })
+const recent = (fail: number) => Array.from({ length: 30 }, (_, i) => (i < fail ? 'failed' : i % 9 === 4 ? 'skipped' : 'succeeded'))
+const clusterTasks = [
+  ['core.account.usage_limits', 'Account usage limits', '账号用量上限恢复', '@every 1m0s', 0],
+  ['core.ccgateway.park_runtimes', 'Park runtimes of red accounts', '停止红色账号的容器', '@every 1m0s', 2],
+  ['core.usage.retry', 'Retry usage settlement', '重试用量结算', '@every 5m0s', 0],
+  ['core.task.housekeeping', 'Scheduled task housekeeping', '定时任务自身维护', '@every 1h0m0s', 0],
+  ['core.audit.purge', 'Purge audit logs', '清理审计日志', '0 3 * * *', 0]
+] as const
+on('GET', '/system/tasks', () => ({
+  summary: { total: clusterTasks.length + 2, running: 1, failing: 1, failed_24h: 4, leader: 'node-1' },
+  cluster: clusterTasks.map(([name, en, zh, schedule, fail], i) => ({
+    name, title: taskTitle(en, zh), source: 'core', plugin_key: null, schedule, timeout_ms: 50000, max_attempts: i === 4 ? 5 : 1, enabled: true, registered: true,
+    running: i === 2, lease_node: i === 2 ? 'node-2' : null,
+    last: { node: `node-${(i % 3) + 1}`, started_at: now(-60), finished_at: now(-60), duration_ms: 80 + i * 40, status: fail ? 'failed' : 'succeeded', count: i, error: fail ? 'docker: connection refused' : '' },
+    last_success_at: now(-180), consecutive_failures: fail, next_run_at: now(45), recent: recent(fail),
+    stats_24h: { runs: 1440, failed: fail * 2, skipped: 3, avg_ms: 95, max_ms: 820 }, queued: 0
+  })),
+  nodes: ['node-1', 'node-2', 'node-3'].map((node_id, n) => ({
+    node_id, alive: true,
+    tasks: [['core.authz.version_poll', 'Permission version', '刷新权限版本', '@every 30s'], ['core.webui.assets', 'Console assets', '控制台资源租约', '@every 15s']].map(([name, en, zh, schedule]) => ({
+      name, title: taskTitle(en, zh), schedule, timeout_ms: 10000, require_work: false, running: false, last_finished_at: now(-5), duration_ms: 3 + n,
+      status: 'succeeded', count: 0, consecutive_failures: 0, skipped: 0, next_run_at: now(45), recent: recent(0), failed_24h: 0
+    }))
+  }))
+}))
+on('GET', '/system/tasks/:name', (req) => ({ name: req.params.name, scope: req.params.name.startsWith('core.authz') || req.params.name.startsWith('core.webui') ? 'node' : 'cluster', schedule: '@every 1m0s', timeout_ms: 50000, max_attempts: 1, nodes: [] }))
+on('GET', '/system/tasks/:name/runs', () => ({ runs: Array.from({ length: 20 }, (_, i) => ({ id: String(900 - i), node: `node-${(i % 3) + 1}`, scheduled_at: now(-i * 60), started_at: now(-i * 60), finished_at: now(-i * 60), duration_ms: 80 + ((i * 37) % 200), attempt: 1, max_attempts: 1, status: i === 3 ? 'failed' : 'succeeded', manual: i === 0, count: i, error: i === 3 ? 'docker: connection refused' : '' })), next_before_id: null }))
+on('POST', '/system/tasks/:name/run', () => ({ submitted: true }))

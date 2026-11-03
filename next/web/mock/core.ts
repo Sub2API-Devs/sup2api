@@ -239,6 +239,7 @@ const MENU_PERMS: Record<string, string | string[]> = {
   '/settings': ['settings:read', 'sticky:read'],
   '/system/upgrades': 'system:update:read',
   '/system/audit': 'audit:read',
+  '/system/tasks': 'task:read',
   '/me/api-keys': 'apikey:self:manage',
   '/me/usage': 'usage:self:read',
   '/me/balance': 'balance:self:read',
@@ -291,6 +292,7 @@ const MENUS = [
     section: 'system',
     items: [
       { id: 'nodes', label: { en: 'Cluster nodes', zh: '集群节点' }, icon: 'node', path: '/nodes' },
+      { id: 'tasks', label: { en: 'Scheduled tasks', zh: '定时任务' }, icon: 'clock', path: '/system/tasks' },
       { id: 'upgrades', label: { en: 'Core updates', zh: '核心升级' }, icon: 'refresh', path: '/system/upgrades' },
       { id: 'audit', label: { en: 'Audit logs', zh: '审计日志' }, icon: 'clock', path: '/system/audit' },
       { id: 'settings', label: { en: 'Settings', zh: '设置' }, icon: 'settings', path: '/settings' }
