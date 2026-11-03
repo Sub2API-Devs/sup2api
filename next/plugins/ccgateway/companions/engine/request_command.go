@@ -98,8 +98,8 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 	}
 	// A tracked request shares the resource authority until the provider
 	// answers (the issuer the core bound it to cannot change before the CLI
-	// sent it) and answers with that issuer. Its identity step takes its own
-	// slot, before the request's.
+	// sent it) and answers with that issuer. Its identity step takes a resource
+	// slot for the check only.
 	credit, refusal := g.admitCredit(w, r)
 	if refusal != nil {
 		refusal.write(w, d)
@@ -109,17 +109,9 @@ func (g *Gateway) serveRequestCommand(w http.ResponseWriter, r *http.Request, d 
 		defer credit.release()
 		plan.credit = credit
 	}
-	// The slot is taken before the body is read or transformed (audit C3): a
-	// Worker at its limit refuses at once instead of after up to 32 MiB. What
-	// the headers alone refuse (path, mode, CLI, method) keeps its own answer.
-	select {
-	case g.Slots <- struct{}{}:
-		defer func() { <-g.Slots }()
-	default:
-		w.Header().Set("Retry-After", "1")
-		refuse(429, "rate_limit_error", "Gateway concurrency limit reached").write(w, d)
-		return
-	}
+	// No request slot: every request runs its own CLI process and the core's
+	// account concurrency is the only limit (2026-11-04; Workers before this
+	// refused the fifth request with 429 "Gateway concurrency limit reached").
 	defer g.releaseSessionState(plan)
 	if refusal = g.prepareRequest(w, r, d, plan); refusal != nil {
 		refusal.write(w, d)

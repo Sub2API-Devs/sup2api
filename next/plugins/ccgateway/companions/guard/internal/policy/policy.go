@@ -27,6 +27,7 @@ type HostConfig struct {
 	Binds       []string  `json:"Binds,omitempty"`
 	NetworkMode string    `json:"NetworkMode"`
 	Memory      int64     `json:"Memory,omitempty"`
+	MemorySwap  int64     `json:"MemorySwap,omitempty"`
 	NanoCpus    int64     `json:"NanoCpus,omitempty"`
 	PidsLimit   int64     `json:"PidsLimit,omitempty"`
 	Init        *bool     `json:"Init,omitempty"`
@@ -103,9 +104,11 @@ const (
 	AppMemoryDefault = GiB
 	AppMemoryMin     = 256 * MiB
 	AppMemoryMax     = 4 * GiB
-	AppCPUDefault    = int64(2e9)
-	AppCPUMin        = int64(1e8)
-	AppCPUMax        = int64(4e9)
+	// AppMemorySwapUnlimited is Docker's MemorySwap for "no swap limit".
+	AppMemorySwapUnlimited = int64(-1)
+	AppCPUDefault          = int64(2e9)
+	AppCPUMin              = int64(1e8)
+	AppCPUMax              = int64(4e9)
 
 	JobMemoryDefault = GiB
 	JobMemoryMin     = 64 * MiB
@@ -247,6 +250,9 @@ func App(n names.Names, root, aid string, in AppInput) (ContainerSpec, error) {
 			},
 			NetworkMode: net,
 			Memory:      mem,
+			// Swap is unlimited (the host's swap): a request over the memory
+			// limit slows down instead of being OOM-killed (2026-11-04).
+			MemorySwap:  AppMemorySwapUnlimited,
 			NanoCpus:    cpu,
 			PidsLimit:   256,
 			Init:        &init,

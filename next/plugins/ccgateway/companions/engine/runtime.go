@@ -28,13 +28,14 @@ type Options struct {
 	MaintenanceOnly           bool
 	Key, AdminKey             string
 	Timeout                   time.Duration
-	// Slots is how many requests the account runs at once (DefaultRequestSlots
-	// when zero); one more is refused with 429 before its body is read.
+	// Slots is how many resource operations (identity checks, resource
+	// requests) run their CLI at once (DefaultRequestSlots when zero). Model
+	// requests take no slot since 2026-11-04: only the core limits them.
 	Slots int
 	Env   []string
 }
 
-// DefaultRequestSlots is the account's concurrent requests by default.
+// DefaultRequestSlots bounds the account's concurrent resource operations by default.
 const DefaultRequestSlots = 4
 
 // maxRequestSlots bounds Options.Slots: each slot is a CLI process.

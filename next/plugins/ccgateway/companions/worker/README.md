@@ -1,4 +1,4 @@
-# CCGateway Worker
+| `CCG_REQUEST_SLOTS` | 4 | — | 同时运行的资源操作数（每个是一个 CLI 进程），1–64；模型请求 2026-11-04 起不受它限制 |# CCGateway Worker
 
 账号容器里的 Go 程序（模块 `ccgateway/worker`）：读配置、起 HTTP 服务、管生命周期，其余全部交给共享引擎 `../engine`（`engine.NewRuntime`）。每个 `/v1/messages` 运行一次打包的定制 CLI 的 `claude request --build|--direct`，由 CLI 用 Claude Code 自己的函数组装并发送；Worker 不组装请求。
 

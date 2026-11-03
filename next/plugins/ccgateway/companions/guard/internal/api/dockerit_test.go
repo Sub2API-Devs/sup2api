@@ -354,7 +354,7 @@ func TestDockeritAccountLifecycle(t *testing.T) {
 			HostConfig struct {
 				CapDrop, CapAdd, SecurityOpt, Binds []string
 				Privileged                          bool
-				Memory, NanoCpus                    int64
+				Memory, MemorySwap, NanoCpus        int64
 				PidsLimit                           *int64
 				Init                                *bool
 				NetworkMode                         string
@@ -373,7 +373,7 @@ func TestDockeritAccountLifecycle(t *testing.T) {
 		_ = json.Unmarshal(raw, &c)
 		hc := c.HostConfig
 		if c.State.Status != "created" || c.Config.User != "1000:1000" || fmt.Sprint(hc.CapDrop) != "[ALL]" || len(hc.CapAdd) != 0 ||
-			fmt.Sprint(hc.SecurityOpt) != "[no-new-privileges:true]" || hc.Privileged || hc.Memory != 1<<30 || hc.NanoCpus != 2e9 ||
+			fmt.Sprint(hc.SecurityOpt) != "[no-new-privileges:true]" || hc.Privileged || hc.Memory != 1<<30 || hc.MemorySwap != -1 || hc.NanoCpus != 2e9 ||
 			hc.PidsLimit == nil || *hc.PidsLimit != 256 || hc.Init == nil || !*hc.Init || hc.NetworkMode != n.Net(aid) ||
 			hc.RestartPolicy.Name != "no" && hc.RestartPolicy.Name != "" || hc.LogConfig.Type != "json-file" ||
 			hc.LogConfig.Config["max-size"] != "20m" || hc.LogConfig.Config["max-file"] != "3" ||

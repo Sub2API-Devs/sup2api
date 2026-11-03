@@ -400,14 +400,6 @@ func TestRequestCommandAdmission(t *testing.T) {
 	if out.Code != 401 {
 		t.Fatal(out.Code)
 	}
-	r = httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"m"}`))
-	r.Header.Set("x-api-key", "secret")
-	g.Slots <- struct{}{}
-	out = httptest.NewRecorder()
-	g.ServeHTTP(out, r)
-	if out.Code != 429 {
-		t.Fatal(out.Code)
-	}
 }
 
 // unreadBody fails the test when the handler reads it.
@@ -418,28 +410,28 @@ func (b unreadBody) Read([]byte) (int, error) {
 	return 0, io.EOF
 }
 
-// A Worker at its limit refuses before it reads or checks the body (audit
-// C3); what the headers alone decide keeps its own answer. /healthz reports
-// the slots.
-func TestRequestSlotIsTakenBeforeTheBody(t *testing.T) {
+// Model requests take no slot (2026-11-04): with every resource slot in use a
+// request still runs instead of a 429 "Gateway concurrency limit reached";
+// what the headers alone decide keeps its own answer, before the body is
+// read. /healthz still reports the resource slots.
+func TestModelRequestsTakeNoSlot(t *testing.T) {
 	cli := cliRequestInfo{Version: "2.1.304", Capabilities: []string{"request_build", features.BuildContentPreservationCapability, features.RequestLevelsCapability}}
 	g := &Gateway{RequestMode: "build", Key: "secret", CLIInfo: cli, Runner: &Runner{Version: "2.1.304"}, Slots: make(chan struct{}, 3)}
 	for range 3 {
 		g.Slots <- struct{}{}
 	}
-	for _, path := range []string{"/v1/messages", "/v1/ccgateway/probe"} {
-		r := httptest.NewRequest("POST", path, unreadBody{t})
-		r.Header.Set("x-api-key", "secret")
-		r.Header.Set(features.PolicyHeader, `{"relay_mode":"build","cli_version":"2.1.304"}`)
-		out := httptest.NewRecorder()
-		g.ServeHTTP(out, r)
-		require.Equal(t, 429, out.Code, path)
-		require.Equal(t, "1", out.Header().Get("Retry-After"))
-	}
-	r := httptest.NewRequest("POST", "/v1/messages", unreadBody{t})
+	r := httptest.NewRequest("POST", "/v1/messages", strings.NewReader(`{"model":"m"}`))
+	r.Header.Set("x-api-key", "secret")
+	r.Header.Set(features.PolicyHeader, `{"relay_mode":"build","cli_version":"2.1.304"}`)
+	out := httptest.NewRecorder()
+	g.ServeHTTP(out, r)
+	require.NotEqual(t, 429, out.Code, out.Body.String())
+	require.NotContains(t, out.Body.String(), "Gateway concurrency limit reached")
+	require.Empty(t, out.Header().Get("Retry-After"))
+	r = httptest.NewRequest("POST", "/v1/messages", unreadBody{t})
 	r.Header.Set("x-api-key", "secret")
 	r.Header.Set(features.PolicyHeader, `{"relay_mode":"build","cli_version":"2.1.302"}`)
-	out := httptest.NewRecorder()
+	out = httptest.NewRecorder()
 	g.ServeHTTP(out, r)
 	require.Equal(t, 409, out.Code, "a policy for another CLI is not a full Worker")
 	r = httptest.NewRequest("POST", "/v1/messages", unreadBody{t})

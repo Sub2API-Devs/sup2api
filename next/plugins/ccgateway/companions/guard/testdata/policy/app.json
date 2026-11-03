@@ -22,6 +22,7 @@
     ],
     "NetworkMode": "ccg-21-net",
     "Memory": 1073741824,
+    "MemorySwap": -1,
     "NanoCpus": 2000000000,
     "PidsLimit": 256,
     "Init": true,

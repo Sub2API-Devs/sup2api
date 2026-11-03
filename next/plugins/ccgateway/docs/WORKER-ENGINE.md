@@ -40,7 +40,7 @@ GOMAXPROCS 按容器 CPU 配额设定（`main.go` 的 `//go:debug containermaxpr
 3. **日志入口**：`diagnostic.capture` 决定本请求的日志级别并包一层 `diagnosticWriter`（第 4 节）。
 4. **策略头解析**（`admitRequest` → `parseRequestPolicy`）：读 `X-CCGateway-Request-Policy`（`features.ParseWorkerPolicy`，≤ 16 KiB，未知键忽略）。头无效 400；`cli_version` 与 Worker 的 CLI 不同 409；`relay_mode` 决定模式，没有策略头时用容器模式；路径不是 `/v1/messages` 或 probe 404；probe 固定 build 并回 `X-CCGateway-Test-Mode: native_build`。之后：能力门（`requestCapabilityGates`，不满足 409 `configuration_error`）、方法必须 POST（405）、`anthropic-version` 只接受 `2023-06-01`（400）。
 5. **fallback credit 跟踪**（`request_credit.go admitCredit`）：核心标了跟踪头的请求先核验资源发放方（自己占一个槽位），答复头带 `Principal`/`Generation`，结束后用 trailer 回执。
-6. **并发槽位**：非阻塞地占 `Slots`；满了立即 429 `rate_limit_error`、`Retry-After: 1`。槽位在读请求体之前占（审核 C3）。
+6. **不占槽位**（2026-11-04 起，CLI v47）：每个请求各起一个 CLI 进程，并发只由核心的账号并发限制。此前的 Worker 在读体之前非阻塞地占 `Slots`，满了 429 `Gateway concurrency limit reached`，老账号仍是这样，所以老账号的并发配成 4。
 7. **读体与单次解析**（`prepareRequest`）：最多 32 MiB（超出 413）；`parseRequestBody` 解析一次，凭据扫描、身份读取、日志摘要与 build 信封都读这一份（CONTRACTS §63.8）。`screenSecrets` 在任何正文落日志之前判断是否转为凭据安全模式。
 8. **身份与 agent 上下文**（`resolveRequestContext`，`request_identity.go`、`request_agent.go`）：
    - 身份（CLI 声明 `request_identity_v1` 时启用）：build 下客户端的 `metadata.user_id` 用账号密钥映射（`replace`）；没带的给账号自己的身份，会话由对话第一条消息映射；读不出的当作没带。API Key 账号原样（`client`），OAuth 但不知道登录邮箱时用 CLI 自己的身份（`worker`）。direct 不改 metadata，只在 CLI 支持 agent 上下文时让 CLI 采用客户端的会话 ID。映射密钥是数据目录里的 `request-identity.key`（32 字节，首次生成），按登录邮箱派生（`requestIdentityKey`）。
@@ -96,10 +96,10 @@ Worker 在 `/healthz` 报的能力（`cli_check.go requestCapabilities`）是 CL
 
 ## 3. 并发槽位
 
-`Gateway.Slots` 是容量为 `CCG_REQUEST_SLOTS`（默认 4，上限 64）的通道，每个槽位对应一个 CLI 进程（`runtime.go`）。
+`Gateway.Slots` 是容量为 `CCG_REQUEST_SLOTS`（默认 4，上限 64）的通道，只限资源操作同时运行的 CLI 进程数（`runtime.go`）。
 
-- 模型请求：非阻塞占用，满了 429 + `Retry-After: 1`，在读体之前。
-- fallback credit 的发放方核验：在模型请求占槽之前另占一个。
+- 模型请求：2026-11-04 起不占槽位（之前满了 429 + `Retry-After: 1`，在读体之前；老账号的 Worker 仍如此）。
+- fallback credit 的发放方核验：核验期间占一个，核验完就释放。
 - 资源操作与资源身份探测：等待槽位（`waitResourceSlot`），到截止时间仍等不到答 503。
 - 后台身份保温：没有空闲槽位就跳过这一轮。
 

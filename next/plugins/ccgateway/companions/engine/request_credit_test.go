@@ -254,14 +254,15 @@ func trackedRequest(t *testing.T, peer string) (*Gateway, <-chan string, func())
 // Until the provider answers, a tracked request shares the verified issuer's
 // authority: a reauthorization or resource operation cannot switch the issuer
 // before the CLI sent the request, while other tracked requests are not held
-// up. The identity step does not keep a slot of its own (2026-10-25 audit P2-2).
+// up. The identity step does not keep a slot of its own (2026-10-25 audit P2-2), and the
+// request takes none (2026-11-04).
 func TestCreditTrackingSharesTheIssuerAuthorityUntilTheAnswer(t *testing.T) {
 	g, _, end := trackedRequest(t, "wait")
 	authority := &g.resources.authority.mu
 	require.False(t, authority.TryLock(), "a reauthorization could switch the issuer before the provider answered")
 	require.True(t, authority.TryRLock(), "another tracked request waits on this one")
 	authority.RUnlock()
-	require.Len(t, g.Slots, 1, "the identity slot is not released before the request's own")
+	require.Empty(t, g.Slots, "the identity slot is released and a model request holds none")
 	end()
 	require.True(t, authority.TryLock(), "the resource authority is not released after the request")
 	authority.Unlock()
