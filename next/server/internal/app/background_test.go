@@ -37,6 +37,7 @@ func TestBackgroundBuiltOnceForAdmission(t *testing.T) {
 		managed: &managedCore{mode: "prepared"},
 		stopper: newTeardown(),
 		db:      db,
+		rdb:     rdb,
 		reg:     registry.New(),
 		cl:      cluster.New(rdb, db.Pool, cluster.Options{NodeID: "background-test", Logger: log}),
 		work:    background.New(2),
@@ -47,6 +48,9 @@ func TestBackgroundBuiltOnceForAdmission(t *testing.T) {
 		}
 		if b.dlv != nil {
 			_ = b.dlv.Stop(context.Background())
+		}
+		if b.tasks != nil {
+			b.tasks.Stop(context.Background())
 		}
 	})
 	// The boot path builds them (a managed core does not start them yet).

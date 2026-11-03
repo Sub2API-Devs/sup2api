@@ -36,6 +36,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/proxy"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/task"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usage"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/webui"
 )
@@ -65,6 +66,7 @@ type boot struct {
 	pkgs    *registry.Packages
 	bill    *billing.Service
 	work    *background.Executor
+	tasks   *task.Service
 	settler *usage.Service
 	az      *authz.Service
 	idm     *iam.Service

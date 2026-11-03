@@ -232,3 +232,15 @@ func (s *Service) Stop(ctx context.Context) {
 	}
 	s.node.stop(ctx)
 }
+
+// ClusterRunning reports whether this node's River client is started, that
+// is, whether this node takes part in running cluster tasks now.
+func (s *Service) ClusterRunning() bool {
+	c := s.clusterBackend()
+	if c == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.running && !c.stopped
+}

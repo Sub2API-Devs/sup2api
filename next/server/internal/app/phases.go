@@ -57,6 +57,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/ratelimit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/task"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/updater"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/usage"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/webui"
@@ -157,6 +158,9 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 		b.canWork = b.managed.backgroundAllowed
 		b.canCoordinate = b.managed.coordinateAllowed
 		b.work.Admitted = b.canWork
+	}
+	if err := b.buildTasks(); err != nil {
+		return nil, err
 	}
 	b.env = environment.New(b.db, b.cl.Bus, b.cfg.Environment)
 	b.stopper.add("environment", b.env.Close)
@@ -384,6 +388,27 @@ func (b *boot) startBuiltins() error {
 	return nil
 }
 
+// buildTasks creates the scheduled task service and starts its node backend
+// right away (TASK-FRAMEWORK-DESIGN §5.1): node tasks run as soon as a module
+// registers them; cluster tasks wait for startBackground. It is idempotent.
+func (b *boot) buildTasks() error {
+	if b.tasks != nil {
+		return nil
+	}
+	tasks, err := task.New(task.Options{NodeID: b.cfg.NodeID, Version: b.version, Redis: b.rdb, Bus: b.cl.Bus,
+		CanWork: b.canWork, Logger: b.log, DB: b.db, Executor: b.work,
+		ClientID: b.cfg.NodeID + "-" + b.cl.Registry.BootID()})
+	if err != nil {
+		return fmt.Errorf("scheduled tasks: %w", err)
+	}
+	if err := tasks.StartNode(b.ctx); err != nil {
+		return fmt.Errorf("scheduled tasks: %w", err)
+	}
+	b.tasks = tasks
+	b.stopper.add("tasks", tasks.Stop)
+	return nil
+}
+
 // buildBackground constructs the job scheduler and the event delivery loop and
 // registers their teardown. It is idempotent so the boot path and admission
 // share one pair of instances: registerRoutes hands the console the scheduler
@@ -399,6 +424,12 @@ func (b *boot) buildBackground() {
 	// Extraction goroutines still call plugins and submit usage after their
 	// HTTP handler returns. Join them before stopping either dependency.
 	b.stopper.add("gateway", func(context.Context) { b.gw.Close() })
+	// Every module that registers scheduled tasks is built by now: moving
+	// the task service to the top of the stack stops their runs before the
+	// modules themselves (§5.2).
+	if b.tasks != nil {
+		b.stopper.add("tasks", b.tasks.Stop)
+	}
 }
 
 // startBackground starts the scheduler and delivery loop built by
@@ -409,6 +440,12 @@ func (b *boot) startBackground() error {
 	b.startOnce.Do(func() {
 		if b.startErr = b.jobs.Start(b.ctx); b.startErr == nil {
 			b.startErr = b.dlv.Start(b.ctx)
+		}
+		if b.startErr == nil {
+			if b.startErr = b.buildTasks(); b.startErr == nil {
+				// River itself starts and stops with background admission.
+				b.startErr = b.tasks.StartCluster(b.ctx)
+			}
 		}
 	})
 	if b.startErr != nil {
