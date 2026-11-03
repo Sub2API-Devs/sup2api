@@ -1,5 +1,8 @@
 {
   "chunk-e6aww6q8.js#K1e": "utils/hooks/hookEvents.ts",
   "chunk-9cjx5pnm.js#Ro": "services/api/apiPath.ts",
-  "chunk-z0q4jgnc.js#Fr": "vendor/lodash-es/_nativeKeys.js"
+  "chunk-z0q4jgnc.js#Fr": "vendor/lodash-es/_nativeKeys.js",
+  "chunk-dcmhvw5a.js#ou": "utils/settings/managedSettingsKeys.ts",
+  "chunk-r1wk8q25.js#ae": "services/api/claude.ts",
+  "chunk-sx9xc5ee.js#@20653": "components/providerSetup/bedrock/bedrockVerify.ts"
 }
