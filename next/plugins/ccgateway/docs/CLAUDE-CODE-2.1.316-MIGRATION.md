@@ -1,4 +1,4 @@
-# Claude Code 2.1.312 → 2.1.316 迁移记录（CLI v41 → v43，后续 v44、v45）
+# Claude Code 2.1.312 → 2.1.316 迁移记录（CLI v41 → v43，后续 v44、v45、v46）
 
 2026-11-02。把账号 Worker 里的定制 CLI 从官方 2.1.312（`ccgateway-v41-login-401`）移到官方 2.1.316，要求 `claude request --build|--direct` 与 `claude ccgateway-mgmt` 的逻辑与 v41 一样，只允许出现官方自己的变化。做法按 [CLI-UPGRADE-RUNBOOK](CLI-UPGRADE-RUNBOOK.md) 第 1–5 节，上一次迁移见 [CLAUDE-CODE-2.1.312-MIGRATION](CLAUDE-CODE-2.1.312-MIGRATION.md)，计费头规则见 [CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION](CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION.md)。
 
@@ -311,6 +311,46 @@ v45 的 92 处差异全部归类如下（场景名见 `test/e2e/README.md`）：
 
 没有跑或没有覆盖：真实上游（发布后用生产账号测）、核心 ↔ 插件（核心与合同由另一位负责）、`controller-go/integration/l7`、真实 CLI 的 engine 用例（16 跳过，与 v44 相同）。
 
+## 12. v46：实测发现的两处缺口（`ccgateway-v46-shape-prompt-text`）
+
+2026-11-03 实测：82 号账号原地升到 v45（插件 0.1.124，Worker `eacf79d9…`），官方 Claude Code 2.1.316 客户端按用户的接法（`ANTHROPIC_BASE_URL=https://api.prophey.ai`、网关密钥作 `ANTHROPIC_AUTH_TOKEN`、全新 HOME、`sdk-cli`、`claude-sonnet-4-6`）跑了 4 个会话：单轮、工具循环（Read）、`--continue` 第二轮、general-purpose 子代理，共 10 个请求（日志在 `artifacts/cc-thirdparty/live82/ours/`）。计费头补全、`cc_prev_req`、3→4 拆块、prompt-id 头、首个请求的 diagnostics 都对；两处不对：
+
+| 缺口 | 现象 | 根因 |
+|---|---|---|
+| 1. 续接请求没有 `diagnostics` | 带 `cc_prev_req` 的 6 个请求都没有 `diagnostics`，也没有 `cache-diagnosis` beta；官方带 `previous_message_id` = 上一次应答的 `msg_…` | Worker 一次应答也没读：CLI 写到 stdout 的是 fetch 已解压的字节，但 `--response-meta` 里记的是上游原始响应头，Anthropic 的应答都带 `Content-Encoding`（gzip/br），v45 的 `newAnswerObserver` 见到非 identity 的编码就不读（`return nil`），所以记忆里没有 message id。离线 e2e 的假上游不压缩，没暴露 |
+| 2. 子代理没有 `x-claude-code-agent-type`、`cc_prompt_id`、prompt-id 头 | 父线程的 Agent 调用写着 `subagent_type: general-purpose`，子代理首个请求的 prompt 与它逐字相同，但配不上 | 同一个根因（父线程应答里的 Agent 调用也没读到），另有一个时序问题：记忆在 CLI 进程退出之后才写、线程占用也在请求处理完才释放，而客户端拿到完整应答就立刻发下一个请求（子代理首个请求、工具结果）。CLI 退出得慢时，下一个请求会看到父线程"还在忙"，按"宁可少不可错"什么都不给 |
+| 附带发现：工具循环里 prompt id 变了 | 同一轮的第二个请求（`cc_turn_index` 仍是 1）`cc_prompt_id` 与第一个不同（官方同一轮共用） | CLI 派生 prompt id 时对 prompt 的内容取哈希，内容带着客户端的缓存标记：客户端把 `cache_control` 挂在最后一条消息上，第一个请求里 prompt 带标记，有了工具结果之后标记挪走，哈希就变了。这个只在 prompt 本身是最后一块时出现（Sonnet 4.6 的三方形状；Opus 的首轮最后一块是系统提醒），所以 v45 的离线 e2e（Opus 为主）没暴露 |
+
+修正：
+
+- **Worker（`engine/answer_observer.go`、`request_command.go`、`session_state.go`）**：观察器不再看 `Content-Encoding`（CLI 给的就是解码后的字节；类型对不上、读不了的仍然不记）；观察器认出应答的结尾（流的 `message_stop`、JSON 应答完整可解析）时，在把这一段写给客户端**之前**就把应答记入会话记忆并释放线程（只做一次，CLI 退出后不再重复），客户端随后发来的请求一定能看到它。记忆的条件（续接证明、子代理唯一配对、父线程不忙）不变，证明不了照旧不给。观察器也不再只在转换时才开（记 message id 不影响不转换的请求：不转换的 CLI 拿到的上下文里会去掉一方形状的字段）。
+- **CLI（`request-session.js promptTextHash`、`request-build.js`）**：派生 prompt id 用的哈希去掉 `cache_control`，并把只有一段文字的字符串 content 当作一个文本块（与 Worker 比较历史时的规整方式相同），同一轮的请求共用一个 prompt id。CLI 的补丁产物因此变了，标签：2.1.316 `ccgateway-v45-first-party-shape` → `ccgateway-v46-shape-prompt-text`；三个旧 profile 的产物也变了，升为 `ccgateway-v53-shape-prompt-text`（2.1.312）、`v54`（2.1.310）、`v55`（2.1.304），不编译、不发布。
+- **发布要成对**：Worker 与 CLI 都变了，v46 要和这次的 Worker（离线验证用 `3cf2744aef47490f334b0570d0f9bb3ae5537d763347a12631c6fed016febd93`）一起发。
+
+测试：
+
+- Worker：`engine/first_party_live_test.go`，用实测请求的形状（`engine/testdata/first-party-live-2.1.316.json`，由 `testdata/build-first-party-live.cjs` 从 82 号日志生成：去掉工具定义、截短提示词、替换签名、设备/账号/会话 ID 与上游 request/message/tool_use ID，结构不变）。`TestFirstPartyShapeLiveConversation`：应答按 gzip 记录时，工具循环的续接拿到上一次应答的 message id、子代理首个请求拿到父线程的 prompt id 与 `general-purpose`、子代理续接与主线程下一轮都拿到各自的上一次应答；`TestFirstPartyShapeMemoryIsReadyWhenTheAnswerEnds`：父线程的 CLI 写完应答后再拖 4 秒才退出，客户端收到 `message_stop` 立即发子代理首个请求与主线程下一个请求，两者都拿到记忆，CLI 退出后线程不被旧应答回写。两项在恢复旧逻辑时都失败（已核对）。测试桩 CLI 可按请求内容脚本化回答（`CCG_TEST_REQUEST_SCRIPT`）、记录响应编码、延迟退出。
+- CLI：`test/first-party-shape.test.mjs` 新增"缓存标记挪走后同一轮 prompt id 不变"（实测的工具循环形状；字符串 content 与单个文本块相同；换 prompt 则不同），旧哈希下失败（已核对）。
+- 离线 e2e：假上游 `FAKE_GZIP=1` 时按请求的 `accept-encoding` 用 gzip 回答（`thirdparty` 模式打开它）；新增 `tp-sonnet-tool-low`、`tp-sonnet-subagent-low`、`tp-sonnet-turn2-low` 三个 Sonnet 4.6 场景；`fp-compare.cjs` 新增两条不变式：每个线程有 assistant 消息的请求 `diagnostics.previous_message_id` 等于该线程上一次应答的 message id（首个请求为 null，A 与 B 都查）、子代理的 agent type 与官方一致。
+
+编译与验证（ovh `/tmp/ccg316-v46`，用完已删；脚本 `artifacts/claude-2.1.316/verify/scripts-v46/`，日志 `verify/v46/final.tgz`；基线镜像 `ccgateway-app:0.1.124`，自带 Worker `eacf79d9…` 与 v45）：
+
+| 项 | v46 |
+|---|---|
+| 补丁树 | `artifacts/claude-2.1.316/patched-v46`（日志 `build/patch-v46.log`）：与 `patched-v45` 只差 `ccgateway-request-build.js`、`ccgateway-request-session.js`、`cli.js`（补丁标签）与 `ccgateway-patch.json` |
+| 定制 ELF SHA-256 | `2125d0b0953f3ee789f82fc39d4b6d7ec9ebb252f5ed88aac5189f46fd0b0b41`（325232816 字节，2907 个模块，`Bun v1.4.4 (38afee6c8)`，运行时检查 `v26.12.1`，能力 22 项不变） |
+| release | `artifacts/claude-2.1.316/release-v46/`；ovh `~/sup2api/checks/cli-releases/release-v46-2.1.316` |
+| 单测 + 原生对账 | Linux（`CCG_REQUIRE_ARTIFACTS=1`）：2.1.316 37 个文件 **246/246**，2.1.312/2.1.310/2.1.304 各 34 个文件 **237/237**，无跳过标记；本机 Windows 245/246、236/237（各 1 条只在 Linux 上跑）。`injected-tools-2.1.316.json` 按 v46 重录（工具逐字相同） |
+| Go | Linux（`golang:1.27-bookworm`）engine **257 过**、16 跳过（需真实 CLI），worker 3 个包、contracts 7 个包全过；本机 Windows engine 252 过、21 跳过（另 5 项只在 Linux 上跑），`go vet`、`GOOS=linux go vet` 通过 |
+| TLS / 请求头 | 22 条连接，10 条 Messages 连接（官方、v45、v46 各 direct/build 两次）与官方 **identical**；请求头 **PASS** |
+| L4 / 客户端内容 / L6 / L5 / L7 | **76/76**（上游 64，acceptance pass）/ **14/14** / 实时转发 **12/12**、抓包回放 14 项 **verified** / **216/216** / 策略矩阵 **passed**（上游 98） |
+| 噪声 | v45 两次：**0 of 73**（149 个请求）；含三方形状场景 **0 of 91**（188 个请求） |
+| D1（v45 → v46，73 个原有场景） | **0 of 73**，149 个请求，出口无差异 |
+| 断言 | verify 2310/2310、2310/2310、**2321/2321**；values 12/12；beta-check 只有已知 2 条；capcheck 188/188（`missing 0`、`bodyMismatch 0`、`secretsLeaked false`）；respmatch 174/174 |
+| 三方形状对一方形状（`fp-compare.cjs`，18 个场景） | 不变式：v45 **53 失败**（续接缺 diagnostics 12、子代理 agent type 11、子代理 `cc_prompt_id` 11、prompt id 共用方式 5 等，与实测一致），v46 **0 失败** |
+
+v46 对官方一方形状剩下的差异与 v45 相同的几类（第 11.4 节），只是新加的 Sonnet 场景让次数变多：`mid-conversation-system-clear-at`（28，不做）、消息里客户端自己写的延迟工具/技能清单（48，客户端内容）、`x-claude-code-prev-tool-durations`（10，做不到）、两个压缩头（4）、对照场景 `tp-main-off`/`tp-main-direct`（19，按设计不转换）、认证方式与账号类型（7）。
+
 ## 变更记录
 
 | 日期 | 版本 | 内容 |
@@ -318,4 +358,5 @@ v45 的 92 处差异全部归类如下（场景名见 `test/e2e/README.md`）：
 | 2026-11-02 | v42 | 移到 2.1.316，逻辑与 v41 相同（未发布） |
 | 2026-11-02 | v43 | 报告官方运行时版本 `v26.12.1`；首轮工具注入（`build_injection_tools_v2`）；插件 0.1.122 起新账号使用 |
 | 2026-11-02 | v44 | `StoredLoginHeldBackError` 按 `errorClass` 回 403 / 401 / 可重试 502（第 10 节）；未发布，并入 v45 |
-| 2026-11-03 | v45 | 三方形状转一方形状（`build_first_party_shape_v1`）与三处一致性修正（第 11 节）；候选，需要同一次改动的 Worker |
+| 2026-11-03 | v45 | 三方形状转一方形状（`build_first_party_shape_v1`）与三处一致性修正（第 11 节）；插件 0.1.124 上线 82 号账号实测 |
+| 2026-11-03 | v46 | 实测两处缺口：Worker 读压缩应答并在应答结束时立即记忆、CLI 派生 prompt id 不受缓存标记影响（第 12 节）；候选，需要同一次改动的 Worker |

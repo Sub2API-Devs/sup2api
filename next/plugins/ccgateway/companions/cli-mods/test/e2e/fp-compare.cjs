@@ -58,6 +58,26 @@ function diff(a, b, at, out) {
 }
 const short = v => { const s = typeof v === 'string' ? v : j(v); return s === undefined ? '(无)' : s.length > 240 ? s.slice(0, 240) + `…(${s.length})` : s; };
 
+// diagnosticsFollow checks a side's diagnostics as Claude Code writes them
+// (2026-11-03 live test: v45 wrote none on continuations): a thread's request
+// with an answer in its messages names the thread's previous answer (the
+// fake's message ID for that request), its first request null. Compaction
+// requests are left out (CC sends them off the main thread's transcript).
+function diagnosticsFollow(side, rows, label) {
+  const last = new Map();
+  for (const r of rows) {
+    const thread = header(r, 'x-claude-code-agent-id') || 'main';
+    const compaction = header(r, 'x-claude-code-request-class') === 'compaction';
+    const answered = (r.body?.messages ?? []).some(m => m.role === 'assistant');
+    if (!compaction) {
+      const expected = answered ? last.get(thread) ?? '(unknown)' : null;
+      const actual = r.body?.diagnostics?.previous_message_id;
+      check(actual === expected, `${label} ${side} ${kind(r)}: diagnostics.previous_message_id ${j(actual)}, expected ${j(expected)}`);
+    }
+    last.set(thread, 'msg_ccg_audit_' + r.index);
+  }
+}
+
 let failures = 0;
 const check = (ok, what) => { if (!ok) { failures++; console.log(`  FAIL ${what}`); } };
 const totals = new Map();
@@ -84,6 +104,9 @@ for (const name of dirs) {
     const prompts = (side) => side.map(r => field(billing(r), 'cc_prompt_id'));
     const shape = ids => ids.map(id => ids.indexOf(id));
     check(j(shape(prompts(A))) === j(shape(prompts(B))), `${name}: prompt IDs shared as A shares them ${j(shape(prompts(A)))} vs ${j(shape(prompts(B)))}`);
+    // The rule holds for the official client (A, the reference) and for B.
+    diagnosticsFollow('A', A, name);
+    diagnosticsFollow('B', B, name);
   } else {
     for (const r of B) check(field(billing(r), 'cch') === undefined, `${name} ${kind(r)}: not converted`);
   }
@@ -93,6 +116,8 @@ for (const name of dirs) {
     if (bi < 0) { console.log(`-- ${kind(a)}: B 侧无对应请求`); totals.set('B 侧缺请求', (totals.get('B 侧缺请求') ?? 0) + 1); continue; }
     used.add(bi);
     const b = B[bi], out = [];
+    // A subagent names the agent type the official client names.
+    if (converted && header(a, 'x-claude-code-agent-type') !== undefined) check(header(b, 'x-claude-code-agent-type') === header(a, 'x-claude-code-agent-type'), `${name} ${kind(a)}: agent type ${j(header(b, 'x-claude-code-agent-type'))}, official ${j(header(a, 'x-claude-code-agent-type'))}`);
     if (a.url !== b.url) out.push(`URL A=${a.url} B=${b.url}`);
     const ha = headers(a).filter(([k]) => !IGNORE_HEADERS.has(k)), hb = headers(b).filter(([k]) => !IGNORE_HEADERS.has(k));
     const na = ha.map(([k]) => k), nb = hb.map(([k]) => k), ma = new Map(ha), mb = new Map(hb);

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -34,7 +35,7 @@ func requestCancellationPeer() {
 		}
 		_, _ = file.Write(append(raw, '\n'))
 		_ = file.Close()
-		if target := os.Getenv("CCG_TEST_REQUEST_ENV_CAPTURE"); target != "" {
+		if target := peerSetting(raw, "CCG_TEST_REQUEST_ENV_CAPTURE"); target != "" {
 			values := map[string]string{}
 			for _, name := range []string{"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "DISABLE_TELEMETRY", "DO_NOT_TRACK", "DISABLE_ERROR_REPORTING", "CLAUDE_CODE_ENABLE_TELEMETRY", "CCG_REPORT_CONTAINER_RESOURCES", "CCG_HARDWARE_PROFILE_PATH", requestIdentityEnv, directPolicyEnv, requestAgentEnv, firstPartyShapeEnv, "CLAUDE_CODE_REMOTE_SESSION_ID", "_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL",
 				"CCG_API_KEY", "CCG_ADMIN_KEY", "ccg_api_key", "CCG_ACCOUNT_DISK_QUOTA_BYTES"} {
@@ -53,28 +54,38 @@ func requestCancellationPeer() {
 		// writing its own header gives (session_state.go). With
 		// CCG_TEST_REQUEST_FRAME=1 the answer fails after its first event.
 		headers := map[string]string{"content-type": "text/event-stream"}
-		if id := os.Getenv("CCG_TEST_REQUEST_ANSWER_ID"); id != "" {
+		if id := peerSetting(raw, "CCG_TEST_REQUEST_ANSWER_ID"); id != "" {
 			headers["request-id"] = id
+		}
+		// CCG_TEST_REQUEST_ANSWER_ENCODING is the Content-Encoding the upstream
+		// answered with, as the CLI records it while writing the decoded bytes.
+		if encoding := peerSetting(raw, "CCG_TEST_REQUEST_ANSWER_ENCODING"); encoding != "" {
+			headers["content-encoding"] = encoding
 		}
 		meta, _ := json.Marshal(struct {
 			Status  int               `json:"status"`
 			Headers map[string]string `json:"headers"`
 			Session json.RawMessage   `json:"session,omitempty"`
-		}{200, headers, json.RawMessage(os.Getenv("CCG_TEST_REQUEST_ANSWER_SESSION"))})
+		}{200, headers, json.RawMessage(peerSetting(raw, "CCG_TEST_REQUEST_ANSWER_SESSION"))})
 		for i, arg := range os.Args {
 			if arg == "--response-meta" && i+1 < len(os.Args) {
 				_ = os.WriteFile(os.Args[i+1], meta, 0600)
 			}
 		}
-		if os.Getenv("CCG_TEST_REQUEST_FRAME") == "1" {
+		if peerSetting(raw, "CCG_TEST_REQUEST_FRAME") == "1" {
 			_, _ = io.WriteString(os.Stdout, cancellationFirstEvent)
 			_, _ = io.WriteString(os.Stderr, cancellationErrorFrame)
 			os.Exit(1)
 		}
 		// CCG_TEST_REQUEST_ANSWER_BODY is the answer's event stream, when the
 		// test reads it (answer_observer.go).
-		if body := os.Getenv("CCG_TEST_REQUEST_ANSWER_BODY"); body != "" {
+		if body := peerSetting(raw, "CCG_TEST_REQUEST_ANSWER_BODY"); body != "" {
 			_, _ = io.WriteString(os.Stdout, body)
+			// CCG_TEST_REQUEST_LINGER_MS keeps the CLI running after the
+			// answer, as a real CLI takes its time to exit.
+			if linger, _ := strconv.Atoi(peerSetting(raw, "CCG_TEST_REQUEST_LINGER_MS")); linger > 0 {
+				time.Sleep(time.Duration(linger) * time.Millisecond)
+			}
 			return
 		}
 		_, _ = io.WriteString(os.Stdout, cancellationFirstEvent+"event: message_stop\ndata: {}\n\n")
@@ -250,4 +261,30 @@ func TestRequestCommandSeparatesCancellationAndDeadline(t *testing.T) {
 			}
 		}
 	}
+}
+
+// peerSetting is the capture peer's setting name: with CCG_TEST_REQUEST_SCRIPT
+// (a JSON list of {"marker", "env"}), the env of the first entry whose marker
+// the request's input contains, so that one Worker can answer concurrent
+// requests differently; else the process environment.
+func peerSetting(raw []byte, name string) string {
+	if script := os.Getenv("CCG_TEST_REQUEST_SCRIPT"); script != "" {
+		var entries []struct {
+			Marker string            `json:"marker"`
+			Env    map[string]string `json:"env"`
+		}
+		data, err := os.ReadFile(script)
+		if err != nil || json.Unmarshal(data, &entries) != nil {
+			panic("CCG_TEST_REQUEST_SCRIPT")
+		}
+		for _, entry := range entries {
+			if strings.Contains(string(raw), entry.Marker) {
+				if value, ok := entry.Env[name]; ok {
+					return value
+				}
+				break
+			}
+		}
+	}
+	return os.Getenv(name)
 }

@@ -200,6 +200,45 @@ test('a converted main thread: CC\'s header, CC\'s split, its prompt ID, diagnos
   } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
 });
 
+// 2026-11-03 live test (account 82, Sonnet 4.6): the client marks its last
+// message for the cache, so the prompt carries the marker on its turn's first
+// request and none once a tool result follows it. The turn's requests keep
+// one prompt ID (v45 derived another for the continuation), and the
+// continuation names the first request's answer.
+test('a turn keeps its prompt ID when the cache marker moves off the prompt', async () => {
+  const f = await fixture();
+  try {
+    const context = { map: true, key: 'ab'.repeat(32), client: {} };
+    const reminder = { type: 'text', text: '<system-reminder>\nToday\'s date is 2026-11-03.\n</system-reminder>' };
+    const prompt = 'Read /w/proj/notes.txt using the Read tool with limit 1, then reply with its first line.';
+    const first = [{ role: 'user', content: [reminder, { type: 'text', text: prompt, cache_control: { type: 'ephemeral' } }] }];
+    const one = await withEnv({ CCG_FIRST_PARTY_SHAPE: '1', CCG_REQUEST_IDENTITY: identity() }, () => f.adapter.buildRequest(request(thirdPartySystem(), first), {}, signal(), f.resolver(context)));
+    const promptId = one.agent.promptId;
+    assert.match(promptId, /^[0-9a-f-]{36}$/);
+    const loop = [{ role: 'user', content: [reminder, { type: 'text', text: prompt }] },
+      { role: 'assistant', content: [{ type: 'thinking', thinking: '', signature: 'sig' }, { type: 'tool_use', id: 'toolu_1', name: 'Read', input: { file_path: '/w/proj/notes.txt', limit: 1 } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: '1\tfirst line', cache_control: { type: 'ephemeral' } }] }];
+    const previous = { thread: 'main', request_id: 'req_one', turn_position: one.session.turn_position, prompt_hash: one.session.prompt_hash, message_id: 'msg_one', prompt_id: one.session.prompt_id };
+    const two = await withEnv({ CCG_FIRST_PARTY_SHAPE: '1', CCG_REQUEST_IDENTITY: identity({ previous }) }, () => f.adapter.buildRequest(request(thirdPartySystem(), loop), {}, signal(), f.resolver(context)));
+    assert.equal(two.agent.promptId, promptId);
+    assert.equal(firstLine(two.body), header(` cch=00000; cc_prev_req=req_one; cc_prompt_id=${promptId}; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;`));
+    assert.deepEqual(two.body.diagnostics, { previous_message_id: 'msg_one' });
+    // Without the Worker's memory the same: the ID depends on the prompt's
+    // text, not on where the client put its marker.
+    const unproven = await withEnv({ CCG_FIRST_PARTY_SHAPE: '1', CCG_REQUEST_IDENTITY: identity() }, () => f.adapter.buildRequest(request(thirdPartySystem(), loop), {}, signal(), f.resolver(context)));
+    assert.equal(unproven.agent.promptId, promptId);
+    // A prompt sent as a string is its one text block.
+    const plain = [{ role: 'user', content: prompt }];
+    const asBlock = [{ role: 'user', content: [{ type: 'text', text: prompt, cache_control: { type: 'ephemeral' } }] }];
+    const a = await withEnv({ CCG_FIRST_PARTY_SHAPE: '1', CCG_REQUEST_IDENTITY: identity() }, () => f.adapter.buildRequest(request(thirdPartySystem(), plain), {}, signal(), f.resolver(context)));
+    const b = await withEnv({ CCG_FIRST_PARTY_SHAPE: '1', CCG_REQUEST_IDENTITY: identity() }, () => f.adapter.buildRequest(request(thirdPartySystem(), asBlock), {}, signal(), f.resolver(context)));
+    assert.equal(a.agent.promptId, b.agent.promptId);
+    // Another prompt is another ID.
+    const other = await withEnv({ CCG_FIRST_PARTY_SHAPE: '1', CCG_REQUEST_IDENTITY: identity() }, () => f.adapter.buildRequest(request(thirdPartySystem(), [{ role: 'user', content: 'Something else.' }]), {}, signal(), f.resolver(context)));
+    assert.notEqual(other.agent.promptId, a.agent.promptId);
+  } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+});
+
 test('a converted later turn continues what the Worker proved, and nothing it did not', async () => {
   const f = await fixture();
   try {

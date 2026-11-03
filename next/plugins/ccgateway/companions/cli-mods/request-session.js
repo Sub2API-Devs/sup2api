@@ -32,6 +32,19 @@ export const requestThread = agent => !agent || agent.requestClass === 'main' ||
 // promptHash tells a prompt sent again (a retry) from a new one.
 export const promptHash = content => createHash('sha256').update(JSON.stringify(content ?? null)).digest('hex');
 
+// promptTextHash is the prompt's hash for what stays of it through its turn:
+// Claude Code moves its cache marker to the conversation's last message, so
+// the prompt carries one on its first request and none once a tool result or
+// a subagent's report follows it, and writes a message whose one text block
+// lost its marker as a string (2026-11-03, live test on account 82: a turn's
+// derived prompt ID changed after its first request). The markers and that
+// form are left out, as the Worker's memory leaves them out
+// (engine/session_state.go canonicalMessage).
+export const promptTextHash = content => promptHash(withoutCacheMarkers(typeof content === 'string' ? [{ type: 'text', text: content }] : content));
+const withoutCacheMarkers = value => Array.isArray(value) ? value.map(withoutCacheMarkers)
+  : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'cache_control').map(([key, item]) => [key, withoutCacheMarkers(item)]))
+  : value;
+
 // sessionTurn is the prompt's position: the native count from the history,
 // never behind the remembered turn. A new prompt (the request's last user
 // message, and not the remembered prompt again) is one turn past the

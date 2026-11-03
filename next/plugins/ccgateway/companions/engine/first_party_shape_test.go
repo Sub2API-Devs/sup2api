@@ -42,7 +42,7 @@ func agentStream(id string, calls ...string) string {
 func TestAnswerObserverReadsTheMessageIDAndAgentCalls(t *testing.T) {
 	stream := agentStream("msg_01ABC", `{"description":"d","prompt":"LEVEL1: go","subagent_type":"general-purpose"}`, `{"prompt":"other"}`)
 	for _, size := range []int{1, 7, 64, len(stream)} {
-		o := newAnswerObserver("text/event-stream; charset=utf-8", "")
+		o := newAnswerObserver("text/event-stream; charset=utf-8")
 		for at := 0; at < len(stream); at += size {
 			o.write([]byte(stream[at:min(at+size, len(stream))]))
 		}
@@ -51,26 +51,37 @@ func TestAnswerObserverReadsTheMessageIDAndAgentCalls(t *testing.T) {
 		require.Equal(t, []agentSpawn{{prompt: sha256.Sum256([]byte("LEVEL1: go")), agentType: "general-purpose"}, {prompt: sha256.Sum256([]byte("other"))}}, spawns, size)
 	}
 	// A JSON answer.
-	o := newAnswerObserver("application/json", "")
+	o := newAnswerObserver("application/json")
 	o.write([]byte(`{"id":"msg_2","content":[{"type":"text","text":"x"},{"type":"tool_use","name":"Agent","input":{"prompt":"p","subagent_type":"Explore"}},{"type":"tool_use","name":"Bash","input":{"prompt":"no"}}]}`))
 	id, spawns := o.facts()
 	require.Equal(t, "msg_2", id)
 	require.Equal(t, []agentSpawn{{prompt: sha256.Sum256([]byte("p")), agentType: "Explore"}}, spawns)
 	// An unfinished call, a bad ID, an encoded or other answer: what is not
 	// certain is left out.
-	unfinished := newAnswerObserver("text/event-stream", "")
+	unfinished := newAnswerObserver("text/event-stream")
 	unfinished.write([]byte(strings.Split(agentStream("msg_3", `{"prompt":"p"}`), "event: content_block_stop")[0]))
 	id, spawns = unfinished.facts()
 	require.Equal(t, "msg_3", id)
 	require.Nil(t, spawns)
-	bad := newAnswerObserver("text/event-stream", "")
+	bad := newAnswerObserver("text/event-stream")
 	bad.write([]byte(agentStream("not-a-message-id")))
 	id, _ = bad.facts()
 	require.Empty(t, id)
-	require.Nil(t, newAnswerObserver("text/event-stream", "gzip"))
-	require.Nil(t, newAnswerObserver("text/plain", ""))
+	require.Nil(t, newAnswerObserver("text/plain"))
+	// The answer's end: a stream's message_stop, a JSON answer once whole.
+	ending := newAnswerObserver("text/event-stream")
+	ending.write([]byte(strings.Split(agentStream("msg_4"), "event: message_stop")[0]))
+	require.False(t, ending.ended())
+	ending.write([]byte("event: message_stop\ndata: {\"type\":\"message_stop\"}\n"))
+	require.True(t, ending.ended())
+	whole := newAnswerObserver("application/json")
+	whole.write([]byte(`{"id":"msg_5","content":[{"type":"text","text":"}"}`))
+	require.False(t, whole.ended())
+	whole.write([]byte(`]}` + "\n"))
+	require.True(t, whole.ended())
 	var none *answerObserver
 	none.write([]byte("x"))
+	require.False(t, none.ended())
 	id, spawns = none.facts()
 	require.Empty(t, id)
 	require.Nil(t, spawns)

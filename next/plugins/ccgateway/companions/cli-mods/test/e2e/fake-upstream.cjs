@@ -12,10 +12,13 @@
 //   credit-slow -> the same, streamed, with CREDIT_DELAY_MS between the first
 //                  event and the refusal events (the P2-1 streaming probe)
 //   error400    -> 400 with a body and headers outside the core whitelist
+// With FAKE_GZIP=1 a Messages answer is gzip-compressed when the request
+// accepts it, as the real upstream compresses its answers (2026-11-03: the
+// CLI records the Content-Encoding while it writes the decoded bytes).
 // It also serves GET /api/oauth/profile (the Worker's resource-identity probe)
 // and writes the profile answer to profile.json, never to a req-N.json.
 // Usage: node fake-upstream.cjs <sock> <capture-dir> <cert-dir>
-const fs = require('fs'), https = require('https'), path = require('path');
+const fs = require('fs'), https = require('https'), path = require('path'), zlib = require('zlib');
 const [sock, dir, certDir] = process.argv.slice(2);
 const scenario = process.env.SCENARIO || 'text';
 fs.mkdirSync(dir, { recursive: true });
@@ -47,7 +50,21 @@ function sse(res, model, blocks, stop, stopDetails, delay = 0, logDir = '', logI
   if (delay) setTimeout(content, delay); else content();
 }
 
-const server = https.createServer({ key: fs.readFileSync(path.join(certDir, 'key.pem')), cert: fs.readFileSync(path.join(certDir, 'cert.pem')) }, (req, res) => {
+// compressed is res answering in gzip when FAKE_GZIP=1 and the request
+// accepts it: each write is flushed, so a stream still streams.
+function compressed(req, res) {
+  if (process.env.FAKE_GZIP !== '1' || !/\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))) return res;
+  const z = zlib.createGzip();
+  z.pipe(res);
+  return {
+    writeHead: (status, headers) => res.writeHead(status, { ...headers, 'content-encoding': 'gzip' }),
+    write: data => { z.write(data); z.flush(); },
+    end: data => { if (data !== undefined) z.write(data); z.end(); },
+  };
+}
+
+const server = https.createServer({ key: fs.readFileSync(path.join(certDir, 'key.pem')), cert: fs.readFileSync(path.join(certDir, 'cert.pem')) }, (req, raw) => {
+  let res = raw;
   const chunks = [];
   req.on('data', d => chunks.push(d)).on('end', () => {
     const body = Buffer.concat(chunks).toString('utf8');
@@ -70,6 +87,7 @@ const server = https.createServer({ key: fs.readFileSync(path.join(certDir, 'key
       res.writeHead(404, { 'content-type': 'application/json' });
       return res.end('{"type":"error","error":{"type":"not_found_error","message":"fake"}}');
     }
+    res = compressed(req, raw);
     const b = parsed, text = JSON.stringify(b.messages ?? []);
     if (scenario === 'error400') {
       res.writeHead(400, { 'content-type': 'application/json', 'request-id': 'req_err_probe', 'x-internal-route': 'private', 'set-cookie': 'a=b' });

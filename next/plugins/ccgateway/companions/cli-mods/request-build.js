@@ -3,7 +3,7 @@ import { queryModel, renderAttachment, ccgatewayEnvironment, ccgatewayEnvironmen
   getRootSession, setEntrypointOnRequests } from './native-build.js';
 import { requestTool } from './ccgateway-native-tools.js';
 import { prepareBuildInput, wireMessages, wireRecords, fingerprintMessages } from './ccgateway-request-input.js';
-import { continueSession, requestThread, promptHash } from './ccgateway-request-session.js';
+import { continueSession, requestThread, promptTextHash } from './ccgateway-request-session.js';
 import { previousSession, spawnContext, requestSessionID } from './ccgateway-request-identity.js';
 import { normalizeBetas, setProtocolHeaders } from './ccgateway-request-headers.js';
 import { createContentPolicy } from './ccgateway-content-policy.js';
@@ -261,7 +261,7 @@ export async function buildRequest(components, headers, signal, resolveAgent, { 
   const continued = clientBilling === null || thirdParty ? continueSession(records, prompt, { human: entrypoint === 'cli', thread }) : undefined;
   // The converted main thread's prompt ID, once its turn is known.
   if (thirdParty && prompt && agent?.derivePromptId) {
-    prompt.promptId = agent.promptId = agent.derivePromptId(prompt.turnPosition?.turnIndex ?? 0, promptHash(prompt.message?.content));
+    prompt.promptId = agent.promptId = agent.derivePromptId(prompt.turnPosition?.turnIndex ?? 0, promptTextHash(prompt.message?.content));
     agent.shapePrompt = true;
   }
   const body = initial.request, clientBetas = normalizeBetas(new Headers(headers).get('anthropic-beta'), body.betas);

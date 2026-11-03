@@ -427,7 +427,10 @@ func (g *Gateway) runCLI(w http.ResponseWriter, r *http.Request, d *requestDiagn
 	if building(p) {
 		cmd.Dir = runner.WorkingDirectory
 	}
-	run.output = &requestCommandOutput{writer: w, meta: run.meta, diagnostic: d, credit: p.credit, observe: p.shape && p.session != nil && p.session.usable}
+	run.output = &requestCommandOutput{writer: w, meta: run.meta, diagnostic: d, credit: p.credit, observe: p.session != nil && p.session.usable}
+	// The memory takes the answer as soon as it has ended, before its last
+	// bytes reach the client (session_state.go rememberSessionState).
+	run.output.ended = func() { g.rememberSessionState(p, run.output) }
 	run.stderr = &requestErrorReader{diagnostic: d}
 	cmd.Stdout, cmd.Stderr = run.output, run.stderr
 	d.trace("request_command", Object{"mode": p.mode, "configured_mode": g.RequestMode, "probe": p.probe, "cli_version": runner.Version})
@@ -591,10 +594,13 @@ type requestCommandOutput struct {
 	status    int
 	requestID string        // the upstream answer's request-id
 	session   *sessionState // the turn the CLI's own header used
-	// observe: the answer is read for the session memory (a converted
-	// request's thread, answer_observer.go); observer reads a 2xx answer.
+	// observe: the answer is read for the session memory (the request's
+	// thread, answer_observer.go); observer reads a 2xx answer, and ended
+	// is called once, when it has read the answer's end and before the bytes
+	// that end it are written.
 	observe     bool
 	observer    *answerObserver
+	ended       func()
 	diagnostic  *requestDiagnostic
 	contentType string
 	// A tracked response keeps a copy for its credit claim (request_credit.go).
@@ -658,7 +664,7 @@ func (o *requestCommandOutput) commit(status int, h http.Header) {
 	o.requestID = h.Get("request-id")
 	o.started = true
 	if o.observe && status >= 200 && status <= 299 {
-		o.observer = newAnswerObserver(h.Get("Content-Type"), h.Get("Content-Encoding"))
+		o.observer = newAnswerObserver(h.Get("Content-Type"))
 	}
 }
 
@@ -670,6 +676,11 @@ func (o *requestCommandOutput) Write(p []byte) (int, error) {
 		o.keepCredit(p)
 	}
 	o.observer.write(p)
+	if o.ended != nil && o.observer.ended() {
+		ended := o.ended
+		o.ended = nil
+		ended()
+	}
 	n, err := o.writer.Write(p)
 	if err == nil {
 		_ = http.NewResponseController(o.writer).Flush()

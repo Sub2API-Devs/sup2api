@@ -232,7 +232,9 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   // injected tools rendered amid CC's whole pool).
   // 2026-11-03: ccgateway-v52-first-party-shape (was ccgateway-v49-stored-login); the first-party shape conversion
   // changed the shared support modules and the profile's native bindings.
-  assert.equal(patchManifest.extension, 'ccgateway-v52-first-party-shape');
+  // 2026-11-03 (live test): ccgateway-v55-shape-prompt-text (was ccgateway-v52-first-party-shape); a turn's derived prompt ID
+  // no longer depends on where the client put its cache marker (request-session.js).
+  assert.equal(patchManifest.extension, 'ccgateway-v55-shape-prompt-text');
   assert(!patchManifest.capabilities.includes('build_first_party_shape_v1'));
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));
   assert(patchManifest.capabilities.includes('request_capture_v1'));

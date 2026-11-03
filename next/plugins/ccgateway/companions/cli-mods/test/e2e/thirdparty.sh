@@ -7,6 +7,13 @@
 # fp-compare.cjs can list what still differs once the gateway has converted
 # the B side (features.FirstPartyShapeCapability). The policy carries no
 # first_party_shape (on), except tp-main-off.
+# The fake upstream compresses its answers, as the real one does (2026-11-03
+# live test: v45's Worker read no compressed answer, so continuations lacked
+# diagnostics and subagents their parent's prompt ID and agent type). The
+# Sonnet scenarios have the client's cache marker on the prompt itself (no
+# mid-conversation system message), which moves off it once a tool result
+# follows (the same live test: a turn's prompt ID changed).
+export FAKE_GZIP=1
 TP_ENV='CLAUDE_CODE_OAUTH_TOKEN=ccg-audit-gateway-key ANTHROPIC_BASE_URL=http://127.0.0.1:8788'
 TP_KEY_ENV='ANTHROPIC_AUTH_TOKEN=ccg-audit-gateway-key ANTHROPIC_BASE_URL=http://127.0.0.1:8788'
 TP_APIKEY_ENV='ANTHROPIC_API_KEY=ccg-audit-gateway-key ANTHROPIC_BASE_URL=http://127.0.0.1:8788'
@@ -44,6 +51,13 @@ run_case tp-tool-low tool "$POLICY_LOW" "$REF_ENV" "$TP_ENV"
 CARGS='-p "use a subagent to say OK" --model claude-opus-4-8 --output-format json'
 run_case tp-subagent-low subagent "$POLICY_LOW" "$REF_ENV" "$TP_ENV"
 run_case tp-sub3-low sub3 "$POLICY_LOW" "$REF_ENV" "$TP_ENV"
+CARGS='-p "Run the command and report its output." --model claude-sonnet-4-6 --output-format json'
+run_case tp-sonnet-tool-low tool "$POLICY_LOW" "$REF_ENV" "$TP_ENV"
+CARGS='-p "use a subagent to say OK" --model claude-sonnet-4-6 --output-format json'
+run_case tp-sonnet-subagent-low subagent "$POLICY_LOW" "$REF_ENV" "$TP_ENV"
+CARGS='-p "Run the command and report its output." --model claude-sonnet-4-6 --output-format json'
+tp_continue tp-sonnet-turn2-low tool "$POLICY_LOW" '-p "Reply with the single word OK." --continue --model claude-sonnet-4-6 --output-format json'
+
 CARGS='-p "Reply with the single word OK." --model claude-opus-4-8 --output-format json'
 tp_continue tp-turn2-low text "$POLICY_LOW" '-p "Reply with the single word OK." --continue --model claude-opus-4-8 --output-format json'
 tp_continue tp-compact-low text "$POLICY_LOW" '-p "/compact" --continue --model claude-opus-4-8 --output-format json'

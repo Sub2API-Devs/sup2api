@@ -459,6 +459,9 @@ type requestSession struct {
 	key, thread string
 	messages    messageHistory
 	usable      bool // no other request of the thread was in flight
+	// kept: the answer was taken (once); left: the claim was given back
+	// (once, as soon as the answer was taken).
+	kept, left bool
 }
 
 // attachSessionState gives the request's identity context what the Worker
@@ -535,18 +538,29 @@ func parentThread(h http.Header) string {
 // CLI uses and reports only the thread it builds, and a request carrying the
 // client's header, in any thread, neither reads nor moves the memory. A failed
 // request does not move the thread on.
+//
+// It runs once: when the Worker has read the answer's end (its message_stop,
+// answer_observer.go), before the bytes carrying it reach the client, else
+// when the CLI has finished. The client sends the conversation's next request
+// (a tool result, the first request of the subagent an Agent call spawns) as
+// soon as it has the whole answer; the memory and the thread's claim must be
+// ready by then, or that request finds the thread busy and is given nothing
+// (2026-11-03). The thread is given back at once.
 func (g *Gateway) rememberSessionState(p *requestPlan, o *requestCommandOutput) {
 	s := p.session
-	if s == nil || !s.usable || o.session == nil || o.session.Thread != s.thread || o.status < 200 || o.status > 299 {
+	if s == nil || s.kept || !s.usable || o.session == nil || o.session.Thread != s.thread || o.status < 200 || o.status > 299 {
 		return
 	}
+	s.kept = true
 	messageID, spawns := o.observer.facts()
 	g.sessionStates.answeredWith(s.key, o.requestID, s.messages.all(), *o.session, answerFacts{messageID: messageID, spawns: spawns})
+	g.releaseSessionState(p)
 }
 
-// releaseSessionState gives back the thread the request claimed.
+// releaseSessionState gives back the thread the request claimed, once.
 func (g *Gateway) releaseSessionState(p *requestPlan) {
-	if p.session != nil {
+	if p.session != nil && !p.session.left {
+		p.session.left = true
 		g.sessionStates.leave(p.session.key)
 	}
 }

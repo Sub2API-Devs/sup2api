@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"mime"
 	"regexp"
-	"strings"
 )
 
 // answerObserver reads, from the bytes a converted request's answer streams
@@ -28,6 +27,9 @@ type answerObserver struct {
 	messageID string
 	spawns    []agentSpawn
 	failed    bool // the answer could not be read whole: no spawns
+	// complete: the answer has ended (a stream's message_stop, a JSON answer
+	// whole), as the client will see it once these bytes reach it.
+	complete bool
 }
 
 // agentCall is one tool_use block of a streamed answer that calls Claude
@@ -68,11 +70,16 @@ var (
 var agentToolNames = map[string]bool{"Agent": true, "Task": true}
 
 // newAnswerObserver observes an answer of contentType, or returns nil for one
-// it cannot read (another media type, an encoded body).
-func newAnswerObserver(contentType, encoding string) *answerObserver {
-	if encoding != "" && !strings.EqualFold(encoding, "identity") {
-		return nil
-	}
+// it cannot read (another media type).
+//
+// The bytes are the ones the CLI writes, which its fetch has already decoded;
+// the CLI's recorded headers still name the upstream's Content-Encoding (Bun
+// keeps the header when it decodes, 2026-11-03: Anthropic compresses its
+// answers, so every real answer said gzip or br and v45's observer read none
+// of them, live test on account 82), and the Worker never relays that header
+// (httpfacts.Select). An answer whose bytes are not what its type says is
+// simply not read (no facts).
+func newAnswerObserver(contentType string) *answerObserver {
 	media, _, err := mime.ParseMediaType(contentType)
 	switch {
 	case err != nil:
@@ -96,6 +103,11 @@ func (o *answerObserver) write(p []byte) {
 			return
 		}
 		o.body.Write(p)
+		// A JSON answer is whole once it parses (checked only when the bytes
+		// so far end like an object).
+		if end := bytes.TrimRight(o.body.Bytes(), " \t\r\n"); len(end) > 0 && end[len(end)-1] == '}' && json.Valid(end) {
+			o.complete = true
+		}
 		return
 	}
 	for len(p) > 0 {
@@ -167,6 +179,8 @@ func (o *answerObserver) event(line []byte) {
 			delete(o.blocks, event.Index)
 			o.spawn(call.input.Bytes())
 		}
+	case "message_stop":
+		o.complete = true
 	}
 }
 
@@ -188,6 +202,13 @@ func (o *answerObserver) spawn(raw []byte) {
 		call.agentType = *input.SubagentType
 	}
 	o.spawns = append(o.spawns, call)
+}
+
+// ended says the answer has ended: what it leaves can be kept before its
+// last bytes reach the client, which may send the conversation's next request
+// (a tool result, a subagent's first request) as soon as they do.
+func (o *answerObserver) ended() bool {
+	return o != nil && o.complete
 }
 
 // facts are what an answer read in full leaves: its message ID and its

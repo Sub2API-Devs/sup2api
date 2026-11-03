@@ -1,7 +1,7 @@
 {
   "binarySHA256": "fd13c70000fec3f2116dfbcbb6121210b4a29328bf0e46210a59dd594a67d824",
   "version": "2.1.316",
-  "extension": "ccgateway-v45-first-party-shape",
+  "extension": "ccgateway-v46-shape-prompt-text",
   "bunVersion": "1.4.4",
   "runtimeVersion": "v26.12.1",
   "capabilities": [

@@ -1,7 +1,7 @@
 {
-  "provenance": "Tools the patched CLI injects on a first turn (test/injection-tools-probe.cjs against the compiled release in a disposable offline ccgateway-app:0.1.123 container, Worker-like environment; v45 re-recording, tools identical to the v43/v44 ones)",
-  "cli_sha256": "724ebb3397eef4abb88d4e320ebef0e55edc66fe1ca409263ada6db05a6b3bde",
-  "patch": "ccgateway-v45-first-party-shape",
+  "provenance": "Tools the patched CLI injects on a first turn (test/injection-tools-probe.cjs against the compiled release in a disposable offline ccgateway-app:0.1.124 container, Worker-like environment; v46 re-recording, tools identical to the v43–v45 ones)",
+  "cli_sha256": "2125d0b0953f3ee789f82fc39d4b6d7ec9ebb252f5ed88aac5189f46fd0b0b41",
+  "patch": "ccgateway-v46-shape-prompt-text",
   "model": "claude-sonnet-4-6",
   "runtime_version": "v26.12.1",
   "cases": [

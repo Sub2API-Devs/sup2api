@@ -195,6 +195,8 @@ Worker 连的是官方 API，应当对齐"真实 CC 直连官方地址"的形状
 ## 5. 会话记忆：`cc_prev_req` 与 turn 字段（v38 起；v45 起也用于转换的请求）
 
 > 2026-11-03（v45）：会话记忆也用于第 2.4 节转换的第三方形状请求，并多记三件事：应答的 `message.id`（下一次请求的 `diagnostics.previous_message_id`）、本线程头里用的 `cc_prompt_id`、子代理的类型；另外从父线程上次应答里读出 Agent 调用（prompt 与 `subagent_type`），给子代理的第一个请求配对。规则与下表相同：证明不了接续就不给。
+>
+> 2026-11-03（v46，82 号账号实测后）：Worker 从 CLI 写出的字节读应答（已解码；CLI 记下的上游 `Content-Encoding` 不影响读取，v45 因为它一个真实应答都没读到），读到应答结束（`message_stop`）时在把这段字节交给客户端之前就记入记忆并释放线程，因为客户端一拿到完整应答就会发下一个请求（工具结果、子代理首个请求）。CLI 派生同一轮的 `cc_prompt_id` 时不看缓存标记（客户端把它从 prompt 挪到最后一条消息），同一轮的请求共用一个。
 
 真实 CC 从自己的 transcript 读两件事：上一次应答的请求（最后一条 assistant 消息的 `requestId`，`mmr`）与本轮的位置（最后一个 prompt 的 `turnPosition`，`vKn` 按之前的 prompt 计数）。客户端发来的是对话消息而不是 CC 的 transcript：没有 request-id，历史还可能被截断或压缩。所以对**我们写的头**，Worker 按会话线程记住这两件事，CLI 把它们放回 CC 自己读的位置，由原生 `f3o` 写字段（不拼字符串）。
 
