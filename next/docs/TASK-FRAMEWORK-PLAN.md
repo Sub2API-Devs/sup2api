@@ -23,7 +23,7 @@
 | A7 | **控制台页面**：概览、全集群任务、每节点矩阵、详情抽屉（历史、错误、耗时趋势）、手动运行、节点页入口、中英文 | `web/src/views/tasks/`、`web/src/api/`、`web/src/router/`、i18n | `npm run check`（类型、lint、vitest）；页面单元测试：状态颜色、计划描述、空数据、节点离线 | 完成 |
 | A8 | **停容器**：`core.ccgateway.park_runtimes`、`desiredIn` 的 `parked`、阻断去重扩到所有 `!Enabled`、唤醒（重新授权、测试、运行环境“启动”）、额度查询回 `runtime_parked`、设置项 `park_after_hours`、控制台文案与原因码 | `server/internal/ccgateway/`、`server/internal/account/`、`web/src/views/{accounts,ccgateway,settings}` | 停容器设计 §9 的单元测试全部；同步只下发一次 `enabled:false` | 完成 |
 | A9 | **迁移 0.1.235 的 13 个现有循环**，删除原循环和锁：A9a account（#3、#6、#8、#9）；A9b authz #18、webui #41；A9c ccgateway #21、helper #12b；A9d 清理类（#17、#28、#31、#32b、#34b） | 各包 + `app/phases.go` | 原有测试改为通过任务入口调用，结果不变；原 Redis 锁 key 不再出现 | 完成 |
-| A10 | **防回退检查**：`internal/` 下 `time.NewTicker`/`time.Tick` 白名单测试（0.1.236 要迁的暂列白名单） | `server/internal/task/ticker_guard_test.go` | 测试通过；新增 ticker 会失败 | 待做 |
+| A10 | **防回退检查**：`internal/` 下 `time.NewTicker`/`time.Tick` 白名单测试（0.1.236 要迁的暂列白名单） | `server/internal/task/ticker_guard_test.go` | 测试通过；新增 ticker 会失败 | 完成 |
 | A11 | **文档**：CONTRACTS §77（接口、表、原因码 `account_parked`/`runtime_parked`、任务约定、不再接受新的业务 ticker） | `docs/CONTRACTS.md` | — | 待做 |
 | A12 | **全量验证与发布材料**：每个 Go 模块 `go test`（`go.work` 内全部）、`npm run check`、构建；写发布清单（`stage/0.1.235/` 要替换的版本号和提交号逐项列出）、部署记录草稿、线上核对步骤 | `docs/TASK-FRAMEWORK-RELEASE-0.1.235.md` | 全部通过；发布本身在 ovh 由你执行 | 待做 |
 
