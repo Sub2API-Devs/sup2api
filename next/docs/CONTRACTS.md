@@ -2065,8 +2065,8 @@ Linux 上 `go test -v ./...`（`next/server`）共 **599 个 `=== RUN`，只有 
 | `usage:reconcile`（`usage/reconcile.go` `ReconcileDue`） | 30 秒（原 5 分钟） | 一轮扫描结束释放 | `KeepLock`，父 ctx = 2 分钟扫描预算，故最长持有约 2.5 分钟 | `claimDue` 用 `FOR UPDATE SKIP LOCKED` 领取并把 `next_check_at` 推后 3 分钟（租约）；结算事务内 `SELECT billing_status … FOR UPDATE` 重查；账本 `balance_ledger.idempotency_key` UNIQUE |
 | `job:{plugin}:{job}:{slot}`（`job/job.go` `runScheduled`；`slot` = 触发时刻 Unix 秒） | 任务超时 + `LockGrace`（60 秒） | **故意不释放**：让时钟落后的节点在锁过期前也跳过这个触发点 | 无 | 迁移 `0015_job_runs_unique_slot.sql` 的唯一索引 `plugin_job_runs_slot_uniq (plugin_key, job_id, scheduled_at) WHERE NOT manual`；原先只有 `INSERT … WHERE NOT EXISTS`，没有唯一索引时它不是原子的。插入撞上唯一约束即视为「别的节点拿到了这个触发点」 |
 | `job:{plugin}:{job}:manual`（`job/job.go` `RunNow`） | 任务超时 + 60 秒 | 执行结束释放 | 无 | 锁本身就是「同一任务已有手动运行 → 409 `conflict`」语义的边界，没有数据库保护（手动运行的 `scheduled_at` 是点击时刻，不进唯一索引）。执行受任务超时约束，正常情况下锁比执行活得久；Redis 重启丢锁时可能出现两个手动运行，接受 |
-| `jobs:retention`（`job/retention.go`） | 保留周期 × 0.9（默认 54 分钟） | **故意不释放**：让其他节点跳过本周期 | 无 | 工作幂等（`PurgeRuns`：删多余历史、标记卡死的运行） |
-| `events:retention`（`event/delivery/retention.go`） | 同上 | **故意不释放** | 无 | 工作幂等（`PurgeEvents`：删所有游标都已越过的旧事件） |
+| ~~`jobs:retention`~~ | — | — | — | 0.1.235 起不再使用：改为全集群任务 `core.jobs.retention`（§77） |
+| ~~`events:retention`~~ | — | — | — | 0.1.235 起不再使用：改为全集群任务 `core.events.retention`（§77） |
 | `events:{plugin}`（`event/delivery/worker.go` `holdLock`） | 默认 30 秒（`Options.LockTTL`），`Options.defaults` 会把它**自动抬高**到至少 `minLockTTL` = `max(CallTimeout + 10 秒, (CallTimeout + 9 秒) × 100/99)`：每步开始前要求剩余有效期超过 `stepValidity` = `CallTimeout + 5 秒`，刚续完的有效期 = TTL − redsync 1% 漂移余量 − Redis 往返，TTL 太短会让每一步都丢锁重抢（换新 token，中间留出别的节点接手的窗口）而不是原地续期；×100/99 补的就是这 1%。默认 `CallTimeout` 20 秒时下限为 30 秒，默认值不变 | 停止时释放；续期没续上（确定丢锁、结果未知、或续上后有效期仍不足 `stepValidity`）时释放并立即重抢 | 每一步之前剩余有效期不足 `stepValidity` 时**原地 `Extend`**；单步 ctx 截止 = `Until()` | 游标 CAS：`UPDATE plugin_event_cursors … WHERE plugin_key = $1 AND last_event_id = $from`。原来靠「释放再重抢」续租，窗口里别的节点可能接手、把在途整批再投一遍；现在只有续期没续上才重新抢。插件侧仍是**至少一次**（§27.4） |
 | `plugins:builtin`（`app/app.go`，§5.7） | 1 分钟（原 5 分钟） | 结束释放 | `KeepLock`，父 ctx = 进程根 ctx 派生、**10 分钟超时**的 ctx；超时或丢锁时 `EnsureBuiltin` 的 ctx 被取消并记一条 `builtin plugins: install cut short` 警告。所以最长持有约 11 分钟 | 下游的发布协调者租约（`plugin_rollouts.coordinator_lease_until`，`plugin/rollout/coordinator.go`） |
 
@@ -3248,7 +3248,7 @@ CREATE TABLE IF NOT EXISTS ccgateway_runtimes (
 
 ### 49.13 清理任务
 
-每分钟一次，只在 `account_runtimes` 开启时运行，并且（有集群锁时）通过 `Locker.TryLock("ccgateway:drafts:sweep", 2m)` + `KeepLock` 保证同一时刻只有一个节点在扫；托管核心只在获准后台工作（`CanWork`）时扫。
+每分钟一次，只在 `account_runtimes` 开启时运行。0.1.235 起由全集群任务 `core.ccgateway.draft_sweep`（§77）执行：同一时段只有一个可工作节点在扫，锁 `ccgateway:drafts:sweep` 不再使用。
 
 1. `account_id IS NULL` 且（`last_seen_at` 早于 15 分钟前，或 `created_at` 早于 2 小时前）的草稿：在一个事务里拿该 key 的 advisory 锁（`pg_try_advisory_xact_lock`，与 `Reconcile` 同一把；拿不到就跳过，下一轮再试）→ `DELETE ... WHERE key=$1 AND account_id IS NULL` → 控制器 `DELETE /accounts/<key>` → 成功才提交。这样正在 reconcile 的运行环境不会被删到一半又被重建；同时进行的 `POST /accounts` 认领要等这一行的锁，之后找不到草稿而返回 `draft_not_found`；反过来认领先提交时清理的 DELETE 删不到行，也就不碰控制器。控制器失败则回滚，行保留。控制器回 404 视为已删除（没有该端点的旧控制器也不可能建过草稿运行环境）。
 2. 孤儿：先读控制器 `GET /accounts`，再查表；控制器列出的草稿 key（只认 `^d[0-9a-f]{16}$`）在表里**没有任何行**（已认领的也算有）、且 `created_at` 早于 15 分钟前的，在同一把 advisory 锁下再确认一次没有行后删除。`created_at` 解析不了的跳过。控制器没有 `GET /accounts`（404/405）时跳过这一步。
@@ -5597,7 +5597,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
   - 节点关闭：核心开始关闭（进程收到 SIGTERM，或 `Stop`）起就不再领取新行；正在进行的那一条不取消，在它自己的 30 秒投递期限内自然结束并照常记录结果。核心的关闭流程最多等 35 秒（同时受整个关闭预算限制：独立核心是 90 秒，通知在插件实例停止之前关闭），超出才取消；被取消的那一次退还次数、立即可再领。被取消时服务端可能已经收下，重启后会再发一次：投递是至少一次，不是恰好一次。
   - 投递时渠道没有绑定到记下的那个插件（启动时插件还没加载、已停用或卸载、渠道 id 已归另一个插件）不算一次投递：退还次数，30 秒后再试；从排队起超过 24 小时仍未绑定才按最终失败处理。worker 在插件运行时启动之后才开始。
   - 插件实例在调用到达插件进程之前就拒绝（`plugin_unavailable`：启动中、崩溃后等待重启、升级或停止时旧实例 draining）也按上一条处理：不计次数，30 秒后再试，排队超过 24 小时才最终失败，所以插件长期起不来时不会无限重试。调用已经到达插件进程之后的错误照常计次数，包括进程中途崩溃和插件自己返回的 Unavailable：那一次可能已经发出，而且一条让插件崩溃的通知也要能耗尽次数。
-  - 记录保留 30 天。每小时清理一次（过期删除、把租约耗尽的最后一次投递标为失败），只在拿到集群锁 `notify:purge` 的节点上执行（受后台准入控制）。
+  - 记录保留 30 天。每小时清理一次（过期删除、把租约耗尽的最后一次投递标为失败），0.1.235 起由全集群任务 `core.notify.purge`（§77）执行，锁 `notify:purge` 不再使用。
   - 控制台的测试通知以 `core:test` 为来源，不占核心通知的限速额度。
 - **控制台**：`GET /notifications/channels`、`GET /notifications`，以及 `POST /notifications/test`（需要 `settings:manage`）。
 
@@ -5778,7 +5778,7 @@ new-api 的动态权重做在核心的渠道模型里（`model/channel_dynamic_w
     - 写审计失败只记日志，不影响插件的回答。插件不能选择不记录。
     - 节点关闭时，`Run` 退出前最多再等 5 秒把已排队的行写完。进程被强杀时队列里的行会丢。
     - 不选"设 Content-Length 让响应先结束"：HTTP/2 下流要等处理函数返回才结束，反向代理的行为也不一致，不能保证调用方不等待。
-- **保留**：`plugin.route.write` 保留 180 天。后台每小时删除一次过期行，只在拿到集群锁 `audit:plugin-writes` 的节点上执行（受后台准入控制），每批 1 万行直到删完；不在请求路径上。其他审计行不删除。
+- **保留**：`plugin.route.write` 保留 180 天。后台每小时删除一次过期行，0.1.235 起由全集群任务 `core.audit.plugin_writes_purge`（§77）执行（锁 `audit:plugin-writes` 不再使用），每批 1 万行直到删完；不在请求路径上。其他审计行不删除。
 - **实现位置**：`routes.WithAudit`（插件路由转发处唯一的挂点，接 `core.PluginWriteAuditor` / `core.PluginWrite`），写入和删除由 `audit.PluginWrites` 完成（`Run` 是删除循环）。
 - **迁移 `0067_audit_log_targets`**：`audit_logs` 增加索引 `(target_type, target_id, id DESC)` 和 `(user_id, id DESC)`。
 - **查询接口** `GET /audit-logs`（仍要求 `audit:read`，分页规则同 §3.1，按 id 倒序）：
@@ -5948,3 +5948,124 @@ guard 只维护网桥规则，与 host 网络的 Python 控制器互不干扰，
 - 核心回滚到 0.1.226 期间，不得经 SSH 或本机在已过渡的主机上安装控制器：旧核心没有 `legacy_blocked` 检查。
 - 本机安装（§53.9）要求核心所在环境本身有 `docker compose` v2。
 - 控制台重装会从 stdin 重写 `/opt/ccgateway-runtime.env`，手工加的行（如 `CCG_XRAY_IMAGE`）会丢失。这是现有行为，S4 的手工接管保留原文件。
+
+## 77. 定时任务框架与红色账号停容器（2026-11-03，用户要求；核心 0.1.235）
+
+用户要求（2026-11-03）：散落在各模块的定时循环统一到一个框架，控制台能看到执行情况；CCGateway 账号红色满 3 小时停容器。设计见 `docs/TASK-FRAMEWORK-DESIGN.md`、`plugins/ccgateway/docs/ACCOUNT-RUNTIME-PARKING-DESIGN.md`，实施计划 `docs/TASK-FRAMEWORK-PLAN.md`。本节只写各方必须遵守的契约。
+
+### 77.1 两类任务与接口
+
+- `core.Tasks`（`internal/core/ports_scheduled_tasks.go`）是唯一入口：`Register(TaskSpec)`、`Trigger`、`Enqueue`、`EnqueueTx`。业务代码不 import gocron 或 River。
+- `node` 任务：每个节点各跑一次（gocron v2.22.0，单例模式，上一次没跑完就跳过）。`RequireWork` 为真时，本节点不能做后台工作就跳过。
+- `cluster` 任务：每个时段全集群只跑一次（River v0.49.0，可工作节点执行，主节点按周期投递）。同一任务两次运行不会重叠：`scheduled_tasks` 的租约保证。
+- 名字：核心 `core.<模块>.<任务>`；第二批的插件任务 `plugin.<key>.<id>`。`Title` 必须有 `en` 和 `zh`。
+- 计划：`Every` 或 5 段 cron（UTC）。`@every` 按间隔的整数倍对齐。cluster 最短 5 秒，node 最短 1 秒。超时上限：cluster 1 小时，node 10 分钟。
+- Handler 必须幂等并遵守 ctx（超时、关停、撤销准入都会取消它）。它自己不查准入、不加锁、不 recover。返回 `core.TaskRetryAfter(d)`：cluster 任务延后重试，不算失败；node 任务记为跳过。
+- 重试：cluster 周期任务间隔小于 10 分钟时默认 1 次（下一时段就是重试），否则 5 次。`RunOnStart`：node 任务登记时立即跑一次；cluster 任务在新主节点接手时投递一次。
+
+### 77.2 存储
+
+- 迁移 0076–0083：River 自身的表（从 `riverpgxv5` v0.49.0 生成，`public` schema）。
+- 迁移 0084：
+  - `scheduled_tasks`：cluster 任务登记、最近一次运行、租约；
+  - `river_job_task_name_idx`：按任务名查运行历史；
+  - `plugin_job_runs.scope`：第二批插件任务用，有默认值。
+- 运行历史就是 `river_job`（kind `sup2api.task`，参数 `{name, key, args, manual}`）。结果在 `metadata->'output'`。
+- node 任务状态在 Redis：
+  - `tasks:node:<node_id>`：状态哈希，TTL 2 分钟，每 30 秒刷新；
+  - `tasks:node:<node_id>:runs:<name>`：最近 100 次运行，TTL 24 小时。
+- 迁移 0085：
+  - `ccgateway_runtimes.parked_at`、`woken_at`；
+  - `blocked_revision`、`blocked_at`，0.1.236 起使用；
+  - `accounts.status_changed_at` 及其触发器：只在 status、schedulable、auto_disabled_until 变化时写。
+- 0076–0085 都是幂等迁移，只加表、索引或可空/有默认值的列。旧核心忽略它们。
+
+### 77.3 控制台接口
+
+| 方法 | 路径 | 权限 | 说明 |
+| --- | --- | --- | --- |
+| GET | `/system/tasks` | `task:read` | 概览：`summary`（`total`、`running`、`failing`、`failed_24h`、`leader`）、`cluster[]`、`nodes[]` |
+| GET | `/system/tasks/:name` | `task:read` | 一个任务：登记信息、cluster 状态，或各节点状态 |
+| GET | `/system/tasks/:name/runs` | `task:read` | 历史。`status` 可选 succeeded/failed/timeout/skipped/queued/retrying/running/cancelled。cluster 任务用 `before_id` + `limit` 翻页（`next_before_id`）；node 任务必须带 `node_id` |
+| POST | `/system/tasks/:name/run` | `task:run`（敏感） | 手动运行。cluster 任务同一时间只排一个手动运行。node 任务可带 `{"node_id"}`，不带则所有节点都跑。写审计 `task.run_manual` |
+
+错误码：
+
+| HTTP | code |
+| --- | --- |
+| 404 | `task_not_found` |
+| 400 | `node_required` |
+| 409 | `node_offline` |
+| 503 | `task_not_ready` |
+
+菜单项 `tasks`（“定时任务”，`/system/tasks`）。
+
+### 77.4 0.1.235 的任务
+
+cluster 任务：
+
+| 任务 | 计划 / 超时 |
+| --- | --- |
+| `core.task.housekeeping` | 1h / 1m |
+| `core.ccgateway.park_runtimes` | 1m / 50s |
+| `core.ccgateway.draft_sweep` | 1m / 50s |
+| `core.account.automatic_recovery`（接手时先跑一次） | 1m / 50s |
+| `core.account.lifecycle_status` | 1m / 50s |
+| `core.account.preparation_cleanup` | 1m / 50s |
+| `core.helper.payload_expiry` | 1m / 50s |
+| `core.audit.plugin_writes_purge` | 1h / 5m |
+| `core.events.retention` | 1h / 5m |
+| `core.jobs.retention` | 1h / 5m |
+| `core.notify.purge` | 1h / 5m |
+| `core.egress.logs_prune`（原来每个节点都删） | 1h / 5m |
+
+node 任务：
+
+| 任务 | 计划 / 超时 | 说明 |
+| --- | --- | --- |
+| `core.authz.version_poll` | 30s / 10s | |
+| `core.webui.asset_lease` | 30s / 30s | 登记时先跑一次，`/healthz` 等它 |
+| `core.account.quota_mirror` | 60s / 30s | 镜像预热成功后才登记；插件变更时触发 |
+
+不再使用的 Redis 锁：`account:lifecycle-status:sweep`、`account:preparations:sweep`、`ccgateway:drafts:sweep`、`audit:plugin-writes`、`events:retention`、`jobs:retention`、`notify:purge`。
+
+0.1.236 迁入（涉及计费和凭证，单独发布）：`core.account.usage_limits`、`core.account.credential_refresh`、`core.account.quota_sweep`、`core.helper.usage_replay`、`core.ccgateway.runtime_sync`、`core.usage.reconcile`、`core.usage.settlement_retry`。
+
+### 77.5 不再接受新的业务 ticker
+
+按计划周期执行、彼此独立的后台工作一律登记 `core.Tasks`。以下仍可用 ticker：
+
+- 攒批写缓冲；
+- 队列消费者；
+- 请求内等待；
+- 进程与集群控制回路（心跳、并发槽、准入、插件进程）。
+
+清单见设计 §14.3。`internal/task/ticker_guard_test.go` 按文件列出允许的 `time.NewTicker`/`time.Tick` 及原因：新增一个就失败，减少了也要同步改清单。
+
+### 77.6 红色账号停容器
+
+- 红色与控制台一致（§73.4），满足其一即可：
+  - `disabled`；
+  - `auto_disabled`/`error` 且没有恢复时间；
+  - `active` 但不可调度。
+- 设置 `ccgateway_remote.park_after_hours`：整数 0–720，默认 3，0 为不停。`GET/PUT /system/ccgateway/remote-config` 带这个字段；PUT 不带时保留原值。
+- `core.ccgateway.park_runtimes`：
+  - 条件：账号红色已满设定小时数，从 `status_changed_at` 与 `woken_at` 中较晚的一个算起；
+  - 动作：写 `parked_at` 并下发一次 `enabled:false`，容器停在原地，不重建、不换镜像，卷与登录保留；
+  - 每次写审计 `account.runtime_parked`；
+  - 账号状态变化后，标记自动失效。
+- 唤醒（写 `woken_at`、审计 `account.runtime_woken`，等容器就绪，最长 60 秒）由以下操作触发：
+  - 测试账号；
+  - 重新授权；
+  - 运行环境 `POST .../sync`（控制台按钮“启动”）。
+- 原因码：
+
+| 原因码 | 出现在 | 含义 |
+| --- | --- | --- |
+| `account_parked` | `GET /system/ccgateway/accounts/:id/status` 的 `status:"blocked"` 的 `reason` | 容器因账号停机被停止 |
+| `runtime_parked` | 409 | 对停着的容器做别的运行环境操作 |
+| `runtime_parked` | 额度刷新 | 手动刷新回 409；后台刷新保留快照 |
+| `runtime_not_ready` | 503 | 唤醒后 60 秒内没有就绪 |
+
+- 账号视图有只读字段 `runtime_parked`，只有 ccgateway 账号带它。
+- 回滚到旧核心是安全的：旧核心认为这些容器都应运行，会在 60 秒内重新启动它们。
