@@ -29,4 +29,7 @@ step runnable;          $N tools/rename/apply.mjs original naming/final runnable
 step readable;          rm -rf reconstructed && $N tools/emit/readable.mjs --out reconstructed | tail -6
 if [ "${VERIFY:-0}" = 1 ]; then
   step verify;          npm run -s verify:runnable | tail -5
+  # the readable tree's deminify rewrite, proven on the runnable layout
+  step verify-deminify; $N tools/emit/deminify-dir.mjs runnable artifacts/tmp/deminify/runnable-dm --force --check-printer --check-canonical | tail -3
+  node tools/verify/compare.mjs original artifacts/tmp/deminify/runnable-dm --name deminify-runnable-dm | tail -5
 fi

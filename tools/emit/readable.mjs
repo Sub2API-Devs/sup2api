@@ -1,6 +1,6 @@
 // Emits the readable source tree from the restored modules, the segmentation
 // and the final naming table.
-//   node tools/emit/readable.mjs [--out build/readable] [--only <path-prefix>] [--no-format]
+//   node tools/emit/readable.mjs [--out build/readable] [--only <path-prefix>] [--no-format] [--no-deminify]
 // Inputs : original/, analysis/scan/{decls.jsonl,modules.json},
 //          analysis/segments/{modules.json,decl-path.jsonl}, naming/final/{top.json,locals.jsonl}
 // Outputs: <out>/src/**        first-party modules at their reference paths (.ts/.tsx -> .js)
@@ -16,6 +16,11 @@
 // Imports are synthesised from the use edges: a binding defined in another
 // output module is imported by its final name; chunk-external imports (node
 // builtins, "bun:*") are carried over as written.
+// Before formatting, every file goes through tools/emit/deminify.mjs: one local name per
+// imported binding (the aliases several chunks brought in are merged), `!0` -> `true`,
+// `void 0` -> `undefined`, shorthand properties, `typeof x > "u"`, statement-level sequences
+// (also in return / throw / if tests / arrow bodies), statement-level && / || / ?: as ifs,
+// one declarator per declaration (docs/process/deminify.md).
 import fs from 'node:fs';
 import path from 'node:path';
 import prettier from 'prettier';
@@ -25,11 +30,13 @@ const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] :
 const OUT = opt('--out', 'reconstructed');
 const ONLY = opt('--only', null);
 const FORMAT = !argv.includes('--no-format');
+const DEMINIFY = !argv.includes('--no-deminify');
 const readJsonl = (p) => fs.readFileSync(p, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
 import { renameModule } from '../rename/lib/rename.mjs';
 import { loadNaming, emptyModule } from '../rename/lib/naming.mjs';
 import { planFromTree } from '../rename/lib/global.mjs';
+import { deminifyCode, newStats, addStats } from './deminify.mjs';
 
 const D = readJsonl('analysis/scan/decls.jsonl');
 const scanMods = JSON.parse(fs.readFileSync('analysis/scan/modules.json', 'utf8'));
@@ -322,7 +329,8 @@ for (const [file, info] of Object.entries(manifest)) {
     if (manifest[target]) for (const [imported] of names.values()) manifest[target].exportsPending.add(imported);
   }
 }
-let written = 0, formatFailures = 0;
+let written = 0, formatFailures = 0, deminifyFailures = 0;
+const deminifyStats = newStats();
 for (const [file, info] of Object.entries(manifest)) {
   const { imports, externalImports, body } = info.lines;
   const head = [
@@ -352,20 +360,35 @@ for (const [file, info] of Object.entries(manifest)) {
   }
   const ex = [...info.exportsPending];
   let text = [...head, ...imp, '', ...body, '', ex.length ? `export { ${ex.join(', ')} };` : ''].join('\n') + '\n';
+  if (DEMINIFY) {
+    const dm = deminifyCode(text, { unify: true, crossChunkAlias: true });
+    if (dm.error) { deminifyFailures++; console.warn('[emit] deminify skipped', file, dm.error); }
+    else text = dm.code;
+    addStats(deminifyStats, dm.stats);
+  }
   if (FORMAT) {
     try { text = await prettier.format(text, { parser: 'babel', printWidth: 110 }); } catch { formatFailures++; }
   }
   const dest = path.join(OUT, file);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.writeFileSync(dest, text);
-  // symbol index: the provenance marker precedes each declaration
-  text.split(/\r?\n/).forEach((ln, i) => {
+  // symbol index: the provenance marker precedes each declaration; a declaration of several
+  // names (split into one statement per name by deminify) points each name at its own line
+  const lines = text.split(/\r?\n/);
+  const escRe = (s) => s.replace(/[$]/g, '\\$&');
+  lines.forEach((ln, i) => {
     const mk = /^\/\/@ (\S+?):(\d+)-\d+ /.exec(ln);
     const d = mk && declAt.get(mk[1] + ':' + mk[2]);
     if (!d) return;
     d.names.forEach((n, k) => {
       const t = topByMin.get(d.file)?.get(n);
-      const rec = { name: t?.rec.name ?? n, file, line: i + 2, id: idOf(d), source: t?.rec.source ?? 'minified', kind: info.kind };
+      const name = t?.rec.name ?? n;
+      let line = i + 2;
+      if (d.names.length > 1) {
+        const re = new RegExp('^\\s*(?:export\\s+)?(?:var|let|const|class|(?:async\\s+)?function\\*?)\\s+' + escRe(name) + '(?![\\w$])');
+        for (let j = i + 1; j < lines.length && !lines[j].startsWith('//@ '); j++) if (re.test(lines[j])) { line = j + 1; break; }
+      }
+      const rec = { name, file, line, id: idOf(d), source: t?.rec.source ?? 'minified', kind: info.kind };
       if (k === 0 && declDocs.has(idOf(d))) rec.doc = declDocs.get(idOf(d));
       symbols.push(rec);
     });
@@ -382,7 +405,8 @@ for (const r of resources) {
 }
 fs.writeFileSync(path.join(OUT, 'manifest.json'), JSON.stringify(manifest, null, 1));
 fs.writeFileSync(path.join(OUT, 'symbols.jsonl'), symbols.map((x) => JSON.stringify(x)).join('\n') + '\n');
-console.log({ written, formatFailures, resources: resources.size, renameConflicts: conflicts });
+console.log({ written, formatFailures, deminifyFailures, resources: resources.size, renameConflicts: conflicts });
+if (DEMINIFY) console.log('[emit] deminify', JSON.stringify(deminifyStats));
 
 function addImport(map, spec, imported, local, resource = false) {
   let m = map.get(spec);

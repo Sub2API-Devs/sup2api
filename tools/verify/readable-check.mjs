@@ -45,14 +45,16 @@ if (fs.existsSync('analysis/scan/decls.jsonl') && ROOT !== 'original') {
   for (const [k, n] of want) { if (n >= 1) coverage.found++; if (n > 1) coverage.duplicated++; if (!n && coverage.missing.length < 20) coverage.missing.push(k); }
 }
 
+// One pass per file; ASTs are dropped right away (keeping all of them needs > 8 GB).
+// Relative imports are recorded and resolved after every file's exports are known.
 const exportsOf = new Map();
-const parsed = new Map();
+const importsOf = new Map(); // file -> [{spec, names[]}]
 const res = { files: files.length, parseErrors: [], dupes: [], missingFiles: [], missingNames: [], free: new Map() };
 for (const f of files) {
   const src = fs.readFileSync(f, 'utf8');
+  let ast;
   try {
-    const ast = parse(src, { sourceType: 'module', plugins: ['jsx', 'importAttributes'], errorRecovery: false });
-    parsed.set(f, ast);
+    ast = parse(src, { sourceType: 'module', plugins: ['jsx', 'importAttributes'], errorRecovery: false });
     const ex = new Set();
     for (const n of ast.program.body) {
       if (n.type === 'ExportNamedDeclaration') {
@@ -67,24 +69,20 @@ for (const f of files) {
   } catch (e) {
     const m = /has already been declared/.test(e.message);
     (m ? res.dupes : res.parseErrors).push({ file: rel(f), error: e.message.slice(0, 160) });
+    continue;
   }
-}
-for (const [f, ast] of parsed) {
+  const imps = [];
   for (const n of ast.program.body) {
     if (n.type !== 'ImportDeclaration' || !n.source.value.startsWith('.')) continue;
     if (n.attributes?.length) continue; // resources
-    const target = path.resolve(path.dirname(f), n.source.value);
-    const ex = exportsOf.get(target);
-    if (!ex) {
-      if (!fs.existsSync(target)) res.missingFiles.push({ file: rel(f), spec: n.source.value });
-      continue;
-    }
-    if (ex.has('*')) continue;
+    const names = [];
     for (const s of n.specifiers) {
       const name = s.type === 'ImportSpecifier' ? (s.imported.name ?? s.imported.value) : s.type === 'ImportDefaultSpecifier' ? 'default' : null;
-      if (name && !ex.has(name)) res.missingNames.push({ file: rel(f), spec: n.source.value, name });
+      if (name) names.push(name);
     }
+    imps.push({ spec: n.source.value, names });
   }
+  importsOf.set(f, imps);
   try {
     traverse(ast, {
       Program(p) {
@@ -98,6 +96,18 @@ for (const [f, ast] of parsed) {
     });
   } catch {}
 }
+for (const [f, imps] of importsOf) {
+  for (const { spec, names } of imps) {
+    const target = path.resolve(path.dirname(f), spec);
+    const ex = exportsOf.get(target);
+    if (!ex) {
+      if (!fs.existsSync(target)) res.missingFiles.push({ file: rel(f), spec });
+      continue;
+    }
+    if (ex.has('*')) continue;
+    for (const name of names) if (!ex.has(name)) res.missingNames.push({ file: rel(f), spec, name });
+  }
+}
 function rel(f) { return path.relative(ROOT, f).split(path.sep).join('/'); }
 const out = {
   files: res.files,
@@ -107,6 +117,7 @@ const out = {
   missingImportFiles: res.missingFiles.length,
   missingImportNames: res.missingNames.length,
   freeIdentifiers: res.free.size,
+  freeNames: [...res.free.keys()].sort(),
   samples: { parseErrors: res.parseErrors.slice(0, 20), dupes: res.dupes.slice(0, 20), missingFiles: res.missingFiles.slice(0, 20), missingNames: res.missingNames.slice(0, 20), free: [...res.free].slice(0, 40) },
 };
 fs.mkdirSync(path.dirname(REPORT), { recursive: true });
