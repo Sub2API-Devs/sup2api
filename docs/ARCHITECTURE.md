@@ -25,12 +25,12 @@
 
 | 部分 | 内容 | 规模（`analysis/segments/summary.json`） |
 |---|---|---|
-| `reconstructed/src/` | 一方代码，按 2.1.88 的目录布局重新聚合成模块 | 约 5,020 个模块、74,900 个顶层声明、31.6 MB（未缩进前字节） |
-| `reconstructed/vendor/` | 第三方 npm 包，按包/文件还原 | 1,982 个模块、7.2 MB |
-| `reconstructed/runtime/` | Bun 运行时帮助函数（`__commonJS`、`__toESM` 等） | 1 个模块 |
+| `reconstructed/src/` | 一方代码，按 2.1.88 的目录布局重新聚合成模块 | 5,023 个模块、75,181 个顶层声明、31.7 MB（原始代码字节） |
+| `reconstructed/vendor/` | 第三方 npm 包，按包/文件还原 | 1,989 个模块、7.2 MB |
+| `reconstructed/runtime/` | Bun 运行时帮助函数（即 esbuild 风格的 __commonJS、__toESM 等） | 1 个模块 |
 | `reconstructed/assets/` | 资源（提示词、Skill 文档、字体、原生模块的占位等） | — |
-| `reconstructed/manifest.json` | 每个阅读树文件 → 来源路径、声明 id、chunk、归属方法、导入导出 | 约 7,180 条 |
-| `reconstructed/symbols.jsonl` | 每个绑定一行：名字、文件:行、声明 id、命名来源、类别、说明 | 约 100,800 行 |
+| `reconstructed/manifest.json` | 每个阅读树文件 → 来源路径、声明 id、chunk、归属方法、导入导出 | 7,013 条 |
+| `reconstructed/symbols.jsonl` | 每个绑定一行：名字、文件:行、声明 id、命名来源、类别、说明 | 约 100,840 行 |
 
 另有 `runnable/`（不入库）：同一套命名应用到原 chunk 布局上的可运行树，经 α 等价校验（400 万标识符 0 差异）与 54 个场景对拍（见 `docs/process/rename.md`、`docs/process/verify.md`）。**阅读树本身不保证可运行**，它是给人和 AI 读的。
 
@@ -224,7 +224,7 @@
 - `message_start` 建部分消息；`content_block_delta` 累积 text / thinking / signature / tool_use 的 input_json。
 - **`content_block_stop` 时用 `reconstructed/src/utils/messages.js` · `normalizeContentFromAPI` 把这个块变成一条独立的 assistant 消息并 yield**。一个 API 响应会变成多条共享 `message.id` 的 assistant 消息；tool_use 块此时就交给主循环开始执行。
 - `message_delta` 写 stop_reason 与 usage；`max_tokens`/上下文窗口超限由 `getMaxTokensStopMessage` 处理。
-- 每个原始事件另以 `{type:"stream_event"}` 转发，供 SDK `--include-partial-messages` 与 UI 使用。
+- 每个原始事件另以 `type: "stream_event"` 消息转发，供 SDK `--include-partial-messages` 与 UI 使用。
 - 没收到任何事件或中途断开：按流式重试决策重试，或回退非流式 `executeNonStreamingRequest`。
 - 收尾：`reconstructed/src/cost-tracker.js` · `addToTotalSessionCost`（成本与 token 统计）、`reconstructed/src/services/api/promptCacheBreakDetection.js` · `checkResponseForCacheBreak`（提示词缓存断裂检测）、`reconstructed/src/services/api/logging.js` · `logAPISuccess`。
 
@@ -306,7 +306,7 @@
 | 插件 | `reconstructed/src/utils/plugins/pluginLoader.js` · `loadAllPlugins`；`reconstructed/src/utils/plugins/loadPluginCommands.js`、`loadPluginHooks.js` | marketplace + `enabledPlugins`；插件可带命令、代理、skills、hooks、输出样式、MCP/LSP 服务器、themes、workflows、monitors、binaries |
 | Skills | `reconstructed/src/skills/loadSkillsDir.js` · `getSkillDirCommands`；内置 `reconstructed/src/skills/bundled/index.js` · `initBundledSkills` | Skill 是 `type:"prompt"` 的命令对象，模型经 Skill 工具调用，用户以 `/name` 调用 |
 | Hooks | `reconstructed/src/utils/hooks.js` · `executeHooks`、`getMatchingHooks`；事件表 `HOOK_EVENTS` | 33 个事件；command/http/prompt/agent/mcp_tool 五种类型；配置来自 settings 各层、插件、frontmatter、SDK |
-| mods（函数钩子） | `reconstructed/src/plugins/functionHooks/`（`engineCreate.js` · `buildEngineApi`、`hookDispatch.js` · `buildHookChain`） | 316 新增：插件提供 JS hooks 模块，在独立 worker 中运行；事件链覆盖 `tool.*`、`prompt.*`、`session.*`、`turn.*`、`ui.*`；插件可调用 `$` 接口（tool/session/ui/fs/http/model/process/mcp/agent…）；传统 settings 钩子以 `classic.<Event>` 桥接 |
+| mods（函数钩子） | `reconstructed/src/plugins/functionHooks/`（`reconstructed/src/plugins/functionHooks/engineCreate.js` · `buildEngineApi`、`reconstructed/src/plugins/functionHooks/hookDispatch.js` · `buildHookChain`） | 316 新增：插件提供 JS hooks 模块，在独立 worker 中运行；事件链覆盖 `tool.*`、`prompt.*`、`session.*`、`turn.*`、`ui.*`；插件可调用 `$` 接口（tool/session/ui/fs/http/model/process/mcp/agent…）；传统 settings 钩子以 `classic.<Event>` 桥接 |
 | LSP、Chrome、深链接 | `reconstructed/src/services/lsp/`、`reconstructed/src/utils/claudeInChrome/`、`reconstructed/src/utils/deepLink/` | LSP 诊断作为附件进入对话；Claude in Chrome 是进程内/子进程 MCP 服务器；`claude-cli://` 深链接 |
 
 手册：`docs/handbook/extensions.md`。
@@ -340,11 +340,11 @@
 | 任务系统 | `reconstructed/src/tasks/`（`LocalAgentTask`、`LocalShellTask`、`RemoteAgentTask`、`DreamTask`…）、`reconstructed/src/tasks/stopTask.js` | 后台代理、后台 shell、Monitor、云会话任务；完成后以 task-notification 回到主会话 |
 | 团队 | `reconstructed/src/utils/swarm/`、`reconstructed/src/coordinator/coordinatorMode.js` | teammate（同进程或 tmux/iTerm2 pane）、文件信箱协议、权限同步；协调者模式 |
 | SDK 协议 | `reconstructed/src/cli/structuredIO.js`、`reconstructed/src/entrypoints/sdk/` | stream-json + 约 98 种 control_request；内置 Agent SDK 随包（`reconstructed/vendor/@anthropic-ai/claude-agent-sdk/`） |
-| Remote Control | `reconstructed/src/bridge/`（独立模式 `bridgeMain.js` · `bridgeMain`；REPL 内 `initReplBridge.js` · `initReplBridge` → `remoteBridgeCore.js` · `initEnvLessBridgeCore`） | 让 claude.ai/code 或手机驱动本机会话；REPL 内只剩 v2 env-less 桥 |
+| Remote Control | `reconstructed/src/bridge/`（独立模式 `reconstructed/src/bridge/bridgeMain.js` · `bridgeMain`；REPL 内 `reconstructed/src/bridge/initReplBridge.js` · `initReplBridge` → `reconstructed/src/bridge/remoteBridgeCore.js` · `initEnvLessBridgeCore`） | 让 claude.ai/code 或手机驱动本机会话；REPL 内只剩 v2 env-less 桥 |
 | 云会话 | `reconstructed/src/cli/headlessCloud/`（`--cloud`）、`reconstructed/src/utils/teleport.js` · `teleportToRemote`、`reconstructed/src/remote/`、`reconstructed/src/services/remoteTools/`、`reconstructed/src/remote/tools/` | 本机驱动云会话；云会话把工具调用转回本机或附着机器执行（远程工具、设备桥、设备钩子）；home seed 把本机设置推到云端 |
 | 后台会话与守护进程 | `reconstructed/src/services/daemon/`、`reconstructed/src/daemon/`、`reconstructed/src/screens/FleetView/` | `claude --bg`、`attach/logs/stop`、`claude daemon`、Agents 视图（Fleet） |
 | 自托管 runner | `reconstructed/src/selfHostedRunner/`、`reconstructed/src/services/selfHostedRunner/` | 在客户机器上为 CCR 云环境跑会话 |
-| 定时任务 | `reconstructed/src/utils/` 下的 `cron*` 模块、`reconstructed/src/tools/ScheduleCronTool/` | `/loop`、Cron* 工具、ScheduleWakeup |
+| 定时任务 | `reconstructed/src/utils/cronScheduler.js`、`reconstructed/src/utils/cronTasks.js` 等 cron 模块、`reconstructed/src/tools/ScheduleCronTool/` | `/loop`、Cron* 工具、ScheduleWakeup |
 
 手册：`docs/handbook/agents.md`。
 
@@ -359,22 +359,22 @@
 
 ## 6. 子系统一览表
 
-规模按 `analysis/segments/domains.json`（`tools/segment/domains.mjs` 按路径前缀把一方模块分到 11 个领域；未命中前缀的 `services/`、`utils/`、`types/` 兜底归 state，其余归 misc），为 2026-11-03 08:51 的快照。
+规模按 `analysis/segments/domains.json`（`tools/segment/domains.mjs` 按路径前缀把一方模块分到 11 个领域；未命中前缀的 `services/`、`utils/`、`types/` 兜底归 state，其余归 misc），为 2026-11-03 09:13（place-rest 放置后）的快照。
 
 | 子系统 | 职责 | 主要目录（`reconstructed/src/` 下） | 手册 | 模块 | 顶层声明 | 字节 |
 |---|---|---|---|---|---|---|
-| bootstrap | 入口快速路径、命令树、init/setup、headless 与 SDK 协议、全局状态、迁移、安装更新、退出 | `entrypoints/`、`main.js`、`setup.js`、`cli/`、`bootstrap/`、`migrations/`、`upstreamproxy/` | `docs/handbook/bootstrap.md` | 278 | 5,318 | 2.84 MB |
-| query | 查询循环、Messages API 调用与重试、beta 与请求头、系统提示词、消息规范化、附件、压缩、token、模型/effort/thinking | `query.js`、`query/`、`QueryEngine.js`、`services/api/`、`services/compact/`、`constants/`、`utils/messages*`、`utils/model/`、`utils/attachments.js` | `docs/handbook/query.md` | 311 | 6,872 | 2.43 MB |
-| tools | 工具接口、注册与工具池、工具搜索、执行编排、全部内建工具 | `Tool.js`、`tools.js`、`tools/`、`services/tools/`、`utils/toolSearch.js`、文件类 utils | `docs/handbook/tools.md` | 465 | 5,965 | 3.51 MB |
-| permissions | 权限模式与规则、判定流水线、自动模式分类器、文件路径权限、Bash/PowerShell 分析、沙箱、Shell 执行、安全存储 | `utils/permissions/`、`utils/bash/`、`utils/shell/`、`utils/powershell/`、`utils/sandbox/`、`types/permissions.js` | `docs/handbook/permissions.md` | 166 | 3,503 | 1.18 MB |
-| extensions | MCP、插件、mods 函数钩子、Skills、Hooks、LSP、Claude in Chrome、Computer Use、深链接 | `services/mcp/`、`utils/plugins/`、`plugins/`、`skills/`、`utils/hooks*`、`services/lsp/`、`schemas/` | `docs/handbook/extensions.md` | 721 | 14,331 | 4.87 MB |
-| state | 设置、全局配置、会话存储、记忆、认证、遥测、git/worktree/fs 等基础设施（含兜底的 services/utils） | `utils/settings/`、`utils/config.js`、`utils/sessionStorage.js`、`memdir/`、`services/analytics/`、`utils/auth.js`、`state/` | `docs/handbook/state.md` | 1,251 | 21,278 | 7.92 MB |
-| ui | REPL 屏幕与控制器、输入、消息渲染、权限与各类对话框、设置界面、通知、hooks、设计系统 | `screens/`、`components/`、`hooks/` | `docs/handbook/ui.md` | 817 | 7,357 | 3.80 MB |
-| ink | Ink 渲染层、yoga 布局、输入解析、选区、终端能力、快捷键、vim | `ink/`、`ink.js`、`native-ts/`、`keybindings/`、`vim/` | `docs/handbook/ink.md` | 136 | 1,396 | 0.47 MB |
-| agents | 子代理与 fork、任务系统、团队、协调者、SDK 控制协议、Remote Control、远程会话、定时任务 | `tasks/`、`coordinator/`、`bridge/`、`remote/`、`server/`、`assistant/`、`utils/swarm/`、`entrypoints/sdk/` | `docs/handbook/agents.md` | 335 | 4,490 | 2.46 MB |
-| commands | 斜杠命令对象、注册表与过滤、解析执行、内建命令与发行内建技能 | `commands.js`、`commands/` | `docs/handbook/commands.md` | 305 | 1,958 | 1.18 MB |
-| misc | 未命中上述前缀的其余模块：`_new/`、`engine/`、`daemon/`、`selfHostedRunner/` 等 | 见左 | 本文与 `docs/process/placement-g*.md` | 239 | 2,390 | 0.95 MB |
-| 合计（一方） | | | | 5,024 | 74,858 | 31.6 MB |
+| bootstrap | 入口快速路径、命令树、init/setup、headless 与 SDK 协议、全局状态、迁移、安装更新、退出 | `entrypoints/`、`main.js`、`setup.js`、`cli/`、`bootstrap/`、`migrations/`、`upstreamproxy/` | `docs/handbook/bootstrap.md` | 294 | 5,493 | 2.88 MB |
+| query | 查询循环、Messages API 调用与重试、beta 与请求头、系统提示词、消息规范化、附件、压缩、token、模型/effort/thinking | `query.js`、`query/`、`QueryEngine.js`、`services/api/`、`services/compact/`、`constants/`、`utils/messages*`、`utils/model/`、`utils/attachments.js` | `docs/handbook/query.md` | 317 | 6,950 | 2.45 MB |
+| tools | 工具接口、注册与工具池、工具搜索、执行编排、全部内建工具 | `Tool.js`、`tools.js`、`tools/`、`services/tools/`、`utils/toolSearch.js`、文件类 utils | `docs/handbook/tools.md` | 488 | 6,170 | 3.60 MB |
+| permissions | 权限模式与规则、判定流水线、自动模式分类器、文件路径权限、Bash/PowerShell 分析、沙箱、Shell 执行、安全存储 | `utils/permissions/`、`utils/bash/`、`utils/shell/`、`utils/powershell/`、`utils/sandbox/`、`types/permissions.js` | `docs/handbook/permissions.md` | 167 | 3,524 | 1.19 MB |
+| extensions | MCP、插件、mods 函数钩子、Skills、Hooks、LSP、Claude in Chrome、Computer Use、深链接 | `services/mcp/`、`utils/plugins/`、`plugins/`、`skills/`、`utils/hooks*`、`services/lsp/`、`schemas/` | `docs/handbook/extensions.md` | 744 | 14,553 | 4.95 MB |
+| state | 设置、全局配置、会话存储、记忆、认证、遥测、git/worktree/fs 等基础设施（含兜底的 services/utils） | `utils/settings/`、`utils/config.js`、`utils/sessionStorage.js`、`memdir/`、`services/analytics/`、`utils/auth.js`、`state/` | `docs/handbook/state.md` | 1,327 | 22,313 | 8.27 MB |
+| ui | REPL 屏幕与控制器、输入、消息渲染、权限与各类对话框、设置界面、通知、hooks、设计系统 | `screens/`、`components/`、`hooks/` | `docs/handbook/ui.md` | 823 | 7,418 | 3.81 MB |
+| ink | Ink 渲染层、yoga 布局、输入解析、选区、终端能力、快捷键、vim | `ink/`、`ink.js`、`native-ts/`、`keybindings/`、`vim/` | `docs/handbook/ink.md` | 136 | 1,412 | 0.47 MB |
+| agents | 子代理与 fork、任务系统、团队、协调者、SDK 控制协议、Remote Control、远程会话、定时任务 | `tasks/`、`coordinator/`、`bridge/`、`remote/`、`server/`、`assistant/`、`utils/swarm/`、`entrypoints/sdk/` | `docs/handbook/agents.md` | 366 | 4,832 | 2.56 MB |
+| commands | 斜杠命令对象、注册表与过滤、解析执行、内建命令与发行内建技能 | `commands.js`、`commands/` | `docs/handbook/commands.md` | 317 | 2,034 | 1.25 MB |
+| misc | 未命中上述前缀的其余模块：`daemon/`（后台守护进程）、`selfHostedRunner/`、`engine/`（共用查询引擎）、`main/` 等 | 见左 | 本文第 5.5 节与 `docs/process/placement-g0.md`…`docs/process/placement-g7.md` | 44 | 482 | 0.25 MB |
+| 合计（一方） | | | | 5,023 | 75,181 | 31.7 MB |
 
 按顶层目录统计的文件数与字节见 `docs/INDEX.md` 第 3 节。
 
@@ -387,7 +387,7 @@
 | 官方二进制 | linux-x64 ELF，sha256 `fd13c700…d824` | `original/reconstruction.json`、`README.md` |
 | 打包器 | Bun **1.4.4**，修订 `71c9bf0ca`（Anthropic 内部版），内嵌 Node 版本串 v26.12.1；单文件可执行 + bytecode | `original/reconstruction.json`、`docs/process/verify.md` 第 2 节 |
 | 构建时间 | BUILD_TIME 2026-10-30T23:28:13Z，GIT_SHA `cd7ceb459c…` | `docs/handbook/bootstrap.md` 开头 |
-| 模块表 | 2,880 项：2,648 个 JS（入口 `cli.js` + 2,644 个 `chunk-*.js` + 3 个带 BOM 的资源脚本）、232 个资源（提示词、Skill 文档、字体、2 个 `.node` 原生模块、127 个 zstd 压缩资源） | `docs/PLAN.md` 第 1 节、`original/` |
+| 模块表 | 2,880 项：2,648 个 JS（入口 `cli.js` + 2,644 个 `original/chunk-*.js` + 3 个带 BOM 的资源脚本）、232 个资源（提示词、Skill 文档、字体、2 个 `.node` 原生模块、127 个 zstd 压缩资源） | `docs/PLAN.md` 第 1 节、`original/` |
 | 代码量 | JS 约 50 MB，81,667 个顶层声明（按声明符拆开是 102,120 个单元） | `analysis/segments/summary.json`、`docs/process/vendor.md` 4.1 |
 | chunk 结构 | ESM；全部提升到顶层（scope hoisting）；**一个 chunk 内顺序拼接多个源模块**；Bun 像 esbuild 一样**按顶层语句拆 chunk**，同一源文件可散在多个 chunk（2.1.88 能对上的 1,711 个文件中 728 个跨 chunk），但在一个 chunk 内保持连续 | `docs/process/lead.md` 第 4 节 |
 | CommonJS | 依赖以 `var X=x(function(exports,module){…})` 包裹，一个包裹 = 一个 npm 文件（1,580 个包裹） | `docs/process/vendor.md` 4.4 |
@@ -456,7 +456,7 @@
  */
 ```
 
-截至本快照，约 1,650 个文件有 2.1.88 对应文件，约 3,370 个文件标为 "new in 2.1.316"——316 的一方代码大约三分之二是旧版没有的。
+截至本快照，约 1,660 个文件有 2.1.88 对应文件，约 3,360 个文件标为 "new in 2.1.316"——316 的一方代码大约三分之二是旧版没有的。
 
 ### 8.2 `//@` 出处行
 
@@ -477,11 +477,11 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
 |---|---|
 | `placement` | 放置成员/领域成员显式指定（第三阶段的主力，约 5.6 万个声明） |
 | `fingerprint`、`callgraph-witnessed`、`callgraph-fingerprint`、`layout`、`file-local` | 与 2.1.88 源码匹配：字符串/属性名指纹、调用图传播、chunk 内布局插值、文件内二次匹配 |
-| `facade-exports`、`facade-majority`、`facade-new` | 门面 chunk 推出（同一门面的导出属于同一文件） |
+| `facade-exports`、`facade-majority` | 门面 chunk 推出（同一门面的导出属于同一文件）；早期还有 facade-new（旧版没有对应文件的门面模块，放进顶层 _new/），place-rest 后已全部改为 placement |
 | `sole-consumer`、`sole-consumer-new` | 一段未归属声明只被一个模块使用：紧挨该模块时并入它；不紧挨时作为它旁边的独立新模块（见 8.5） |
 | `affinity`、`shared-adjacent` | 与已归属声明相邻且引用边指向同一文件 |
 | `cjs-*`、`esm-*`、`embedded-runtime`、`native-addon`、`resource-wrapper`、`helper:bun-runtime` | 第三方识别（vendor 成员） |
-| `leftover` | 仍未归属，按 chunk 连续段放进 `_unattributed/` |
+| leftover | 仍未归属，按 chunk 连续段放进 _unattributed/（place-rest 后已不出现在统计中） |
 
 ### 8.3 声明说明与 JSDoc
 
@@ -494,7 +494,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
 | source | 含义 | 可信度 | 一方绑定数（快照） |
 |---|---|---|---|
 | `facade` | 门面 chunk 的原始导出名 | 确定 | 约 7,500 |
-| `semantic` | 领域/放置成员读代码后起的名字 | 高 | 约 25,000 |
+| `semantic` | 领域/放置成员读代码后起的名字 | 高 | 约 25,800 |
 | `vendor` | 与 npm 包源码对齐 | 高 | （主要在 vendor/） |
 | `reference` | 与 2.1.88 源码匹配得到 | 中（有错配，手册和说明里标了"错配"） | 约 5,600 |
 | `auto` | 代码证据推出（解构键、`catch`→`error`、方法名…） | 低 | 约 3,000 |
@@ -506,10 +506,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
 
 | 位置 | 含义 |
 |---|---|
-| `reconstructed/src/_new/<导出名>.js` | 门面 chunk 推出、2.1.88 没有对应文件、还没给出正式路径的模块，文件名取最大的导出名（例如 `reconstructed/src/_new/applyCoordinatorToolFilter.js`）。放置阶段已把大部分搬到正式路径，剩下的仍在这里 |
-| `<目录>/_new/<名>.js`、`<目录>/_new/<文件>.helpers-<chunk 前 4 位>.js` | `sole-consumer-new`：只被同目录某个模块使用、但在 chunk 里不与它相邻的一段代码，独立成新模块放在使用者旁边；没有好名字时命名为 `<使用者>.helpers-<chunk 标记>`（例如 `reconstructed/src/cli/_new/print.helpers-tyg7.js` 是只给 `cli/print.js` 用的 77 个声明） |
-| `reconstructed/src/_unattributed/<chunk>/part-NNN.js` | 仍未归属的代码，按 chunk 内连续段切开（约 160 个文件、7 万字节，约占一方代码的 0.2%） |
-| `reconstructed/src/_misplaced/<原路径>.js` | 确认归错、但去处不明的声明（fixer 裁决，见 `docs/process/fixer.md` 第 7 节） |
+| 顶层 `_new/<导出名>`（已清空） | 门面 chunk 推出、2.1.88 没有对应文件的模块，起初按最大导出名放在顶层 `_new/`（例如早期的 _new/applyCoordinatorToolFilter.ts，其中的 `mergeAndFilterTools` 现在在 `reconstructed/src/utils/toolPool.js`）；第三阶段放置后 197 个全部给出正式路径，顶层 `_new/` 已不存在。手册里若还写着这类路径，用声明 id 查当前位置 |
+| `<目录>/_new/<名>.js`、`<目录>/_new/<文件>.helpers-<chunk 前 4 位>.js` | `sole-consumer-new`（当前 `_new/` 子目录下 130 个文件，其中 86 个 helpers 文件）：只被同目录某个模块使用、但在 chunk 里不与它相邻的一段代码，独立成新模块放在使用者旁边；没有好名字时命名为 `<使用者>.helpers-<chunk 标记>`（例如 `reconstructed/src/cli/_new/print.helpers-tyg7.js` 是只给 `cli/print.js` 用的 77 个声明） |
+| `_unattributed/<chunk>/part-NNN.js`（已清空） | 未归属代码按 chunk 内连续段切开的临时位置；place-rest 放置后已全部落位，当前阅读树没有这个目录 |
+| `_misplaced/<原路径>`（已清空） | fixer 确认归错、但当时去处不明的声明（`docs/process/fixer.md` 第 7 节），place-rest 已给出去处 |
 | `reconstructed/vendor/<包>/<文件>` | 第三方，按 npm 包内路径还原；`private-unresolved/` 是私有/未识别包 |
 
 ### 8.6 React Compiler 产物
@@ -517,7 +517,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
 316 的 React 组件经过 React Compiler 编译，阅读时会看到：
 
 - `$`：组件开头的记忆化缓存数组，形如 `if ($[0] !== session) { …; $[0] = session; $[1] = ms } else ms = $[1]`——这只是 `useMemo`/`useCallback` 的编译结果，按"依赖变了才重算"理解即可；
-- `_temp`、`_tempN`、`t0`、`t1`：编译器提出来的内联回调或临时值（旧版源码里也有这些名字，说明泄露的 2.1.88 源码本身就是编译后的 TSX，见 `docs/process/lead.md` 第 6 节）；
+- `_temp`、`_temp2`、`_temp5`、`t1`、`t2` 这类名字：编译器提出来的内联回调或临时值（旧版源码里也有这些名字，说明泄露的 2.1.88 源码本身就是编译后的 TSX，见 `docs/process/lead.md` 第 6 节）；
 - `Symbol.for("react.memo_cache_sentinel")` / `"react.early_return_sentinel"`：编译器哨兵，来自运行时 chunk，出现在一方组件里不代表第三方代码。
 
 ### 8.7 路径写法的对应关系
@@ -530,18 +530,21 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
 
 ## 9. 已知限制
 
-1. **归属未全部完成**：约 0.2% 的一方代码仍在 `_unattributed/`，另有 `_new/` 下约 200 个模块和若干 `helpers` 模块还没有正式路径；lead 会继续重新生成 `reconstructed/`，少数路径可能变化，以声明 id 为准。
-2. **旧版名错配**：`reference` 来源的名字和"2.1.88 counterpart"有错配。手册列出了已知的：`buddy/*` 名下（316 已删除伴侣精灵）、`components/agents/*` 与 `new-agent-creation/wizard-steps/*`（实为 Bedrock/Vertex/云网关设置向导等）、`commands/thinkback-play`、`commands/tag`、`commands/files`（被按旧名匹配到不相干代码）、`services/awaySummary.ts`（被 Artifact 评论确认占用）等（`docs/handbook/agents.md` 9.6、`docs/handbook/ui.md` 第 12 节、`docs/handbook/commands.md` 第 9 节）。
-3. **约一半的顶层绑定仍是压缩名**（`source: minified`），多是低引用常量和多声明符语句里的附属绑定。
+1. **归属已完成，但有推断出的位置**：place-rest 之后 81,667 个声明全部落位（`analysis/segments/summary.json` 已无 unattributed 类别），_unattributed/、_misplaced/ 与顶层 _new/ 都已清空；不过各目录下 `_new/` 子目录与 `*.helpers-xxxx.js` 文件（130 个）是按"唯一使用者"推出的位置，文件名不是源码原名。lead 可能继续重新生成 `reconstructed/`，少数路径会变化，以声明 id 为准。
+2. **旧版名错配**：`reference` 来源的名字和"2.1.88 counterpart"有错配。手册写作时列出的典型例子：旧版 buddy/ 名下（316 已删除伴侣精灵，名下声明全是匹配误差）、commands/thinkback-play、commands/tag、commands/files（被按旧名匹配到不相干代码）——这几处在后续重切中已从阅读树移走；`reconstructed/src/components/agents/new-agent-creation/` 等处的内容与模块名不符（实为 Bedrock/Vertex/云网关设置向导等）、awaySummary 被 Artifact 评论确认占用等仍需留意（`docs/handbook/agents.md` 9.6、`docs/handbook/ui.md` 第 12 节、`docs/handbook/commands.md` 第 9 节、`docs/handbook/query.md` 12.12）。
+3. **`reconstructed/symbols.jsonl` 里约一半条目仍是压缩名**（`source: minified`），多是低引用常量和多声明符语句里的附属绑定。
 4. **原生层不可见**：计费头里的 `cch` 由原生层在发送前改写，JS 看不到；`Bun.ant.CellSegmenter` 的实现不可见（`docs/handbook/query.md` 第 9 节、`docs/handbook/ink.md` 第 13 节）。
 5. **只有 linux 构建**：平台固化为 linux；macOS 钥匙串、Computer Use 的 Swift 执行器、darwin 专属分支在本二进制中看不到或没有调用方（`docs/handbook/permissions.md` 第 15 节、`docs/handbook/extensions.md` 11.4）。
 6. **阅读树不可直接运行**：要运行或对拍用 `runnable/`（`docs/process/verify.md`）。
-7. **手册与当前路径**：手册写作期间切分重做过几次，手册里少数路径（尤其 `_unattributed/…/part-NNN`、`_new/…`）可能已搬走；用声明 id 在 `reconstructed/symbols.jsonl` 里查当前位置。
+7. **手册与当前路径**：手册写作期间切分重做过几次，手册里少数路径（尤其 _unattributed/ 下的 part-NNN 与 _new/ 下的模块）可能已搬走；用声明 id 在 `reconstructed/symbols.jsonl` 里查当前位置。
 8. **构建期裁剪**：一些函数在外部构建中恒返回常量（如 `getReplTool` 恒 null、`/daemon` 的开关恒 false），代码里能看到入口但功能不可达；手册在各节注明了。
 
 ---
 
 ## 10. 引用校验结果
 
-见文末（由校验脚本生成）。
+校验时间 2026-11-03 09:19（本机时间，阅读树生成于 09:15），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
 
+- 共检查 1026 处引用：路径 413/413，路径·函数 81/81，名字 379/380（另 1 个只在 2.1.88 中存在），声明id 62/62，字面量 89/90（另 1 个只在 2.1.88 中存在）；占位符与含空格的说明性文字 63 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`contextModifier`、`tengu_sm_compact*`
+- 未通过：0 处。

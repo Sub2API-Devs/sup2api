@@ -2,11 +2,11 @@
 
 > 对比对象：旧版是 `references/claude-code-analysis`（约 2.1.88，2026-03 source map 泄露的 TS 源码）；新版是官方 2.1.316 linux-x64 二进制（`original/`）。
 >
-> 素材：10 本手册的"与 2.1.88 的差异"一节、放置组过程文档 `docs/process/placement-g0.md`…`placement-g7.md` 的"新功能"一节。本文去重、合并同类、按重要性排序；每条一句话加证据位置。
+> 素材：10 本手册的"与 2.1.88 的差异"一节、放置组过程文档 `docs/process/placement-g0.md`…`docs/process/placement-g7.md` 的"新功能"一节。本文去重、合并同类、按重要性排序；每条一句话加证据位置。
 >
-> 证据写法：`reconstructed/src/...` 是阅读树路径（目录以 `/` 结尾）；"手册 query §4.1"指 `docs/handbook/query.md` 第 4.1 节，"放置 g3"指 `docs/process/placement-g3.md` 的新功能一节。手册中带声明 id 的证据可用 `node tools/q.mjs show <id>` 查看。
+> 证据写法：以 reconstructed/src/ 开头的是阅读树路径（目录以 `/` 结尾）；"手册 query §4.1"指 `docs/handbook/query.md` 第 4.1 节，"放置 g3"指 `docs/process/placement-g3.md` 的新功能一节。手册中带声明 id 的证据可用 `node tools/q.mjs show <id>` 查看。
 >
-> 规模感：阅读树里约 3,370 个一方文件标为 "new in 2.1.316"，约 1,650 个有 2.1.88 对应文件；内建工具从约 40 个增到约 80 个，SDK 控制请求从 23 种增到 98 种，钩子事件从 27 个增到 33 个，设置顶层键从 75 个增到约 187 个，转录记录类型从 18 种增到 47 种。
+> 规模感：阅读树里约 3,360 个一方文件标为 "new in 2.1.316"，约 1,660 个有 2.1.88 对应文件；内建工具从约 40 个增到约 80 个，SDK 控制请求从 23 种增到 98 种，钩子事件从 27 个增到 33 个，设置顶层键从 75 个增到约 187 个，转录记录类型从 18 种增到 47 种。
 
 ## 目录
 
@@ -366,4 +366,8 @@
 
 ## 4. 引用校验结果
 
-见文末（由校验脚本生成）。
+校验时间 2026-11-03 09:19（本机时间，阅读树生成于 09:15），对象为当时的 `reconstructed/`。脚本检查本文所有代码样式引用：路径是否存在（相对仓库根，或相对 `reconstructed/src/`，`.ts/.tsx` 对应 `.js`）；声明 id 是否在 `reconstructed/symbols.jsonl`；"路径 · 函数名"中的函数是否属于该文件；标识符与字面量是否出现在 `reconstructed/symbols.jsonl` 或阅读树代码中。在 2.1.316 找不到、但在 2.1.88 源码（`references/claude-code-analysis/src`）中存在的，计为"只在 2.1.88 中存在"（删除项、旧名，属预期）。
+
+- 共检查 472 处引用：路径 180/182（另 2 个只在 2.1.88 中存在），字面量 138/146（另 8 个只在 2.1.88 中存在），名字 133/143（另 10 个只在 2.1.88 中存在），声明id 1/1；占位符与含空格的说明性文字 34 处未检查。
+- 只在 2.1.88 中存在（删除项或旧名，预期如此）：`CLAUDE_CODE_UNATTENDED_RETRY`、`contextModifier`、`--session-timeout`、`buddy/`、`bridge/replBridge.ts`、`tengu_sm_compact*`、`classify_result`、`CLAUDE_CODE_JSONL_TRANSCRIPT`、`CLAUDE_CODE_DUMP_AUTO_MODE`、`validateIFSInjection`、`validateBraceExpansion`、`assistantAutoBackgrounded`、`bypass_permissions_disabled`、`--computer-use-mcp`、`/think-back`、`/thinkback-play`、`/pr-comments`、`/init-verifiers`、`migrateFennecToOpus`
+- 未通过：0 处。
