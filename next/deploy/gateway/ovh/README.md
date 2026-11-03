@@ -4,6 +4,11 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-04 **失败策略：同账号先重试 1 次**（数据改动，`PUT /settings/failure-policy`，revision 3 → 4，旧版本由接口自动归档；脚本 [failure-policy-2026-11-04.py](failure-policy-2026-11-04.py)）：
+- `retries_per_account` 0 → **1**，`max_retries` 2 → **3**；其余不变（重试规则 408/429/5xx、切换账号开、重置粘性开、退避 200 ms）。
+- 效果：502/500/529 这类短暂错误先在原账号再试一次，再失败才换号并改绑会话（原账号 → 原账号 → 换号 → 再换号）。上游 5h 用满的 429 照旧直接换号：插件把账号禁用后 `blocked` 为真，跳过同账号重试（`dispatch.go applyPluginAccountState`、`failure_policy_runtime.go nextFailureAction`，§69 起就有，这次没改代码）。不禁用账号的 429（上游短时限流、老 Worker 的 "Gateway concurrency limit reached"）会先在原账号重试一次。
+- 起因：缓存排查中 18 次整段重写来自上游 502 后立即换号。回滚：同一脚本把两个值改回 0 和 2。
+
 2026-11-04 ccgateway **0.1.126** + guard **0.1.126**（`4c5a519d6`，北京时间 00:50–00:55；插件包 `cea82018…145c`，只发插件，核心不变）：
 - 起因：缓存排查发现约 7% 的整段重写来自 Worker 自己的 429 "Gateway concurrency limit reached"（Worker 默认 4 个请求槽，核心给账号的并发是 10），换号后整个会话改绑。
 - 内容：新 Worker 的模型请求不再占槽位，每个请求各起一个 CLI，并发只由核心的账号并发限制（槽位只留给资源操作）；guard 创建账号容器时 `MemorySwap=-1`（内存仍 1 GiB，swap 不限）。CLI 没换，仍是 v46（ELF `2125d0b0…`），Worker `13f093ab…`。
