@@ -4,6 +4,18 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-04 ccgateway **0.1.126** + guard **0.1.126**（`4c5a519d6`，北京时间 00:50–00:55；插件包 `cea82018…145c`，只发插件，核心不变）：
+- 起因：缓存排查发现约 7% 的整段重写来自 Worker 自己的 429 "Gateway concurrency limit reached"（Worker 默认 4 个请求槽，核心给账号的并发是 10），换号后整个会话改绑。
+- 内容：新 Worker 的模型请求不再占槽位，每个请求各起一个 CLI，并发只由核心的账号并发限制（槽位只留给资源操作）；guard 创建账号容器时 `MemorySwap=-1`（内存仍 1 GiB，swap 不限）。CLI 没换，仍是 v46（ELF `2125d0b0…`），Worker `13f093ab…`。
+- **只对新账号生效**：只推了 controller 与 app 角色（`update_existing` 未开），64 个账号容器前后 ID、镜像完全相同（`containers-before.txt` = `containers-after.txt`）。egress 没推，仍是 0.1.125（内容相同，避免共享网关重建断网），所以运行时页 `up_to_date` 为 false，属预期。
+- **老账号并发 10 → 4**（64 个，#50–#113，经 `PATCH /accounts/:id`），与它们旧 Worker 的 4 个槽位对齐。新账号的并发由管理员自己配。
+- **宿主机 swap**：两块空盘 nvme2n1、nvme3n1 各分 128G（分区 `swap-raid1`，其余空间未用），组 RAID1 `/dev/md4`，`mkswap -U 217acf0f-…`，优先级 10，写入 `/etc/fstab` 与 `/etc/mdadm/mdadm.conf` 并 `update-initramfs -u`。之前宿主机只有两块 512 MB swap 且已用满，所以现有容器默认的 1 GiB swap（Docker 缺省 = 内存）其实用不上；现在老账号容器不改配置也有 1 GiB swap 可用。
+- guard 手工换：`/opt/ccgateway/.env` 的 `CCG_GUARD_IMAGE` `0.1.120-r2` → `ccgateway-guard:0.1.126`（`bbd4295a…`），`docker compose … up -d --no-deps guard`，healthy；改前的 `.env` 在 `backups/ccgateway-0.1.126/ccgateway.env.before`。
+- 核验：控制器 0.1.126 healthy；核心 10 分钟 0 条 ERROR；发布后 15 分钟只有 2 条 401（令牌吊销，账号自身问题）。当时多数账号被上游 5h 限流自动禁用到 19:10 UTC，流量很少；新 Worker 的并发与新容器的 swap 要等下一个新账号建出来再实测。
+- 测试：Linux（`golang:1.27-bookworm`，发布提交）插件、engine、worker、guard、controller-go、contracts 全过（engine/worker 的真实 CLI 用例照旧跳过）。
+- 回滚：`rollout.py rollback`（回 0.1.125）+ `bundled-roles app`；guard 把 `.env` 改回 `ccgateway-guard:0.1.120-r2` 再 `up -d --no-deps guard`。老账号不受影响，不用回滚。
+- 脚本 `stage/ccgateway-0.1.126/`；备份 `backups/ccgateway-0.1.126`（数据库 `fcbf1483…`）。
+
 2026-11-03 夜 **模型价格按官方价格页修正**（数据改动，经管理接口 `PATCH/DELETE /prices/:id`，改价历史在 `model_price_history`；依据 `platform.claude.com/docs/en/about-claude/pricing`，本机地区打不开，从 ovh 取）：
 - `claude-sonnet-5-5`（308）缓存读 0.2 → **0.1**（Opus 5.5 / Sonnet 5.5 缓存读是输入价 0.05 倍），表达式模式改为 per_token；`claude-sonnet-4-6`（124）缓存读 0.1 → **0.3**；`claude-haiku-4-5-20251001`（109）0.14/0.71 → **1/5**（缓存读 0.1、写 1.25/2；此前 405 次请求按约 1/7 计费）。
 - 删除官方没有的带日期 ID：`claude-opus-4-6-20260205`（116）、`claude-opus-4-7-20260416`（118），两者从未被请求过；原值都是 sync 来的 5/25/0.5/6.25/10。以后手动从 LiteLLM 同步可能再带回来，同步预览里不要勾。
